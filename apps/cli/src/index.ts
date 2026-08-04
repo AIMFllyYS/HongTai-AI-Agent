@@ -31,14 +31,14 @@ const HELP = `宏泰 AI 智能体 CLI
 `;
 
 interface CliOptions {
-  readonly url: string;
+  readonly input: string;
   readonly outputDirectory?: string;
   readonly maxDurationSeconds?: number;
 }
 
 function parseIngestOptions(args: readonly string[]): CliOptions {
-  const url = args[0];
-  if (!url) throw new Error("缺少视频链接");
+  const input = args[0];
+  if (!input) throw new Error("缺少分享内容或作品链接");
   let outputDirectory: string | undefined;
   let maxDurationSeconds: number | undefined;
 
@@ -60,7 +60,7 @@ function parseIngestOptions(args: readonly string[]): CliOptions {
     }
     throw new Error(`未知参数：${argument}`);
   }
-  return { url, outputDirectory, maxDurationSeconds };
+  return { input, outputDirectory, maxDurationSeconds };
 }
 
 async function runIngest(args: readonly string[]): Promise<void> {
@@ -86,7 +86,7 @@ async function runIngest(args: readonly string[]): Promise<void> {
   });
 
   const result = await pipeline.run({
-    url: options.url,
+    input: options.input,
     outputDirectory: options.outputDirectory,
     maxDurationSeconds: options.maxDurationSeconds ?? config.maxDurationSeconds,
   });
@@ -95,11 +95,15 @@ async function runIngest(args: readonly string[]): Promise<void> {
   console.log(`  任务ID：${result.taskId}`);
   console.log(`  状态：${result.status}`);
   if (result.platform) console.log(`  平台：${result.platform}`);
+  if (result.contentType) console.log(`  内容类型：${result.contentType}`);
   if (result.videoPath) console.log(`  视频：${result.videoPath}`);
   if (result.transcriptPath) console.log(`  原始文稿：${result.transcriptPath}`);
   if (result.draftPath) console.log(`  整理稿：${result.draftPath}`);
-  for (const warning of result.warnings) console.log(`  提示：${warning}`);
-  if (result.error) console.error(`  错误：${result.error}`);
+  for (const issue of result.issues) {
+    const line = `  ${issue.severity === "error" ? "错误" : "提示"}[${issue.code}]：${issue.userMessage}`;
+    if (issue.severity === "error") console.error(line);
+    else console.log(line);
+  }
 
   if (!result.videoPath || !result.transcriptPath) process.exitCode = 1;
 }

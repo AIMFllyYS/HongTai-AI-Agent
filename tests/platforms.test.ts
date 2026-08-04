@@ -39,6 +39,7 @@ test("抖音适配器从公开页面状态提取无水印视频", async () => {
   const resolved = await adapter.resolve("https://www.douyin.com/video/7600000000000000000", client);
   const content = await adapter.parse(resolved, client);
   assert.equal(content.platform, "douyin");
+  assert.equal(content.contentType, "video");
   assert.equal(content.title, "测试抖音");
   assert.equal(content.videos[0]?.hasWatermark, false);
   assert.match(content.videos[0]?.url ?? "", /aweme\.snssdk\.com/);
@@ -66,6 +67,7 @@ test("小红书适配器提取H264视频流", async () => {
   const resolved = await adapter.resolve("https://www.xiaohongshu.com/explore/abc123", client);
   const content = await adapter.parse(resolved, client);
   assert.equal(content.platform, "xiaohongshu");
+  assert.equal(content.contentType, "video");
   assert.equal(content.author, "作者乙");
   assert.equal(content.videos[0]?.codec, "H.264");
 });
@@ -102,6 +104,7 @@ test("B站适配器提取P1 DASH音视频", async () => {
   const resolved = await adapter.resolve("https://www.bilibili.com/video/BV1xx411c7mD", client);
   const content = await adapter.parse(resolved, client);
   assert.equal(content.platform, "bilibili");
+  assert.equal(content.contentType, "video");
   assert.equal(content.videos.length, 1);
   assert.equal(content.audios.length, 1);
 });

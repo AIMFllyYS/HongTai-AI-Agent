@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import type { MediaTranscriber, TextRewriter, TranscriptSegment } from "@hongtai/core";
+import { issueFromError, type MediaTranscriber, type TextRewriter, type TranscriptSegment } from "@hongtai/core";
 
 export interface MimoClientOptions {
   readonly baseUrl: string;
@@ -71,7 +71,7 @@ export class MimoClient implements MediaTranscriber, TextRewriter {
           endSeconds: (index + 1) * segmentSeconds,
           text: "",
           status: "failed",
-          error: error instanceof Error ? error.message : String(error),
+          issue: issueFromError(error, "obtain-transcript"),
         };
       }
       results.push(result);

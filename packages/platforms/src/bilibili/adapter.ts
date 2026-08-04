@@ -144,6 +144,7 @@ export class BilibiliAdapter implements PlatformAdapter {
 
     return {
       platform: this.platform,
+      contentType: "video",
       id: bvid,
       sourceUrl: link.sourceUrl,
       canonicalUrl: `https://www.bilibili.com/video/${bvid}`,
@@ -160,4 +161,3 @@ export class BilibiliAdapter implements PlatformAdapter {
     };
   }
 }
-

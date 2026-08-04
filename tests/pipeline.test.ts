@@ -46,6 +46,7 @@ function dependencies(withVideo: boolean): { dependencies: IngestPipelineDepende
     resolve: async (url) => ({ sourceUrl: url, finalUrl: url, status: 200, body: "<html></html>" }),
     parse: async (link) => ({
       platform: "douyin",
+      contentType: "video",
       sourceUrl: link.sourceUrl,
       canonicalUrl: link.finalUrl,
       title: "测试",
@@ -83,7 +84,7 @@ function dependencies(withVideo: boolean): { dependencies: IngestPipelineDepende
 
 test("完整流水线覆盖七个阶段并保留两种文稿", async () => {
   const setup = dependencies(true);
-  const result = await new IngestPipeline(setup.dependencies).run({ url: "https://www.douyin.com/video/1" });
+  const result = await new IngestPipeline(setup.dependencies).run({ input: "https://www.douyin.com/video/1" });
   assert.equal(result.status, "succeeded");
   assert.ok(result.videoPath);
   assert.match(setup.store.values.get(paths.transcript) ?? "", /原始文稿/);
@@ -94,7 +95,7 @@ test("完整流水线覆盖七个阶段并保留两种文稿", async () => {
 });
 test("没有视频源时返回降级并保存任务", async () => {
   const setup = dependencies(false);
-  const result = await new IngestPipeline(setup.dependencies).run({ url: "https://www.douyin.com/note/1" });
+  const result = await new IngestPipeline(setup.dependencies).run({ input: "https://www.douyin.com/note/1" });
   assert.equal(result.status, "degraded");
   assert.equal(result.videoPath, undefined);
   assert.ok(setup.store.values.has(paths.task));

@@ -1,7 +1,4 @@
-import type {
-  IngestPipelineDependencies,
-  PlatformAdapter,
-} from "./contracts";
+import type { IngestPipelineDependencies } from "./contracts";
 import type {
   IngestRequest,
   IngestResult,
@@ -14,6 +11,8 @@ import type {
   TaskStage,
   TranscriptSegment,
 } from "./models";
+import { TaskError, issueFromError, warningIssue } from "./errors";
+import { normalizeInput } from "./input";
 
 export const PIPELINE_STAGES = [
   "detect-platform",
@@ -45,10 +44,6 @@ function selectBest(sources: readonly MediaSource[]): MediaSource | undefined {
   return [...sources].sort((left, right) => sourceScore(right) - sourceScore(left))[0];
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 export class IngestPipeline {
   readonly #dependencies: IngestPipelineDependencies;
 
@@ -59,26 +54,28 @@ export class IngestPipeline {
   async run(request: IngestRequest): Promise<IngestResult> {
     const taskId = createTaskId();
     const createdAt = new Date().toISOString();
-    const warnings: string[] = [];
+    const issues: import("./models").TaskIssue[] = [];
     const paths = await this.#dependencies.store.initializeTask(taskId, request.outputDirectory);
     let currentStage: TaskStage = "detect-platform";
     let platform: PlatformContent["platform"] | undefined;
+    let contentType: PlatformContent["contentType"] | undefined;
+    let sourceUrl = "";
     let videoDownloaded = false;
     let transcriptWritten = false;
     let draftWritten = false;
     let resolvedLink: ResolvedLink | undefined;
 
-    const writeTask = async (status: TaskRecord["status"], error?: string): Promise<void> => {
+    const writeTask = async (status: TaskRecord["status"]): Promise<void> => {
       const task: TaskRecord = {
         id: taskId,
-        sourceUrl: request.url,
+        sourceUrl,
         status,
         currentStage,
         platform,
+        contentType,
         createdAt,
         updatedAt: new Date().toISOString(),
-        error,
-        warnings,
+        issues,
         paths,
       };
       await this.#dependencies.store.writeJson(paths.task, task);
@@ -89,6 +86,7 @@ export class IngestPipeline {
       status: StageStatus,
       message: string,
       extra: Partial<Pick<ProgressEvent, "progress" | "detail">> = {},
+      issue?: import("./models").TaskIssue,
     ): Promise<void> => {
       currentStage = stage;
       const event: ProgressEvent = {
@@ -98,6 +96,7 @@ export class IngestPipeline {
         message,
         progress: extra.progress,
         detail: extra.detail,
+        issue,
         timestamp: new Date().toISOString(),
       };
       await this.#dependencies.reporter.report(event);
@@ -121,18 +120,27 @@ export class IngestPipeline {
     await writeTask("running");
 
     try {
-      const adapter = await complete(
+      const detected = await complete(
         "detect-platform",
         "开始识别平台",
-        async () => this.#detectAdapter(request.url),
-        (value, elapsedMs) => `完成：${value.platform}，耗时 ${elapsedMs}ms`,
+        async () => {
+          const normalized = normalizeInput(request.input);
+          const adapter = this.#dependencies.adapters.find((candidate) => candidate.platform === normalized.platform);
+          if (!adapter) {
+            throw new TaskError({ code: "INPUT_PLATFORM_UNSUPPORTED", message: "当前只支持抖音、小红书和B站链接", action: "edit_input" });
+          }
+          return { adapter, normalized };
+        },
+        (value, elapsedMs) => `完成：${value.adapter.platform}${value.normalized.ignoredSupportedUrlCount > 0 ? `，已忽略其他${value.normalized.ignoredSupportedUrlCount}个链接` : ""}，耗时 ${elapsedMs}ms`,
       );
+      const adapter = detected.adapter;
       platform = adapter.platform;
+      sourceUrl = detected.normalized.normalizedUrl;
 
       const resolved = await complete(
         "resolve-link",
-        `开始：${request.url}`,
-        async () => adapter.resolve(request.url, this.#dependencies.http),
+        `开始：${sourceUrl}`,
+        async () => adapter.resolve(sourceUrl, this.#dependencies.http),
         (value) => `完成：最终链接 ${value.finalUrl}`,
       );
       resolvedLink = resolved;
@@ -147,6 +155,7 @@ export class IngestPipeline {
         (value) =>
           `完成：标题=${value.title || "未知"}，作者=${value.author || "未知"}，视频源=${value.videos.length}个`,
       );
+      contentType = content.contentType;
       await this.#dependencies.store.writeJson(paths.rawResponse, content.raw);
       await this.#dependencies.store.writeJson(paths.metadata, content);
 
@@ -161,17 +170,18 @@ export class IngestPipeline {
       );
 
       if (!selection.video) {
-        warnings.push("页面已解析，但没有找到可下载的视频源");
-        await report("select-media", "degraded", warnings.at(-1) ?? "没有视频源");
+        const issue = warningIssue("MEDIA_SOURCE_NOT_FOUND", "select-media", "页面已解析，但没有找到可下载的视频源", { action: "view_partial_result", platform });
+        issues.push(issue);
+        await report("select-media", "degraded", issue.userMessage, {}, issue);
         await report("save-artifacts", "running", "开始保存降级任务结果");
         await writeTask("degraded");
         await report("save-artifacts", "succeeded", `完成：${paths.root}`);
-        return { taskId, status: "degraded", platform, warnings };
+        return { taskId, status: "degraded", platform, contentType, issues };
       }
 
       const maxDuration = request.maxDurationSeconds ?? DEFAULT_MAX_DURATION_SECONDS;
       if (content.durationSeconds && content.durationSeconds > maxDuration) {
-        throw new Error(`视频时长 ${Math.ceil(content.durationSeconds)} 秒，超过首版限制 ${maxDuration} 秒`);
+        throw new TaskError({ code: "MEDIA_DURATION_EXCEEDED", message: `视频时长 ${Math.ceil(content.durationSeconds)} 秒，超过首版限制 ${maxDuration} 秒`, action: "edit_input", details: { durationSeconds: Math.ceil(content.durationSeconds), maxDurationSeconds: maxDuration } });
       }
 
       await complete(
@@ -194,7 +204,7 @@ export class IngestPipeline {
       await report("obtain-transcript", "running", "开始读取视频并准备文稿");
       const duration = await this.#dependencies.mediaTools.probeDuration(paths.video);
       if (duration > maxDuration) {
-        throw new Error(`视频时长 ${Math.ceil(duration)} 秒，超过首版限制 ${maxDuration} 秒`);
+        throw new TaskError({ code: "MEDIA_DURATION_EXCEEDED", message: `视频时长 ${Math.ceil(duration)} 秒，超过首版限制 ${maxDuration} 秒`, action: "edit_input", details: { durationSeconds: Math.ceil(duration), maxDurationSeconds: maxDuration } });
       }
 
       await report("obtain-transcript", "running", `音频时长=${Math.ceil(duration)}秒`);
@@ -225,7 +235,7 @@ export class IngestPipeline {
           );
           const failedSegments = segments.filter((segment) => segment.status === "failed");
           if (failedSegments.length > 0) {
-            warnings.push(`语音转写部分失败：${failedSegments.length}/${segments.length}个分段未完成`);
+            issues.push(warningIssue("ASR_PARTIAL_FAILURE", "obtain-transcript", `语音转写部分失败：${failedSegments.length}/${segments.length}个分段未完成`, { action: "view_partial_result", platform, details: { failedSegments: failedSegments.length, totalSegments: segments.length } }));
           }
           transcript = segments
             .filter((segment) => segment.status === "succeeded")
@@ -233,15 +243,16 @@ export class IngestPipeline {
             .filter(Boolean)
             .join("\n");
         } catch (error) {
-          warnings.push(`语音转写失败：${errorMessage(error)}`);
+          const issue = issueFromError(error, "obtain-transcript", platform);
+          issues.push({ ...issue, severity: "warning", action: "view_partial_result" });
         }
       } else {
-        warnings.push("未配置AI API Key，跳过语音转写");
+        issues.push(warningIssue("AI_NOT_CONFIGURED", "obtain-transcript", "未配置AI API Key，跳过语音转写", { action: "configure_ai", platform }));
       }
 
       if (!transcript && content.description) {
         transcript = content.description;
-        warnings.push("没有获得语音转写，已使用平台描述作为降级文稿");
+        issues.push(warningIssue("AI_EMPTY_RESPONSE", "obtain-transcript", "没有获得语音转写，已使用平台描述作为降级文稿", { action: "view_partial_result", platform }));
       }
 
       if (transcript) {
@@ -263,11 +274,12 @@ export class IngestPipeline {
             await report("obtain-transcript", "running", `整理稿完成：${draft.trim().length} 字`);
           }
         } catch (error) {
-          warnings.push(`整理稿生成失败：${errorMessage(error)}`);
+          const base = issueFromError(error, "obtain-transcript", platform);
+          issues.push(warningIssue("TEXT_REWRITE_FAILED", "obtain-transcript", `整理稿生成失败：${base.userMessage}`, { action: "view_partial_result", platform }));
         }
       }
 
-      const transcriptStatus = transcriptWritten ? (warnings.length > 0 ? "degraded" : "succeeded") : "failed";
+      const transcriptStatus = transcriptWritten ? (issues.length > 0 ? "degraded" : "succeeded") : "failed";
       await report(
         "obtain-transcript",
         transcriptStatus,
@@ -278,7 +290,7 @@ export class IngestPipeline {
 
       await report("save-artifacts", "running", "开始保存最终任务结果");
       const finalStatus = videoDownloaded && transcriptWritten
-        ? warnings.length > 0 ? "degraded" : "succeeded"
+        ? issues.length > 0 ? "degraded" : "succeeded"
         : "failed";
       await writeTask(finalStatus);
       await report("save-artifacts", "succeeded", `完成：${paths.root}`);
@@ -287,19 +299,22 @@ export class IngestPipeline {
         taskId,
         status: finalStatus,
         platform,
+        contentType,
         videoPath: videoDownloaded ? paths.video : undefined,
         transcriptPath: transcriptWritten ? paths.transcript : undefined,
         draftPath: draftWritten ? paths.draft : undefined,
-        warnings,
+        issues,
       };
     } catch (error) {
-      const message = errorMessage(error);
       const failureStage = currentStage as TaskStage;
-      await report(failureStage, "failed", `失败：${message}`);
+      const issue = issueFromError(error, failureStage, platform);
+      issues.push(issue);
+      await report(failureStage, "failed", `失败：${issue.userMessage}`, {}, issue);
       if (failureStage === "resolve-link" || failureStage === "parse-content") {
         await this.#dependencies.store.writeJson(paths.rawResponse, {
           stage: failureStage,
-          error: message,
+          errorCode: issue.code,
+          error: issue.userMessage,
           finalUrl: resolvedLink?.finalUrl,
           httpStatus: resolvedLink?.status,
           pageSummary: resolvedLink?.body
@@ -310,35 +325,18 @@ export class IngestPipeline {
             .slice(0, 500),
         });
       }
-      await writeTask("failed", message);
+      await writeTask("failed");
       return {
         taskId,
         status: "failed",
         platform,
+        contentType,
         videoPath: videoDownloaded ? paths.video : undefined,
         transcriptPath: transcriptWritten ? paths.transcript : undefined,
         draftPath: draftWritten ? paths.draft : undefined,
-        warnings,
-        error: message,
+        issues,
       };
     }
-  }
-
-  #detectAdapter(url: string): PlatformAdapter {
-    let parsed: URL;
-    try {
-      parsed = new URL(url);
-    } catch {
-      throw new Error("请输入完整的 HTTPS 视频链接");
-    }
-    if (parsed.protocol !== "https:") {
-      throw new Error("首版仅接受 HTTPS 视频链接");
-    }
-    const adapter = this.#dependencies.adapters.find((candidate) => candidate.matches(url));
-    if (!adapter) {
-      throw new Error("当前只支持抖音、小红书和B站链接");
-    }
-    return adapter;
   }
 
   async #downloadSource(

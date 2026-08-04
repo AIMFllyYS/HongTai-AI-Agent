@@ -19,7 +19,7 @@ import {
   normalizeHttpUrl,
 } from "../shared";
 
-const XHS_HOST = /(^|\.)(xiaohongshu\.com|xhslink\.com)$/i;
+const XHS_HOST = /(^|\.)(xiaohongshu\.com|xhslink\.com|xhslink\.cn)$/i;
 
 function extractNoteId(url: string): string | undefined {
   return url.match(/\/(?:explore|note)\/([a-f0-9]+)/i)?.[1]
@@ -119,6 +119,7 @@ export class XiaohongshuAdapter implements PlatformAdapter {
     const durationMs = asNumber(video?.duration) ?? asNumber(asRecord(video?.media)?.duration);
     return {
       platform: this.platform,
+      contentType: xhsVideos(note, link.finalUrl).length > 0 ? "video" : imageSources.length > 0 ? "image_text" : "unknown",
       id: asString(note.noteId) ?? asString(note.id) ?? noteId,
       sourceUrl: link.sourceUrl,
       canonicalUrl: link.finalUrl,

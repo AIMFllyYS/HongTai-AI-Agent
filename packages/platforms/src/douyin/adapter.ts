@@ -136,6 +136,7 @@ export class DouyinAdapter implements PlatformAdapter {
 
     return {
       platform: this.platform,
+      contentType: sources.length > 0 ? "video" : "unknown",
       id: asString(item.aweme_id) ?? awemeId,
       sourceUrl: link.sourceUrl,
       canonicalUrl: link.finalUrl,

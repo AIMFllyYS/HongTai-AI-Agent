@@ -1,4 +1,17 @@
 export type SupportedPlatform = "douyin" | "xiaohongshu" | "bilibili";
+export type ContentType = "video" | "image_text" | "unknown";
+
+export type ErrorCode =
+  | "INPUT_EMPTY" | "INPUT_NO_SUPPORTED_URL" | "INPUT_URL_INVALID" | "INPUT_PLATFORM_UNSUPPORTED"
+  | "LINK_NETWORK_FAILED" | "LINK_TIMEOUT" | "LINK_REDIRECT_LIMIT" | "LINK_REDIRECT_INVALID" | "LINK_HTTP_ERROR" | "LINK_EXPIRED"
+  | "CONTENT_NOT_FOUND" | "CONTENT_REMOVED" | "CONTENT_PRIVATE_OR_LOGIN_REQUIRED" | "CONTENT_PARSE_FAILED" | "CONTENT_SCHEMA_CHANGED" | "CONTENT_TYPE_UNSUPPORTED"
+  | "PLATFORM_API_RATE_LIMITED" | "PLATFORM_API_UNAVAILABLE" | "PLATFORM_API_RESPONSE_INVALID"
+  | "MEDIA_SOURCE_NOT_FOUND" | "MEDIA_DOWNLOAD_FAILED" | "MEDIA_DOWNLOAD_TIMEOUT" | "MEDIA_DURATION_EXCEEDED" | "MEDIA_PROBE_FAILED" | "MEDIA_MERGE_FAILED"
+  | "AI_NOT_CONFIGURED" | "AI_AUTH_INVALID" | "AI_PERMISSION_DENIED" | "AI_QUOTA_EXHAUSTED" | "AI_RATE_LIMITED" | "AI_NETWORK_FAILED" | "AI_TIMEOUT" | "AI_SERVER_ERROR" | "AI_EMPTY_RESPONSE" | "ASR_PARTIAL_FAILURE" | "TEXT_REWRITE_FAILED"
+  | "STORAGE_WRITE_FAILED" | "STORAGE_SPACE_INSUFFICIENT" | "STORAGE_PERMISSION_DENIED"
+  | "INTERNAL_UNKNOWN_ERROR";
+
+export type IssueAction = "edit_input" | "retry" | "wait_and_retry" | "check_network" | "configure_ai" | "free_storage" | "view_partial_result" | "none";
 
 export type TaskStage =
   | "detect-platform"
@@ -41,6 +54,7 @@ export interface ResolvedLink {
 
 export interface PlatformContent {
   readonly platform: SupportedPlatform;
+  readonly contentType: ContentType;
   readonly id?: string;
   readonly sourceUrl: string;
   readonly canonicalUrl?: string;
@@ -63,11 +77,12 @@ export interface ProgressEvent {
   readonly message: string;
   readonly progress?: number;
   readonly detail?: Readonly<Record<string, unknown>>;
+  readonly issue?: TaskIssue;
   readonly timestamp: string;
 }
 
 export interface IngestRequest {
-  readonly url: string;
+  readonly input: string;
   readonly outputDirectory?: string;
   readonly maxDurationSeconds?: number;
 }
@@ -78,8 +93,31 @@ export interface TranscriptSegment {
   readonly endSeconds: number;
   readonly text: string;
   readonly status: "succeeded" | "failed";
-  readonly error?: string;
+  readonly issue?: TaskIssue;
 }
+
+export interface TaskIssue {
+  readonly code: ErrorCode;
+  readonly severity: "warning" | "error";
+  readonly stage: TaskStage;
+  readonly userMessage: string;
+  readonly retryable: boolean;
+  readonly action: IssueAction;
+  readonly platform?: SupportedPlatform;
+  readonly details?: Readonly<Record<string, string | number | boolean>>;
+}
+
+export interface NormalizedInput {
+  readonly rawInput: string;
+  readonly extractedText: string;
+  readonly normalizedUrl: string;
+  readonly platform: SupportedPlatform;
+  readonly ignoredSupportedUrlCount: number;
+}
+
+export type InputInspection =
+  | { readonly ok: true; readonly value: NormalizedInput }
+  | { readonly ok: false; readonly issue: TaskIssue };
 
 export interface TaskPaths {
   readonly root: string;
@@ -104,10 +142,10 @@ export interface TaskRecord {
   readonly status: TaskStatus;
   readonly currentStage?: TaskStage;
   readonly platform?: SupportedPlatform;
+  readonly contentType?: ContentType;
   readonly createdAt: string;
   readonly updatedAt: string;
-  readonly error?: string;
-  readonly warnings: readonly string[];
+  readonly issues: readonly TaskIssue[];
   readonly paths?: TaskPaths;
 }
 
@@ -115,10 +153,9 @@ export interface IngestResult {
   readonly taskId: string;
   readonly status: TaskStatus;
   readonly platform?: SupportedPlatform;
+  readonly contentType?: ContentType;
   readonly videoPath?: string;
   readonly transcriptPath?: string;
   readonly draftPath?: string;
-  readonly warnings: readonly string[];
-  readonly error?: string;
+  readonly issues: readonly TaskIssue[];
 }
-
