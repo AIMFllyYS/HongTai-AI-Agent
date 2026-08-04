@@ -35,11 +35,11 @@ CLI依次显示平台识别、短链解析、内容提取、媒体选择、下�
 
 ## 3. 状态含义
 
-- `succeeded`：视频及文稿完整，或小红书图文正文和图片完整；
+- `succeeded`：视频及文稿完整、视频确认没有有效口播，或小红书图文正文和图片完整；
 - `degraded`：已有可用产物，但部分图片、转写或整理稿失败；
 - `failed`：没有获得当前内容类型所需的核心产物。
 
-退出码规则：视频任务需要视频和文稿；图文任务需要正文或至少一张图片。缺少核心产物时为1。
+退出码规则：视频任务需要视频，并且已经生成文稿或确认`no_speech`；图文任务需要正文或至少一张图片。缺少核心产物时为1。
 
 图文笔记产物：
 
@@ -51,7 +51,17 @@ media/images/image-002.*
 
 图文笔记不会调用ASR。
 
-## 4. 常见失败
+## 4. 无口播视频
+
+MiMo请求成功但所有音频分段均没有有效文字时，任务返回：
+
+```text
+speechStatus=no_speech
+```
+
+这是一种正常结果：任务保持`succeeded`，不生成伪造的`transcript.txt`或`draft.txt`，也不会使用平台描述冒充语音转写。`transcript/transcript.json`会保留`no_speech`状态和分段结果。
+
+## 5. 常见失败
 
 - `INPUT_NO_SUPPORTED_URL`：分享文字中没有受支持链接；
 - `CONTENT_SCHEMA_CHANGED`：平台页面结构发生变化；
@@ -60,6 +70,7 @@ media/images/image-002.*
 - `AI_AUTH_INVALID` / `AI_PERMISSION_DENIED`：API Key或模型权限错误；
 - `AI_QUOTA_EXHAUSTED`：AI账户余额或额度不足；
 - `AI_RATE_LIMITED`：AI调用频率受限，CLI会有限重试；
+- `AI_EMPTY_RESPONSE`：AI响应缺少预期字段，不等同于没有口播；
 - `STORAGE_SPACE_INSUFFICIENT`：本地空间不足；
 - 下载HTTP 403：平台CDN验证了Referer或媒体地址已过期；
 - FFmpeg失败：本机未安装FFmpeg，或B站音视频流编码不兼容；
