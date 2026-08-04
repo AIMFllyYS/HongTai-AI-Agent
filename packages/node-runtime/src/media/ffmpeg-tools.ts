@@ -1,7 +1,11 @@
 import { spawn } from "node:child_process";
 import { mkdir, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import type { MediaTools } from "@hongtai/core";
+import { TaskError, type ErrorCode, type MediaTools } from "@hongtai/core";
+
+function mediaToolError(error: unknown, code: ErrorCode, message: string): TaskError {
+  return error instanceof TaskError ? error : new TaskError({ code, message, action: "retry", cause: error });
+}
 
 async function run(command: string, args: readonly string[]): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -22,42 +26,59 @@ export class FfmpegMediaTools implements MediaTools {
     try {
       await run("ffmpeg", ["-y", "-i", videoPath, "-i", audioPath, "-c", "copy", "-movflags", "+faststart", outputPath]);
     } catch {
-      await run("ffmpeg", ["-y", "-i", videoPath, "-i", audioPath, "-c:v", "copy", "-c:a", "aac", "-movflags", "+faststart", outputPath]);
+      try {
+        await run("ffmpeg", ["-y", "-i", videoPath, "-i", audioPath, "-c:v", "copy", "-c:a", "aac", "-movflags", "+faststart", outputPath]);
+      } catch (error) {
+        throw mediaToolError(error, "MEDIA_MERGE_FAILED", "音视频合并失败");
+      }
     }
   }
 
   async probeDuration(mediaPath: string): Promise<number> {
-    const output = await run("ffprobe", [
-      "-v", "error",
-      "-show_entries", "format=duration",
-      "-of", "default=noprint_wrappers=1:nokey=1",
-      mediaPath,
-    ]);
+    let output: string;
+    try {
+      output = await run("ffprobe", [
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        mediaPath,
+      ]);
+    } catch (error) {
+      throw mediaToolError(error, "MEDIA_PROBE_FAILED", "无法读取视频信息");
+    }
     const duration = Number(output.trim());
-    if (!Number.isFinite(duration) || duration <= 0) throw new Error("无法读取视频时长");
+    if (!Number.isFinite(duration) || duration <= 0) throw new TaskError({ code: "MEDIA_PROBE_FAILED", message: "无法读取视频时长", action: "retry" });
     return duration;
   }
 
   async extractAudio(videoPath: string, audioPath: string): Promise<void> {
-    await run("ffmpeg", [
-      "-y", "-i", videoPath,
-      "-vn", "-ac", "1", "-ar", "16000", "-sample_fmt", "s16",
-      "-c:a", "pcm_s16le", audioPath,
-    ]);
+    try {
+      await run("ffmpeg", [
+        "-y", "-i", videoPath,
+        "-vn", "-ac", "1", "-ar", "16000", "-sample_fmt", "s16",
+        "-c:a", "pcm_s16le", audioPath,
+      ]);
+    } catch (error) {
+      throw mediaToolError(error, "MEDIA_PROBE_FAILED", "视频音频提取失败");
+    }
   }
 
   async splitAudio(audioPath: string, outputDirectory: string, segmentSeconds: number): Promise<readonly string[]> {
     await mkdir(outputDirectory, { recursive: true });
-    await run("ffmpeg", [
-      "-y", "-i", audioPath,
-      "-f", "segment", "-segment_time", String(segmentSeconds), "-reset_timestamps", "1",
-      "-c:a", "pcm_s16le", join(outputDirectory, "segment-%04d.wav"),
-    ]);
+    try {
+      await run("ffmpeg", [
+        "-y", "-i", audioPath,
+        "-f", "segment", "-segment_time", String(segmentSeconds), "-reset_timestamps", "1",
+        "-c:a", "pcm_s16le", join(outputDirectory, "segment-%04d.wav"),
+      ]);
+    } catch (error) {
+      throw mediaToolError(error, "MEDIA_PROBE_FAILED", "音频切片失败");
+    }
     const files = (await readdir(outputDirectory))
       .filter((name) => /^segment-\d+\.wav$/i.test(name))
       .sort()
       .map((name) => join(outputDirectory, name));
-    if (files.length === 0) throw new Error("FFmpeg没有生成音频分段");
+    if (files.length === 0) throw new TaskError({ code: "MEDIA_PROBE_FAILED", message: "FFmpeg没有生成音频分段", action: "retry" });
     return files;
   }
 }

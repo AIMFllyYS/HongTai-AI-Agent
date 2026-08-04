@@ -46,7 +46,7 @@ function dependencies(withVideo: boolean): { dependencies: IngestPipelineDepende
   const adapter: PlatformAdapter = {
     platform: "douyin",
     matches: () => true,
-    resolve: async (url) => ({ sourceUrl: url, finalUrl: url, status: 200, body: "<html></html>" }),
+    resolve: async (url) => ({ sourceUrl: url, finalUrl: `${url}?xsec_token=private-token`, status: 200, body: "<html></html>" }),
     parse: async (link) => ({
       platform: "douyin",
       contentType: "video",
@@ -85,13 +85,15 @@ function dependencies(withVideo: boolean): { dependencies: IngestPipelineDepende
   };
 }
 
-test("完整流水线覆盖七个阶段并保留两种文稿", async () => {
+test("完整流水线覆盖七个阶段、保留两种文稿并清理日志URL", async () => {
   const setup = dependencies(true);
-  const result = await new IngestPipeline(setup.dependencies).run({ input: "https://www.douyin.com/video/1" });
+  const result = await new IngestPipeline(setup.dependencies).run({ input: "复制打开抖音 https://www.douyin.com/video/1 后续文字" });
   assert.equal(result.status, "succeeded");
   assert.ok(result.videoPath);
   assert.match(setup.store.values.get(paths.transcript) ?? "", /原始文稿/);
   assert.match(setup.store.values.get(paths.draft) ?? "", /整理文稿/);
+  assert.doesNotMatch(setup.store.values.get(paths.log) ?? "", /private-token|xsec_token/);
+  assert.doesNotMatch(setup.store.values.get(paths.task) ?? "", /复制打开抖音|后续文字/);
   assert.deepEqual(new Set(setup.events.map((event) => event.stage)), new Set([
     "detect-platform", "resolve-link", "parse-content", "select-media", "download-media", "obtain-transcript", "save-artifacts",
   ]));

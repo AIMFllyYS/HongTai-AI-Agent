@@ -8,10 +8,11 @@ import type {
   ResolvedLink,
   StageStatus,
   TaskRecord,
+  TaskPaths,
   TaskStage,
   TranscriptSegment,
 } from "./models";
-import { TaskError, issueFromError, warningIssue } from "./errors";
+import { TaskError, issueFromError, safeUrlForDisplay, warningIssue } from "./errors";
 import { normalizeInput } from "./input";
 
 export const PIPELINE_STAGES = [
@@ -55,7 +56,22 @@ export class IngestPipeline {
     const taskId = createTaskId();
     const createdAt = new Date().toISOString();
     const issues: import("./models").TaskIssue[] = [];
-    const paths = await this.#dependencies.store.initializeTask(taskId, request.outputDirectory);
+    let paths: TaskPaths;
+    try {
+      paths = await this.#dependencies.store.initializeTask(taskId, request.outputDirectory);
+    } catch (error) {
+      const issue = issueFromError(error, "save-artifacts");
+      issues.push(issue);
+      await this.#dependencies.reporter.report({
+        taskId,
+        stage: "save-artifacts",
+        status: "failed",
+        message: `失败：${issue.userMessage}`,
+        issue,
+        timestamp: new Date().toISOString(),
+      });
+      return { taskId, status: "failed", issues };
+    }
     let currentStage: TaskStage = "detect-platform";
     let platform: PlatformContent["platform"] | undefined;
     let contentType: PlatformContent["contentType"] | undefined;
@@ -141,7 +157,7 @@ export class IngestPipeline {
         "resolve-link",
         `开始：${sourceUrl}`,
         async () => adapter.resolve(sourceUrl, this.#dependencies.http),
-        (value) => `完成：最终链接 ${value.finalUrl}`,
+        (value) => `完成：最终链接 ${safeUrlForDisplay(value.finalUrl)}`,
       );
       resolvedLink = resolved;
       if (resolved.body) {
@@ -303,11 +319,22 @@ export class IngestPipeline {
                 "obtain-transcript",
                 segment.status === "failed" ? "degraded" : "running",
                 `转写 ${completed}/${total}，当前分段=${segment.status === "failed" ? "失败" : "完成"}，已生成约 ${completedCharacters} 字`,
+                {},
+                segment.issue,
               );
             },
           );
           const failedSegments = segments.filter((segment) => segment.status === "failed");
           if (failedSegments.length > 0) {
+            const segmentIssue = failedSegments.find((segment) => segment.issue)?.issue;
+            if (segmentIssue) {
+              issues.push({
+                ...segmentIssue,
+                severity: "warning",
+                platform,
+                details: { ...segmentIssue.details, failedSegments: failedSegments.length },
+              });
+            }
             issues.push(warningIssue("ASR_PARTIAL_FAILURE", "obtain-transcript", `语音转写部分失败：${failedSegments.length}/${segments.length}个分段未完成`, { action: "view_partial_result", platform, details: { failedSegments: failedSegments.length, totalSegments: segments.length } }));
           }
           transcript = segments

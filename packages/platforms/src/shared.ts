@@ -1,4 +1,4 @@
-import type { HttpClient, HttpResponse, MediaSource } from "@hongtai/core";
+import { TaskError, type HttpClient, type HttpResponse, type MediaSource } from "@hongtai/core";
 
 export const DESKTOP_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
@@ -54,10 +54,26 @@ export async function fetchPage(
   headers: Readonly<Record<string, string>>,
 ): Promise<HttpResponse> {
   const response = await http.get({ url, headers, maxRedirects: 5, timeoutMs: 30_000 });
-  if (response.status < 200 || response.status >= 400) {
-    throw new Error(`页面请求失败：HTTP ${response.status}`);
+  if (response.status === 401 || response.status === 403) {
+    throw new TaskError({ code: "CONTENT_PRIVATE_OR_LOGIN_REQUIRED", message: "作品需要登录或没有访问权限", action: "edit_input", details: { httpStatus: response.status } });
   }
+  if (response.status === 404) throw new TaskError({ code: "CONTENT_NOT_FOUND", message: "作品不存在或链接已经失效", action: "edit_input", details: { httpStatus: 404 } });
+  if (response.status === 410) throw new TaskError({ code: "CONTENT_REMOVED", message: "作品已经被删除", action: "edit_input", details: { httpStatus: 410 } });
+  if (response.status === 429) throw new TaskError({ code: "PLATFORM_API_RATE_LIMITED", message: "平台访问过于频繁，请稍后重试", retryable: true, action: "wait_and_retry", details: { httpStatus: 429 } });
+  if (response.status >= 500) throw new TaskError({ code: "PLATFORM_API_UNAVAILABLE", message: "平台服务暂时不可用", retryable: true, action: "wait_and_retry", details: { httpStatus: response.status } });
+  if (response.status < 200 || response.status >= 400) throw new TaskError({ code: "LINK_HTTP_ERROR", message: `页面请求失败：HTTP ${response.status}`, action: "retry", details: { httpStatus: response.status } });
   return response;
+}
+
+export function contentStateError(body: string, platformName: string): TaskError {
+  const text = body.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 20_000).toLowerCase();
+  if (/作品不存在|内容不存在|已删除|not found|does not exist/.test(text)) {
+    return new TaskError({ code: "CONTENT_NOT_FOUND", message: `${platformName}作品不存在或已删除`, action: "edit_input" });
+  }
+  if (/请登录|登录后|无权限|私密|private|login required/.test(text)) {
+    return new TaskError({ code: "CONTENT_PRIVATE_OR_LOGIN_REQUIRED", message: `${platformName}作品需要登录或没有访问权限`, action: "edit_input" });
+  }
+  return new TaskError({ code: "CONTENT_SCHEMA_CHANGED", message: `${platformName}页面结构已经变化，暂时无法解析`, action: "retry" });
 }
 
 function findBalancedObject(source: string, start: number): string | undefined {
@@ -170,4 +186,3 @@ export function dedupeMedia(sources: readonly MediaSource[]): MediaSource[] {
 export function mediaHeaders(referer: string): Readonly<Record<string, string>> {
   return { "User-Agent": DESKTOP_USER_AGENT, Referer: referer };
 }
-

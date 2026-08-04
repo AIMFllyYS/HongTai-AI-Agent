@@ -1,8 +1,17 @@
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { extname, resolve, join } from "node:path";
 import type { ArtifactStore, MediaSource, TaskPaths } from "@hongtai/core";
+import { storageTaskError } from "../errors";
 
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".avif"]);
+
+async function storageOperation<T>(operation: () => Promise<T>, message: string): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    throw storageTaskError(error, message);
+  }
+}
 
 export class FileArtifactStore implements ArtifactStore {
   readonly #workspaceDirectory: string;
@@ -21,14 +30,14 @@ export class FileArtifactStore implements ArtifactStore {
     const imageDirectory = join(media, "images");
     const content = join(root, "content");
     const segmentDirectory = join(media, "segments");
-    await Promise.all([
+    await storageOperation(() => Promise.all([
       mkdir(raw, { recursive: true }),
       mkdir(media, { recursive: true }),
       mkdir(transcript, { recursive: true }),
       mkdir(imageDirectory, { recursive: true }),
       mkdir(content, { recursive: true }),
       mkdir(segmentDirectory, { recursive: true }),
-    ]);
+    ]), "无法创建任务产物目录");
     return {
       root,
       task: join(root, "task.json"),
@@ -50,15 +59,15 @@ export class FileArtifactStore implements ArtifactStore {
   }
 
   async writeJson(path: string, value: unknown): Promise<void> {
-    await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+    await storageOperation(() => writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8"), "JSON产物保存失败");
   }
 
   async writeText(path: string, value: string): Promise<void> {
-    await writeFile(path, value, "utf8");
+    await storageOperation(() => writeFile(path, value, "utf8"), "文本产物保存失败");
   }
 
   async appendText(path: string, value: string): Promise<void> {
-    await appendFile(path, value, "utf8");
+    await storageOperation(() => appendFile(path, value, "utf8"), "任务日志保存失败");
   }
 
   imagePath(paths: TaskPaths, index: number, source: MediaSource): string {

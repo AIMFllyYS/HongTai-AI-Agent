@@ -1,11 +1,12 @@
 import { readFile } from "node:fs/promises";
-import { issueFromError, type MediaTranscriber, type TextRewriter, type TranscriptSegment } from "@hongtai/core";
+import { TaskError, issueFromError, type MediaTranscriber, type TextRewriter, type TranscriptSegment } from "@hongtai/core";
 
 export interface MimoClientOptions {
   readonly baseUrl: string;
   readonly apiKey: string;
   readonly asrModel: string;
   readonly textModel: string;
+  readonly retryDelaysMs?: readonly number[];
 }
 
 interface ChatResponse {
@@ -56,7 +57,7 @@ export class MimoClient implements MediaTranscriber, TextRewriter {
           asr_options: { language: "auto" },
         });
         const text = parseContent(payload);
-        if (!text) throw new Error("MiMo ASR返回空文本");
+        if (!text) throw new TaskError({ code: "AI_EMPTY_RESPONSE", message: "MiMo ASR返回空文本", action: "retry" });
         result = {
           index,
           startSeconds: index * segmentSeconds,
@@ -92,7 +93,7 @@ export class MimoClient implements MediaTranscriber, TextRewriter {
         ],
       });
       const text = parseContent(payload);
-      if (!text) throw new Error("MiMo文本模型返回空整理稿");
+      if (!text) throw new TaskError({ code: "AI_EMPTY_RESPONSE", message: "MiMo文本模型返回空整理稿", action: "retry" });
       results.push(text);
     }
     return results.join("\n\n");
@@ -114,9 +115,9 @@ export class MimoClient implements MediaTranscriber, TextRewriter {
 
   async #post(body: unknown): Promise<unknown> {
     const url = new URL(`${this.#options.baseUrl.replace(/\/+$/, "")}/chat/completions`);
-    if (url.protocol !== "https:") throw new Error("MiMo Base URL必须使用HTTPS");
-    const delays = [0, 1_000, 3_000];
-    let lastError: Error | undefined;
+    if (url.protocol !== "https:") throw new TaskError({ code: "AI_NETWORK_FAILED", message: "MiMo Base URL必须使用HTTPS", action: "configure_ai" });
+    const delays = this.#options.retryDelaysMs ?? [0, 1_000, 3_000];
+    let lastError: TaskError | undefined;
 
     for (let attempt = 0; attempt < delays.length; attempt += 1) {
       const delay = delays[attempt] ?? 0;
@@ -132,15 +133,55 @@ export class MimoClient implements MediaTranscriber, TextRewriter {
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(90_000),
         });
-        if (response.ok) return await response.json();
-        const message = `MiMo请求失败：HTTP ${response.status}`;
-        if (response.status !== 429 && response.status < 500) throw new Error(message);
-        lastError = new Error(message);
+        const responseText = (await response.text()).slice(0, 8_192);
+        let payload: unknown;
+        try {
+          payload = responseText ? JSON.parse(responseText) : {};
+        } catch (error) {
+          if (response.ok) throw new TaskError({ code: "AI_SERVER_ERROR", message: "MiMo返回了无效JSON", retryable: true, action: "retry", cause: error });
+          payload = {};
+        }
+        if (response.ok) return payload;
+
+        const providerError = (payload as { error?: { code?: unknown; type?: unknown; message?: unknown } })?.error;
+        const providerCode = typeof providerError?.code === "string" ? providerError.code.slice(0, 100) : undefined;
+        const providerType = typeof providerError?.type === "string" ? providerError.type.slice(0, 100) : undefined;
+        const providerMessage = typeof providerError?.message === "string" ? providerError.message.slice(0, 500) : "";
+        const details = {
+          httpStatus: response.status,
+          ...(providerCode ? { providerCode } : {}),
+          ...(providerType ? { providerType } : {}),
+        };
+        if (response.status === 401) throw new TaskError({ code: "AI_AUTH_INVALID", message: "MiMo API Key无效", action: "configure_ai", details });
+        if (response.status === 403 || response.status === 404) throw new TaskError({ code: "AI_PERMISSION_DENIED", message: "MiMo账户没有对应模型权限", action: "configure_ai", details });
+        if (response.status === 429) {
+          const quota = /quota|balance|credit|insufficient|额度|余额/i.test(`${providerCode ?? ""} ${providerType ?? ""} ${providerMessage}`);
+          if (quota) throw new TaskError({ code: "AI_QUOTA_EXHAUSTED", message: "MiMo账户额度或余额不足", action: "configure_ai", details });
+          lastError = new TaskError({ code: "AI_RATE_LIMITED", message: "MiMo请求过于频繁，请稍后重试", retryable: true, action: "wait_and_retry", details });
+          continue;
+        }
+        if (response.status >= 500) {
+          lastError = new TaskError({ code: "AI_SERVER_ERROR", message: "MiMo服务暂时不可用", retryable: true, action: "wait_and_retry", details });
+          continue;
+        }
+        throw new TaskError({ code: "AI_SERVER_ERROR", message: `MiMo请求被拒绝：HTTP ${response.status}`, action: "configure_ai", details });
       } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        if (lastError.message.includes("HTTP 4") && !lastError.message.includes("HTTP 429")) throw lastError;
+        if (error instanceof TaskError) {
+          if (!error.retryable) throw error;
+          lastError = error;
+          continue;
+        }
+        const name = error instanceof Error ? error.name : "UnknownError";
+        const timedOut = name === "AbortError" || name === "TimeoutError";
+        lastError = new TaskError({
+          code: timedOut ? "AI_TIMEOUT" : "AI_NETWORK_FAILED",
+          message: timedOut ? "MiMo请求超时" : "无法连接MiMo服务",
+          retryable: true,
+          action: timedOut ? "retry" : "check_network",
+          cause: error,
+        });
       }
     }
-    throw lastError ?? new Error("MiMo请求失败");
+    throw lastError ?? new TaskError({ code: "AI_NETWORK_FAILED", message: "MiMo请求失败", action: "retry" });
   }
 }

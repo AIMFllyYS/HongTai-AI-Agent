@@ -1,16 +1,11 @@
-import type {
-  HttpClient,
-  MediaSource,
-  PlatformAdapter,
-  PlatformContent,
-  ResolvedLink,
-} from "@hongtai/core";
+import { TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
 import {
   DESKTOP_USER_AGENT,
   asArray,
   asNumber,
   asRecord,
   asString,
+  contentStateError,
   dedupeMedia,
   extractAssignedJson,
   fetchPage,
@@ -124,9 +119,9 @@ export class DouyinAdapter implements PlatformAdapter {
       routerData = extractAssignedJson(body, ["window._ROUTER_DATA", "_ROUTER_DATA"]);
     }
 
-    if (!routerData) throw new Error("抖音公开页面中没有找到 _ROUTER_DATA");
+    if (!routerData) throw contentStateError(body, "抖音");
     const item = extractItem(routerData, awemeId);
-    if (!item) throw new Error("抖音页面数据中没有找到作品信息");
+    if (!item) throw new TaskError({ code: "CONTENT_PARSE_FAILED", message: "抖音页面数据中没有找到作品信息", action: "retry" });
 
     const author = asRecord(item.author);
     const video = asRecord(item.video);

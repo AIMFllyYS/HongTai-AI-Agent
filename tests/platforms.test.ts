@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { HttpClient, HttpRequest, HttpResponse } from "../packages/core/src/index";
+import { TaskError } from "../packages/core/src/index";
 import {
   BilibiliAdapter,
   DouyinAdapter,
@@ -82,6 +83,13 @@ test("小红书适配器识别图文笔记", async () => {
   assert.equal(content.contentType, "image_text");
   assert.equal(content.images.length, 2);
   assert.equal(content.videos.length, 0);
+});
+
+test("平台页面结构变化返回稳定错误码", async () => {
+  const client = new FakeHttpClient(() => response("https://www.xiaohongshu.com/explore/deadbeef", "<html>empty</html>"));
+  const adapter = new XiaohongshuAdapter();
+  const resolved = await adapter.resolve("https://www.xiaohongshu.com/explore/deadbeef", client);
+  await assert.rejects(() => adapter.parse(resolved, client), (error) => error instanceof TaskError && error.code === "CONTENT_SCHEMA_CHANGED");
 });
 
 test("B站适配器提取P1 DASH音视频", async () => {

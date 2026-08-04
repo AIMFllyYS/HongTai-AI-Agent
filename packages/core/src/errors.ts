@@ -93,3 +93,14 @@ export function warningIssue(
     details: options.details,
   };
 }
+
+export function safeUrlForDisplay(value: string): string {
+  try {
+    const url = new URL(value);
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return "无效URL";
+  }
+}

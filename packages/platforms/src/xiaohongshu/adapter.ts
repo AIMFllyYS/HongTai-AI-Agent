@@ -1,16 +1,11 @@
-import type {
-  HttpClient,
-  MediaSource,
-  PlatformAdapter,
-  PlatformContent,
-  ResolvedLink,
-} from "@hongtai/core";
+import { TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
 import {
   MOBILE_USER_AGENT,
   asArray,
   asNumber,
   asRecord,
   asString,
+  contentStateError,
   dedupeMedia,
   extractAssignedJson,
   fetchPage,
@@ -99,10 +94,10 @@ export class XiaohongshuAdapter implements PlatformAdapter {
     void http;
     const body = link.body ?? "";
     const state = extractAssignedJson(body, ["window.__INITIAL_STATE__", "__INITIAL_STATE__"]);
-    if (!state) throw new Error("小红书公开页面中没有找到 __INITIAL_STATE__");
+    if (!state) throw contentStateError(body, "小红书");
     const noteId = extractNoteId(link.finalUrl);
     const note = extractNote(state, noteId);
-    if (!note) throw new Error("小红书页面数据中没有找到笔记信息");
+    if (!note) throw new TaskError({ code: "CONTENT_PARSE_FAILED", message: "小红书页面数据中没有找到笔记信息", action: "retry" });
 
     const user = asRecord(note.user);
     const imageSources: MediaSource[] = [];
