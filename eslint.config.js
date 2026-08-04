@@ -8,7 +8,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["packages/core/**/*.ts", "packages/platforms/**/*.ts"],
+    files: ["packages/core/**/*.ts", "packages/platforms/**/*.ts", "packages/ai/**/*.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -16,7 +16,7 @@ export default tseslint.config(
           patterns: [
             {
               group: ["node:*", "fs", "fs/*", "child_process", "path", "os"],
-              message: "共享核心和平台适配器不能依赖 Node.js；请通过 contracts 中的端口注入能力。"
+              message: "共享核心、平台适配器和AI应用能力层不能依赖 Node.js；请通过 contracts 中的端口注入能力。"
             }
           ]
         }
@@ -24,4 +24,3 @@ export default tseslint.config(
     }
   }
 );
-
