@@ -1,0 +1,20 @@
+{
+  "name": "@hongtai/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@hongtai/core": "workspace:*",
+    "@hongtai/node-runtime": "workspace:*",
+    "@hongtai/platforms": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

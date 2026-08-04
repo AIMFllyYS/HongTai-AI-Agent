@@ -1,0 +1,27 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+
+# 本地任务、缓存、Cookie和模型均不进入版本库
+workspace/tasks/*
+workspace/cache/*
+workspace/cookies/*
+workspace/models/*
+!workspace/tasks/.gitkeep
+!workspace/cache/.gitkeep
+!workspace/cookies/.gitkeep
+!workspace/models/.gitkeep
+
+# Capacitor/Android生成物
+android/.gradle/
+android/**/build/
+
+# 编辑器与系统文件
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
