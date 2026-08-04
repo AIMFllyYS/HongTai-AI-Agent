@@ -1,5 +1,6 @@
 export type SupportedPlatform = "douyin" | "xiaohongshu" | "bilibili";
 export type ContentType = "video" | "image_text" | "unknown";
+export type SpeechStatus = "transcribed" | "no_speech" | "failed";
 
 export type ErrorCode =
   | "INPUT_EMPTY" | "INPUT_NO_SUPPORTED_URL" | "INPUT_URL_INVALID" | "INPUT_PLATFORM_UNSUPPORTED"
@@ -92,8 +93,14 @@ export interface TranscriptSegment {
   readonly startSeconds: number;
   readonly endSeconds: number;
   readonly text: string;
-  readonly status: "succeeded" | "failed";
+  readonly status: "succeeded" | "no_speech" | "failed";
   readonly issue?: TaskIssue;
+}
+
+export interface TranscriptionResult {
+  readonly status: SpeechStatus;
+  readonly text: string;
+  readonly segments: readonly TranscriptSegment[];
 }
 
 export interface TaskIssue {
@@ -145,6 +152,7 @@ export interface TaskRecord {
   readonly currentStage?: TaskStage;
   readonly platform?: SupportedPlatform;
   readonly contentType?: ContentType;
+  readonly speechStatus?: SpeechStatus;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly issues: readonly TaskIssue[];
@@ -156,6 +164,7 @@ export interface IngestResult {
   readonly status: TaskStatus;
   readonly platform?: SupportedPlatform;
   readonly contentType?: ContentType;
+  readonly speechStatus?: SpeechStatus;
   readonly videoPath?: string;
   readonly transcriptPath?: string;
   readonly draftPath?: string;

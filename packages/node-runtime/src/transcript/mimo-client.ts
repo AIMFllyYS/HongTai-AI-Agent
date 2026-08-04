@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { TaskError, issueFromError, type MediaTranscriber, type TextRewriter, type TranscriptSegment } from "@hongtai/core";
+import { TaskError, issueFromError, summarizeTranscription, type MediaTranscriber, type TextRewriter, type TranscriptionResult, type TranscriptSegment } from "@hongtai/core";
 
 export interface MimoClientOptions {
   readonly baseUrl: string;
@@ -21,9 +21,10 @@ const REWRITE_SYSTEM_PROMPT = `你是短视频文稿整理助手。请严格遵�
 3. 保留原有语气、专有名词、数字和结论；
 4. 只输出整理后的正文，不解释处理过程。`;
 
-function parseContent(payload: unknown): string {
+function parseContent(payload: unknown): string | undefined {
   const response = payload as ChatResponse;
-  return response.choices?.[0]?.message?.content?.trim() ?? "";
+  const content = response.choices?.[0]?.message?.content;
+  return typeof content === "string" ? content.trim() : undefined;
 }
 
 export class MimoClient implements MediaTranscriber, TextRewriter {
@@ -37,7 +38,7 @@ export class MimoClient implements MediaTranscriber, TextRewriter {
     segmentPaths: readonly string[],
     segmentSeconds: number,
     onSegment?: (segment: TranscriptSegment, completed: number, total: number) => void | Promise<void>,
-  ): Promise<readonly TranscriptSegment[]> {
+  ): Promise<TranscriptionResult> {
     const results: TranscriptSegment[] = [];
     for (let index = 0; index < segmentPaths.length; index += 1) {
       const segmentPath = segmentPaths[index];
@@ -57,14 +58,10 @@ export class MimoClient implements MediaTranscriber, TextRewriter {
           asr_options: { language: "auto" },
         });
         const text = parseContent(payload);
-        if (!text) throw new TaskError({ code: "AI_EMPTY_RESPONSE", message: "MiMo ASR返回空文本", action: "retry" });
-        result = {
-          index,
-          startSeconds: index * segmentSeconds,
-          endSeconds: (index + 1) * segmentSeconds,
-          text,
-          status: "succeeded",
-        };
+        if (text === undefined) throw new TaskError({ code: "AI_EMPTY_RESPONSE", message: "MiMo ASR响应缺少文本字段", action: "retry" });
+        result = text
+          ? { index, startSeconds: index * segmentSeconds, endSeconds: (index + 1) * segmentSeconds, text, status: "succeeded" }
+          : { index, startSeconds: index * segmentSeconds, endSeconds: (index + 1) * segmentSeconds, text: "", status: "no_speech" };
       } catch (error) {
         result = {
           index,
@@ -78,7 +75,7 @@ export class MimoClient implements MediaTranscriber, TextRewriter {
       results.push(result);
       await onSegment?.(result, index + 1, segmentPaths.length);
     }
-    return results;
+    return summarizeTranscription(results);
   }
 
   async rewrite(transcript: string): Promise<string> {

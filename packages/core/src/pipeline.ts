@@ -6,11 +6,11 @@ import type {
   PlatformContent,
   ProgressEvent,
   ResolvedLink,
+  SpeechStatus,
   StageStatus,
   TaskRecord,
   TaskPaths,
   TaskStage,
-  TranscriptSegment,
 } from "./models";
 import { TaskError, issueFromError, safeUrlForDisplay, warningIssue } from "./errors";
 import { normalizeInput } from "./input";
@@ -79,6 +79,7 @@ export class IngestPipeline {
     let videoDownloaded = false;
     let transcriptWritten = false;
     let draftWritten = false;
+    let speechStatus: SpeechStatus | undefined;
     let resolvedLink: ResolvedLink | undefined;
 
     const writeTask = async (status: TaskRecord["status"]): Promise<void> => {
@@ -89,6 +90,7 @@ export class IngestPipeline {
         currentStage,
         platform,
         contentType,
+        speechStatus,
         createdAt,
         updatedAt: new Date().toISOString(),
         issues,
@@ -305,7 +307,7 @@ export class IngestPipeline {
 
       await report("obtain-transcript", "running", `音频时长=${Math.ceil(duration)}秒`);
       let transcript = "";
-      let segments: readonly TranscriptSegment[] = [];
+      let segments: import("./models").TranscriptionResult["segments"] = [];
       let completedCharacters = 0;
 
       if (this.#dependencies.transcriber) {
@@ -317,20 +319,26 @@ export class IngestPipeline {
             SEGMENT_SECONDS,
           );
           await report("obtain-transcript", "running", `音频分段=${segmentPaths.length}个`);
-          segments = await this.#dependencies.transcriber.transcribe(
+          const transcription = await this.#dependencies.transcriber.transcribe(
             segmentPaths,
             SEGMENT_SECONDS,
             async (segment, completed, total) => {
               completedCharacters += segment.text.length;
+              const segmentMessage = segment.status === "failed"
+                ? "失败"
+                : segment.status === "no_speech" ? "未检测到口播" : "完成";
               await report(
                 "obtain-transcript",
                 segment.status === "failed" ? "degraded" : "running",
-                `转写 ${completed}/${total}，当前分段=${segment.status === "failed" ? "失败" : "完成"}，已生成约 ${completedCharacters} 字`,
+                `转写 ${completed}/${total}，当前分段=${segmentMessage}，已生成约 ${completedCharacters} 字`,
                 {},
                 segment.issue,
               );
             },
           );
+          speechStatus = transcription.status;
+          segments = transcription.segments;
+          transcript = transcription.text;
           const failedSegments = segments.filter((segment) => segment.status === "failed");
           if (failedSegments.length > 0) {
             const segmentIssue = failedSegments.find((segment) => segment.issue)?.issue;
@@ -344,32 +352,32 @@ export class IngestPipeline {
             }
             issues.push(warningIssue("ASR_PARTIAL_FAILURE", "obtain-transcript", `语音转写部分失败：${failedSegments.length}/${segments.length}个分段未完成`, { action: "view_partial_result", platform, details: { failedSegments: failedSegments.length, totalSegments: segments.length } }));
           }
-          transcript = segments
-            .filter((segment) => segment.status === "succeeded")
-            .map((segment) => segment.text.trim())
-            .filter(Boolean)
-            .join("\n");
         } catch (error) {
+          speechStatus = "failed";
           const issue = issueFromError(error, "obtain-transcript", platform);
           issues.push({ ...issue, severity: "warning", action: "view_partial_result" });
         }
       } else {
+        speechStatus = "failed";
         issues.push(warningIssue("AI_NOT_CONFIGURED", "obtain-transcript", "未配置AI API Key，跳过语音转写", { action: "configure_ai", platform }));
       }
 
-      if (!transcript && content.description) {
+      if (speechStatus !== "no_speech" && !transcript && content.description) {
         transcript = content.description;
         issues.push(warningIssue("AI_EMPTY_RESPONSE", "obtain-transcript", "没有获得语音转写，已使用平台描述作为降级文稿", { action: "view_partial_result", platform }));
       }
 
       if (transcript) {
         await this.#dependencies.store.writeText(paths.transcript, `${transcript.trim()}\n`);
+        transcriptWritten = true;
+      }
+      if (segments.length > 0 || transcriptWritten) {
         await this.#dependencies.store.writeJson(paths.transcriptJson, {
-          source: segments.length > 0 ? "asr" : "description",
+          speechStatus,
+          source: speechStatus === "no_speech" ? "none" : segments.length > 0 && transcript ? "asr" : "description",
           durationSeconds: duration,
           segments,
         });
-        transcriptWritten = true;
       }
 
       if (transcript && this.#dependencies.rewriter) {
@@ -386,17 +394,21 @@ export class IngestPipeline {
         }
       }
 
-      const transcriptStatus = transcriptWritten ? (issues.length > 0 ? "degraded" : "succeeded") : "failed";
+      const transcriptStatus = speechStatus === "no_speech"
+        ? "succeeded"
+        : transcriptWritten ? (issues.length > 0 ? "degraded" : "succeeded") : "failed";
       await report(
         "obtain-transcript",
         transcriptStatus,
-        transcriptWritten
-          ? `完成：原始文稿 ${transcript.length} 字${draftWritten ? "，整理稿已生成" : ""}`
-          : "失败：没有生成任何文稿",
+        speechStatus === "no_speech"
+          ? "完成：未检测到有效口播，无需生成文稿"
+          : transcriptWritten
+            ? `完成：原始文稿 ${transcript.length} 字${draftWritten ? "，整理稿已生成" : ""}`
+            : "失败：没有生成任何文稿",
       );
 
       await report("save-artifacts", "running", "开始保存最终任务结果");
-      const finalStatus = videoDownloaded && transcriptWritten
+      const finalStatus = videoDownloaded && (transcriptWritten || speechStatus === "no_speech")
         ? issues.length > 0 ? "degraded" : "succeeded"
         : "failed";
       await writeTask(finalStatus);
@@ -407,6 +419,7 @@ export class IngestPipeline {
         status: finalStatus,
         platform,
         contentType,
+        speechStatus,
         videoPath: videoDownloaded ? paths.video : undefined,
         transcriptPath: transcriptWritten ? paths.transcript : undefined,
         draftPath: draftWritten ? paths.draft : undefined,
@@ -438,6 +451,7 @@ export class IngestPipeline {
         status: "failed",
         platform,
         contentType,
+        speechStatus,
         videoPath: videoDownloaded ? paths.video : undefined,
         transcriptPath: transcriptWritten ? paths.transcript : undefined,
         draftPath: draftWritten ? paths.draft : undefined,

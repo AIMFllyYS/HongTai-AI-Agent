@@ -77,7 +77,7 @@ function dependencies(withVideo: boolean): { dependencies: IngestPipelineDepende
       transcriber: { transcribe: async (_paths, seconds, callback) => {
         const segment = { index: 0, startSeconds: 0, endSeconds: seconds, text: "原始文稿", status: "succeeded" as const };
         await callback?.(segment, 1, 1);
-        return [segment];
+        return { status: "transcribed", text: segment.text, segments: [segment] };
       } },
       rewriter: { rewrite: async () => "整理文稿" },
       reporter: { report: (event) => { events.push(event); } },
@@ -135,7 +135,7 @@ test("小红书图文保存正文和全部图片后正常成功", async () => {
     http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
     downloader: { download: async (_source, _destination, progress) => { await progress?.({ downloadedBytes: 10, totalBytes: 10, progress: 1 }); } },
     mediaTools: { merge: async () => {}, probeDuration: async () => 1, extractAudio: async () => {}, splitAudio: async () => [] },
-    transcriber: { transcribe: async () => { transcriberCalled = true; return []; } },
+    transcriber: { transcribe: async () => { transcriberCalled = true; return { status: "failed", text: "", segments: [] }; } },
     store,
     reporter: { report: (event) => { events.push(event); } },
   }).run({ input: "小红书分享 xhslink.cn/o/image-note" });
@@ -145,6 +145,29 @@ test("小红书图文保存正文和全部图片后正常成功", async () => {
   assert.match(store.values.get(paths.contentText) ?? "", /图文正文/);
   assert.equal(transcriberCalled, false);
   assert.equal(events.some((event) => event.stage === "obtain-transcript" && event.status === "succeeded"), true);
+});
+
+test("视频无有效口播时任务成功且不生成伪文稿和整理稿", async () => {
+  const setup = dependencies(true);
+  let rewriterCalled = false;
+  const segment = { index: 0, startSeconds: 0, endSeconds: 10, text: "", status: "no_speech" as const };
+  const result = await new IngestPipeline({
+    ...setup.dependencies,
+    transcriber: { transcribe: async (_paths, _seconds, callback) => {
+      await callback?.(segment, 1, 1);
+      return { status: "no_speech", text: "", segments: [segment] };
+    } },
+    rewriter: { rewrite: async () => { rewriterCalled = true; return "不应生成"; } },
+  }).run({ input: "https://www.douyin.com/video/1" });
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.speechStatus, "no_speech");
+  assert.equal(result.transcriptPath, undefined);
+  assert.equal(result.draftPath, undefined);
+  assert.equal(rewriterCalled, false);
+  assert.equal(setup.store.values.has(paths.transcript), false);
+  assert.equal(setup.store.values.has(paths.draft), false);
+  assert.match(setup.store.values.get(paths.transcriptJson) ?? "", /"speechStatus":"no_speech"/);
+  assert.equal(result.issues.length, 0);
 });
 
 test("小红书部分图片下载失败时保留正文并结构化降级", async () => {

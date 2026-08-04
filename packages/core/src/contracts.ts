@@ -6,6 +6,7 @@ import type {
   ResolvedLink,
   SupportedPlatform,
   TaskPaths,
+  TranscriptionResult,
   TranscriptSegment,
 } from "./models";
 
@@ -60,7 +61,7 @@ export interface MediaTranscriber {
     segmentPaths: readonly string[],
     segmentSeconds: number,
     onSegment?: (segment: TranscriptSegment, completed: number, total: number) => void | Promise<void>,
-  ): Promise<readonly TranscriptSegment[]>;
+  ): Promise<TranscriptionResult>;
 }
 
 export interface TextRewriter {

@@ -97,6 +97,7 @@ async function runIngest(args: readonly string[]): Promise<void> {
   console.log(`  状态：${result.status}`);
   if (result.platform) console.log(`  平台：${result.platform}`);
   if (result.contentType) console.log(`  内容类型：${result.contentType}`);
+  if (result.speechStatus) console.log(`  口播状态：${result.speechStatus}`);
   if (result.videoPath) console.log(`  视频：${result.videoPath}`);
   if (result.transcriptPath) console.log(`  原始文稿：${result.transcriptPath}`);
   if (result.draftPath) console.log(`  整理稿：${result.draftPath}`);
@@ -111,7 +112,7 @@ async function runIngest(args: readonly string[]): Promise<void> {
 
   const hasPrimaryArtifacts = result.contentType === "image_text"
     ? Boolean(result.contentTextPath || result.imagePaths?.length)
-    : Boolean(result.videoPath && result.transcriptPath);
+    : Boolean(result.videoPath && (result.transcriptPath || result.speechStatus === "no_speech"));
   if (!hasPrimaryArtifacts) process.exitCode = 1;
 }
 
