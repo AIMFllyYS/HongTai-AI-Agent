@@ -21,6 +21,8 @@ import {
 } from "../shared";
 
 const DOUYIN_HOST = /(^|\.)(douyin\.com|iesdouyin\.com)$/i;
+const MOBILE_USER_AGENT =
+  "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
 
 function extractAwemeId(url: string): string | undefined {
   const match = url.match(/\/(?:video|note)\/(\d+)/) ?? url.match(/[?&]modal_id=(\d+)/);
@@ -112,7 +114,9 @@ export class DouyinAdapter implements PlatformAdapter {
       const kind = link.finalUrl.includes("/note/") ? "note" : "video";
       const shareUrl = `https://www.iesdouyin.com/share/${kind}/${awemeId}/`;
       const share = await fetchPage(http, shareUrl, {
-        "User-Agent": DESKTOP_USER_AGENT,
+        // 桌面作品页可能只返回 __ac 风控脚本；公开移动分享页仍会内嵌
+        // _ROUTER_DATA，并且不需要 Cookie、登录或执行页面 JavaScript。
+        "User-Agent": MOBILE_USER_AGENT,
         Referer: link.finalUrl,
         Accept: "text/html,application/xhtml+xml",
       });
@@ -148,4 +152,3 @@ export class DouyinAdapter implements PlatformAdapter {
     };
   }
 }
-

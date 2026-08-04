@@ -8,6 +8,7 @@ import type {
   MediaSource,
   PlatformContent,
   ProgressEvent,
+  ResolvedLink,
   StageStatus,
   TaskRecord,
   TaskStage,
@@ -65,6 +66,7 @@ export class IngestPipeline {
     let videoDownloaded = false;
     let transcriptWritten = false;
     let draftWritten = false;
+    let resolvedLink: ResolvedLink | undefined;
 
     const writeTask = async (status: TaskRecord["status"], error?: string): Promise<void> => {
       const task: TaskRecord = {
@@ -133,6 +135,7 @@ export class IngestPipeline {
         async () => adapter.resolve(request.url, this.#dependencies.http),
         (value) => `完成：最终链接 ${value.finalUrl}`,
       );
+      resolvedLink = resolved;
       if (resolved.body) {
         await this.#dependencies.store.writeText(paths.rawPage, resolved.body);
       }
@@ -166,6 +169,11 @@ export class IngestPipeline {
         return { taskId, status: "degraded", platform, warnings };
       }
 
+      const maxDuration = request.maxDurationSeconds ?? DEFAULT_MAX_DURATION_SECONDS;
+      if (content.durationSeconds && content.durationSeconds > maxDuration) {
+        throw new Error(`视频时长 ${Math.ceil(content.durationSeconds)} 秒，超过首版限制 ${maxDuration} 秒`);
+      }
+
       await complete(
         "download-media",
         "开始下载视频",
@@ -183,15 +191,16 @@ export class IngestPipeline {
         (value) => `完成：${value}`,
       );
 
+      await report("obtain-transcript", "running", "开始读取视频并准备文稿");
       const duration = await this.#dependencies.mediaTools.probeDuration(paths.video);
-      const maxDuration = request.maxDurationSeconds ?? DEFAULT_MAX_DURATION_SECONDS;
       if (duration > maxDuration) {
         throw new Error(`视频时长 ${Math.ceil(duration)} 秒，超过首版限制 ${maxDuration} 秒`);
       }
 
-      await report("obtain-transcript", "running", `开始：音频时长=${Math.ceil(duration)}秒`);
+      await report("obtain-transcript", "running", `音频时长=${Math.ceil(duration)}秒`);
       let transcript = "";
       let segments: readonly TranscriptSegment[] = [];
+      let completedCharacters = 0;
 
       if (this.#dependencies.transcriber) {
         try {
@@ -205,18 +214,19 @@ export class IngestPipeline {
           segments = await this.#dependencies.transcriber.transcribe(
             segmentPaths,
             SEGMENT_SECONDS,
-            (segment, completed, total) => {
-              const completedText = segments
-                .filter((item) => item.status === "succeeded")
-                .map((item) => item.text)
-                .join("");
-              void report(
+            async (segment, completed, total) => {
+              completedCharacters += segment.text.length;
+              await report(
                 "obtain-transcript",
                 segment.status === "failed" ? "degraded" : "running",
-                `转写 ${completed}/${total}，当前分段=${segment.status === "failed" ? "失败" : "完成"}，已生成约 ${completedText.length + segment.text.length} 字`,
+                `转写 ${completed}/${total}，当前分段=${segment.status === "failed" ? "失败" : "完成"}，已生成约 ${completedCharacters} 字`,
               );
             },
           );
+          const failedSegments = segments.filter((segment) => segment.status === "failed");
+          if (failedSegments.length > 0) {
+            warnings.push(`语音转写部分失败：${failedSegments.length}/${segments.length}个分段未完成`);
+          }
           transcript = segments
             .filter((segment) => segment.status === "succeeded")
             .map((segment) => segment.text.trim())
@@ -284,7 +294,22 @@ export class IngestPipeline {
       };
     } catch (error) {
       const message = errorMessage(error);
-      await report(currentStage, "failed", `失败：${message}`);
+      const failureStage = currentStage as TaskStage;
+      await report(failureStage, "failed", `失败：${message}`);
+      if (failureStage === "resolve-link" || failureStage === "parse-content") {
+        await this.#dependencies.store.writeJson(paths.rawResponse, {
+          stage: failureStage,
+          error: message,
+          finalUrl: resolvedLink?.finalUrl,
+          httpStatus: resolvedLink?.status,
+          pageSummary: resolvedLink?.body
+            ?.replace(/<script[\s\S]*?<\/script>/gi, " ")
+            .replace(/<[^>]+>/g, " ")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 500),
+        });
+      }
       await writeTask("failed", message);
       return {
         taskId,
@@ -329,12 +354,15 @@ export class IngestPipeline {
     ) => Promise<void>,
   ): Promise<void> {
     let lastReportedAt = 0;
-    await this.#dependencies.downloader.download(source, destination, (progress) => {
+    let lastProgress: number | undefined;
+    await this.#dependencies.downloader.download(source, destination, async (progress) => {
       const now = Date.now();
+      if (progress.progress === 1 && lastProgress === 1) return;
       if (now - lastReportedAt < 1_000 && progress.progress !== 1) return;
       lastReportedAt = now;
+      lastProgress = progress.progress;
       const percent = progress.progress == null ? "未知" : `${Math.round(progress.progress * 100)}%`;
-      void report(stage, "running", `下载 ${percent}`, {
+      await report(stage, "running", `下载 ${percent}`, {
         progress: progress.progress,
         detail: {
           downloadedBytes: progress.downloadedBytes,

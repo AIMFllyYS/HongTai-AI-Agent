@@ -44,7 +44,7 @@ export interface MediaDownloader {
   download(
     source: MediaSource,
     destination: string,
-    onProgress?: (progress: DownloadProgress) => void,
+    onProgress?: (progress: DownloadProgress) => void | Promise<void>,
   ): Promise<void>;
 }
 
@@ -59,7 +59,7 @@ export interface MediaTranscriber {
   transcribe(
     segmentPaths: readonly string[],
     segmentSeconds: number,
-    onSegment?: (segment: TranscriptSegment, completed: number, total: number) => void,
+    onSegment?: (segment: TranscriptSegment, completed: number, total: number) => void | Promise<void>,
   ): Promise<readonly TranscriptSegment[]>;
 }
 
@@ -90,4 +90,3 @@ export interface IngestPipelineDependencies {
 }
 
 export type { IngestRequest };
-

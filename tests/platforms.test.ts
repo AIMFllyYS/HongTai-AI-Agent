@@ -44,6 +44,21 @@ test("抖音适配器从公开页面状态提取无水印视频", async () => {
   assert.match(content.videos[0]?.url ?? "", /aweme\.snssdk\.com/);
 });
 
+test("抖音桌面页受限时回退到公开移动分享页", async () => {
+  const html = `<script>window._ROUTER_DATA={"loaderData":{"video":{"aweme_id":"7600000000000000001","desc":"移动分享页","author":{"nickname":"作者丁"},"video":{"duration":10000,"play_addr":{"uri":"mobile-video-id","url_list":[]}}}}};</script>`;
+  const requests: HttpRequest[] = [];
+  const client = new FakeHttpClient((request) => {
+    requests.push(request);
+    if (request.url.includes("/share/video/")) return response(request.url, html);
+    return response("https://www.douyin.com/video/7600000000000000001", "<script>window.__ac_signature='challenge'</script>");
+  });
+  const adapter = new DouyinAdapter();
+  const resolved = await adapter.resolve("https://v.douyin.com/example/", client);
+  const content = await adapter.parse(resolved, client);
+  assert.equal(content.title, "移动分享页");
+  assert.match(requests[1]?.headers?.["User-Agent"] ?? "", /Mobile/);
+});
+
 test("小红书适配器提取H264视频流", async () => {
   const html = `<script>window.__INITIAL_STATE__={"note":{"noteDetailMap":{"abc123":{"note":{"noteId":"abc123","title":"测试小红书","desc":"正文","user":{"nickname":"作者乙"},"imageList":[{"urlDefault":"https://img.example/xhs.jpg"}],"video":{"duration":30000,"media":{"stream":{"h264":[{"masterUrl":"https://sns-video.example/master.mp4","videoQuality":"HD","width":1080,"height":1920,"avgBitrate":1800000}]}}}}}}}};</script>`;
   const client = new FakeHttpClient(() => response("https://www.xiaohongshu.com/explore/abc123", html));
