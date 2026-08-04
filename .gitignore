@@ -10,6 +10,7 @@ workspace/tasks/*
 workspace/cache/*
 workspace/cookies/*
 workspace/models/*
+workspace/ai/*
 !workspace/tasks/.gitkeep
 !workspace/cache/.gitkeep
 !workspace/cookies/.gitkeep
@@ -24,4 +25,3 @@ android/**/build/
 .vscode/
 .DS_Store
 Thumbs.db
-
