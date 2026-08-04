@@ -1,0 +1,12 @@
+route	page height	page errors
+/	1386px	0 errors
+/analyze/processing	1506px	0 errors
+/analyze/result	1378px	0 errors
+/analyze/detail/video	1535px	0 errors
+/analyze/detail/gallery	1876px	0 errors
+/create	1332px	0 errors
+/publish	1268px	0 errors
+/assets	1145px	0 errors
+/settings	1194px	0 errors
+/vitality/scan	997px	0 errors
+/vitality/result	1483px	0 errors
