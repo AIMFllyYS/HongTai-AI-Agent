@@ -6,9 +6,10 @@
   "packageManager": "pnpm@10.30.0",
   "scripts": {
     "cli": "pnpm --filter @hongtai/cli dev",
+    "test": "tsx --test tests/*.test.ts",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
-    "check": "pnpm typecheck && pnpm lint"
+    "check": "pnpm typecheck && pnpm lint && pnpm test"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

@@ -1,0 +1,173 @@
+import type { HttpClient, HttpResponse, MediaSource } from "@hongtai/core";
+
+export const DESKTOP_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36";
+
+export const MOBILE_USER_AGENT =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) " +
+  "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1";
+
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return isRecord(value) ? value : undefined;
+}
+
+export function asArray(value: unknown): readonly unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+export function asString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+export function asNumber(value: unknown): number | undefined {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : undefined;
+}
+
+export function firstString(value: unknown): string | undefined {
+  if (typeof value === "string") return asString(value);
+  for (const item of asArray(value)) {
+    const result = asString(item);
+    if (result) return result;
+  }
+  return undefined;
+}
+
+export function normalizeHttpUrl(value: unknown, prefix?: string): string | undefined {
+  const raw = asString(value);
+  if (!raw) return undefined;
+  if (raw.startsWith("//")) return `https:${raw}`;
+  if (raw.startsWith("https://")) return raw;
+  if (raw.startsWith("http://")) return `https://${raw.slice("http://".length)}`;
+  if (prefix) return `${prefix}${raw.replace(/^\/+/, "")}`;
+  return undefined;
+}
+
+export async function fetchPage(
+  http: HttpClient,
+  url: string,
+  headers: Readonly<Record<string, string>>,
+): Promise<HttpResponse> {
+  const response = await http.get({ url, headers, maxRedirects: 5, timeoutMs: 30_000 });
+  if (response.status < 200 || response.status >= 400) {
+    throw new Error(`页面请求失败：HTTP ${response.status}`);
+  }
+  return response;
+}
+
+function findBalancedObject(source: string, start: number): string | undefined {
+  let depth = 0;
+  let quote = "";
+  let escaped = false;
+
+  for (let index = start; index < source.length; index += 1) {
+    const character = source[index];
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === quote) {
+        quote = "";
+      }
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === "{") depth += 1;
+    if (character === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(start, index + 1);
+    }
+  }
+  return undefined;
+}
+
+function replaceUndefined(source: string): string {
+  let output = "";
+  let quote = "";
+  let escaped = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (quote) {
+      output += character;
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = "";
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      output += character;
+      continue;
+    }
+    if (source.startsWith("undefined", index)) {
+      output += "null";
+      index += "undefined".length - 1;
+      continue;
+    }
+    output += character;
+  }
+  return output;
+}
+
+export function extractAssignedJson(html: string, markers: readonly string[]): unknown {
+  for (const marker of markers) {
+    const markerIndex = html.indexOf(marker);
+    if (markerIndex < 0) continue;
+    const objectStart = html.indexOf("{", markerIndex + marker.length);
+    if (objectStart < 0) continue;
+    const jsonText = findBalancedObject(html, objectStart);
+    if (!jsonText) continue;
+    try {
+      return JSON.parse(replaceUndefined(jsonText));
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
+export function findRecord(
+  root: unknown,
+  predicate: (record: Record<string, unknown>) => boolean,
+): Record<string, unknown> | undefined {
+  const queue: unknown[] = [root];
+  const visited = new Set<object>();
+  let inspected = 0;
+
+  while (queue.length > 0 && inspected < 50_000) {
+    const value = queue.shift();
+    if (!value || typeof value !== "object" || visited.has(value)) continue;
+    visited.add(value);
+    inspected += 1;
+    if (isRecord(value)) {
+      if (predicate(value)) return value;
+      queue.push(...Object.values(value));
+    } else if (Array.isArray(value)) {
+      queue.push(...value);
+    }
+  }
+  return undefined;
+}
+
+export function dedupeMedia(sources: readonly MediaSource[]): MediaSource[] {
+  const seen = new Set<string>();
+  return sources.filter((source) => {
+    if (seen.has(source.url)) return false;
+    seen.add(source.url);
+    return true;
+  });
+}
+
+export function mediaHeaders(referer: string): Readonly<Record<string, string>> {
+  return { "User-Agent": DESKTOP_USER_AGENT, Referer: referer };
+}
+

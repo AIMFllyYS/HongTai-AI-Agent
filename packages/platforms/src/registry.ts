@@ -11,11 +11,12 @@ export class PlatformRegistry {
     return this.#adapters.length;
   }
 
+  get all(): readonly PlatformAdapter[] {
+    return this.#adapters;
+  }
+
   find(url: string): PlatformAdapter | undefined {
     return this.#adapters.find((adapter) => adapter.matches(url));
   }
 }
-
-// 平台实现将在后续逐项评审后注册，骨架阶段保持为空。
-export const platformRegistry = new PlatformRegistry([]);
 

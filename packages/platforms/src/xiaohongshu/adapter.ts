@@ -1,0 +1,137 @@
+import type {
+  HttpClient,
+  MediaSource,
+  PlatformAdapter,
+  PlatformContent,
+  ResolvedLink,
+} from "@hongtai/core";
+import {
+  MOBILE_USER_AGENT,
+  asArray,
+  asNumber,
+  asRecord,
+  asString,
+  dedupeMedia,
+  extractAssignedJson,
+  fetchPage,
+  findRecord,
+  mediaHeaders,
+  normalizeHttpUrl,
+} from "../shared";
+
+const XHS_HOST = /(^|\.)(xiaohongshu\.com|xhslink\.com)$/i;
+
+function extractNoteId(url: string): string | undefined {
+  return url.match(/\/(?:explore|note)\/([a-f0-9]+)/i)?.[1]
+    ?? url.match(/\/discovery\/item\/([a-f0-9]+)/i)?.[1]
+    ?? url.match(/\/user\/profile\/[^/]+\/([a-f0-9]+)/i)?.[1];
+}
+
+function extractNote(root: unknown, noteId?: string): Record<string, unknown> | undefined {
+  return findRecord(root, (record) => {
+    const id = asString(record.noteId) ?? asString(record.id);
+    const hasMedia = Boolean(asRecord(record.video) || Array.isArray(record.imageList));
+    return hasMedia && (!noteId || id === noteId || id == null);
+  });
+}
+
+function xhsVideos(note: Record<string, unknown>, referer: string): MediaSource[] {
+  const video = asRecord(note.video);
+  if (!video) return [];
+  const media = asRecord(video.media);
+  const stream = asRecord(media?.stream);
+  const headers = mediaHeaders(referer);
+  const sources: MediaSource[] = [];
+
+  for (const streamValue of asArray(stream?.h264)) {
+    const item = asRecord(streamValue);
+    if (!item) continue;
+    const urls = [item.masterUrl, ...asArray(item.backupUrls)];
+    for (const value of urls) {
+      const url = normalizeHttpUrl(value);
+      if (!url) continue;
+      sources.push({
+        kind: "video",
+        url,
+        quality: asString(item.videoQuality) ?? `${asNumber(item.width) ?? "?"}x${asNumber(item.height) ?? "?"}`,
+        codec: "H.264",
+        bitrate: asNumber(item.avgBitrate) ?? asNumber(item.bitRate),
+        width: asNumber(item.width),
+        height: asNumber(item.height),
+        hasWatermark: false,
+        headers,
+      });
+    }
+  }
+
+  const consumer = asRecord(video.consumer);
+  const originKey = asString(video.originVideoKey) ?? asString(consumer?.originVideoKey);
+  const direct = normalizeHttpUrl(video.url)
+    ?? (originKey ? normalizeHttpUrl(originKey, "https://sns-video-bd.xhscdn.com/") : undefined);
+  if (direct) {
+    sources.push({ kind: "video", url: direct, quality: "origin", codec: "H.264", hasWatermark: false, headers });
+  }
+  return dedupeMedia(sources);
+}
+
+export class XiaohongshuAdapter implements PlatformAdapter {
+  readonly platform = "xiaohongshu" as const;
+
+  matches(url: string): boolean {
+    try {
+      return XHS_HOST.test(new URL(url).hostname);
+    } catch {
+      return false;
+    }
+  }
+
+  async resolve(url: string, http: HttpClient): Promise<ResolvedLink> {
+    const response = await fetchPage(http, url, {
+      "User-Agent": MOBILE_USER_AGENT,
+      Referer: "https://www.xiaohongshu.com/",
+      Accept: "text/html,application/xhtml+xml",
+      "Accept-Language": "zh-CN,zh;q=0.9",
+    });
+    return { sourceUrl: url, finalUrl: response.url, status: response.status, body: response.body };
+  }
+
+  async parse(link: ResolvedLink, http: HttpClient): Promise<PlatformContent> {
+    void http;
+    const body = link.body ?? "";
+    const state = extractAssignedJson(body, ["window.__INITIAL_STATE__", "__INITIAL_STATE__"]);
+    if (!state) throw new Error("小红书公开页面中没有找到 __INITIAL_STATE__");
+    const noteId = extractNoteId(link.finalUrl);
+    const note = extractNote(state, noteId);
+    if (!note) throw new Error("小红书页面数据中没有找到笔记信息");
+
+    const user = asRecord(note.user);
+    const imageSources: MediaSource[] = [];
+    for (const imageValue of asArray(note.imageList)) {
+      const image = asRecord(imageValue);
+      if (!image) continue;
+      const url = normalizeHttpUrl(image.urlDefault)
+        ?? normalizeHttpUrl(image.urlPre)
+        ?? normalizeHttpUrl(image.url);
+      if (url) imageSources.push({ kind: "image", url, headers: mediaHeaders(link.finalUrl) });
+    }
+
+    const video = asRecord(note.video);
+    const durationMs = asNumber(video?.duration) ?? asNumber(asRecord(video?.media)?.duration);
+    return {
+      platform: this.platform,
+      id: asString(note.noteId) ?? asString(note.id) ?? noteId,
+      sourceUrl: link.sourceUrl,
+      canonicalUrl: link.finalUrl,
+      title: asString(note.title) ?? asString(note.desc),
+      description: asString(note.desc),
+      author: asString(user?.nickname) ?? asString(user?.nickName),
+      coverUrl: imageSources[0]?.url,
+      durationSeconds: durationMs ? durationMs / 1_000 : undefined,
+      videos: xhsVideos(note, link.finalUrl),
+      audios: [],
+      images: dedupeMedia(imageSources),
+      subtitles: [],
+      raw: { note },
+    };
+  }
+}
