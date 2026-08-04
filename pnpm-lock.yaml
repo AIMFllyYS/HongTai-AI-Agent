@@ -50,6 +50,10 @@ importers:
         version: 5.9.3
 
   packages/ai:
+    dependencies:
+      '@hongtai/core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       typescript:
         specifier: ^5.0.0
@@ -63,6 +67,9 @@ importers:
 
   packages/node-runtime:
     dependencies:
+      '@hongtai/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@hongtai/core':
         specifier: workspace:*
         version: link:../core

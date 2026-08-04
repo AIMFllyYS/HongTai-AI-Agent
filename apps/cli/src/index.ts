@@ -4,7 +4,7 @@ import { IngestPipeline } from "@hongtai/core";
 import {
   FileArtifactStore,
   FfmpegMediaTools,
-  MimoClient,
+  OpenAiMediaClient,
   NodeHttpClient,
   NodeMediaDownloader,
   TerminalProgressReporter,
@@ -69,19 +69,19 @@ async function runIngest(args: readonly string[]): Promise<void> {
   const projectRoot = resolve(import.meta.dirname, "../../..");
   loadLocalEnvironment(resolve(projectRoot, ".env"));
   const config = readNodeRuntimeConfig();
-  const mimo = config.ai ? new MimoClient(config.ai) : undefined;
+  const ai = config.ai ? new OpenAiMediaClient(config.ai) : undefined;
   const workspaceDirectory = isAbsolute(config.workspaceDirectory)
     ? config.workspaceDirectory
     : resolve(projectRoot, config.workspaceDirectory);
 
-  console.log(`运行模式：公开单条作品，已注册平台=${platformRegistry.size}个，AI转写=${mimo ? "已配置" : "未配置"}`);
+  console.log(`运行模式：公开单条作品，已注册平台=${platformRegistry.size}个，AI转写=${ai ? "已配置" : "未配置"}`);
   const pipeline = new IngestPipeline({
     adapters: platformRegistry.all,
     http: new NodeHttpClient(),
     downloader: new NodeMediaDownloader(),
     mediaTools: new FfmpegMediaTools(),
-    transcriber: mimo,
-    rewriter: mimo,
+    transcriber: ai,
+    rewriter: ai,
     store: new FileArtifactStore(workspaceDirectory),
     reporter: new TerminalProgressReporter(),
   });

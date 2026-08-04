@@ -5,6 +5,6 @@ export * from "./http/node-http-client";
 export * from "./media/ffmpeg-tools";
 export * from "./progress/terminal-reporter";
 export * from "./storage/file-artifact-store";
-export * from "./transcript/mimo-client";
+export * from "./transcript/openai-media-client";
 
-export const NODE_RUNTIME_STATUS = "本地下载、FFmpeg、产物存储与MiMo适配器已就绪";
+export const NODE_RUNTIME_STATUS = "本地下载、FFmpeg、产物存储与OpenAI兼容适配器已就绪";
