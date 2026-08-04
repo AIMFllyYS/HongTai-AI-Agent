@@ -17,17 +17,18 @@ const HELP = `宏泰 AI 智能体 CLI
 
 用法：
   pnpm cli --help
-  pnpm cli ingest <公开视频链接> [--output <目录>] [--max-duration <秒>]
+  pnpm cli ingest <分享文字或公开链接> [--output <目录>] [--max-duration <秒>]
 
 支持：
-  抖音、小红书、B站公开单条视频链接
+  抖音、小红书、B站公开单条作品；小红书同时支持视频和图文笔记
 
 示例：
   pnpm cli ingest "https://www.bilibili.com/video/BVxxxxxxxxxx"
   pnpm cli ingest "https://v.douyin.com/xxxxxx/" --output D:\\HongTaiOutput
+  pnpm cli ingest "复制打开小红书 xhslink.cn/o/xxxxxx 这篇笔记等你来看"
 
 说明：
-  未配置 HONGTAI_AI_API_KEY 时仍会尝试解析和下载视频，文稿仅能降级使用平台描述。
+  可以直接粘贴平台生成的整段分享文字。未配置AI时，视频文稿会降级使用平台描述；图文笔记不需要AI。
 `;
 
 interface CliOptions {
@@ -73,7 +74,7 @@ async function runIngest(args: readonly string[]): Promise<void> {
     ? config.workspaceDirectory
     : resolve(projectRoot, config.workspaceDirectory);
 
-  console.log(`运行模式：公开链接，已注册平台=${platformRegistry.size}个，AI转写=${mimo ? "已配置" : "未配置"}`);
+  console.log(`运行模式：公开单条作品，已注册平台=${platformRegistry.size}个，AI转写=${mimo ? "已配置" : "未配置"}`);
   const pipeline = new IngestPipeline({
     adapters: platformRegistry.all,
     http: new NodeHttpClient(),

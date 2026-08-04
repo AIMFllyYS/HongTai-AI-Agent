@@ -14,9 +14,9 @@ const LABELS: Readonly<Record<TaskStage, string>> = {
   "detect-platform": "识别平台",
   "resolve-link": "解析链接",
   "parse-content": "提取内容",
-  "select-media": "选择视频",
-  "download-media": "下载视频",
-  "obtain-transcript": "获取文稿",
+  "select-media": "选择资源",
+  "download-media": "下载媒体",
+  "obtain-transcript": "获取内容",
   "save-artifacts": "保存产物",
 };
 

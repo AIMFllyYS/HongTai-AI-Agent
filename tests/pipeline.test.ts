@@ -87,13 +87,14 @@ function dependencies(withVideo: boolean): { dependencies: IngestPipelineDepende
 
 test("完整流水线覆盖七个阶段、保留两种文稿并清理日志URL", async () => {
   const setup = dependencies(true);
-  const result = await new IngestPipeline(setup.dependencies).run({ input: "复制打开抖音 https://www.douyin.com/video/1 后续文字" });
+  const result = await new IngestPipeline(setup.dependencies).run({ input: "复制打开抖音 https://www.douyin.com/video/1 后续还有 https://b23.tv/ignored" });
   assert.equal(result.status, "succeeded");
   assert.ok(result.videoPath);
   assert.match(setup.store.values.get(paths.transcript) ?? "", /原始文稿/);
   assert.match(setup.store.values.get(paths.draft) ?? "", /整理文稿/);
   assert.doesNotMatch(setup.store.values.get(paths.log) ?? "", /private-token|xsec_token/);
-  assert.doesNotMatch(setup.store.values.get(paths.task) ?? "", /复制打开抖音|后续文字/);
+  assert.doesNotMatch(setup.store.values.get(paths.task) ?? "", /复制打开抖音|后续还有|b23\.tv/);
+  assert.equal(setup.events.find((event) => event.stage === "detect-platform" && event.status === "succeeded")?.detail?.ignoredSupportedUrlCount, 1);
   assert.deepEqual(new Set(setup.events.map((event) => event.stage)), new Set([
     "detect-platform", "resolve-link", "parse-content", "select-media", "download-media", "obtain-transcript", "save-artifacts",
   ]));

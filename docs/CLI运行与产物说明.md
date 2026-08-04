@@ -21,28 +21,50 @@ API Key不得写进源码、文档或提交记录。
 
 ## 2. 运行
 
+CLI既接受纯链接，也接受平台复制出的整段分享文字：
+
 ```powershell
 pnpm cli ingest "https://公开视频链接"
+pnpm cli ingest "7.94 复制打开抖音，看看作者作品 https://v.douyin.com/xxxxxx/ 其他分享文字"
+pnpm cli ingest "小红书分享内容 http://xhslink.cn/o/xxxxxx 这篇笔记等你来看"
 ```
+
+系统会跳过无关网址，按出现顺序使用第一个有效的抖音、小红书或B站链接。无协议链接会补全HTTPS，受支持域名的HTTP链接会在请求前升级为HTTPS。
 
 CLI依次显示平台识别、短链解析、内容提取、媒体选择、下载、文稿和产物保存七个阶段。
 
 ## 3. 状态含义
 
-- `succeeded`：视频、原始文稿和所需产物均成功；
-- `degraded`：核心产物存在，但部分转写、整理稿或元数据缺失；
-- `failed`：视频没有下载成功，或者最终没有任何可用文稿。
+- `succeeded`：视频及文稿完整，或小红书图文正文和图片完整；
+- `degraded`：已有可用产物，但部分图片、转写或整理稿失败；
+- `failed`：没有获得当前内容类型所需的核心产物。
 
-退出码规则：视频和文稿都存在时为0；缺少任意一个时为1。
+退出码规则：视频任务需要视频和文稿；图文任务需要正文或至少一张图片。缺少核心产物时为1。
+
+图文笔记产物：
+
+```text
+content/content.txt
+media/images/image-001.*
+media/images/image-002.*
+```
+
+图文笔记不会调用ASR。
 
 ## 4. 常见失败
 
-- 页面没有公开数据：平台风控或页面结构已经变化；
-- 没有视频源：输入的是图文作品，或者媒体字段发生变化；
+- `INPUT_NO_SUPPORTED_URL`：分享文字中没有受支持链接；
+- `CONTENT_SCHEMA_CHANGED`：平台页面结构发生变化；
+- `CONTENT_PRIVATE_OR_LOGIN_REQUIRED`：作品私密或需要登录；
+- `MEDIA_DOWNLOAD_FAILED`：媒体服务器或网络下载失败；
+- `AI_AUTH_INVALID` / `AI_PERMISSION_DENIED`：API Key或模型权限错误；
+- `AI_QUOTA_EXHAUSTED`：AI账户余额或额度不足；
+- `AI_RATE_LIMITED`：AI调用频率受限，CLI会有限重试；
+- `STORAGE_SPACE_INSUFFICIENT`：本地空间不足；
 - 下载HTTP 403：平台CDN验证了Referer或媒体地址已过期；
 - FFmpeg失败：本机未安装FFmpeg，或B站音视频流编码不兼容；
-- MiMo HTTP 401/403：API Key无效或账户没有对应模型权限；
-- MiMo HTTP 429：调用频率或额度受限，CLI会有限重试；
 - 只有平台描述：语音转写失败后使用描述字段降级，不代表真实语音逐字稿。
+
+CLI会打印稳定错误码；未来前端使用错误码、严重程度和建议动作展示弹窗，不解析中文错误文本。
 
 首版不自动登录或读取浏览器Cookie。遇到需要登录的作品会明确失败，不进行隐藏式绕过。

@@ -124,11 +124,12 @@ export class IngestPipeline {
       startMessage: string,
       operation: () => Promise<T>,
       finishMessage: (value: T, elapsedMs: number) => string,
+      finishExtra?: (value: T) => Partial<Pick<ProgressEvent, "progress" | "detail">>,
     ): Promise<T> => {
       const started = Date.now();
       await report(stage, "running", startMessage);
       const value = await operation();
-      await report(stage, "succeeded", finishMessage(value, Date.now() - started));
+      await report(stage, "succeeded", finishMessage(value, Date.now() - started), finishExtra?.(value));
       await writeTask("running");
       return value;
     };
@@ -145,13 +146,19 @@ export class IngestPipeline {
           if (!adapter) {
             throw new TaskError({ code: "INPUT_PLATFORM_UNSUPPORTED", message: "当前只支持抖音、小红书和B站链接", action: "edit_input" });
           }
+          platform = adapter.platform;
+          sourceUrl = normalized.normalizedUrl;
           return { adapter, normalized };
         },
         (value, elapsedMs) => `完成：${value.adapter.platform}${value.normalized.ignoredSupportedUrlCount > 0 ? `，已忽略其他${value.normalized.ignoredSupportedUrlCount}个链接` : ""}，耗时 ${elapsedMs}ms`,
+        (value) => ({
+          detail: {
+            normalizedUrl: safeUrlForDisplay(value.normalized.normalizedUrl),
+            ignoredSupportedUrlCount: value.normalized.ignoredSupportedUrlCount,
+          },
+        }),
       );
       const adapter = detected.adapter;
-      platform = adapter.platform;
-      sourceUrl = detected.normalized.normalizedUrl;
 
       const resolved = await complete(
         "resolve-link",
