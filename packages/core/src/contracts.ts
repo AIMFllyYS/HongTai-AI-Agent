@@ -72,6 +72,7 @@ export interface ArtifactStore {
   writeJson(path: string, value: unknown): Promise<void>;
   writeText(path: string, value: string): Promise<void>;
   appendText(path: string, value: string): Promise<void>;
+  imagePath(paths: TaskPaths, index: number, source: MediaSource): string;
 }
 
 export interface ProgressReporter {

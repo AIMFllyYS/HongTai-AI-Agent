@@ -72,6 +72,18 @@ test("小红书适配器提取H264视频流", async () => {
   assert.equal(content.videos[0]?.codec, "H.264");
 });
 
+test("小红书适配器识别图文笔记", async () => {
+  const html = `<script>window.__INITIAL_STATE__={"note":{"noteDetailMap":{"img123":{"note":{"noteId":"img123","title":"图文测试","desc":"正文","user":{"nickname":"作者戊"},"imageList":[{"urlDefault":"https://img.example/1.jpg"},{"urlDefault":"https://img.example/2.jpg"}]}}}}};</script>`;
+  const client = new FakeHttpClient(() => response("https://www.xiaohongshu.com/discovery/item/img123", html));
+  const adapter = new XiaohongshuAdapter();
+  assert.equal(adapter.matches("https://xhslink.cn/o/example"), true);
+  const resolved = await adapter.resolve("https://www.xiaohongshu.com/discovery/item/img123", client);
+  const content = await adapter.parse(resolved, client);
+  assert.equal(content.contentType, "image_text");
+  assert.equal(content.images.length, 2);
+  assert.equal(content.videos.length, 0);
+});
+
 test("B站适配器提取P1 DASH音视频", async () => {
   const client = new FakeHttpClient((request) => {
     if (request.url.includes("/x/web-interface/view")) {

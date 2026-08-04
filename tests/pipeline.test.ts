@@ -23,6 +23,8 @@ const paths: TaskPaths = {
   videoPart: "task/media/video-only.m4s",
   audioPart: "task/media/audio-only.m4s",
   audio: "task/media/audio.wav",
+  imageDirectory: "task/media/images",
+  contentText: "task/content/content.txt",
   segmentDirectory: "task/media/segments",
   transcript: "task/transcript/transcript.txt",
   transcriptJson: "task/transcript/transcript.json",
@@ -35,6 +37,7 @@ class MemoryStore implements ArtifactStore {
   async writeJson(path: string, value: unknown): Promise<void> { this.values.set(path, JSON.stringify(value)); }
   async writeText(path: string, value: string): Promise<void> { this.values.set(path, value); }
   async appendText(path: string, value: string): Promise<void> { this.values.set(path, (this.values.get(path) ?? "") + value); }
+  imagePath(_paths: TaskPaths, index: number): string { return `task/media/images/image-${index + 1}.jpg`; }
 }
 
 function dependencies(withVideo: boolean): { dependencies: IngestPipelineDependencies; events: ProgressEvent[]; store: MemoryStore } {
@@ -99,4 +102,68 @@ test("没有视频源时返回降级并保存任务", async () => {
   assert.equal(result.status, "degraded");
   assert.equal(result.videoPath, undefined);
   assert.ok(setup.store.values.has(paths.task));
+});
+
+test("小红书图文保存正文和全部图片后正常成功", async () => {
+  const events: ProgressEvent[] = [];
+  const store = new MemoryStore();
+  let transcriberCalled = false;
+  const adapter: PlatformAdapter = {
+    platform: "xiaohongshu",
+    matches: () => true,
+    resolve: async (url) => ({ sourceUrl: url, finalUrl: url, status: 200, body: "<html></html>" }),
+    parse: async (link) => ({
+      platform: "xiaohongshu",
+      contentType: "image_text",
+      sourceUrl: link.sourceUrl,
+      canonicalUrl: link.finalUrl,
+      title: "图文标题",
+      description: "图文正文",
+      videos: [], audios: [], subtitles: [],
+      images: [
+        { kind: "image", url: "https://image.example/1.jpg" },
+        { kind: "image", url: "https://image.example/2.jpg" },
+      ],
+      raw: { ok: true },
+    }),
+  };
+  const result = await new IngestPipeline({
+    adapters: [adapter],
+    http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    downloader: { download: async (_source, _destination, progress) => { await progress?.({ downloadedBytes: 10, totalBytes: 10, progress: 1 }); } },
+    mediaTools: { merge: async () => {}, probeDuration: async () => 1, extractAudio: async () => {}, splitAudio: async () => [] },
+    transcriber: { transcribe: async () => { transcriberCalled = true; return []; } },
+    store,
+    reporter: { report: (event) => { events.push(event); } },
+  }).run({ input: "小红书分享 xhslink.cn/o/image-note" });
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.contentType, "image_text");
+  assert.equal(result.imagePaths?.length, 2);
+  assert.match(store.values.get(paths.contentText) ?? "", /图文正文/);
+  assert.equal(transcriberCalled, false);
+  assert.equal(events.some((event) => event.stage === "obtain-transcript" && event.status === "succeeded"), true);
+});
+
+test("小红书部分图片下载失败时保留正文并结构化降级", async () => {
+  const store = new MemoryStore();
+  let downloads = 0;
+  const adapter: PlatformAdapter = {
+    platform: "xiaohongshu",
+    matches: () => true,
+    resolve: async (url) => ({ sourceUrl: url, finalUrl: url, status: 200, body: "" }),
+    parse: async (link) => ({
+      platform: "xiaohongshu", contentType: "image_text", sourceUrl: link.sourceUrl,
+      title: "标题", description: "正文", videos: [], audios: [], subtitles: [], raw: {},
+      images: [{ kind: "image", url: "https://image.example/1.jpg" }, { kind: "image", url: "https://image.example/2.jpg" }],
+    }),
+  };
+  const result = await new IngestPipeline({
+    adapters: [adapter], http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    downloader: { download: async () => { downloads += 1; if (downloads === 2) throw new Error("network"); } },
+    mediaTools: { merge: async () => {}, probeDuration: async () => 1, extractAudio: async () => {}, splitAudio: async () => [] },
+    store, reporter: { report: () => {} },
+  }).run({ input: "https://xhslink.cn/o/image-note" });
+  assert.equal(result.status, "degraded");
+  assert.equal(result.imagePaths?.length, 1);
+  assert.equal(result.issues.some((issue) => issue.code === "MEDIA_DOWNLOAD_FAILED"), true);
 });

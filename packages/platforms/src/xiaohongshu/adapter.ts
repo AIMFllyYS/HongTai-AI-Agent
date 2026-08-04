@@ -117,9 +117,10 @@ export class XiaohongshuAdapter implements PlatformAdapter {
 
     const video = asRecord(note.video);
     const durationMs = asNumber(video?.duration) ?? asNumber(asRecord(video?.media)?.duration);
+    const videos = xhsVideos(note, link.finalUrl);
     return {
       platform: this.platform,
-      contentType: xhsVideos(note, link.finalUrl).length > 0 ? "video" : imageSources.length > 0 ? "image_text" : "unknown",
+      contentType: videos.length > 0 ? "video" : imageSources.length > 0 ? "image_text" : "unknown",
       id: asString(note.noteId) ?? asString(note.id) ?? noteId,
       sourceUrl: link.sourceUrl,
       canonicalUrl: link.finalUrl,
@@ -128,7 +129,7 @@ export class XiaohongshuAdapter implements PlatformAdapter {
       author: asString(user?.nickname) ?? asString(user?.nickName),
       coverUrl: imageSources[0]?.url,
       durationSeconds: durationMs ? durationMs / 1_000 : undefined,
-      videos: xhsVideos(note, link.finalUrl),
+      videos,
       audios: [],
       images: dedupeMedia(imageSources),
       subtitles: [],

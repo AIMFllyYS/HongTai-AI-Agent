@@ -1,5 +1,5 @@
 import process from "node:process";
-import { isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { IngestPipeline } from "@hongtai/core";
 import {
   FileArtifactStore,
@@ -99,13 +99,19 @@ async function runIngest(args: readonly string[]): Promise<void> {
   if (result.videoPath) console.log(`  视频：${result.videoPath}`);
   if (result.transcriptPath) console.log(`  原始文稿：${result.transcriptPath}`);
   if (result.draftPath) console.log(`  整理稿：${result.draftPath}`);
+  if (result.contentTextPath) console.log(`  图文正文：${result.contentTextPath}`);
+  const firstImagePath = result.imagePaths?.[0];
+  if (firstImagePath) console.log(`  图片：${result.imagePaths?.length ?? 0}张，目录=${dirname(firstImagePath)}`);
   for (const issue of result.issues) {
     const line = `  ${issue.severity === "error" ? "错误" : "提示"}[${issue.code}]：${issue.userMessage}`;
     if (issue.severity === "error") console.error(line);
     else console.log(line);
   }
 
-  if (!result.videoPath || !result.transcriptPath) process.exitCode = 1;
+  const hasPrimaryArtifacts = result.contentType === "image_text"
+    ? Boolean(result.contentTextPath || result.imagePaths?.length)
+    : Boolean(result.videoPath && result.transcriptPath);
+  if (!hasPrimaryArtifacts) process.exitCode = 1;
 }
 
 async function main(args: readonly string[]): Promise<void> {

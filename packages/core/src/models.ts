@@ -130,6 +130,8 @@ export interface TaskPaths {
   readonly videoPart: string;
   readonly audioPart: string;
   readonly audio: string;
+  readonly imageDirectory: string;
+  readonly contentText: string;
   readonly segmentDirectory: string;
   readonly transcript: string;
   readonly transcriptJson: string;
@@ -157,5 +159,7 @@ export interface IngestResult {
   readonly videoPath?: string;
   readonly transcriptPath?: string;
   readonly draftPath?: string;
+  readonly imagePaths?: readonly string[];
+  readonly contentTextPath?: string;
   readonly issues: readonly TaskIssue[];
 }

@@ -159,6 +159,79 @@ export class IngestPipeline {
       await this.#dependencies.store.writeJson(paths.rawResponse, content.raw);
       await this.#dependencies.store.writeJson(paths.metadata, content);
 
+      if (content.contentType === "image_text") {
+        const textParts = [content.title, content.description]
+          .map((value) => value?.trim())
+          .filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index);
+        const contentText = textParts.join("\n\n");
+
+        await report("select-media", "running", "开始选择图文资源");
+        if (content.images.length > 0) {
+          await report("select-media", "succeeded", `完成：图片=${content.images.length}张，正文=${contentText.length}字`);
+        } else {
+          const issue = warningIssue("MEDIA_SOURCE_NOT_FOUND", "select-media", "图文笔记中没有找到可下载图片", { action: "view_partial_result", platform });
+          issues.push(issue);
+          await report("select-media", "degraded", issue.userMessage, {}, issue);
+        }
+
+        const imagePaths: string[] = [];
+        await report("download-media", "running", `开始下载${content.images.length}张图片`);
+        for (let index = 0; index < content.images.length; index += 1) {
+          const source = content.images[index];
+          if (!source) continue;
+          const destination = this.#dependencies.store.imagePath(paths, index, source);
+          try {
+            await this.#downloadSource(taskId, "download-media", source, destination, report);
+            imagePaths.push(destination);
+          } catch (error) {
+            const base = issueFromError(error, "download-media", platform);
+            const issue = warningIssue("MEDIA_DOWNLOAD_FAILED", "download-media", `第${index + 1}张图片下载失败`, {
+              action: "view_partial_result",
+              platform,
+              retryable: base.retryable,
+              details: { imageIndex: index + 1 },
+            });
+            issues.push(issue);
+            await report("download-media", "degraded", issue.userMessage, {}, issue);
+          }
+        }
+        await report(
+          "download-media",
+          imagePaths.length === content.images.length ? "succeeded" : "degraded",
+          `完成：已保存 ${imagePaths.length}/${content.images.length} 张图片`,
+        );
+
+        await report("obtain-transcript", "running", "图文笔记无需语音转写，开始保存正文");
+        let contentTextWritten = false;
+        if (contentText) {
+          await this.#dependencies.store.writeText(paths.contentText, `${contentText}\n`);
+          contentTextWritten = true;
+          await report("obtain-transcript", "succeeded", `完成：图文正文 ${contentText.length} 字`);
+        } else {
+          const issue = warningIssue("CONTENT_NOT_FOUND", "obtain-transcript", "图文笔记没有可保存的标题或正文", { action: "view_partial_result", platform });
+          issues.push(issue);
+          await report("obtain-transcript", "degraded", issue.userMessage, {}, issue);
+        }
+
+        await report("save-artifacts", "running", "开始保存图文任务结果");
+        const hasArtifacts = contentTextWritten || imagePaths.length > 0;
+        const finalStatus = !hasArtifacts ? "failed" : issues.length > 0 ? "degraded" : "succeeded";
+        if (!hasArtifacts) {
+          issues.push(issueFromError(new TaskError({ code: "CONTENT_NOT_FOUND", message: "没有保存到任何图文内容", action: "retry" }), "save-artifacts", platform));
+        }
+        await writeTask(finalStatus);
+        await report("save-artifacts", hasArtifacts ? "succeeded" : "failed", `完成：${paths.root}`);
+        return {
+          taskId,
+          status: finalStatus,
+          platform,
+          contentType,
+          imagePaths,
+          contentTextPath: contentTextWritten ? paths.contentText : undefined,
+          issues,
+        };
+      }
+
       const selection = await complete(
         "select-media",
         "开始选择最佳媒体源",
