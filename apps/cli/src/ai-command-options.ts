@@ -12,3 +12,10 @@ export function parseDiagnosisServeOptions(args: readonly string[]): { readonly 
   }
   return { port };
 }
+
+export function parseContentAnalysisOptions(args: readonly string[]): { readonly taskId: string } {
+  if (args.length !== 1) throw new Error("analyze-content需要且只接受一个任务ID参数");
+  const taskId = args[0];
+  if (!taskId || !/^[a-zA-Z0-9-]+$/.test(taskId)) throw new Error("任务ID格式无效");
+  return { taskId };
+}

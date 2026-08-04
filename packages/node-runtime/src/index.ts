@@ -1,4 +1,5 @@
 export * from "./ai/diagnosis-harness-server";
+export * from "./ai/file-content-analysis-store";
 export * from "./ai/file-diagnosis-repository";
 export * from "./ai/sharp-image-preprocessor";
 export * from "./config";

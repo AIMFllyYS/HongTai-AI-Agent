@@ -1,9 +1,10 @@
 import process from "node:process";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { DiagnosisFlow, OpenAiCompatibleProvider } from "@hongtai/ai";
+import { ContentAnalysisFlow, DiagnosisFlow, OpenAiCompatibleProvider } from "@hongtai/ai";
 import { IngestPipeline } from "@hongtai/core";
 import {
   FileDiagnosisRepository,
+  FileContentAnalysisStore,
   FileArtifactStore,
   FfmpegMediaTools,
   OpenAiMediaClient,
@@ -16,7 +17,7 @@ import {
   readNodeRuntimeConfig,
 } from "@hongtai/node-runtime";
 import { platformRegistry } from "@hongtai/platforms";
-import { parseDiagnosisServeOptions } from "./ai-command-options";
+import { parseContentAnalysisOptions, parseDiagnosisServeOptions } from "./ai-command-options";
 
 const HELP = `宏泰 AI 智能体 CLI
 
@@ -24,6 +25,7 @@ const HELP = `宏泰 AI 智能体 CLI
   pnpm cli --help
   pnpm cli ingest <分享文字或公开链接> [--output <目录>] [--max-duration <秒>]
   pnpm cli diagnosis serve [--port <端口>]
+  pnpm cli analyze-content <任务ID>
 
 支持：
   抖音、小红书、B站公开单条作品；小红书同时支持视频和图文笔记
@@ -161,6 +163,32 @@ async function runDiagnosisServe(args: readonly string[]): Promise<void> {
   });
 }
 
+async function runContentAnalysis(args: readonly string[]): Promise<void> {
+  const options = parseContentAnalysisOptions(args);
+  const projectRoot = resolve(import.meta.dirname, "../../..");
+  loadLocalEnvironment(resolve(projectRoot, ".env"));
+  const config = readNodeRuntimeConfig();
+  if (!config.ai) throw new Error("未配置AI连接，请先填写.env中的Base URL、API Key、文本模型和视觉模型");
+  const workspaceDirectory = isAbsolute(config.workspaceDirectory)
+    ? config.workspaceDirectory
+    : resolve(projectRoot, config.workspaceDirectory);
+  const provider = new OpenAiCompatibleProvider(config.ai);
+  const flow = new ContentAnalysisFlow({
+    provider,
+    store: new FileContentAnalysisStore(workspaceDirectory),
+    onEvent: (event) => {
+      if (event.type === "reasoning_delta") process.stdout.write(`[思考] ${safeTerminalText(event.delta)}\n`);
+      if (event.type === "content_delta") process.stdout.write(`[输出] ${safeTerminalText(event.delta)}\n`);
+      if (event.type === "usage") console.log(`[用量] 输入=${event.promptTokens ?? "未知"}，输出=${event.completionTokens ?? "未知"}`);
+    },
+  });
+  console.log(`开始拆解任务：${options.taskId}`);
+  const result = await flow.run(options.taskId);
+  const outputPath = join(workspaceDirectory, "tasks", options.taskId, "analysis", "content-analysis.json");
+  console.log(`拆解完成：${result.overview.summary}`);
+  console.log(`结构化结果：${outputPath}`);
+}
+
 async function main(args: readonly string[]): Promise<void> {
   const [command, ...rest] = args;
   if (!command || command === "--help" || command === "-h") {
@@ -169,6 +197,10 @@ async function main(args: readonly string[]): Promise<void> {
   }
   if (command === "diagnosis" && rest[0] === "serve") {
     await runDiagnosisServe(rest.slice(1));
+    return;
+  }
+  if (command === "analyze-content") {
+    await runContentAnalysis(rest);
     return;
   }
   if (command !== "ingest") {
