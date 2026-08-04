@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@hongtai/ai": "workspace:*",
-    "@hongtai/core": "workspace:*"
+    "@hongtai/core": "workspace:*",
+    "sharp": "^0.34.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

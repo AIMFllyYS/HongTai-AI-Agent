@@ -1,23 +1,29 @@
 import process from "node:process";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import { DiagnosisFlow, OpenAiCompatibleProvider } from "@hongtai/ai";
 import { IngestPipeline } from "@hongtai/core";
 import {
+  FileDiagnosisRepository,
   FileArtifactStore,
   FfmpegMediaTools,
   OpenAiMediaClient,
+  SharpImagePreprocessor,
   NodeHttpClient,
   NodeMediaDownloader,
   TerminalProgressReporter,
+  createDiagnosisHarnessServer,
   loadLocalEnvironment,
   readNodeRuntimeConfig,
 } from "@hongtai/node-runtime";
 import { platformRegistry } from "@hongtai/platforms";
+import { parseDiagnosisServeOptions } from "./ai-command-options";
 
 const HELP = `宏泰 AI 智能体 CLI
 
 用法：
   pnpm cli --help
   pnpm cli ingest <分享文字或公开链接> [--output <目录>] [--max-duration <秒>]
+  pnpm cli diagnosis serve [--port <端口>]
 
 支持：
   抖音、小红书、B站公开单条作品；小红书同时支持视频和图文笔记
@@ -30,6 +36,12 @@ const HELP = `宏泰 AI 智能体 CLI
 说明：
   可以直接粘贴平台生成的整段分享文字。未配置AI时，视频文稿会降级使用平台描述；图文笔记不需要AI。
 `;
+
+function safeTerminalText(value: string): string {
+  return value
+    .replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]")
+    .replace(/data:(image|audio)\/[^;]+;base64,[A-Za-z0-9+/=]+/gi, "data:$1/[REDACTED];base64,[REDACTED]");
+}
 
 interface CliOptions {
   readonly input: string;
@@ -116,10 +128,47 @@ async function runIngest(args: readonly string[]): Promise<void> {
   if (!hasPrimaryArtifacts) process.exitCode = 1;
 }
 
+async function runDiagnosisServe(args: readonly string[]): Promise<void> {
+  const options = parseDiagnosisServeOptions(args);
+  const projectRoot = resolve(import.meta.dirname, "../../..");
+  loadLocalEnvironment(resolve(projectRoot, ".env"));
+  const config = readNodeRuntimeConfig();
+  if (!config.ai) throw new Error("未配置AI连接，请先填写.env中的Base URL、API Key、文本模型和视觉模型");
+  const workspaceDirectory = isAbsolute(config.workspaceDirectory)
+    ? config.workspaceDirectory
+    : resolve(projectRoot, config.workspaceDirectory);
+  const diagnosisRoot = join(workspaceDirectory, "ai", "diagnosis");
+  const repository = new FileDiagnosisRepository(diagnosisRoot);
+  const provider = new OpenAiCompatibleProvider(config.ai);
+  const flow = new DiagnosisFlow({
+    provider,
+    repository,
+    contextWindowTokens: config.ai.contextWindowTokens,
+    onEvent: (event) => {
+      if (event.type === "reasoning_delta") process.stdout.write(`[思考] ${safeTerminalText(event.delta)}\n`);
+      if (event.type === "content_delta") process.stdout.write(`[输出] ${safeTerminalText(event.delta)}\n`);
+      if (event.type === "usage") console.log(`[用量] 输入=${event.promptTokens ?? "未知"}，输出=${event.completionTokens ?? "未知"}`);
+    },
+  });
+  const server = createDiagnosisHarnessServer({
+    flow,
+    preprocessor: new SharpImagePreprocessor(),
+    onSessionCreated: (sessionId) => console.log(`会话已保存：${join(diagnosisRoot, sessionId)}`),
+  });
+  server.listen(options.port, "127.0.0.1", () => {
+    console.log(`本地图片观察测试入口：http://127.0.0.1:${options.port}`);
+    console.log("仅监听本机回环地址，按Ctrl+C停止。详细JSON、reasoning和日志保存在workspace。 ");
+  });
+}
+
 async function main(args: readonly string[]): Promise<void> {
   const [command, ...rest] = args;
   if (!command || command === "--help" || command === "-h") {
     console.log(HELP);
+    return;
+  }
+  if (command === "diagnosis" && rest[0] === "serve") {
+    await runDiagnosisServe(rest.slice(1));
     return;
   }
   if (command !== "ingest") {

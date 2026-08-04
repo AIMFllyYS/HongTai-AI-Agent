@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@hongtai/core": "workspace:*"
+    "@hongtai/core": "workspace:*",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0"

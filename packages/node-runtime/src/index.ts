@@ -1,3 +1,6 @@
+export * from "./ai/diagnosis-harness-server";
+export * from "./ai/file-diagnosis-repository";
+export * from "./ai/sharp-image-preprocessor";
 export * from "./config";
 export * from "./errors";
 export * from "./download/node-downloader";
