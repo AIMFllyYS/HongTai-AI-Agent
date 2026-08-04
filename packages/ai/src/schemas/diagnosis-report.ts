@@ -56,6 +56,12 @@ export const diagnosisReportSchema = z.object({
   limitations: z.array(z.string()).min(1),
   disclaimer: z.string().min(1),
 }).superRefine((report, context) => {
+  if ((!report.imageQuality.usable || report.imageQuality.overallQuality === "unusable") && report.observations.length > 0) {
+    context.addIssue({ code: "custom", path: ["observations"], message: "图片不可用时不能输出可见观察项" });
+  }
+  if (report.imageQuality.usable && report.imageQuality.overallQuality === "unusable") {
+    context.addIssue({ code: "custom", path: ["imageQuality"], message: "图片可用性与总体质量矛盾" });
+  }
   const ids = new Set(report.observations.map((item) => item.id));
   if (ids.size !== report.observations.length) {
     context.addIssue({ code: "custom", path: ["observations"], message: "观察项ID必须唯一" });

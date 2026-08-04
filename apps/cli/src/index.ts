@@ -13,6 +13,7 @@ import {
   NodeMediaDownloader,
   TerminalProgressReporter,
   createDiagnosisHarnessServer,
+  sanitizeAiArtifactText,
   loadLocalEnvironment,
   readNodeRuntimeConfig,
 } from "@hongtai/node-runtime";
@@ -38,12 +39,6 @@ const HELP = `宏泰 AI 智能体 CLI
 说明：
   可以直接粘贴平台生成的整段分享文字。未配置AI时，视频文稿会降级使用平台描述；图文笔记不需要AI。
 `;
-
-function safeTerminalText(value: string): string {
-  return value
-    .replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]")
-    .replace(/data:(image|audio)\/[^;]+;base64,[A-Za-z0-9+/=]+/gi, "data:$1/[REDACTED];base64,[REDACTED]");
-}
 
 interface CliOptions {
   readonly input: string;
@@ -147,8 +142,8 @@ async function runDiagnosisServe(args: readonly string[]): Promise<void> {
     repository,
     contextWindowTokens: config.ai.contextWindowTokens,
     onEvent: (event) => {
-      if (event.type === "reasoning_delta") process.stdout.write(`[思考] ${safeTerminalText(event.delta)}\n`);
-      if (event.type === "content_delta") process.stdout.write(`[输出] ${safeTerminalText(event.delta)}\n`);
+      if (event.type === "reasoning_delta") process.stdout.write(`[思考] ${sanitizeAiArtifactText(event.delta)}\n`);
+      if (event.type === "content_delta") process.stdout.write(`[输出] ${sanitizeAiArtifactText(event.delta)}\n`);
       if (event.type === "usage") console.log(`[用量] 输入=${event.promptTokens ?? "未知"}，输出=${event.completionTokens ?? "未知"}`);
     },
   });
@@ -177,8 +172,8 @@ async function runContentAnalysis(args: readonly string[]): Promise<void> {
     provider,
     store: new FileContentAnalysisStore(workspaceDirectory),
     onEvent: (event) => {
-      if (event.type === "reasoning_delta") process.stdout.write(`[思考] ${safeTerminalText(event.delta)}\n`);
-      if (event.type === "content_delta") process.stdout.write(`[输出] ${safeTerminalText(event.delta)}\n`);
+      if (event.type === "reasoning_delta") process.stdout.write(`[思考] ${sanitizeAiArtifactText(event.delta)}\n`);
+      if (event.type === "content_delta") process.stdout.write(`[输出] ${sanitizeAiArtifactText(event.delta)}\n`);
       if (event.type === "usage") console.log(`[用量] 输入=${event.promptTokens ?? "未知"}，输出=${event.completionTokens ?? "未知"}`);
     },
   });

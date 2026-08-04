@@ -1,13 +1,7 @@
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AiMessage, AiRunRecord, DiagnosisReportV1, DiagnosisRepository, DiagnosisSession, ObservationMode } from "@hongtai/ai";
-
-function sanitize(value: string): string {
-  return value
-    .replace(/Bearer\s+[A-Za-z0-9._~+/-]+/gi, "Bearer [REDACTED]")
-    .replace(/data:(image|audio)\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+/gi, "data:$1/[REDACTED];base64,[REDACTED]")
-    .replace(/("?(?:api[_-]?key|authorization|cookie|token)"?\s*[:=]\s*")([^"]+)(")/gi, "$1[REDACTED]$3");
-}
+import { sanitizeAiArtifactText } from "./sanitize-ai-artifact";
 
 async function readJson<T>(path: string): Promise<T | undefined> {
   try {
@@ -78,8 +72,8 @@ export class FileDiagnosisRepository implements DiagnosisRepository {
   async saveRun(sessionId: string, run: AiRunRecord): Promise<void> {
     const root = join(this.#sessionRoot(sessionId), "runs", run.id);
     await mkdir(root, { recursive: true });
-    const rawResponse = sanitize(run.rawResponse);
-    const reasoning = sanitize(run.reasoning);
+    const rawResponse = sanitizeAiArtifactText(run.rawResponse);
+    const reasoning = sanitizeAiArtifactText(run.reasoning);
     await writeFile(join(root, "raw-response.json"), `${JSON.stringify({ content: rawResponse }, null, 2)}\n`, "utf8");
     const reasoningLines = reasoning.split(/\r?\n/).filter(Boolean)
       .map((content) => JSON.stringify({ type: "reasoning", content })).join("\n");

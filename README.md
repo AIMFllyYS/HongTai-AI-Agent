@@ -6,10 +6,12 @@
 抖音/小红书/B站公开视频链接
 → 解析作品和视频源
 → 下载本地视频
-→ MiMo语音转写
-→ MiMo整理文稿
+→ OpenAI兼容服务语音转写
+→ OpenAI兼容服务整理文稿
 → 保存全部产物
 ```
+
+在此基础上，当前还提供两个独立的AI应用能力：舌象/面部图片观察与多轮对话，以及对既有视频或图文任务进行证据可追溯的内容拆解。正式移动端界面和自动视频合成尚未进入本阶段。
 
 首版只支持公开、单条视频链接，不处理Cookie、自动登录、批量下载和画面修复型去水印。
 
@@ -18,7 +20,7 @@
 - Node.js 24（最低建议20以上）；
 - pnpm 10；
 - 可从终端直接运行的 `ffmpeg` 和 `ffprobe`；
-- 生成语音文稿时需要小米MiMo API Key。
+- 使用AI能力时需要一个兼容OpenAI格式的服务地址、API Key及相应模型。
 
 检查本机环境：
 
@@ -33,11 +35,17 @@ pnpm install
 Copy-Item .env.example .env
 ```
 
-打开本地`.env`，至少填写：
+打开本地`.env`，显式填写自己的供应商配置：
 
 ```text
+HONGTAI_AI_BASE_URL=https://你的服务地址/v1
 HONGTAI_AI_API_KEY=你的API密钥
+HONGTAI_TEXT_MODEL=文本模型
+HONGTAI_VISION_MODEL=视觉模型
+HONGTAI_ASR_MODEL=语音转写模型
 ```
+
+项目不内置默认供应商。文本/视觉使用Chat Completions兼容协议；ASR可选择标准`audio/transcriptions`或兼容供应商的`chat-input-audio`。
 
 `.env`、任务缓存和本地模型默认不会进入Git。
 
@@ -60,6 +68,20 @@ pnpm cli ingest "https://xhslink.com/o/xxxxxx"
 ```powershell
 pnpm cli ingest "公开视频链接" --output "D:\HongTaiOutput"
 pnpm cli ingest "公开视频链接" --max-duration 600
+```
+
+启动仅供本地开发使用的图片观察与对话入口：
+
+```powershell
+pnpm cli diagnosis serve
+```
+
+浏览器打开终端显示的`127.0.0.1`地址，选择舌象或面部图片。页面只显示报告摘要和对话；完整JSON、reasoning和日志保存在`workspace/ai/diagnosis/`。
+
+拆解一个已经完成的抓取任务：
+
+```powershell
+pnpm cli analyze-content "任务ID"
 ```
 
 查看帮助：
@@ -110,6 +132,24 @@ workspace/tasks/{task-id}/
 - `draft.txt`：补标点、去明显口癖和分段后的整理稿；
 - `metadata.json`：平台元数据及媒体源；
 - `raw`：平台原始页面和响应，供平台规则变化时排查。
+
+舌象/面部会话保存为：
+
+```text
+workspace/ai/diagnosis/{session-id}/
+├── session.json
+├── source/normalized-image.jpg
+├── report.json
+├── messages.jsonl
+├── context-summary.json
+├── task.log
+└── runs/{run-id}/
+    ├── run.json
+    ├── raw-response.json
+    └── reasoning.jsonl
+```
+
+内容拆解结果保存到原任务的`analysis/`目录，核心文件为`content-analysis.json`。两个AI功能的唯一正式结构化协议都是经过Schema校验的JSON，不使用XML或`thinking`标签。
 
 ## 基础检查
 

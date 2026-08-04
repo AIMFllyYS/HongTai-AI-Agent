@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { TaskError } from "../packages/core/src/index";
 import {
   DiagnosisFlow,
   type AiGenerateRequest,
@@ -61,6 +62,14 @@ class SequenceProvider implements AiProvider {
   async transcribe(): Promise<string> { return ""; }
 }
 
+class FailingProvider implements AiProvider {
+  constructor(readonly code: "AI_PERMISSION_DENIED" | "AI_SERVER_ERROR") {}
+  async generate(): Promise<AiGenerateResult> {
+    throw new TaskError({ code: this.code, message: "供应商失败", action: "retry" });
+  }
+  async transcribe(): Promise<string> { return ""; }
+}
+
 test("舌象报告在首次JSON无效时只修复一次并保存标准结果", async () => {
   const repository = new MemoryRepository();
   const provider = new SequenceProvider(["不是JSON", JSON.stringify(validReport)]);
@@ -105,4 +114,35 @@ test("上下文超过窗口80%时摘要较早消息并保留最近六条", async
   assert.equal(provider.calls.length, 2);
   assert.match(JSON.stringify(provider.calls[1]?.messages), /较早对话摘要/);
   assert.doesNotMatch(JSON.stringify(provider.calls[1]?.messages), /第0条/);
+});
+
+test("图片不可用时Schema拒绝模型虚构可见观察项", async () => {
+  const repository = new MemoryRepository();
+  const invalid = {
+    ...validReport,
+    imageQuality: { usable: false, overallQuality: "unusable" as const, limitations: ["图片模糊"], retakeSuggestions: ["重新拍摄"] },
+  };
+  const provider = new SequenceProvider([JSON.stringify(invalid), JSON.stringify(invalid)]);
+  const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
+  await assert.rejects(() => flow.analyze({ mode: "tongue", image: { mimeType: "image/jpeg", data: new Uint8Array([1]) } }), /修复/);
+});
+
+test("视觉模型无权限时返回稳定的视觉能力错误", async () => {
+  const repository = new MemoryRepository();
+  const flow = new DiagnosisFlow({ provider: new FailingProvider("AI_PERMISSION_DENIED"), repository, contextWindowTokens: 32_000 });
+  await assert.rejects(
+    () => flow.analyze({ mode: "face", image: { mimeType: "image/jpeg", data: new Uint8Array([1]) } }),
+    (error) => error instanceof TaskError && error.code === "AI_VISION_UNAVAILABLE",
+  );
+});
+
+test("上下文摘要调用失败时返回稳定摘要错误且不追加消息", async () => {
+  const repository = new MemoryRepository();
+  repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", imagePath: "source/normalized-image.jpg" };
+  repository.report = validReport;
+  repository.messages = Array.from({ length: 10 }, (_, index) => ({ id: `m-${index}`, sessionId: "session-1", reportId: "report-1", role: index % 2 ? "assistant" as const : "user" as const, content: "很长的历史".repeat(20), status: "completed" as const, createdAt: "2026-08-05T00:00:00.000Z" }));
+  const originalCount = repository.messages.length;
+  const flow = new DiagnosisFlow({ provider: new FailingProvider("AI_SERVER_ERROR"), repository, contextWindowTokens: 100 });
+  await assert.rejects(() => flow.chat("session-1", "继续"), (error) => error instanceof TaskError && error.code === "AI_CONTEXT_SUMMARY_FAILED");
+  assert.equal(repository.messages.length, originalCount);
 });
