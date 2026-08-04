@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   ContentAnalysisFlow,
+  contentAnalysisResultSchema,
   type AiGenerateRequest,
   type AiProvider,
   type ContentAnalysisInput,
@@ -68,6 +69,10 @@ test("内容拆解发现无效证据引用时只修复一次并保存标准结�
   const flow = new ContentAnalysisFlow({ provider, store });
   const result = await flow.run("task-1");
   assert.equal(provider.calls.length, 2);
+  assert.equal(provider.calls[0]?.jsonSchema?.name, "content_analysis_v1");
+  assert.match(String(provider.calls[0]?.messages[0]?.content), /"schemaVersion"/);
+  assert.doesNotMatch(String(provider.calls[0]?.messages[0]?.content), /测试内容|测试作者/);
+  assert.match(String(provider.calls[1]?.messages[0]?.content), /"targetAudiences"/);
   assert.deepEqual(result.hook.evidenceRefs, ["segment-0"]);
   assert.equal(store.run?.reasoning, "拆解思考\n拆解思考");
 });
@@ -80,4 +85,12 @@ test("内容拆解拒绝与真实任务不一致的source", async () => {
   const flow = new ContentAnalysisFlow({ provider, store });
   await assert.rejects(() => flow.run("task-1"), /修复/);
   assert.equal(store.failedRun?.status, "failed");
+});
+
+test("证据不足时允许空受众、空结构和空模板步骤而不诱导虚构", () => {
+  const insufficient = resultWithReference("segment-0");
+  insufficient.overview.targetAudiences = [];
+  insufficient.structure = [];
+  insufficient.reusableTemplate.steps = [];
+  assert.equal(contentAnalysisResultSchema.safeParse(insufficient).success, true);
 });

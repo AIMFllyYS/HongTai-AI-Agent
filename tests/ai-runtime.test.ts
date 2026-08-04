@@ -11,6 +11,7 @@ const baseOptions = {
   apiKey: "test-secret",
   models: { asr: "asr-model", text: "text-model", vision: "vision-model" },
   supportsJsonObject: true,
+  supportsJsonSchema: false,
   asrTransport: "chat-input-audio" as const,
   contextWindowTokens: 32_000,
   reasoningMode: "provider-default" as const,
@@ -79,7 +80,7 @@ test("通用媒体客户端把401映射为API Key错误", async () => {
   }
 });
 
-test("运行配置没有默认供应商且要求显式模型", () => {
+test("运行配置没有默认供应商并允许按命令配置所需模型", () => {
   const names = [
     "HONGTAI_AI_BASE_URL", "HONGTAI_AI_API_KEY", "HONGTAI_TEXT_MODEL", "HONGTAI_VISION_MODEL", "HONGTAI_ASR_MODEL",
   ] as const;
@@ -87,6 +88,26 @@ test("运行配置没有默认供应商且要求显式模型", () => {
   try {
     for (const name of names) delete process.env[name];
     assert.equal(readNodeRuntimeConfig().ai, undefined);
+    process.env.HONGTAI_AI_BASE_URL = "https://api.example/v1";
+    process.env.HONGTAI_AI_API_KEY = "secret";
+    process.env.HONGTAI_TEXT_MODEL = "text-only-model";
+    const config = readNodeRuntimeConfig();
+    assert.equal(config.ai?.models.text, "text-only-model");
+    assert.equal(config.ai?.models.vision, undefined);
+  } finally {
+    for (const name of names) {
+      const value = saved[name];
+      if (value == null) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});
+
+test("运行配置拒绝缺少连接字段但不强迫无关模型", () => {
+  const names = ["HONGTAI_AI_BASE_URL", "HONGTAI_AI_API_KEY", "HONGTAI_TEXT_MODEL", "HONGTAI_VISION_MODEL", "HONGTAI_ASR_MODEL"] as const;
+  const saved = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  try {
+    for (const name of names) delete process.env[name];
     process.env.HONGTAI_AI_API_KEY = "secret";
     assert.throws(() => readNodeRuntimeConfig(), (error) => error instanceof TaskError && error.code === "AI_NOT_CONFIGURED");
   } finally {

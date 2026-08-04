@@ -77,6 +77,9 @@ test("舌象报告在首次JSON无效时只修复一次并保存标准结果", a
   const result = await flow.analyze({ mode: "tongue", image: { mimeType: "image/jpeg", data: new Uint8Array([1, 2, 3]) } });
   assert.equal(result.report.summary.headline, validReport.summary.headline);
   assert.equal(provider.calls.length, 2);
+  assert.equal(provider.calls[0]?.jsonSchema?.name, "diagnosis_report_v1");
+  assert.match(String(provider.calls[0]?.messages[0]?.content), /"imageQuality"/);
+  assert.match(String(provider.calls[1]?.messages[0]?.content), /"wellnessReferences"/);
   assert.equal(repository.runs.length, 1);
   assert.equal(repository.runs[0]?.reasoning, "调试思考\n调试思考");
   assert.doesNotMatch(JSON.stringify(repository.report), /调试思考/);

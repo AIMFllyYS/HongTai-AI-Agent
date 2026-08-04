@@ -2,7 +2,7 @@ import { TaskError } from "@hongtai/core";
 import type { AiGenerateResult, AiRequestMessage, AiStreamEvent } from "../../contracts/provider";
 import type { AiMessage, DiagnosisFlowDependencies } from "../../contracts/diagnosis";
 import { diagnosisConversationPrompt, diagnosisInitialPrompt, diagnosisRepairPrompt } from "../../prompts/diagnosis";
-import { diagnosisReportSchema, type ObservationMode } from "../../schemas/diagnosis-report";
+import { diagnosisReportJsonSchema, diagnosisReportSchema, type ObservationMode } from "../../schemas/diagnosis-report";
 import { parseStructuredOutput } from "../../structured-output/parse-structured-output";
 
 function base64(data: Uint8Array): string {
@@ -38,6 +38,7 @@ export class DiagnosisFlow {
       const initial = await this.#dependencies.provider.generate({
         model: "vision",
         output: "json",
+        jsonSchema: { name: "diagnosis_report_v1", schema: diagnosisReportJsonSchema, strict: true },
         messages: [
           { role: "system", content: diagnosisInitialPrompt(input.mode) },
           { role: "user", content: [
@@ -56,6 +57,7 @@ export class DiagnosisFlow {
         const repaired = await this.#dependencies.provider.generate({
           model: "text",
           output: "json",
+          jsonSchema: { name: "diagnosis_report_v1", schema: diagnosisReportJsonSchema, strict: true },
           messages: [{ role: "system", content: diagnosisRepairPrompt(initial.content, input.mode) }],
           onEvent,
         });

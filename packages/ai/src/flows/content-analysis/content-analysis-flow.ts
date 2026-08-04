@@ -2,7 +2,7 @@ import { TaskError } from "@hongtai/core";
 import type { ContentAnalysisFlowDependencies, ContentAnalysisInput, ContentAnalysisRunRecord } from "../../contracts/content-analysis";
 import type { AiStreamEvent } from "../../contracts/provider";
 import { contentAnalysisPrompt, contentAnalysisRepairPrompt } from "../../prompts/content-analysis";
-import { contentAnalysisResultSchema, type ContentAnalysisResultV1 } from "../../schemas/content-analysis";
+import { contentAnalysisResultJsonSchema, contentAnalysisResultSchema, type ContentAnalysisResultV1 } from "../../schemas/content-analysis";
 import { parseStructuredOutput } from "../../structured-output/parse-structured-output";
 
 function validateSemantics(result: ContentAnalysisResultV1, input: ContentAnalysisInput): void {
@@ -43,7 +43,7 @@ export class ContentAnalysisFlow {
     };
     try {
       const initial = await this.#dependencies.provider.generate({
-        model: "text", output: "json", messages: [{ role: "system", content: contentAnalysisPrompt(input) }], onEvent,
+        model: "text", output: "json", jsonSchema: { name: "content_analysis_v1", schema: contentAnalysisResultJsonSchema, strict: true }, messages: [{ role: "system", content: contentAnalysisPrompt(input) }], onEvent,
       });
       rawResponse = initial.content;
       let result: ContentAnalysisResultV1;
@@ -53,7 +53,7 @@ export class ContentAnalysisFlow {
       } catch (error) {
         if (!(error instanceof TaskError) || error.code !== "AI_STRUCTURED_OUTPUT_INVALID") throw error;
         const repaired = await this.#dependencies.provider.generate({
-          model: "text", output: "json", messages: [{ role: "system", content: contentAnalysisRepairPrompt(initial.content, input) }], onEvent,
+          model: "text", output: "json", jsonSchema: { name: "content_analysis_v1", schema: contentAnalysisResultJsonSchema, strict: true }, messages: [{ role: "system", content: contentAnalysisRepairPrompt(initial.content, input) }], onEvent,
         });
         rawResponse = `${initial.content}\n\n--- repaired ---\n${repaired.content}`;
         try {

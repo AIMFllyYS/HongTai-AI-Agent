@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { toProviderJsonSchema } from "../structured-output/json-schema";
 
 const evidenceRefs = z.array(z.string().min(1));
 
@@ -13,7 +14,7 @@ export const contentAnalysisResultSchema = z.object({
   overview: z.object({
     summary: z.string().min(1),
     theme: z.string().min(1),
-    targetAudiences: z.array(z.string()).min(1),
+    targetAudiences: z.array(z.string()),
     communicationGoal: z.string().min(1),
   }),
   hook: z.object({
@@ -30,7 +31,7 @@ export const contentAnalysisResultSchema = z.object({
     summary: z.string().min(1),
     techniques: z.array(z.string()),
     evidenceRefs,
-  })).min(1),
+  })),
   coreClaims: z.array(z.object({
     claim: z.string().min(1),
     supportLevel: z.enum(["explicit", "inferred"]),
@@ -44,7 +45,7 @@ export const contentAnalysisResultSchema = z.object({
   }),
   reusableTemplate: z.object({
     formula: z.string().min(1),
-    steps: z.array(z.string()).min(1),
+    steps: z.array(z.string()),
     variableSlots: z.array(z.string()),
     doNotCopy: z.array(z.string()),
   }),
@@ -58,3 +59,4 @@ export const contentAnalysisResultSchema = z.object({
 });
 
 export type ContentAnalysisResultV1 = z.infer<typeof contentAnalysisResultSchema>;
+export const contentAnalysisResultJsonSchema = toProviderJsonSchema(contentAnalysisResultSchema);

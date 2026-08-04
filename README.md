@@ -43,9 +43,14 @@ HONGTAI_AI_API_KEY=你的API密钥
 HONGTAI_TEXT_MODEL=文本模型
 HONGTAI_VISION_MODEL=视觉模型
 HONGTAI_ASR_MODEL=语音转写模型
+HONGTAI_AI_JSON_OBJECT=true
+HONGTAI_AI_JSON_SCHEMA=false
+HONGTAI_AI_ASR_TRANSPORT=audio-transcriptions
 ```
 
-项目不内置默认供应商。文本/视觉使用Chat Completions兼容协议；ASR可选择标准`audio/transcriptions`或兼容供应商的`chat-input-audio`。
+项目不内置默认供应商。文本/视觉使用Chat Completions兼容协议；ASR可选择标准`audio/transcriptions`或兼容供应商的`chat-input-audio`。仅当供应商明确支持`response_format=json_schema`时将`HONGTAI_AI_JSON_SCHEMA`设为`true`；否则保留JSON Object或Prompt约束回退。
+
+模型按命令校验：`ingest`只使用已配置的ASR和文本模型，`analyze-content`只要求文本模型，`diagnosis serve`要求文本与视觉模型。未配置视觉模型不会阻止单纯抓取下载。
 
 `.env`、任务缓存和本地模型默认不会进入Git。
 

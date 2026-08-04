@@ -21,6 +21,11 @@ export interface AiGenerateRequest {
   readonly model: AiModelRole;
   readonly messages: readonly AiRequestMessage[];
   readonly output: "json" | "text";
+  readonly jsonSchema?: {
+    readonly name: string;
+    readonly schema: Readonly<Record<string, unknown>>;
+    readonly strict?: boolean;
+  };
   readonly onEvent?: (event: AiStreamEvent) => void | Promise<void>;
 }
 
@@ -45,11 +50,12 @@ export interface OpenAiCompatibleProviderConfig {
   readonly baseUrl: string;
   readonly apiKey: string;
   readonly models: {
-    readonly text: string;
-    readonly vision: string;
+    readonly text?: string;
+    readonly vision?: string;
     readonly asr?: string;
   };
   readonly supportsJsonObject: boolean;
+  readonly supportsJsonSchema?: boolean;
   readonly asrTransport: "audio-transcriptions" | "chat-input-audio";
   readonly contextWindowTokens: number;
   readonly reasoningMode: "provider-default";

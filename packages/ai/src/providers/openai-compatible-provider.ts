@@ -46,8 +46,8 @@ export class OpenAiCompatibleProvider implements AiProvider {
   readonly #config: OpenAiCompatibleProviderConfig;
 
   constructor(config: OpenAiCompatibleProviderConfig) {
-    if (!config.baseUrl.trim() || !config.apiKey.trim() || !config.models.text.trim() || !config.models.vision.trim()) {
-      throw new TaskError({ code: "AI_NOT_CONFIGURED", message: "AI连接缺少Base URL、API Key或模型配置", action: "configure_ai" });
+    if (!config.baseUrl.trim() || !config.apiKey.trim()) {
+      throw new TaskError({ code: "AI_NOT_CONFIGURED", message: "AI连接缺少Base URL或API Key", action: "configure_ai" });
     }
     const url = new URL(config.baseUrl);
     if (url.protocol !== "https:") {
@@ -58,14 +58,20 @@ export class OpenAiCompatibleProvider implements AiProvider {
 
   async generate(request: AiGenerateRequest): Promise<AiGenerateResult> {
     const model = request.model === "vision" ? this.#config.models.vision : this.#config.models.text;
+    if (!model?.trim()) {
+      throw new TaskError({ code: "AI_NOT_CONFIGURED", message: `未配置${request.model === "vision" ? "视觉" : "文本"}模型`, action: "configure_ai" });
+    }
+    const responseFormat = request.output === "json" && request.jsonSchema && this.#config.supportsJsonSchema
+      ? { type: "json_schema", json_schema: request.jsonSchema }
+      : request.output === "json" && this.#config.supportsJsonObject
+        ? { type: "json_object" }
+        : undefined;
     const body = {
       model,
       messages: mapMessages(request.messages),
       stream: true,
       stream_options: { include_usage: true },
-      ...(request.output === "json" && this.#config.supportsJsonObject
-        ? { response_format: { type: "json_object" } }
-        : {}),
+      ...(responseFormat ? { response_format: responseFormat } : {}),
     };
     const response = await this.#request("chat/completions", {
       method: "POST",

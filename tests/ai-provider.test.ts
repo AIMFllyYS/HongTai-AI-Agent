@@ -27,6 +27,7 @@ test("OpenAI兼容Provider使用自定义视觉模型并分离正文与reasoning
       apiKey: "secret-key",
       models: { text: "text-model", vision: "vision-model", asr: "asr-model" },
       supportsJsonObject: true,
+      supportsJsonSchema: true,
       asrTransport: "audio-transcriptions",
       contextWindowTokens: 32_000,
       reasoningMode: "provider-default",
@@ -40,6 +41,16 @@ test("OpenAI兼容Provider使用自定义视觉模型并分离正文与reasoning
         { type: "image_url", imageUrl: "data:image/jpeg;base64,AAAA" },
       ] }],
       output: "json",
+      jsonSchema: {
+        name: "test_result",
+        strict: true,
+        schema: {
+          type: "object",
+          properties: { schemaVersion: { type: "string" } },
+          required: ["schemaVersion"],
+          additionalProperties: false,
+        },
+      },
       onEvent: (event) => events.push(event),
     });
 
@@ -47,10 +58,53 @@ test("OpenAI兼容Provider使用自定义视觉模型并分离正文与reasoning
     assert.equal(requestHeaders?.get("authorization"), "Bearer secret-key");
     assert.equal(requestHeaders?.has("x-mimo-source"), false);
     assert.equal(requestBody?.model, "vision-model");
-    assert.deepEqual(requestBody?.response_format, { type: "json_object" });
+    assert.deepEqual(requestBody?.response_format, {
+      type: "json_schema",
+      json_schema: {
+        name: "test_result",
+        strict: true,
+        schema: {
+          type: "object",
+          properties: { schemaVersion: { type: "string" } },
+          required: ["schemaVersion"],
+          additionalProperties: false,
+        },
+      },
+    });
     assert.equal(result.content, '{"schemaVersion":"test.v1"}');
     assert.equal(result.reasoning, "分析图片");
     assert.deepEqual(events.map((event) => event.type), ["reasoning_delta", "content_delta", "usage", "completed"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("OpenAI兼容Provider在不支持JSON Schema时回退JSON Object", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestBody: Record<string, unknown> | undefined;
+  globalThis.fetch = async (_input, init) => {
+    requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return new Response(JSON.stringify({ choices: [{ message: { content: "{}" } }] }), { status: 200 });
+  };
+  try {
+    const provider = new OpenAiCompatibleProvider({
+      baseUrl: "https://custom.example/v1",
+      apiKey: "secret-key",
+      models: { text: "text-model" },
+      supportsJsonObject: true,
+      supportsJsonSchema: false,
+      asrTransport: "audio-transcriptions",
+      contextWindowTokens: 32_000,
+      reasoningMode: "provider-default",
+      retryDelaysMs: [0],
+    });
+    await provider.generate({
+      model: "text",
+      messages: [{ role: "user", content: "输出JSON" }],
+      output: "json",
+      jsonSchema: { name: "test", schema: { type: "object" }, strict: true },
+    });
+    assert.deepEqual(requestBody?.response_format, { type: "json_object" });
   } finally {
     globalThis.fetch = originalFetch;
   }

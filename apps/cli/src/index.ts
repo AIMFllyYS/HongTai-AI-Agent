@@ -16,9 +16,11 @@ import {
   sanitizeAiArtifactText,
   loadLocalEnvironment,
   readNodeRuntimeConfig,
+  requireAiModels,
 } from "@hongtai/node-runtime";
 import { platformRegistry } from "@hongtai/platforms";
 import { parseContentAnalysisOptions, parseDiagnosisServeOptions } from "./ai-command-options";
+import { TerminalAiStreamPrinter } from "./terminal-ai-stream-printer";
 
 const HELP = `宏泰 AI 智能体 CLI
 
@@ -79,18 +81,20 @@ async function runIngest(args: readonly string[]): Promise<void> {
   loadLocalEnvironment(resolve(projectRoot, ".env"));
   const config = readNodeRuntimeConfig();
   const ai = config.ai ? new OpenAiMediaClient(config.ai) : undefined;
+  const transcriber = ai && config.ai?.models.asr ? ai : undefined;
+  const rewriter = ai && config.ai?.models.text ? ai : undefined;
   const workspaceDirectory = isAbsolute(config.workspaceDirectory)
     ? config.workspaceDirectory
     : resolve(projectRoot, config.workspaceDirectory);
 
-  console.log(`运行模式：公开单条作品，已注册平台=${platformRegistry.size}个，AI转写=${ai ? "已配置" : "未配置"}`);
+  console.log(`运行模式：公开单条作品，已注册平台=${platformRegistry.size}个，AI转写=${transcriber ? "已配置" : "未配置"}`);
   const pipeline = new IngestPipeline({
     adapters: platformRegistry.all,
     http: new NodeHttpClient(),
     downloader: new NodeMediaDownloader(),
     mediaTools: new FfmpegMediaTools(),
-    transcriber: ai,
-    rewriter: ai,
+    transcriber,
+    rewriter,
     store: new FileArtifactStore(workspaceDirectory),
     reporter: new TerminalProgressReporter(),
   });
@@ -130,21 +134,20 @@ async function runDiagnosisServe(args: readonly string[]): Promise<void> {
   const projectRoot = resolve(import.meta.dirname, "../../..");
   loadLocalEnvironment(resolve(projectRoot, ".env"));
   const config = readNodeRuntimeConfig();
-  if (!config.ai) throw new Error("未配置AI连接，请先填写.env中的Base URL、API Key、文本模型和视觉模型");
+  const aiConfig = requireAiModels(config.ai, ["text", "vision"]);
   const workspaceDirectory = isAbsolute(config.workspaceDirectory)
     ? config.workspaceDirectory
     : resolve(projectRoot, config.workspaceDirectory);
   const diagnosisRoot = join(workspaceDirectory, "ai", "diagnosis");
   const repository = new FileDiagnosisRepository(diagnosisRoot);
-  const provider = new OpenAiCompatibleProvider(config.ai);
+  const provider = new OpenAiCompatibleProvider(aiConfig);
+  const streamPrinter = new TerminalAiStreamPrinter((value) => process.stdout.write(value), sanitizeAiArtifactText);
   const flow = new DiagnosisFlow({
     provider,
     repository,
-    contextWindowTokens: config.ai.contextWindowTokens,
+    contextWindowTokens: aiConfig.contextWindowTokens,
     onEvent: (event) => {
-      if (event.type === "reasoning_delta") process.stdout.write(`[思考] ${sanitizeAiArtifactText(event.delta)}\n`);
-      if (event.type === "content_delta") process.stdout.write(`[输出] ${sanitizeAiArtifactText(event.delta)}\n`);
-      if (event.type === "usage") console.log(`[用量] 输入=${event.promptTokens ?? "未知"}，输出=${event.completionTokens ?? "未知"}`);
+      streamPrinter.handle(event);
     },
   });
   const server = createDiagnosisHarnessServer({
@@ -163,18 +166,17 @@ async function runContentAnalysis(args: readonly string[]): Promise<void> {
   const projectRoot = resolve(import.meta.dirname, "../../..");
   loadLocalEnvironment(resolve(projectRoot, ".env"));
   const config = readNodeRuntimeConfig();
-  if (!config.ai) throw new Error("未配置AI连接，请先填写.env中的Base URL、API Key、文本模型和视觉模型");
+  const aiConfig = requireAiModels(config.ai, ["text"]);
   const workspaceDirectory = isAbsolute(config.workspaceDirectory)
     ? config.workspaceDirectory
     : resolve(projectRoot, config.workspaceDirectory);
-  const provider = new OpenAiCompatibleProvider(config.ai);
+  const provider = new OpenAiCompatibleProvider(aiConfig);
+  const streamPrinter = new TerminalAiStreamPrinter((value) => process.stdout.write(value), sanitizeAiArtifactText);
   const flow = new ContentAnalysisFlow({
     provider,
     store: new FileContentAnalysisStore(workspaceDirectory),
     onEvent: (event) => {
-      if (event.type === "reasoning_delta") process.stdout.write(`[思考] ${sanitizeAiArtifactText(event.delta)}\n`);
-      if (event.type === "content_delta") process.stdout.write(`[输出] ${sanitizeAiArtifactText(event.delta)}\n`);
-      if (event.type === "usage") console.log(`[用量] 输入=${event.promptTokens ?? "未知"}，输出=${event.completionTokens ?? "未知"}`);
+      streamPrinter.handle(event);
     },
   });
   console.log(`开始拆解任务：${options.taskId}`);

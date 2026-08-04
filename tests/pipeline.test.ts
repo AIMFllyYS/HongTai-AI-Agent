@@ -170,6 +170,27 @@ test("视频无有效口播时任务成功且不生成伪文稿和整理稿", as
   assert.equal(result.issues.length, 0);
 });
 
+test("ASR全失败并使用平台描述时记录真实来源为description", async () => {
+  const setup = dependencies(true);
+  const failedSegment = {
+    index: 0,
+    startSeconds: 0,
+    endSeconds: 10,
+    text: "",
+    status: "failed" as const,
+  };
+  const result = await new IngestPipeline({
+    ...setup.dependencies,
+    transcriber: {
+      transcribe: async () => ({ status: "failed", text: "", segments: [failedSegment] }),
+    },
+  }).run({ input: "https://www.douyin.com/video/1" });
+  const transcriptJson = JSON.parse(setup.store.values.get(paths.transcriptJson) ?? "{}") as { source?: string };
+  assert.equal(result.status, "degraded");
+  assert.equal(transcriptJson.source, "description");
+  assert.match(setup.store.values.get(paths.transcript) ?? "", /平台描述/);
+});
+
 test("小红书部分图片下载失败时保留正文并结构化降级", async () => {
   const store = new MemoryStore();
   let downloads = 0;

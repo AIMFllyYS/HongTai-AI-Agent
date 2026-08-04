@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { toProviderJsonSchema } from "../structured-output/json-schema";
 
 export const observationModeSchema = z.enum(["tongue", "face"]);
 export type ObservationMode = z.infer<typeof observationModeSchema>;
@@ -80,3 +81,4 @@ export const diagnosisReportSchema = z.object({
 });
 
 export type DiagnosisReportV1 = z.infer<typeof diagnosisReportSchema>;
+export const diagnosisReportJsonSchema = toProviderJsonSchema(diagnosisReportSchema);

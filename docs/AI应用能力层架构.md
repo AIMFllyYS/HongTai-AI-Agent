@@ -38,13 +38,15 @@ packages/ai/src/
 
 ## OpenAI 兼容边界
 
-AI连接必须显式配置 Base URL、API Key 和模型，不内置默认供应商。文本和视觉请求使用 OpenAI Chat Completions 兼容协议；ASR优先使用标准音频转写端点，同时保留可配置的聊天音频适配器。
+AI连接必须显式配置 Base URL、API Key 和当前命令所需模型，不内置默认供应商。文本和视觉请求使用 OpenAI Chat Completions 兼容协议；ASR同时支持标准音频转写端点和可配置的聊天音频适配器。模型能力按命令校验，避免内容拆解被无关的视觉模型配置阻断。
 
 模型思考能力使用供应商默认行为，不要求 `<thinking>` 标签。供应商返回的独立 reasoning 只作为开发调试流显示和保存，不进入正式业务结果或后续会话上下文。
 
 ## 唯一结构化协议
 
-两个 Flow 的正式结果统一为经过运行时 Schema 校验的 JSON。支持 JSON Object 的供应商启用对应模式；其他供应商由 Prompt 约束只返回 JSON。解析或校验失败时只允许一次格式修复，再失败返回稳定错误。
+两个 Flow 的正式结果统一为经过运行时 Schema 校验的 JSON。Zod 是业务契约的唯一来源，Provider使用的JSON Schema和Prompt中的字段契约均由Zod自动生成，避免三套定义漂移。供应商能力按`JSON Schema严格模式 → JSON Object → Prompt-only`降级；JSON Object只保证JSON语法，不代表符合业务Schema。解析或校验失败时只允许一次带完整Schema的格式修复，再失败返回稳定错误。
+
+内容拆解只允许从真实转写segment或图文paragraph生成核心结论。标题和作者保留为任务元数据，但不会进入模型的分析证据上下文；ASR失败并改用平台描述时，来源必须记录为`description`，不能伪装成`asr`。证据不足时允许空受众、空结构和空模板步骤，禁止为了满足Schema虚构内容。
 
 XML 不作为模型约束、存储格式或前端契约。
 

@@ -17,12 +17,17 @@ HONGTAI_TEXT_MODEL=文本模型
 HONGTAI_VISION_MODEL=视觉模型
 HONGTAI_ASR_MODEL=语音转写模型
 HONGTAI_AI_JSON_OBJECT=true
+HONGTAI_AI_JSON_SCHEMA=false
 HONGTAI_AI_ASR_TRANSPORT=audio-transcriptions
 HONGTAI_AI_CONTEXT_WINDOW_TOKENS=32000
 HONGTAI_MAX_DURATION_SECONDS=1200
 ```
 
-`HONGTAI_AI_ASR_TRANSPORT`也可配置为`chat-input-audio`，用于以聊天音频消息提供转写能力的兼容服务。API Key不得写进源码、文档、日志或提交记录。
+仅当供应商明确支持`response_format=json_schema`时启用`HONGTAI_AI_JSON_SCHEMA=true`。不支持时系统依次使用JSON Object或Prompt字段契约，并始终执行相同的Zod运行时校验。
+
+`HONGTAI_AI_ASR_TRANSPORT`也可配置为`chat-input-audio`，用于以聊天音频消息提供转写能力的兼容服务。例如MiMo V2.5 ASR使用`chat-input-audio`，而不是`audio/transcriptions`。API Key不得写进源码、文档、日志或提交记录。
+
+不同命令只校验自身所需模型：`ingest`按已配置能力启用ASR和整理稿，`analyze-content`要求文本模型，`diagnosis serve`要求文本和视觉模型。
 
 ## 2. 运行
 
@@ -55,7 +60,7 @@ pnpm cli diagnosis serve --port 5001
 pnpm cli analyze-content "任务ID"
 ```
 
-视频使用原始转写和时间段，图文使用`content.txt`段落。结果为`content-analysis.v1` JSON，关键结论必须引用真实segment或paragraph证据；不会自动跟随`ingest`调用，也不使用AI整理稿替代原始事实来源。
+视频使用原始转写和时间段，图文使用`content.txt`段落。结果为`content-analysis.v1` JSON，关键结论必须引用真实segment或paragraph证据；标题和作者不作为内容证据。证据不足时返回明确的不足说明和空分析数组，不虚构结构。该命令不会自动跟随`ingest`调用，也不使用AI整理稿替代原始事实来源。
 
 ## 3. 状态含义
 

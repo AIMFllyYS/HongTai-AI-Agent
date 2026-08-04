@@ -80,6 +80,7 @@ export class IngestPipeline {
     let transcriptWritten = false;
     let draftWritten = false;
     let speechStatus: SpeechStatus | undefined;
+    let transcriptSource: "asr" | "description" | "none" | undefined;
     let resolvedLink: ResolvedLink | undefined;
 
     const writeTask = async (status: TaskRecord["status"]): Promise<void> => {
@@ -339,6 +340,7 @@ export class IngestPipeline {
           speechStatus = transcription.status;
           segments = transcription.segments;
           transcript = transcription.text;
+          if (transcript) transcriptSource = "asr";
           const failedSegments = segments.filter((segment) => segment.status === "failed");
           if (failedSegments.length > 0) {
             const segmentIssue = failedSegments.find((segment) => segment.issue)?.issue;
@@ -364,6 +366,7 @@ export class IngestPipeline {
 
       if (speechStatus !== "no_speech" && !transcript && content.description) {
         transcript = content.description;
+        transcriptSource = "description";
         issues.push(warningIssue("AI_EMPTY_RESPONSE", "obtain-transcript", "没有获得语音转写，已使用平台描述作为降级文稿", { action: "view_partial_result", platform }));
       }
 
@@ -374,7 +377,7 @@ export class IngestPipeline {
       if (segments.length > 0 || transcriptWritten) {
         await this.#dependencies.store.writeJson(paths.transcriptJson, {
           speechStatus,
-          source: speechStatus === "no_speech" ? "none" : segments.length > 0 && transcript ? "asr" : "description",
+          source: speechStatus === "no_speech" ? "none" : transcriptSource ?? "description",
           durationSeconds: duration,
           segments,
         });
