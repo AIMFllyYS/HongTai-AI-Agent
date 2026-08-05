@@ -23,6 +23,25 @@ test("Pulse Flow brand assets are public vector resources", () => {
   assert.match(brandLogo, /宏泰AI智能体/);
 });
 
+test("page brand mark stays transparent while the app icon keeps its frame", () => {
+  const markPath = join(root, "apps", "web", "public", "brand", "pulse-flow-mark.svg");
+  const appIcon = read("apps/web/public/brand/pulse-flow-icon.svg");
+  const brandLogo = read("apps/web/src/components/BrandLogo.tsx");
+  const shellStyles = read("apps/web/src/styles/shell.css");
+
+  assert.equal(existsSync(markPath), true, "the page mark should be a separate public asset");
+  const mark = read("apps/web/public/brand/pulse-flow-mark.svg");
+  assert.match(mark, /<path\b/);
+  assert.doesNotMatch(mark, /<rect\b|<filter\b/, "the page mark must not carry the app icon frame");
+  assert.match(appIcon, /<rect\b/);
+  assert.match(appIcon, /<filter\b/);
+  assert.match(brandLogo, /variant\?:\s*"mark"\s*\|\s*"icon"\s*\|\s*"lockup"/);
+  assert.match(brandLogo, /variant\s*=\s*"mark"/);
+  assert.match(brandLogo, /\/brand\/pulse-flow-mark\.svg/);
+  assert.match(shellStyles, /\.brand-logo--mark[\s\S]*border:\s*0/);
+  assert.match(shellStyles, /\.brand-logo--mark[\s\S]*background:\s*transparent/);
+});
+
 test("Chinese UI font is bundled locally for web and future APK packaging", () => {
   const fontPath = join(root, "apps/web/public/fonts/NotoSansSC-VF.woff2");
   assert.equal(existsSync(fontPath), true, "Noto Sans SC variable font should be bundled");

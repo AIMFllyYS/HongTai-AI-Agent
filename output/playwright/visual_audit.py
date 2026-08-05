@@ -66,6 +66,28 @@ def assert_local_visual_resources(page: Page, route: str) -> str:
     return f"local-font=1;local-images={len(sources)}"
 
 
+def assert_page_mark(page: Page, route: str) -> str:
+    marks = page.locator(".brand-logo--mark")
+    assert marks.count() >= 1, f"{route}: expected at least one transparent page mark"
+    sources = marks.locator("img").evaluate_all("images => images.map(image => image.currentSrc || image.src)")
+    assert all(source.endswith("/brand/pulse-flow-mark.svg") for source in sources), f"{route}: page mark uses the wrong asset: {sources}"
+    style = marks.first.evaluate(
+        """element => {
+          const computed = getComputedStyle(element);
+          return {
+            borderWidth: computed.borderWidth,
+            borderStyle: computed.borderStyle,
+            backgroundColor: computed.backgroundColor,
+            boxShadow: computed.boxShadow,
+          };
+        }"""
+    )
+    assert style["borderWidth"] == "0px" and style["borderStyle"] == "none", f"{route}: page mark has a visible border: {style}"
+    assert style["backgroundColor"] in {"rgba(0, 0, 0, 0)", "transparent"}, f"{route}: page mark has a background: {style}"
+    assert style["boxShadow"] == "none", f"{route}: page mark has a shadow: {style}"
+    return f"page-mark={len(sources)};transparent=1"
+
+
 def vitality_color_snapshot(page: Page) -> dict[str, str | None]:
     return page.locator(".app-shell").evaluate(
         """element => {
@@ -174,6 +196,7 @@ def main() -> None:
             if route in {"/", "/vitality/scan"}:
                 assert page.locator(".app-header .brand-logo img").count() == 1, f"{route}: brand header should use the shared logo"
             evidence_rows.append(f"{route}\t{assert_local_visual_resources(page, route)}")
+            evidence_rows.append(f"{route}\t{assert_page_mark(page, route)}")
             assert_tabs_are_associated(page, route)
             if route in VITALITY_ROUTES:
                 evidence_rows.append(f"{route}\t{assert_vitality_theme(page, route)}")
