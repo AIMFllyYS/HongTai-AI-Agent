@@ -17,16 +17,15 @@ test("asset rows reserve a bounded thumbnail track", () => {
 });
 
 test("the design logo is shared by brand headers and the AI navigation item", () => {
-  assert.equal(existsSync(join(process.cwd(), "apps", "web", "public", "brand", "pulse-flow-mark.svg")), true, "the transparent page mark should be public");
-  assert.equal(existsSync(join(process.cwd(), "apps", "web", "public", "brand", "pulse-flow-icon.svg")), true, "the compact design logo should be public");
+  assert.equal(existsSync(join(process.cwd(), "apps", "web", "public", "brand", "pulse-flow-mark.png")), true, "the transparent page mark should be public");
+  assert.equal(existsSync(join(process.cwd(), "apps", "web", "public", "brand", "pulse-flow-source.png")), true, "the supplied source should be public");
 
   const logo = read("components/BrandLogo.tsx");
   const shell = read("components/AppShell.tsx");
   const navigation = read("components/BottomNav.tsx");
 
-  assert.match(logo, /\/brand\/pulse-flow-mark\.svg/);
-  assert.match(logo, /\/brand\/pulse-flow-icon\.svg/);
-  assert.match(logo, /\/brand\/pulse-flow\.svg/);
+  assert.match(logo, /\/brand\/pulse-flow-mark\.png/);
+  assert.match(logo, /\/brand\/pulse-flow-source\.png/);
   assert.match(logo, /variant\s*=\s*"mark"/);
   assert.match(logo, /alt="宏泰AI智能体 Pulse Flow"/);
   assert.match(shell, /<BrandLogo/);
@@ -50,6 +49,7 @@ test("the browser audit checks the asset thumbnail boundary and shared logo", ()
 
   assert.match(audit, /asset-row/);
   assert.match(audit, /brand-logo/);
+  assert.match(audit, /pulse-flow-mark\.png/);
   assert.match(audit, /page-mark/);
   assert.match(audit, /markWidth/);
   assert.match(audit, /assets geometry/);

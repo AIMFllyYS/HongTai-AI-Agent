@@ -6,39 +6,37 @@ import { test } from "node:test";
 const root = process.cwd();
 const read = (relativePath: string) => readFileSync(join(root, relativePath), "utf8");
 
-test("Pulse Flow brand assets are public vector resources", () => {
+test("Pulse Flow brand assets preserve the supplied raster source", () => {
   for (const relativePath of [
-    "apps/web/public/brand/pulse-flow.svg",
-    "apps/web/public/brand/pulse-flow-icon.svg",
+    "apps/web/public/brand/pulse-flow-source.png",
+    "apps/web/public/brand/pulse-flow-mark.png",
   ]) {
-    assert.equal(existsSync(join(root, relativePath)), true, `${relativePath} should exist`);
-    const svg = read(relativePath);
-    assert.match(svg, /<svg\b/);
-    assert.match(svg, /<path\b/);
-    assert.doesNotMatch(svg, /<image\b/, `${relativePath} must not wrap a raster image`);
+    const assetPath = join(root, relativePath);
+    assert.equal(existsSync(assetPath), true, `${relativePath} should exist`);
+    assert.ok(statSync(assetPath).size > 10_000, `${relativePath} should not be a placeholder`);
+    assert.deepEqual([...readFileSync(assetPath).subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], `${relativePath} should be a PNG`);
   }
 
   const brandLogo = read("apps/web/src/components/BrandLogo.tsx");
-  assert.match(brandLogo, /\/brand\/pulse-flow\.svg/);
+  assert.match(brandLogo, /\/brand\/pulse-flow-source\.png/);
+  assert.match(brandLogo, /\/brand\/pulse-flow-mark\.png/);
   assert.match(brandLogo, /宏泰AI智能体/);
 });
 
 test("page brand mark stays transparent while the app icon keeps its frame", () => {
-  const markPath = join(root, "apps", "web", "public", "brand", "pulse-flow-mark.svg");
-  const appIcon = read("apps/web/public/brand/pulse-flow-icon.svg");
+  const markPath = join(root, "apps", "web", "public", "brand", "pulse-flow-mark.png");
+  const sourcePath = join(root, "apps", "web", "public", "brand", "pulse-flow-source.png");
   const brandLogo = read("apps/web/src/components/BrandLogo.tsx");
   const shellStyles = read("apps/web/src/styles/shell.css");
 
   assert.equal(existsSync(markPath), true, "the page mark should be a separate public asset");
-  const mark = read("apps/web/public/brand/pulse-flow-mark.svg");
-  assert.match(mark, /<path\b/);
-  assert.doesNotMatch(mark, /<rect\b|<filter\b/, "the page mark must not carry the app icon frame");
-  assert.match(mark, /viewBox='190 230 650 430'/, "the page mark needs breathing room around its vector edges");
-  assert.match(appIcon, /<rect\b/);
-  assert.match(appIcon, /<filter\b/);
+  assert.equal(existsSync(sourcePath), true, "the original source should remain available for the app icon");
+  assert.deepEqual([...readFileSync(markPath).subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.deepEqual([...readFileSync(sourcePath).subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
   assert.match(brandLogo, /variant\?:\s*"mark"\s*\|\s*"icon"\s*\|\s*"lockup"/);
   assert.match(brandLogo, /variant\s*=\s*"mark"/);
-  assert.match(brandLogo, /\/brand\/pulse-flow-mark\.svg/);
+  assert.match(brandLogo, /\/brand\/pulse-flow-mark\.png/);
+  assert.match(brandLogo, /\/brand\/pulse-flow-source\.png/);
   assert.match(shellStyles, /\.brand-logo--mark[\s\S]*border:\s*0/);
   assert.match(shellStyles, /\.brand-logo--mark[\s\S]*background:\s*transparent/);
   assert.match(shellStyles, /\.brand-logo--mark\s*\{[\s\S]*width:\s*2\.0625rem;[\s\S]*height:\s*2\.0625rem/);

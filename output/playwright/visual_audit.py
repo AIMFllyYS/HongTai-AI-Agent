@@ -70,7 +70,7 @@ def assert_page_mark(page: Page, route: str) -> str:
     marks = page.locator(".brand-logo--mark")
     assert marks.count() >= 1, f"{route}: expected at least one transparent page mark"
     sources = marks.locator("img").evaluate_all("images => images.map(image => image.currentSrc || image.src)")
-    assert all(source.endswith("/brand/pulse-flow-mark.svg") for source in sources), f"{route}: page mark uses the wrong asset: {sources}"
+    assert all(source.endswith("/brand/pulse-flow-mark.png") for source in sources), f"{route}: page mark uses the wrong asset: {sources}"
     style = marks.first.evaluate(
         """element => {
           const computed = getComputedStyle(element);
