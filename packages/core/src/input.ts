@@ -1,7 +1,7 @@
 import { TaskError, issueFromError } from "./errors";
 import type { InputInspection, NormalizedInput, SupportedPlatform } from "./models";
 
-const SUPPORTED_LINK = /(^|[^\p{L}\p{N}@._-])((?:https?:\/\/)?(?:www\.)?(?:douyin\.com|v\.douyin\.com|iesdouyin\.com|xiaohongshu\.com|xhslink\.com|xhslink\.cn|bilibili\.com|b23\.tv)(?:\/[^\s<>"'，。！？；：、）》】」』]*)?)/giu;
+const SUPPORTED_LINK = /(^|[^\p{L}\p{N}@._-])((?:https?:\/\/)?(?:www\.)?(?:douyin\.com|v\.douyin\.com|iesdouyin\.com|xiaohongshu\.com|xhslink\.com|xhslink\.cn|bilibili\.com|b23\.tv|kuaishou\.com|v\.kuaishou\.com)(?:\/[^\s<>"'，。！？；：、）》】」』]*)?)/giu;
 const TRAILING_PUNCTUATION = /[，。！？；：、）》】」』,.!?;:]+$/u;
 
 function platformForHost(hostname: string): SupportedPlatform | undefined {
@@ -9,6 +9,7 @@ function platformForHost(hostname: string): SupportedPlatform | undefined {
   if (host === "douyin.com" || host === "v.douyin.com" || host === "iesdouyin.com") return "douyin";
   if (host === "xiaohongshu.com" || host === "xhslink.com" || host === "xhslink.cn") return "xiaohongshu";
   if (host === "bilibili.com" || host === "b23.tv") return "bilibili";
+  if (host === "kuaishou.com" || host === "v.kuaishou.com") return "kuaishou";
   return undefined;
 }
 
@@ -32,7 +33,7 @@ export function normalizeInput(rawInput: string): NormalizedInput {
   if (!rawInput.trim()) {
     throw new TaskError({
       code: "INPUT_EMPTY",
-      message: "请粘贴抖音、小红书或B站的分享内容",
+      message: "请粘贴抖音、小红书、B站或快手的分享内容",
       action: "edit_input",
     });
   }
@@ -46,7 +47,7 @@ export function normalizeInput(rawInput: string): NormalizedInput {
   if (!first) {
     throw new TaskError({
       code: "INPUT_NO_SUPPORTED_URL",
-      message: "没有找到受支持的抖音、小红书或B站链接",
+      message: "没有找到受支持的抖音、小红书、B站或快手链接",
       action: "edit_input",
     });
   }

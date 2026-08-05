@@ -7,7 +7,7 @@ export const contentAnalysisResultSchema = z.object({
   schemaVersion: z.literal("content-analysis.v1"),
   source: z.object({
     taskId: z.string().min(1),
-    platform: z.enum(["douyin", "xiaohongshu", "bilibili"]),
+    platform: z.enum(["douyin", "xiaohongshu", "bilibili", "kuaishou"]),
     contentType: z.enum(["video", "image_text"]),
     sourceKind: z.enum(["asr", "description", "image_text"]),
   }),

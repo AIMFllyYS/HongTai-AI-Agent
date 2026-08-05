@@ -1,4 +1,4 @@
-import { TaskError, type HttpClient, type HttpRequest, type HttpResponse } from "@hongtai/core";
+import { TaskError, type HttpClient, type HttpPostRequest, type HttpRequest, type HttpResponse } from "@hongtai/core";
 
 export interface NodeHttpClientOptions {
   readonly retryDelaysMs?: readonly number[];
@@ -48,11 +48,19 @@ export class NodeHttpClient implements HttpClient {
   }
 
   async get(request: HttpRequest): Promise<HttpResponse> {
+    return this.#request("GET", request);
+  }
+
+  async post(request: HttpPostRequest): Promise<HttpResponse> {
+    return this.#request("POST", request);
+  }
+
+  async #request(method: "GET" | "POST", request: HttpRequest | HttpPostRequest): Promise<HttpResponse> {
     let current = validateHttps(request.url);
     const maxRedirects = request.maxRedirects ?? 5;
 
     for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount += 1) {
-      const response = await this.#fetchWithRetry(current, request);
+      const response = await this.#fetchWithRetry(current, method, request);
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("location");
         await response.body?.cancel();
@@ -81,19 +89,30 @@ export class NodeHttpClient implements HttpClient {
     throw new TaskError({ code: "LINK_REDIRECT_LIMIT", message: "无法完成链接跳转", action: "edit_input" });
   }
 
-  async #fetchWithRetry(url: URL, request: HttpRequest): Promise<Response> {
+  async #fetchWithRetry(
+    url: URL,
+    method: "GET" | "POST",
+    request: HttpRequest | HttpPostRequest,
+  ): Promise<Response> {
     let lastError: TaskError | undefined;
-    for (let attempt = 0; attempt < this.#retryDelaysMs.length; attempt += 1) {
-      const delay = this.#retryDelaysMs[attempt] ?? 0;
+    const defaultAttempts = method === "GET" ? this.#retryDelaysMs.length : 1;
+    const maxAttempts = Math.max(1, Math.floor(request.maxAttempts ?? defaultAttempts));
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const delay = this.#retryDelaysMs[attempt] ?? this.#retryDelaysMs.at(-1) ?? 0;
       if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
       try {
         const response = await fetch(url, {
-          method: "GET",
+          method,
           headers: request.headers,
+          body: method === "POST" ? (request as HttpPostRequest).body : undefined,
           redirect: "manual",
           signal: AbortSignal.timeout(request.timeoutMs ?? 30_000),
         });
-        const retryableStatus = response.status === 429 || response.status >= 500;
+        const retryableStatus = response.status === 429
+          || response.status === 500
+          || response.status === 502
+          || response.status === 503
+          || response.status === 504;
         if (!retryableStatus) return response;
         await response.body?.cancel();
         lastError = new TaskError({

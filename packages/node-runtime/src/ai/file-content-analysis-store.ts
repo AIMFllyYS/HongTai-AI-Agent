@@ -30,7 +30,7 @@ export class FileContentAnalysisStore implements ContentAnalysisStore {
     const metadata = await readJson(join(root, "metadata.json"));
     const platform = (task.platform ?? metadata.platform) as SupportedPlatform;
     const contentType = (task.contentType ?? metadata.contentType) as ContentType;
-    if (!(["douyin", "xiaohongshu", "bilibili"] as const).includes(platform)) {
+    if (!(["douyin", "xiaohongshu", "bilibili", "kuaishou"] as const).includes(platform)) {
       throw new TaskError({ code: "TASK_ARTIFACT_MISSING", message: "任务缺少受支持的平台信息", action: "view_partial_result" });
     }
     if (contentType === "image_text") {

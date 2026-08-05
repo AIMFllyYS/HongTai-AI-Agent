@@ -32,6 +32,51 @@ test("HTTP客户端对5xx有限重试后成功", async () => {
   }
 });
 
+test("HTTP客户端仅在显式授权时重试可重放POST", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ method?: string; body?: string }> = [];
+  globalThis.fetch = async (_input, init) => {
+    requests.push({ method: init?.method, body: typeof init?.body === "string" ? init.body : undefined });
+    return requests.length === 1 ? new Response("busy", { status: 503 }) : new Response("ok", { status: 200 });
+  };
+  try {
+    const response = await new NodeHttpClient({ retryDelaysMs: [0, 0, 0] }).post({
+      url: "https://example.com/graphql",
+      body: JSON.stringify({ operationName: "ReadOnlyQuery" }),
+      headers: { "Content-Type": "application/json" },
+      maxAttempts: 2,
+    });
+    assert.equal(response.body, "ok");
+    assert.deepEqual(requests, [
+      { method: "POST", body: '{"operationName":"ReadOnlyQuery"}' },
+      { method: "POST", body: '{"operationName":"ReadOnlyQuery"}' },
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("HTTP客户端POST默认只发送一次", async () => {
+  const originalFetch = globalThis.fetch;
+  let attempts = 0;
+  globalThis.fetch = async () => {
+    attempts += 1;
+    return new Response("busy", { status: 503 });
+  };
+  try {
+    await assert.rejects(
+      () => new NodeHttpClient({ retryDelaysMs: [0, 0, 0] }).post({
+        url: "https://example.com/graphql",
+        body: "{}",
+      }),
+      (error) => error instanceof TaskError && error.code === "PLATFORM_API_UNAVAILABLE",
+    );
+    assert.equal(attempts, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("HTTP客户端返回稳定的跳转超限错误码", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(null, { status: 302, headers: { location: "https://example.com/again" } });

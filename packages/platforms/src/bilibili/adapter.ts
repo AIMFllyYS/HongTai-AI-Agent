@@ -107,6 +107,7 @@ function dashSources(playData: Record<string, unknown>, referer: string): {
 
 export class BilibiliAdapter implements PlatformAdapter {
   readonly platform = "bilibili" as const;
+  readonly supportLevel = "stable" as const;
 
   matches(url: string): boolean {
     try {

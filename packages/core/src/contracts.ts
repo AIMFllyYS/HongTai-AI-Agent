@@ -2,6 +2,7 @@ import type {
   IngestRequest,
   MediaSource,
   PlatformContent,
+  PlatformSupportLevel,
   ProgressEvent,
   ResolvedLink,
   SupportedPlatform,
@@ -15,6 +16,11 @@ export interface HttpRequest {
   readonly headers?: Readonly<Record<string, string>>;
   readonly maxRedirects?: number;
   readonly timeoutMs?: number;
+  readonly maxAttempts?: number;
+}
+
+export interface HttpPostRequest extends HttpRequest {
+  readonly body: string;
 }
 
 export interface HttpResponse {
@@ -26,10 +32,12 @@ export interface HttpResponse {
 
 export interface HttpClient {
   get(request: HttpRequest): Promise<HttpResponse>;
+  post(request: HttpPostRequest): Promise<HttpResponse>;
 }
 
 export interface PlatformAdapter {
   readonly platform: SupportedPlatform;
+  readonly supportLevel: PlatformSupportLevel;
   matches(url: string): boolean;
   resolve(url: string, http: HttpClient): Promise<ResolvedLink>;
   parse(link: ResolvedLink, http: HttpClient): Promise<PlatformContent>;

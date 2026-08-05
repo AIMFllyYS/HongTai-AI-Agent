@@ -33,6 +33,12 @@ test("extractAssignedJson支持嵌套对象和undefined", () => {
   assert.deepEqual(value, { note: { value: null, nested: { ok: true } } });
 });
 
+test("现有平台显式标记为稳定支持", () => {
+  assert.equal(new DouyinAdapter().supportLevel, "stable");
+  assert.equal(new XiaohongshuAdapter().supportLevel, "stable");
+  assert.equal(new BilibiliAdapter().supportLevel, "stable");
+});
+
 test("抖音适配器从公开页面状态提取无水印视频", async () => {
   const html = `<script>window._ROUTER_DATA={"loaderData":{"video":{"aweme_id":"7600000000000000000","desc":"测试抖音","author":{"nickname":"作者甲"},"video":{"duration":45000,"cover":{"url_list":["https://img.example/cover.jpg"]},"bit_rate":[{"gear_name":"1080p","bit_rate":2000000,"play_addr":{"uri":"video-file-id","url_list":["https://cdn.example/playwm/item.mp4"]}}]}}}};</script>`;
   const client = new FakeHttpClient(() => response("https://www.douyin.com/video/7600000000000000000", html));

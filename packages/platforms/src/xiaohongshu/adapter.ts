@@ -71,6 +71,7 @@ function xhsVideos(note: Record<string, unknown>, referer: string): MediaSource[
 
 export class XiaohongshuAdapter implements PlatformAdapter {
   readonly platform = "xiaohongshu" as const;
+  readonly supportLevel = "stable" as const;
 
   matches(url: string): boolean {
     try {

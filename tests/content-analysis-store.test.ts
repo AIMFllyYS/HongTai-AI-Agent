@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import type { ContentAnalysisResultV1 } from "../packages/ai/src/index";
+import { contentAnalysisResultSchema, type ContentAnalysisResultV1 } from "../packages/ai/src/index";
 import { FileContentAnalysisStore } from "../packages/node-runtime/src/index";
 
 const minimalResult: ContentAnalysisResultV1 = {
@@ -51,6 +51,28 @@ test("任务目录存储把图文正文规范成段落证据", async () => {
     const input = await new FileContentAnalysisStore(workspace).loadInput("image-task");
     assert.equal(input.sourceKind, "image_text");
     assert.deepEqual(input.evidenceUnits.map((unit) => unit.id), ["paragraph-1", "paragraph-2"]);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("快手视频任务沿用统一内容拆解输入和结果Schema", async () => {
+  const workspace = await mkdtemp(join(tmpdir(), "hongtai-analysis-kuaishou-"));
+  const root = join(workspace, "tasks", "kuaishou-task");
+  await mkdir(join(root, "transcript"), { recursive: true });
+  await writeFile(join(root, "task.json"), JSON.stringify({ id: "kuaishou-task", platform: "kuaishou", contentType: "video" }), "utf8");
+  await writeFile(join(root, "metadata.json"), JSON.stringify({ platform: "kuaishou", contentType: "video" }), "utf8");
+  await writeFile(join(root, "transcript", "transcript.txt"), "快手视频文字", "utf8");
+  await writeFile(join(root, "transcript", "transcript.json"), JSON.stringify({ source: "description", segments: [] }), "utf8");
+  try {
+    const input = await new FileContentAnalysisStore(workspace).loadInput("kuaishou-task");
+    assert.equal(input.platform, "kuaishou");
+    assert.equal(input.sourceKind, "description");
+    const parsed = contentAnalysisResultSchema.safeParse({
+      ...minimalResult,
+      source: { ...minimalResult.source, taskId: "kuaishou-task", platform: "kuaishou" },
+    });
+    assert.equal(parsed.success, true);
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }

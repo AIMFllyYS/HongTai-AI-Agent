@@ -18,6 +18,16 @@ const cases = [
     url: "https://b23.tv/mIrEY6j",
     platform: "bilibili",
   },
+  {
+    input: "复制打开快手，看看这个作品 https://v.kuaishou.com/nvZAnXmn 更多分享文字",
+    url: "https://v.kuaishou.com/nvZAnXmn",
+    platform: "kuaishou",
+  },
+  {
+    input: "https://www.kuaishou.com/short-video/3xk22yucqvrwx64",
+    url: "https://www.kuaishou.com/short-video/3xk22yucqvrwx64",
+    platform: "kuaishou",
+  },
 ] as const;
 
 for (const item of cases) {
@@ -36,6 +46,12 @@ test("跳过无关网址并选择第一个受支持链接", () => {
 
 test("无受支持链接返回稳定错误码", () => {
   const result = inspectInput("只有普通文字和 https://example.com/a");
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.issue.code, "INPUT_NO_SUPPORTED_URL");
+});
+
+test("快手GraphQL内部地址不是用户作品链接", () => {
+  const result = inspectInput("https://video.kuaishou.com/graphql");
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.issue.code, "INPUT_NO_SUPPORTED_URL");
 });

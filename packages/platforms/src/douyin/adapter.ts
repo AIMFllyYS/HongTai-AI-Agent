@@ -81,6 +81,7 @@ function videoSources(item: Record<string, unknown>, referer: string): MediaSour
 
 export class DouyinAdapter implements PlatformAdapter {
   readonly platform = "douyin" as const;
+  readonly supportLevel = "stable" as const;
 
   matches(url: string): boolean {
     try {
