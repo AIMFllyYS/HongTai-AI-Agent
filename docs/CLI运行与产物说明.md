@@ -37,9 +37,12 @@ CLI既接受纯链接，也接受平台复制出的整段分享文字：
 pnpm cli ingest "https://公开视频链接"
 pnpm cli ingest "7.94 复制打开抖音，看看作者作品 https://v.douyin.com/xxxxxx/ 其他分享文字"
 pnpm cli ingest "小红书分享内容 http://xhslink.cn/o/xxxxxx 这篇笔记等你来看"
+pnpm cli ingest "快手分享 https://v.kuaishou.com/xxxxxx"
 ```
 
-系统会跳过无关网址，按出现顺序使用第一个有效的抖音、小红书或B站链接。无协议链接会补全HTTPS，受支持域名的HTTP链接会在请求前升级为HTTPS。
+系统会跳过无关网址，按出现顺序使用第一个有效的抖音、小红书、B站或快手链接。无协议链接会补全HTTPS，受支持域名的HTTP链接会在请求前升级为HTTPS。
+
+快手固定标记为`experimental`，首版只接受`v.kuaishou.com/<token>`和`www.kuaishou.com/short-video/<photoId>`。CLI识别后会打印“快手（实验性）”提示，但不会因此把成功任务标记为`degraded`。它不携带Cookie或登录态，不绕过验证码，只下载GraphQL详情中明确为MP4的候选；只有m3u8时返回`MEDIA_SOURCE_NOT_FOUND`。
 
 CLI依次显示平台识别、短链解析、内容提取、媒体选择、下载、文稿和产物保存七个阶段。
 
@@ -95,6 +98,7 @@ speechStatus=no_speech
 - `INPUT_NO_SUPPORTED_URL`：分享文字中没有受支持链接；
 - `CONTENT_SCHEMA_CHANGED`：平台页面结构发生变化；
 - `CONTENT_PRIVATE_OR_LOGIN_REQUIRED`：作品私密或需要登录；
+- `PLATFORM_RISK_CONTROLLED`：快手匿名链路触发验证码或平台风控，本次停止获取详情，建议稍后再试；
 - `MEDIA_DOWNLOAD_FAILED`：媒体服务器或网络下载失败；
 - `AI_AUTH_INVALID` / `AI_PERMISSION_DENIED`：API Key或模型权限错误；
 - `AI_QUOTA_EXHAUSTED`：AI账户余额或额度不足；
@@ -113,3 +117,13 @@ speechStatus=no_speech
 CLI会打印稳定错误码；未来前端使用错误码、严重程度和建议动作展示弹窗，不解析中文错误文本。
 
 首版不自动登录或读取浏览器Cookie。遇到需要登录的作品会明确失败，不进行隐藏式绕过。
+
+## 6. 快手实验性人工验收
+
+自动化检查不会访问真实快手地址。人工验收应使用自己有权处理的公开作品，至少准备两个短链和一个标准`short-video`链接，并分两个时间窗口运行：
+
+```powershell
+pnpm cli ingest "<快手公开链接>"
+```
+
+至少两条应完成作品详情、MP4下载和FFprobe；如果触发验证码，应以`PLATFORM_RISK_CONTROLLED`结束且CLI不崩溃。检查`media/video.mp4`、`metadata.json`、`task.json`与`task.log`，并确认任务目录没有CDN签名查询参数或敏感请求头。`metadata.json`只保留移除查询参数后的媒体地址，完整临时地址只存在于当次下载内存中。完成一次人工验收后仍保持实验性标记。

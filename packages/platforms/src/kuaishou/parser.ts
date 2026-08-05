@@ -105,6 +105,7 @@ export function parseKuaishouDetail(result: KuaishouDetailResult, referer: strin
       hasAuthor: Boolean(author),
       hasPhoto: Boolean(result.detail.photo),
       graphqlErrorCount: result.graphqlErrorCount,
+      errorClassification: "none",
       media: {
         mp4Count,
         hlsCount,

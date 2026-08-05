@@ -98,6 +98,8 @@ test("快手适配器优先使用photoUrl直链并输出脱敏原始结果", asy
   assert.equal(adapter.matches("https://www.kuaishou.com/graphql"), false);
   assert.equal(adapter.matches("https://kuaishou.com/short-video/3xk22yucqvrwx64"), false);
   const resolved = await adapter.resolve("https://v.kuaishou.com/nvZAnXmn", client);
+  assert.equal(resolved.body, undefined);
+  assert.equal(resolved.finalUrl, "https://www.kuaishou.com/short-video/3xk22yucqvrwx64");
   const content = await adapter.parse(resolved, client);
 
   assert.equal(adapter.supportLevel, "experimental");
@@ -115,6 +117,7 @@ test("快手适配器优先使用photoUrl直链并输出脱敏原始结果", asy
   const raw = JSON.stringify(content.raw);
   assert.doesNotMatch(raw, /media-secret|manifest-secret|hls-secret|cover-secret/);
   assert.match(raw, /v23\.kwaicdn\.com/);
+  assert.equal((content.raw as { errorClassification?: string }).errorClassification, "none");
 });
 
 test("快手适配器在没有photoUrl时只选择manifest中的MP4", async () => {
@@ -195,7 +198,9 @@ test("快手验证码结果映射为稳定风控错误且不在适配器内重�
       }, client),
       (error) => error instanceof TaskError
         && error.code === "PLATFORM_RISK_CONTROLLED"
-        && error.message === "快手平台触发风控，暂时无法获取视频",
+        && error.message === "快手平台触发风控，暂时无法获取视频"
+        && error.details?.operationName === "visionVideoDetail"
+        && error.details?.httpStatus === 200,
     );
     assert.equal(requests, 1);
   }

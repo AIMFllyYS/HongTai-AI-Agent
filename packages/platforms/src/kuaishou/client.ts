@@ -30,6 +30,17 @@ export interface KuaishouDetailResult {
   readonly graphqlErrorCount: number;
 }
 
+function diagnosticDetails(
+  httpStatus?: number,
+  extra: Readonly<Record<string, string | number | boolean>> = {},
+): Readonly<Record<string, string | number | boolean>> {
+  return {
+    operationName: OPERATION_NAME,
+    ...(httpStatus === undefined ? {} : { httpStatus }),
+    ...extra,
+  };
+}
+
 function graphqlErrors(payload: Record<string, unknown>): readonly Record<string, unknown>[] {
   return asArray(payload.errors).flatMap((value) => {
     const record = asRecord(value);
@@ -49,55 +60,70 @@ export async function fetchKuaishouDetail(
   photoId: string,
   referer: string,
 ): Promise<KuaishouDetailResult> {
-  const response = await http.post({
-    url: KUAISHOU_GRAPHQL_URL,
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "User-Agent": DESKTOP_USER_AGENT,
-      Origin: "https://www.kuaishou.com",
-      Referer: referer,
-    },
-    body: JSON.stringify({
-      operationName: OPERATION_NAME,
-      variables: { photoId, page: "search" },
-      query: VIDEO_DETAIL_QUERY,
-    }),
-    maxRedirects: 0,
-    timeoutMs: 30_000,
-    maxAttempts: 2,
-  });
+  let response: Awaited<ReturnType<HttpClient["post"]>>;
+  try {
+    response = await http.post({
+      url: KUAISHOU_GRAPHQL_URL,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "User-Agent": DESKTOP_USER_AGENT,
+        Origin: "https://www.kuaishou.com",
+        Referer: referer,
+      },
+      body: JSON.stringify({
+        operationName: OPERATION_NAME,
+        variables: { photoId, page: "search" },
+        query: VIDEO_DETAIL_QUERY,
+      }),
+      maxRedirects: 0,
+      timeoutMs: 30_000,
+      maxAttempts: 2,
+    });
+  } catch (error) {
+    if (error instanceof TaskError) {
+      throw new TaskError({
+        code: error.code,
+        message: error.message,
+        retryable: error.retryable,
+        action: error.action,
+        details: diagnosticDetails(undefined, error.details),
+        cause: error,
+      });
+    }
+    throw error;
+  }
 
   if (response.status === 401 || response.status === 403) {
-    throw new TaskError({ code: "CONTENT_PRIVATE_OR_LOGIN_REQUIRED", message: "快手作品需要登录或没有访问权限", action: "edit_input", details: { httpStatus: response.status } });
+    throw new TaskError({ code: "CONTENT_PRIVATE_OR_LOGIN_REQUIRED", message: "快手作品需要登录或没有访问权限", action: "edit_input", details: diagnosticDetails(response.status) });
   }
   if (response.status === 429) {
-    throw new TaskError({ code: "PLATFORM_API_RATE_LIMITED", message: "快手平台访问过于频繁，请稍后重试", retryable: true, action: "wait_and_retry", details: { httpStatus: 429 } });
+    throw new TaskError({ code: "PLATFORM_API_RATE_LIMITED", message: "快手平台访问过于频繁，请稍后重试", retryable: true, action: "wait_and_retry", details: diagnosticDetails(429) });
   }
   if ([500, 502, 503, 504].includes(response.status)) {
-    throw new TaskError({ code: "PLATFORM_API_UNAVAILABLE", message: "快手平台服务暂时不可用", retryable: true, action: "wait_and_retry", details: { httpStatus: response.status } });
+    throw new TaskError({ code: "PLATFORM_API_UNAVAILABLE", message: "快手平台服务暂时不可用", retryable: true, action: "wait_and_retry", details: diagnosticDetails(response.status) });
   }
   if (response.status < 200 || response.status >= 300) {
-    throw new TaskError({ code: "PLATFORM_API_RESPONSE_INVALID", message: "快手作品详情请求失败", action: "retry", details: { httpStatus: response.status } });
+    throw new TaskError({ code: "PLATFORM_API_RESPONSE_INVALID", message: "快手作品详情请求失败", action: "retry", details: diagnosticDetails(response.status) });
   }
 
   let payload: unknown;
   try {
     payload = JSON.parse(response.body) as unknown;
   } catch (error) {
-    throw new TaskError({ code: "PLATFORM_API_RESPONSE_INVALID", message: "快手作品详情返回了无效JSON", action: "retry", cause: error });
+    throw new TaskError({ code: "PLATFORM_API_RESPONSE_INVALID", message: "快手作品详情返回了无效JSON", action: "retry", details: diagnosticDetails(response.status), cause: error });
   }
   const root = asRecord(payload);
-  if (!root) throw new TaskError({ code: "PLATFORM_API_RESPONSE_INVALID", message: "快手作品详情返回格式无效", action: "retry" });
+  if (!root) throw new TaskError({ code: "PLATFORM_API_RESPONSE_INVALID", message: "快手作品详情返回格式无效", action: "retry", details: diagnosticDetails(response.status) });
   const errors = graphqlErrors(root);
   if (isRiskControlled(root) || errors.some(isRiskControlled)) {
-    throw new TaskError({ code: "PLATFORM_RISK_CONTROLLED", message: "快手平台触发风控，暂时无法获取视频", retryable: true, action: "wait_and_retry", details: { graphqlErrorCount: errors.length } });
+    throw new TaskError({ code: "PLATFORM_RISK_CONTROLLED", message: "快手平台触发风控，暂时无法获取视频", retryable: true, action: "wait_and_retry", details: diagnosticDetails(response.status, { graphqlErrorCount: errors.length }) });
   }
   if (errors.length > 0) {
-    throw new TaskError({ code: "PLATFORM_API_RESPONSE_INVALID", message: "快手作品详情返回平台错误", action: "retry", details: { graphqlErrorCount: errors.length } });
+    throw new TaskError({ code: "PLATFORM_API_RESPONSE_INVALID", message: "快手作品详情返回平台错误", action: "retry", details: diagnosticDetails(response.status, { graphqlErrorCount: errors.length }) });
   }
   const detail = asRecord(asRecord(root.data)?.visionVideoDetail);
-  if (!detail) throw new TaskError({ code: "PLATFORM_API_RESPONSE_INVALID", message: "快手作品详情缺少必要数据", action: "retry" });
+  if (!detail) throw new TaskError({ code: "PLATFORM_API_RESPONSE_INVALID", message: "快手作品详情缺少必要数据", action: "retry", details: diagnosticDetails(response.status) });
   return { detail, httpStatus: response.status, graphqlErrorCount: errors.length };
 }
 

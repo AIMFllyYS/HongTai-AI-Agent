@@ -1,7 +1,7 @@
 import process from "node:process";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { ContentAnalysisFlow, DiagnosisFlow, OpenAiCompatibleProvider } from "@hongtai/ai";
-import { IngestPipeline } from "@hongtai/core";
+import { IngestPipeline, inspectInput } from "@hongtai/core";
 import {
   FileDiagnosisRepository,
   FileContentAnalysisStore,
@@ -20,6 +20,7 @@ import {
 } from "@hongtai/node-runtime";
 import { platformRegistry } from "@hongtai/platforms";
 import { parseContentAnalysisOptions, parseDiagnosisServeOptions } from "./ai-command-options";
+import { experimentalPlatformNotice } from "./platform-support";
 import { TerminalAiStreamPrinter } from "./terminal-ai-stream-printer";
 
 const HELP = `宏泰 AI 智能体 CLI
@@ -31,12 +32,14 @@ const HELP = `宏泰 AI 智能体 CLI
   pnpm cli analyze-content <任务ID>
 
 支持：
-  抖音、小红书、B站公开单条作品；小红书同时支持视频和图文笔记
+  抖音、小红书、B站公开单条作品；快手匿名公开单条视频（实验性）
+  小红书同时支持视频和图文笔记
 
 示例：
   pnpm cli ingest "https://www.bilibili.com/video/BVxxxxxxxxxx"
   pnpm cli ingest "https://v.douyin.com/xxxxxx/" --output D:\\HongTaiOutput
   pnpm cli ingest "复制打开小红书 xhslink.cn/o/xxxxxx 这篇笔记等你来看"
+  pnpm cli ingest "https://v.kuaishou.com/xxxxxx"
 
 说明：
   可以直接粘贴平台生成的整段分享文字。未配置AI时，视频文稿会降级使用平台描述；图文笔记不需要AI。
@@ -88,6 +91,12 @@ async function runIngest(args: readonly string[]): Promise<void> {
     : resolve(projectRoot, config.workspaceDirectory);
 
   console.log(`运行模式：公开单条作品，已注册平台=${platformRegistry.size}个，AI转写=${transcriber ? "已配置" : "未配置"}`);
+  const inspection = inspectInput(options.input);
+  if (inspection.ok) {
+    const adapter = platformRegistry.all.find((candidate) => candidate.platform === inspection.value.platform);
+    const notice = adapter ? experimentalPlatformNotice(adapter) : undefined;
+    if (notice) console.log(notice);
+  }
   const pipeline = new IngestPipeline({
     adapters: platformRegistry.all,
     http: new NodeHttpClient(),

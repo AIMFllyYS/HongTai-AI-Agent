@@ -34,6 +34,36 @@ function createTaskId(): string {
   return `${timestamp}-${suffix}`;
 }
 
+function mediaSourceForStorage(source: MediaSource): Omit<MediaSource, "headers"> {
+  return {
+    kind: source.kind,
+    url: safeUrlForDisplay(source.url),
+    quality: source.quality,
+    codec: source.codec,
+    mimeType: source.mimeType,
+    bitrate: source.bitrate,
+    width: source.width,
+    height: source.height,
+    hasWatermark: source.hasWatermark,
+  };
+}
+
+function platformContentForStorage(content: PlatformContent): PlatformContent {
+  return {
+    ...content,
+    sourceUrl: safeUrlForDisplay(content.sourceUrl),
+    canonicalUrl: content.canonicalUrl ? safeUrlForDisplay(content.canonicalUrl) : undefined,
+    coverUrl: content.coverUrl ? safeUrlForDisplay(content.coverUrl) : undefined,
+    videos: content.videos.map(mediaSourceForStorage),
+    audios: content.audios.map(mediaSourceForStorage),
+    images: content.images.map(mediaSourceForStorage),
+    subtitles: content.subtitles.map((subtitle) => ({
+      ...subtitle,
+      url: subtitle.url ? safeUrlForDisplay(subtitle.url) : undefined,
+    })),
+  };
+}
+
 function sourceScore(source: MediaSource): number {
   const pixels = (source.width ?? 0) * (source.height ?? 0);
   const bitrate = source.bitrate ?? 0;
@@ -167,7 +197,7 @@ export class IngestPipeline {
         "resolve-link",
         `开始：${sourceUrl}`,
         async () => adapter.resolve(sourceUrl, this.#dependencies.http),
-        (value) => `完成：最终链接 ${safeUrlForDisplay(value.finalUrl)}`,
+        (value, elapsedMs) => `完成：最终链接 ${safeUrlForDisplay(value.finalUrl)}，耗时 ${elapsedMs}ms`,
       );
       resolvedLink = resolved;
       if (resolved.body) {
@@ -178,12 +208,12 @@ export class IngestPipeline {
         "parse-content",
         "开始提取页面和平台数据",
         async () => adapter.parse(resolved, this.#dependencies.http),
-        (value) =>
-          `完成：标题=${value.title || "未知"}，作者=${value.author || "未知"}，视频源=${value.videos.length}个`,
+        (value, elapsedMs) =>
+          `完成：标题=${value.title || "未知"}，作者=${value.author || "未知"}，视频源=${value.videos.length}个，耗时 ${elapsedMs}ms`,
       );
       contentType = content.contentType;
       await this.#dependencies.store.writeJson(paths.rawResponse, content.raw);
-      await this.#dependencies.store.writeJson(paths.metadata, content);
+      await this.#dependencies.store.writeJson(paths.metadata, platformContentForStorage(content));
 
       if (content.contentType === "image_text") {
         const textParts = [content.title, content.description]
@@ -262,10 +292,10 @@ export class IngestPipeline {
         "select-media",
         "开始选择最佳媒体源",
         async () => ({ video: selectBest(content.videos), audio: selectBest(content.audios) }),
-        (value) =>
-          value.video
+        (value, elapsedMs) =>
+          `${value.video
             ? `完成：${value.video.quality || "未知画质"}，${value.video.codec || "未知编码"}，${value.video.hasWatermark === false ? "无水印" : "水印状态未知"}`
-            : "降级：没有找到可下载的视频源",
+            : "降级：没有找到可下载的视频源"}，耗时 ${elapsedMs}ms`,
       );
 
       if (!selection.video) {
@@ -297,7 +327,7 @@ export class IngestPipeline {
           videoDownloaded = true;
           return paths.video;
         },
-        (value) => `完成：${value}`,
+        (value, elapsedMs) => `完成：${value}，耗时 ${elapsedMs}ms`,
       );
 
       await report("obtain-transcript", "running", "开始读取视频并准备文稿");
@@ -438,8 +468,9 @@ export class IngestPipeline {
           stage: failureStage,
           errorCode: issue.code,
           error: issue.userMessage,
-          finalUrl: resolvedLink?.finalUrl,
+          finalUrl: resolvedLink?.finalUrl ? safeUrlForDisplay(resolvedLink.finalUrl) : undefined,
           httpStatus: resolvedLink?.status,
+          details: issue.details,
           pageSummary: resolvedLink?.body
             ?.replace(/<script[\s\S]*?<\/script>/gi, " ")
             .replace(/<[^>]+>/g, " ")

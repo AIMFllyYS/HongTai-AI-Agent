@@ -10,7 +10,7 @@ import type {
   ProgressEvent,
   TaskPaths,
 } from "../packages/core/src/index";
-import { IngestPipeline } from "../packages/core/src/index";
+import { IngestPipeline, TaskError } from "../packages/core/src/index";
 
 const paths: TaskPaths = {
   root: "task",
@@ -55,7 +55,12 @@ function dependencies(withVideo: boolean, withAudio = false): { dependencies: In
       canonicalUrl: link.finalUrl,
       title: "测试",
       description: "平台描述",
-      videos: withVideo ? [{ kind: "video", url: "https://media.example/video.mp4", hasWatermark: false }] : [],
+      videos: withVideo ? [{
+        kind: "video",
+        url: "https://media.example/video.mp4?signature=media-secret",
+        hasWatermark: false,
+        headers: { Referer: "https://platform.example/item", Cookie: "session=secret" },
+      }] : [],
       audios: withAudio ? [{ kind: "audio", url: "https://media.example/audio.m4s" }] : [],
       images: [],
       subtitles: [],
@@ -98,8 +103,13 @@ test("完整流水线覆盖七个阶段、保留两种文稿并清理日志URL",
   assert.match(setup.store.values.get(paths.draft) ?? "", /整理文稿/);
   assert.doesNotMatch(setup.store.values.get(paths.log) ?? "", /private-token|xsec_token/);
   assert.doesNotMatch(setup.store.values.get(paths.task) ?? "", /复制打开抖音|后续还有|b23\.tv/);
+  assert.doesNotMatch(setup.store.values.get(paths.metadata) ?? "", /private-token|xsec_token|media-secret|signature|Cookie|session=secret/);
   assert.equal(setup.events.find((event) => event.stage === "detect-platform" && event.status === "succeeded")?.detail?.ignoredSupportedUrlCount, 1);
   assert.equal(setup.events.some((event) => event.message === "媒体校验通过：时长=10秒"), true);
+  for (const stage of ["detect-platform", "resolve-link", "parse-content", "select-media", "download-media"] as const) {
+    const completed = setup.events.find((event) => event.stage === stage && event.status === "succeeded");
+    assert.match(completed?.message ?? "", /耗时 \d+ms/);
+  }
   assert.deepEqual(new Set(setup.events.map((event) => event.stage)), new Set([
     "detect-platform", "resolve-link", "parse-content", "select-media", "download-media", "obtain-transcript", "save-artifacts",
   ]));
@@ -116,6 +126,37 @@ test("分离媒体下载分别标明视频流和音频流", async () => {
     .map((event) => event.message);
   assert.ok(downloadMessages.includes("视频流下载 100%"));
   assert.ok(downloadMessages.includes("音频流下载 100%"));
+});
+
+test("快手风控失败保存安全诊断投影", async () => {
+  const setup = dependencies(true);
+  const adapter: PlatformAdapter = {
+    platform: "kuaishou",
+    supportLevel: "experimental",
+    matches: () => true,
+    resolve: async (url) => ({
+      sourceUrl: url,
+      finalUrl: "https://www.kuaishou.com/short-video/riskcase?signature=secret",
+      status: 200,
+    }),
+    parse: async () => {
+      throw new TaskError({
+        code: "PLATFORM_RISK_CONTROLLED",
+        message: "快手平台触发风控，暂时无法获取视频",
+        action: "wait_and_retry",
+        retryable: true,
+        details: { operationName: "visionVideoDetail", httpStatus: 200, graphqlErrorCount: 1 },
+      });
+    },
+  };
+  const result = await new IngestPipeline({ ...setup.dependencies, adapters: [adapter] }).run({
+    input: "https://v.kuaishou.com/riskcase",
+  });
+  const raw = setup.store.values.get(paths.rawResponse) ?? "";
+  assert.equal(result.status, "failed");
+  assert.match(raw, /"operationName":"visionVideoDetail"/);
+  assert.match(raw, /"errorCode":"PLATFORM_RISK_CONTROLLED"/);
+  assert.doesNotMatch(raw, /signature|secret/);
 });
 test("没有视频源时返回降级并保存任务", async () => {
   const setup = dependencies(false);

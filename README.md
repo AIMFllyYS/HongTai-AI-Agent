@@ -3,7 +3,7 @@
 面向大健康门店老板的本地 Android 短视频生产工具。当前首先提供无界面的 CLI，用于验证以下核心链路：
 
 ```text
-抖音/小红书/B站公开视频链接
+抖音/小红书/B站公开视频链接，或快手匿名公开视频链接（实验性）
 → 解析作品和视频源
 → 下载本地视频
 → OpenAI兼容服务语音转写
@@ -13,7 +13,7 @@
 
 在此基础上，当前还提供两个独立的AI应用能力：舌象/面部图片观察与多轮对话，以及对既有视频或图文任务进行证据可追溯的内容拆解。正式移动端界面和自动视频合成尚未进入本阶段。
 
-首版只支持公开、单条视频链接，不处理Cookie、自动登录、批量下载和画面修复型去水印。
+采集入口只支持公开单条作品，不处理Cookie、自动登录、批量下载和画面修复型去水印。快手目前仅支持匿名公开单条视频，受平台风控影响时会结构化失败，不能视为正式稳定支持。
 
 ## 环境要求
 
@@ -66,6 +66,7 @@ pnpm cli ingest "公开视频链接"
 pnpm cli ingest "https://www.bilibili.com/video/BVxxxxxxxxxx"
 pnpm cli ingest "https://v.douyin.com/xxxxxx/"
 pnpm cli ingest "https://xhslink.com/o/xxxxxx"
+pnpm cli ingest "https://v.kuaishou.com/xxxxxx"
 ```
 
 指定输出目录或视频时长上限：
@@ -136,7 +137,7 @@ workspace/tasks/{task-id}/
 - `transcript.txt`：忠实语音转写；
 - `draft.txt`：补标点、去明显口癖和分段后的整理稿；
 - `metadata.json`：平台元数据及媒体源；
-- `raw`：平台原始页面和响应，供平台规则变化时排查。
+- `raw`：平台排查结果；含临时签名地址的平台只保存安全投影，不保存查询参数、Cookie或原始错误正文。
 
 舌象/面部会话保存为：
 

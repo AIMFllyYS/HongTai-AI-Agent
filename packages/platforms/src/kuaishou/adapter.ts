@@ -43,7 +43,13 @@ export class KuaishouAdapter implements PlatformAdapter {
     if (!RESOLVED_HOSTS.has(finalHost)) {
       throw new TaskError({ code: "LINK_REDIRECT_INVALID", message: "快手链接跳转到了未认可的地址", action: "edit_input", details: { hostname: finalHost } });
     }
-    return { sourceUrl: url, finalUrl: response.url, status: response.status, body: response.body };
+    const photoId = extractPhotoId(response.url) ?? extractPhotoId(response.body);
+    if (!photoId) throw new TaskError({ code: "INPUT_URL_INVALID", message: "无法从快手链接中提取作品ID", action: "edit_input" });
+    return {
+      sourceUrl: url,
+      finalUrl: `https://www.kuaishou.com/short-video/${encodeURIComponent(photoId)}`,
+      status: response.status,
+    };
   }
 
   async parse(link: ResolvedLink, http: HttpClient): Promise<PlatformContent> {

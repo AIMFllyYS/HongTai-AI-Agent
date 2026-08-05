@@ -14,7 +14,7 @@
 ```text
 apps/cli                 命令、开发期图片上传入口、终端日志
 packages/core            既有抓取任务、通用错误和运行契约
-packages/platforms       抖音、小红书、B站解析
+packages/platforms       抖音、小红书、B站稳定解析与快手实验性解析
 packages/ai              纯TypeScript AI Provider、Schema、Prompt和Flow
 packages/node-runtime    Node文件、图片预处理和开发期产物存储
 ```
