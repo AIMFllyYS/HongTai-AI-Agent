@@ -59,7 +59,7 @@
   border: 1px solid var(--color-outline-soft);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
-  transition: transform 160ms ease, border-color 160ms ease;
+  transition: transform var(--motion-duration-fast) var(--motion-ease-emphasized), border-color var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .template-tile .media-frame {
@@ -154,7 +154,7 @@
   background: var(--color-surface-card);
   border: 1px solid var(--color-outline-soft);
   border-radius: var(--radius-control);
-  transition: transform 160ms ease, border-color 160ms ease;
+  transition: transform var(--motion-duration-fast) var(--motion-ease-emphasized), border-color var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .platform-card.is-selected {

@@ -3,6 +3,18 @@
   border: 1px solid rgba(191, 201, 196, 0.42);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
+  transition: transform var(--motion-duration-fast) var(--motion-ease-emphasized), border-color var(--motion-duration-fast) var(--motion-ease-standard), box-shadow var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.glass-card--interactive {
+  cursor: pointer;
+  will-change: transform;
+}
+
+.glass-card--interactive:active {
+  transform: scale(var(--motion-scale-press)) translateY(1px);
+  border-color: var(--color-action-secondary);
+  box-shadow: 0 0.18rem 0.55rem rgba(0, 77, 64, 0.08);
 }
 
 .glass-card--soft {
@@ -26,7 +38,7 @@
   font-size: var(--text-section);
   font-weight: 600;
   line-height: 1.25;
-  transition: transform 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+  transition: transform var(--motion-duration-fast) var(--motion-ease-emphasized), background-color var(--motion-duration-fast) var(--motion-ease-standard), box-shadow var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .button--lg {
@@ -36,7 +48,7 @@
 }
 
 .button:active {
-  transform: scale(0.98);
+  transform: scale(var(--motion-scale-press));
 }
 
 .button--primary {
@@ -91,6 +103,7 @@
   color: var(--color-text-subtle);
   font-size: var(--text-caption);
   line-height: 1rem;
+  transition: transform var(--motion-duration-fast) var(--motion-ease-emphasized), color var(--motion-duration-standard) var(--motion-ease-standard);
 }
 
 .bottom-nav__icon-wrap {
@@ -99,7 +112,19 @@
   min-height: 2rem;
   place-items: center;
   border-radius: var(--radius-pill);
-  transition: background-color 160ms ease, color 160ms ease;
+  transition: transform var(--motion-duration-fast) var(--motion-ease-emphasized), background-color var(--motion-duration-fast) var(--motion-ease-standard), color var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.bottom-nav__item:active .bottom-nav__icon-wrap {
+  transform: scale(var(--motion-scale-press));
+}
+
+.tabs button {
+  transition: transform var(--motion-duration-fast) var(--motion-ease-emphasized), background-color var(--motion-duration-standard) var(--motion-ease-standard), color var(--motion-duration-standard) var(--motion-ease-standard);
+}
+
+.tabs button:active {
+  transform: scale(var(--motion-scale-press));
 }
 
 .bottom-nav__item.is-active {

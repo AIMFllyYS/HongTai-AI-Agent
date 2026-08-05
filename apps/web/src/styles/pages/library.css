@@ -113,7 +113,7 @@
   background: var(--color-surface-card);
   border: 1px solid var(--color-outline-soft);
   border-radius: var(--radius-control);
-  transition: transform 160ms ease, border-color 160ms ease;
+  transition: transform var(--motion-duration-fast) var(--motion-ease-emphasized), border-color var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .asset-row__media {
@@ -245,7 +245,7 @@
   text-align: left;
   background: transparent;
   border-bottom: 1px solid var(--color-outline-soft);
-  transition: transform 160ms ease, border-color 160ms ease;
+  transition: transform var(--motion-duration-fast) var(--motion-ease-emphasized), border-color var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .settings-row:last-child {

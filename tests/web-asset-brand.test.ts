@@ -22,17 +22,18 @@ test("the design logo is shared by brand headers while AI navigation uses a medi
 
   const logo = read("components/BrandLogo.tsx");
   const shell = read("components/AppShell.tsx");
-  const navigation = read("components/BottomNav.tsx");
+  const navigation = read("navigation/primary-nav.ts");
+  const bottomNavigation = read("components/BottomNav.tsx");
 
   assert.match(logo, /\/brand\/pulse-flow-mark\.png/);
   assert.match(logo, /\/brand\/pulse-flow-source\.png/);
   assert.match(logo, /variant\s*=\s*"mark"/);
   assert.match(logo, /alt="宏泰AI智能体 Pulse Flow"/);
   assert.match(shell, /<BrandLogo/);
-  assert.doesNotMatch(navigation, /BrandLogo/);
+  assert.doesNotMatch(bottomNavigation, /BrandLogo/);
   assert.match(navigation, /id:\s*"ai"[\s\S]*icon:\s*"health_cross"/);
-  assert.match(navigation, /bottom-nav__item--\$\{item\.id\}/);
-  assert.doesNotMatch(navigation, /brandLogo/);
+  assert.match(bottomNavigation, /bottom-nav__item--\$\{item\.id\}/);
+  assert.doesNotMatch(bottomNavigation, /brandLogo/);
 });
 
 test("page shells do not repeat the same title as the top app bar", () => {

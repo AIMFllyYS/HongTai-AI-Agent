@@ -83,3 +83,19 @@ test("route motion and feedback are mounted at the shared application boundaries
   assert.match(shell, /data-scroll-state/);
   assert.match(navigation, /whileTap/);
 });
+
+test("shared controls expose one press-feedback vocabulary", () => {
+  const buttons = read("components/Buttons.tsx");
+  const cards = read("components/GlassCard.tsx");
+  const components = read("styles/components.css");
+  const shell = read("styles/shell.css");
+
+  assert.match(buttons, /button--\$\{size\}/);
+  assert.match(cards, /glass-card--interactive/);
+  assert.match(cards, /data-feedback/);
+  assert.match(components, /--motion-duration-fast/);
+  assert.match(components, /\.button:active/);
+  assert.match(components, /\.glass-card--interactive:active/);
+  assert.match(components, /\.tabs button:active/);
+  assert.match(shell, /touch-action:\s*pan-y/);
+});

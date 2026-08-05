@@ -140,10 +140,15 @@
   color: var(--color-primary);
   background: transparent;
   border-radius: var(--radius-pill);
+  transition: transform var(--motion-duration-fast) var(--motion-ease-emphasized), background-color var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .icon-button:hover {
   background: var(--color-surface-high);
+}
+
+.icon-button:active {
+  transform: scale(var(--motion-scale-press));
 }
 
 .app-content {
