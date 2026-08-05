@@ -3,7 +3,7 @@ import { images, media } from "./media";
 
 export const vitalityScan: VitalityScanViewModel = {
   source: "design-fixture",
-  brand: "Vitality AI",
+  brand: "宏泰AI智能体",
   title: "AI 智能诊疗",
   description: "请将面部或舌部对准扫描框以获取精准分析。",
   scanLabel: "立即拍摄",

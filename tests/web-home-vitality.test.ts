@@ -36,3 +36,10 @@ test("vitality pages explicitly use the warm-soft-tech visual theme", () => {
     assert.match(tokens, new RegExp(value, "i"), `${value} should be present in the warm-soft-tech mapping`);
   }
 });
+
+test("vitality scan uses the HongTai AI brand in the shared app header", () => {
+  const fixture = read("data/fixtures/vitality.ts");
+
+  assert.match(fixture, /brand:\s*"宏泰AI智能体"/);
+  assert.doesNotMatch(fixture, /brand:\s*"Vitality AI"/);
+});
