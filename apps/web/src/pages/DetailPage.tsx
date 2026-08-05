@@ -3,7 +3,9 @@ import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
-import { Chip, MetricGrid, PageHeading, SectionHeading, Tabs } from "../components/PageBlocks";
+import { Chip, MetricGrid } from "../components/ContentBlocks";
+import { PageHeading, SectionHeading } from "../components/Headings";
+import { TabPanel, Tabs, tabId, tabPanelId } from "../components/Tabs";
 import { MediaFrame } from "../components/MediaFrame";
 
 export interface DetailPageProps {
@@ -13,6 +15,9 @@ export interface DetailPageProps {
 
 export function DetailPage({ viewModel, navigate }: DetailPageProps) {
   const isGallery = viewModel.variant === "gallery";
+  const tabsId = `${viewModel.variant}-detail-tabs`;
+  const activeTabIndex = Math.max(0, viewModel.tabs.indexOf(viewModel.activeTab));
+
   return (
     <AppShell
       backPath="/analyze/result"
@@ -40,20 +45,22 @@ export function DetailPage({ viewModel, navigate }: DetailPageProps) {
         ) : null}
 
         <MetricGrid items={viewModel.metrics} />
-        <Tabs active={viewModel.activeTab} tabs={viewModel.tabs} />
+        <Tabs active={viewModel.activeTab} id={tabsId} panelId={tabPanelId(tabsId)} tabs={viewModel.tabs} />
 
-        <GlassCard className="detail-content-card">
-          <PageHeading description={viewModel.analysisIntro} title="AI 自动拆解" />
-          <section className="transcript-list">
-            <SectionHeading title={isGallery ? "图文结构" : "原始文稿"} />
-            {viewModel.transcript.map((line) => <div className="transcript-line" key={line.time}><time>{line.time}</time><p>{line.text}</p></div>)}
-          </section>
-          <section className="page-section">
-            <SectionHeading title="关键片段" />
-            <div className="timeline-list timeline-list--compact">{viewModel.timeline.slice(0, 3).map((item) => <article className={`timeline-item timeline-item--${item.tone}`} key={item.id}><div className="timeline-item__rail"><Icon name="check_circle" size={16} /></div><div className="timeline-item__body"><div className="timeline-item__title"><strong>{item.label}</strong><time>{item.timeRange}</time></div><p>{item.description}</p></div></article>)}</div>
-          </section>
-          <div className="chip-row detail-tags">{viewModel.tags.map((tag) => <Chip key={tag}>{tag}</Chip>)}</div>
-        </GlassCard>
+        <TabPanel className="page-stack" id={tabPanelId(tabsId)} labelledBy={tabId(tabsId, activeTabIndex)}>
+          <GlassCard className="detail-content-card">
+            <PageHeading description={viewModel.analysisIntro} title="AI 自动拆解" />
+            <section className="transcript-list">
+              <SectionHeading title={isGallery ? "图文结构" : "原始文稿"} />
+              {viewModel.transcript.map((line) => <div className="transcript-line" key={line.time}><time>{line.time}</time><p>{line.text}</p></div>)}
+            </section>
+            <section className="page-section">
+              <SectionHeading title="关键片段" />
+              <div className="timeline-list timeline-list--compact">{viewModel.timeline.slice(0, 3).map((item) => <article className={`timeline-item timeline-item--${item.tone}`} key={item.id}><div className="timeline-item__rail"><Icon name="check_circle" size={16} /></div><div className="timeline-item__body"><div className="timeline-item__title"><strong>{item.label}</strong><time>{item.timeRange}</time></div><p>{item.description}</p></div></article>)}</div>
+            </section>
+            <div className="chip-row detail-tags">{viewModel.tags.map((tag) => <Chip key={tag}>{tag}</Chip>)}</div>
+          </GlassCard>
+        </TabPanel>
       </div>
     </AppShell>
   );

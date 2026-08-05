@@ -16,7 +16,7 @@
 
 .button {
   display: inline-flex;
-  min-height: 3rem;
+  min-height: var(--button-height-md);
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
@@ -27,6 +27,12 @@
   font-weight: 600;
   line-height: 1.25;
   transition: transform 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.button--lg {
+  min-height: var(--button-height-lg);
+  padding-inline: 1.5rem;
+  font-size: var(--text-module);
 }
 
 .button:active {

@@ -4,7 +4,8 @@ import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
 import { ProgressSteps } from "../components/ProgressSteps";
-import { RecentAnalysisList, SectionHeading } from "../components/PageBlocks";
+import { RecentAnalysisList } from "../components/ContentBlocks";
+import { SectionHeading } from "../components/Headings";
 
 export interface ProcessingPageProps {
   readonly viewModel: ProcessingViewModel;

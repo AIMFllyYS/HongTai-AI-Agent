@@ -3,7 +3,8 @@ import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
-import { PageHeading, RecentAnalysisList, SectionHeading, iconName } from "../components/PageBlocks";
+import { RecentAnalysisList, iconName } from "../components/ContentBlocks";
+import { PageHeading, SectionHeading } from "../components/Headings";
 
 export interface HomePageProps {
   readonly viewModel: HomeViewModel;

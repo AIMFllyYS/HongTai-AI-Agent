@@ -9,67 +9,6 @@ export function iconName(value: string): IconName {
   return value as IconName;
 }
 
-export interface PageHeadingProps {
-  readonly eyebrow?: string;
-  readonly title: string;
-  readonly description?: string;
-  readonly action?: ReactNode;
-  readonly className?: string;
-}
-
-export function PageHeading({ eyebrow, title, description, action, className = "" }: PageHeadingProps) {
-  return (
-    <div className={`page-heading ${className}`.trim()}>
-      <div>
-        {eyebrow ? <span className="page-heading__eyebrow">{eyebrow}</span> : null}
-        <h2>{title}</h2>
-        {description ? <p>{description}</p> : null}
-      </div>
-      {action ? <div className="page-heading__action">{action}</div> : null}
-    </div>
-  );
-}
-
-export interface SectionHeadingProps {
-  readonly title: string;
-  readonly action?: ReactNode;
-  readonly className?: string;
-}
-
-export function SectionHeading({ title, action, className = "" }: SectionHeadingProps) {
-  return (
-    <div className={`section-heading ${className}`.trim()}>
-      <h3>{title}</h3>
-      {action ? <div>{action}</div> : null}
-    </div>
-  );
-}
-
-export interface TabsProps {
-  readonly tabs: readonly string[];
-  readonly active: string;
-  readonly onSelect?: (tab: string) => void;
-}
-
-export function Tabs({ tabs, active, onSelect }: TabsProps) {
-  return (
-    <div className="tabs" role="tablist">
-      {tabs.map((tab) => (
-        <button
-          aria-selected={tab === active}
-          className={tab === active ? "is-active" : ""}
-          key={tab}
-          onClick={() => onSelect?.(tab)}
-          role="tab"
-          type="button"
-        >
-          {tab}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export interface ChipProps {
   readonly children: ReactNode;
   readonly selected?: boolean;

@@ -3,7 +3,8 @@ import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
-import { Chip, PageHeading, SectionHeading } from "../components/PageBlocks";
+import { Chip } from "../components/ContentBlocks";
+import { PageHeading, SectionHeading } from "../components/Headings";
 import { MediaFrame } from "../components/MediaFrame";
 
 export interface CreatePageProps {

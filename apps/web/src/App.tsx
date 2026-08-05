@@ -2,6 +2,7 @@ import { EmptyState } from "./components/StatePanels";
 import { activeNavForRoute } from "./components/BottomNav";
 import { AppShell } from "./components/AppShell";
 import { createStaticVisualDataAdapter } from "./data/static-visual-adapter";
+import type { VisualDataAdapter } from "./data/visual-adapter";
 import { useBrowserRoute } from "./hooks/useBrowserRoute";
 import { matchRoute } from "./router";
 import { AnalysisResultPage } from "./pages/AnalysisResultPage";
@@ -15,11 +16,14 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { VitalityResultPage } from "./pages/VitalityResultPage";
 import { VitalityScanPage } from "./pages/VitalityScanPage";
 
-const visualData = createStaticVisualDataAdapter();
+export interface AppProps {
+  readonly visualData?: VisualDataAdapter;
+}
 
-export function App() {
+export function App({ visualData: injectedVisualData }: AppProps = {}) {
   const { pathname, navigate } = useBrowserRoute();
   const route = matchRoute(pathname);
+  const visualData = injectedVisualData ?? createStaticVisualDataAdapter();
 
   if (route.key === "home") return <HomePage navigate={navigate} viewModel={visualData.getHome()} />;
   if (route.key === "processing") return <ProcessingPage navigate={navigate} viewModel={visualData.getProcessing()} />;
