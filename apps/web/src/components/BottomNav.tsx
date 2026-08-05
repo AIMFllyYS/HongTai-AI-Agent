@@ -1,16 +1,20 @@
+import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import { Icon } from "./Icon";
-import { type RouteKey } from "../router";
+import { type Navigate, type RouteKey } from "../router";
 import { primaryNavItems } from "../navigation/primary-nav";
+
+export type BottomNavVisualTheme = "workbench" | "warm-soft-tech";
 
 export interface BottomNavProps {
   readonly active?: "ai" | "home" | "create" | "assets" | "settings";
-  readonly navigate: (path: string) => void;
+  readonly navigate: Navigate;
+  readonly visualTheme?: BottomNavVisualTheme;
 }
 
-export function BottomNav({ active, navigate }: BottomNavProps) {
-  return (
-    <nav aria-label="主导航" className="bottom-nav">
+export function BottomNav({ active, navigate, visualTheme = "workbench" }: BottomNavProps) {
+  const navigation = (
+    <nav aria-label="主导航" className="bottom-nav" data-visual-theme={visualTheme}>
       {primaryNavItems.map((item) => {
         const selected = item.id === active;
         return (
@@ -21,7 +25,7 @@ export function BottomNav({ active, navigate }: BottomNavProps) {
             key={item.id}
             onClick={(event) => {
               event.preventDefault();
-              navigate(item.path);
+              navigate(item.path, { scroll: "auto", transition: "instant" });
             }}
             transition={{ duration: 0.14 }}
             whileTap={{ scale: 0.96 }}
@@ -33,6 +37,8 @@ export function BottomNav({ active, navigate }: BottomNavProps) {
       })}
     </nav>
   );
+
+  return typeof document === "undefined" ? navigation : createPortal(navigation, document.body);
 }
 
 export function activeNavForRoute(route: RouteKey): BottomNavProps["active"] {

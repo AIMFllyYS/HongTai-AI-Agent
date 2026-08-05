@@ -1,6 +1,6 @@
 import { EmptyState } from "./components/StatePanels";
-import { activeNavForRoute } from "./components/BottomNav";
-import { AppShell } from "./components/AppShell";
+import { activeNavForRoute, BottomNav } from "./components/BottomNav";
+import { AppShell, AppShellNavigationProvider } from "./components/AppShell";
 import { RouteTransition } from "./components/RouteTransition";
 import { createStaticVisualDataAdapter } from "./data/static-visual-adapter";
 import type { VisualDataAdapter } from "./data/visual-adapter";
@@ -23,7 +23,7 @@ export interface AppProps {
 }
 
 export function App({ visualData: injectedVisualData }: AppProps = {}) {
-  const { pathname, direction, navigate } = useBrowserRoute();
+  const { pathname, direction, transitionMode, navigate } = useBrowserRoute();
   useInteractionFeedback();
   const route = matchRoute(pathname);
   const visualData = injectedVisualData ?? createStaticVisualDataAdapter();
@@ -48,5 +48,13 @@ export function App({ visualData: injectedVisualData }: AppProps = {}) {
     );
   };
 
-  return <RouteTransition direction={direction} pathname={pathname}>{renderRoute()}</RouteTransition>;
+  const activeNav = activeNavForRoute(route.key);
+  const visualTheme = route.key === "vitality-scan" || route.key === "vitality-result" ? "warm-soft-tech" : "workbench";
+
+  return (
+    <AppShellNavigationProvider>
+      <RouteTransition direction={direction} pathname={pathname} transitionMode={transitionMode}>{renderRoute()}</RouteTransition>
+      <BottomNav active={activeNav} navigate={navigate} visualTheme={visualTheme} />
+    </AppShellNavigationProvider>
+  );
 }

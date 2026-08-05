@@ -18,6 +18,15 @@ export interface AppRoute {
   readonly navKey?: "ai" | "home" | "create" | "assets" | "settings";
 }
 
+export type NavigationTransition = "animated" | "instant";
+
+export interface NavigateOptions {
+  readonly transition?: NavigationTransition;
+  readonly scroll?: ScrollBehavior;
+}
+
+export type Navigate = (path: string, options?: NavigateOptions) => void;
+
 export const appRoutes: readonly AppRoute[] = [
   { path: "/", key: "home", navKey: "home" },
   { path: "/analyze/processing", key: "processing", navKey: "home" },

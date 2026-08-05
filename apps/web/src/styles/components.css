@@ -93,6 +93,10 @@
   backdrop-filter: blur(1.25rem);
 }
 
+.bottom-nav[data-visual-theme="warm-soft-tech"] {
+  background: rgba(251, 253, 250, 0.94);
+}
+
 .bottom-nav__item {
   display: flex;
   min-width: 0;
@@ -134,6 +138,14 @@
 
 .bottom-nav__item.is-active .bottom-nav__icon-wrap {
   background: var(--color-accent-soft);
+}
+
+.bottom-nav[data-visual-theme="warm-soft-tech"] .bottom-nav__item.is-active {
+  color: var(--vitality-accent);
+}
+
+.bottom-nav[data-visual-theme="warm-soft-tech"] .bottom-nav__item.is-active .bottom-nav__icon-wrap {
+  background: var(--vitality-accent-soft);
 }
 
 .bottom-nav__item--ai .bottom-nav__icon-wrap {

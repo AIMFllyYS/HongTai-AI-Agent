@@ -84,6 +84,40 @@ test("route motion and feedback are mounted at the shared application boundaries
   assert.match(navigation, /whileTap/);
 });
 
+test("bottom navigation stays outside route transforms and supports direct navigation", () => {
+  const app = read("App.tsx");
+  const shell = read("components/AppShell.tsx");
+  const navigation = read("components/BottomNav.tsx");
+  const routeTransition = read("components/RouteTransition.tsx");
+  const browserRoute = read("hooks/useBrowserRoute.ts");
+
+  assert.match(navigation, /createPortal/);
+  assert.match(navigation, /document\.body/);
+  assert.match(navigation, /transition:\s*["']instant["']/);
+  assert.match(app, /AppShellNavigationProvider/);
+  assert.match(app, /<BottomNav active=/);
+  assert.match(shell, /visualTheme=\{visualTheme\}/);
+  assert.match(shell, /externalNavigationContext/);
+  assert.match(app, /transitionMode/);
+  assert.match(browserRoute, /transitionMode/);
+  assert.match(routeTransition, /transitionMode\s*===\s*["']instant["']/);
+});
+
+test("horizontal navigation follows mouse and touch movement with one direction rule", () => {
+  const swipe = read("hooks/useSwipeNavigation.ts");
+  const shell = read("components/AppShell.tsx");
+
+  assert.match(swipe, /pointerType\s*===\s*["']mouse["']/);
+  assert.match(swipe, /onPointerMove/);
+  assert.match(swipe, /setPointerCapture/);
+  assert.match(swipe, /swipeOffset/);
+  assert.match(swipe, /deltaX\s*<\s*0/);
+  assert.match(swipe, /currentIndex\s*\+\s*1/);
+  assert.match(swipe, /currentIndex\s*-\s*1/);
+  assert.match(shell, /app-content--dragging/);
+  assert.match(shell, /--swipe-offset/);
+});
+
 test("shared controls expose one press-feedback vocabulary", () => {
   const buttons = read("components/Buttons.tsx");
   const cards = read("components/GlassCard.tsx");

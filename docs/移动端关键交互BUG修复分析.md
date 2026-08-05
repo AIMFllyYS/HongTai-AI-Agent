@@ -12,7 +12,7 @@
 
 当前 `RouteTransition` 用 `motion.div` 包住 `AppShell`，并在页面切换时对该祖先设置 `transform`。CSS 中的 fixed 后代在存在 transformed ancestor 时可能改以该祖先作为包含块，导致导航在切换、滚动或不同浏览器实现下表现为跟随页面内容、短暂消失或位置重算。
 
-最小修复是把 `BottomNav` portal 到 `document.body`，使它脱离路由动画的 transform 树；`AppShell` 继续保留底部安全区和内容 padding，保证最后一项内容不会被导航遮挡。主题属性同时传给 portal 节点，避免脱离壳后丢失 warm-soft-tech 语义 token。
+最小修复是由 `App` 在 `RouteTransition` 外持有唯一的 `BottomNav`，并将它 portal 到 `document.body`，使它同时脱离路由动画的 transform 树和页面组件的卸载周期。`AppShell` 在应用宿主模式下只保留底部安全区和内容 padding，独立使用 `AppShell` 时仍保留原有的本地导航回退。主题属性同时传给 portal 节点，避免脱离壳后丢失 warm-soft-tech 语义 token。
 
 ### 2. 水平手势必须使用真实位移和稳定方向不变量
 
@@ -29,11 +29,11 @@
 
 底部导航点击的核心反馈是“立即进入所选一级页面”。当前点击沿用路由的 `AnimatePresence mode="wait"` 和非 reduced-motion 下的 smooth scroll，用户需要等待退出动画和滚动完成，造成点击不直接、像是响应迟缓。
 
-路由仍需要保留页面内进入详情、返回和手势切换的统一过渡；因此不移除全局动效，而是给导航器增加可选的 `transition` 与 `scroll` 选项。底部导航明确传入 `transition: "instant"`、`scroll: "auto"`，只绕过一级导航入口的动画和 smooth scroll。
+路由仍需要保留页面内进入详情、返回和手势切换的统一过渡；因此不移除全局动效，而是给导航器增加可选的 `transition` 与 `scroll` 选项。底部导航明确传入 `transition: "instant"`、`scroll: "auto"`，只绕过一级导航入口的动画和 smooth scroll。instant 模式直接替换 route 节点；从 instant 页面进入页面内 animated 路由时，只播放新页面的进入动画，避免重复卸载或丢失过渡边界。
 
 ## 修复不变量
 
-1. `BottomNav` 的 DOM 不在 `RouteTransition` 的 transformed subtree 中，且仍由 `AppShell` 控制是否显示。
+1. 应用宿主中的唯一 `BottomNav` DOM 不在 `RouteTransition` 的 transformed subtree 中；独立使用 `AppShell` 时，`showNav` 仍控制本地导航回退。
 2. 内容区域具有可观察的水平拖拽偏移；提交方向只由 `deltaX` 决定，左右不反转，越界项不导航。
 3. 底部导航点击只改变浏览器路径和页面内容，不等待页面退出动画，也不平滑滚动到顶部。
 4. 页面内原有路由过渡、返回路径、五项导航顺序、主题 token 和数据适配器保持不变。
