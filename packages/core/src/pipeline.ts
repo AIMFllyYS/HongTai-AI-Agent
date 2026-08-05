@@ -477,6 +477,7 @@ export class IngestPipeline {
   ): Promise<void> {
     let lastReportedAt = 0;
     let lastProgress: number | undefined;
+    const mediaLabel = source.kind === "audio" ? "音频流" : source.kind === "image" ? "图片" : "视频流";
     await this.#dependencies.downloader.download(source, destination, async (progress) => {
       const now = Date.now();
       if (progress.progress === 1 && lastProgress === 1) return;
@@ -484,7 +485,7 @@ export class IngestPipeline {
       lastReportedAt = now;
       lastProgress = progress.progress;
       const percent = progress.progress == null ? "未知" : `${Math.round(progress.progress * 100)}%`;
-      await report(stage, "running", `下载 ${percent}`, {
+      await report(stage, "running", `${mediaLabel}下载 ${percent}`, {
         progress: progress.progress,
         detail: {
           downloadedBytes: progress.downloadedBytes,

@@ -1,19 +1,31 @@
 import { mkdir, open, rm } from "node:fs/promises";
 import { dirname } from "node:path";
 import { TaskError, type DownloadProgress, type MediaDownloader, type MediaSource } from "@hongtai/core";
+import { fetch, getGlobalDispatcher, RetryAgent, type Dispatcher } from "undici";
 import { mediaNetworkError, storageTaskError } from "../errors";
 
 export interface NodeMediaDownloaderOptions {
-  readonly retryDelaysMs?: readonly number[];
+  readonly maxRetries?: number;
+  readonly minRetryDelayMs?: number;
   readonly timeoutMs?: number;
 }
 
 export class NodeMediaDownloader implements MediaDownloader {
-  readonly #retryDelaysMs: readonly number[];
+  readonly #dispatcher: Dispatcher;
   readonly #timeoutMs: number;
 
   constructor(options: NodeMediaDownloaderOptions = {}) {
-    this.#retryDelaysMs = options.retryDelaysMs ?? [0, 1_000, 3_000];
+    const minRetryDelayMs = Math.min(3_000, Math.max(0, options.minRetryDelayMs ?? 1_000));
+    this.#dispatcher = new RetryAgent(getGlobalDispatcher(), {
+      maxRetries: Math.max(0, options.maxRetries ?? 2),
+      minTimeout: minRetryDelayMs,
+      maxTimeout: 3_000,
+      timeoutFactor: 3,
+      retryAfter: true,
+      methods: ["GET"],
+      statusCodes: [429, 500, 502, 503, 504],
+      throwOnError: false,
+    });
     this.#timeoutMs = options.timeoutMs ?? 600_000;
   }
 
@@ -22,20 +34,12 @@ export class NodeMediaDownloader implements MediaDownloader {
     destination: string,
     onProgress?: (progress: DownloadProgress) => void | Promise<void>,
   ): Promise<void> {
-    let lastError: TaskError | undefined;
-    for (let attempt = 0; attempt < this.#retryDelaysMs.length; attempt += 1) {
-      const delay = this.#retryDelaysMs[attempt] ?? 0;
-      if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
-      try {
-        await this.#downloadOnce(source, destination, onProgress);
-        return;
-      } catch (error) {
-        await rm(destination, { force: true }).catch(() => undefined);
-        lastError = error instanceof TaskError ? error : mediaNetworkError(error);
-        if (!lastError.retryable) throw lastError;
-      }
+    try {
+      await this.#downloadOnce(source, destination, onProgress);
+    } catch (error) {
+      await rm(destination, { force: true }).catch(() => undefined);
+      throw error instanceof TaskError ? error : mediaNetworkError(error);
     }
-    throw lastError ?? new TaskError({ code: "MEDIA_DOWNLOAD_FAILED", message: "媒体下载失败", action: "retry" });
   }
 
   async #downloadOnce(
@@ -51,9 +55,10 @@ export class NodeMediaDownloader implements MediaDownloader {
     }
     if (parsed.protocol !== "https:") throw new TaskError({ code: "MEDIA_DOWNLOAD_FAILED", message: "媒体源不是HTTPS地址", action: "retry" });
 
-    let response: Response;
+    let response: Awaited<ReturnType<typeof fetch>>;
     try {
       response = await fetch(parsed, {
+        dispatcher: this.#dispatcher,
         headers: source.headers,
         redirect: "follow",
         signal: AbortSignal.timeout(this.#timeoutMs),

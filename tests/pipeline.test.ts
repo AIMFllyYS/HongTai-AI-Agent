@@ -40,7 +40,7 @@ class MemoryStore implements ArtifactStore {
   imagePath(_paths: TaskPaths, index: number): string { return `task/media/images/image-${index + 1}.jpg`; }
 }
 
-function dependencies(withVideo: boolean): { dependencies: IngestPipelineDependencies; events: ProgressEvent[]; store: MemoryStore } {
+function dependencies(withVideo: boolean, withAudio = false): { dependencies: IngestPipelineDependencies; events: ProgressEvent[]; store: MemoryStore } {
   const events: ProgressEvent[] = [];
   const store = new MemoryStore();
   const adapter: PlatformAdapter = {
@@ -55,7 +55,7 @@ function dependencies(withVideo: boolean): { dependencies: IngestPipelineDepende
       title: "测试",
       description: "平台描述",
       videos: withVideo ? [{ kind: "video", url: "https://media.example/video.mp4", hasWatermark: false }] : [],
-      audios: [],
+      audios: withAudio ? [{ kind: "audio", url: "https://media.example/audio.m4s" }] : [],
       images: [],
       subtitles: [],
       raw: { ok: true },
@@ -98,6 +98,19 @@ test("完整流水线覆盖七个阶段、保留两种文稿并清理日志URL",
   assert.deepEqual(new Set(setup.events.map((event) => event.stage)), new Set([
     "detect-platform", "resolve-link", "parse-content", "select-media", "download-media", "obtain-transcript", "save-artifacts",
   ]));
+});
+
+test("分离媒体下载分别标明视频流和音频流", async () => {
+  const setup = dependencies(true, true);
+
+  const result = await new IngestPipeline(setup.dependencies).run({ input: "https://www.douyin.com/video/1" });
+
+  assert.equal(result.status, "succeeded");
+  const downloadMessages = setup.events
+    .filter((event) => event.stage === "download-media" && event.status === "running")
+    .map((event) => event.message);
+  assert.ok(downloadMessages.includes("视频流下载 100%"));
+  assert.ok(downloadMessages.includes("音频流下载 100%"));
 });
 test("没有视频源时返回降级并保存任务", async () => {
   const setup = dependencies(false);
@@ -145,6 +158,7 @@ test("小红书图文保存正文和全部图片后正常成功", async () => {
   assert.match(store.values.get(paths.contentText) ?? "", /图文正文/);
   assert.equal(transcriberCalled, false);
   assert.equal(events.some((event) => event.stage === "obtain-transcript" && event.status === "succeeded"), true);
+  assert.equal(events.some((event) => event.message === "图片下载 100%"), true);
 });
 
 test("视频无有效口播时任务成功且不生成伪文稿和整理稿", async () => {
