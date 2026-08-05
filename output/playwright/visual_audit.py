@@ -85,7 +85,21 @@ def assert_page_mark(page: Page, route: str) -> str:
     assert style["borderWidth"] == "0px" and style["borderStyle"] == "none", f"{route}: page mark has a visible border: {style}"
     assert style["backgroundColor"] in {"rgba(0, 0, 0, 0)", "transparent"}, f"{route}: page mark has a background: {style}"
     assert style["boxShadow"] == "none", f"{route}: page mark has a shadow: {style}"
-    return f"page-mark={len(sources)};transparent=1"
+
+    header_mark = page.locator(".app-header .brand-logo--mark")
+    if not header_mark.count():
+        return f"page-mark={len(sources)};transparent=1"
+
+    geometry = header_mark.first.evaluate(
+        """element => {
+          const mark = element.getBoundingClientRect();
+          const title = element.closest('.app-header').querySelector('.app-header__title-wrap').getBoundingClientRect();
+          return { markWidth: mark.width, titleGap: title.left - mark.right };
+        }"""
+    )
+    assert 32.5 <= geometry["markWidth"] <= 33.5, f"{route}: page mark size drifted: {geometry}"
+    assert 6.5 <= geometry["titleGap"] <= 7.5, f"{route}: page mark/title gap drifted: {geometry}"
+    return f"page-mark={len(sources)};transparent=1;markWidth={geometry['markWidth']:.1f};titleGap={geometry['titleGap']:.1f}"
 
 
 def vitality_color_snapshot(page: Page) -> dict[str, str | None]:

@@ -51,6 +51,7 @@ test("the browser audit checks the asset thumbnail boundary and shared logo", ()
   assert.match(audit, /asset-row/);
   assert.match(audit, /brand-logo/);
   assert.match(audit, /page-mark/);
+  assert.match(audit, /markWidth/);
   assert.match(audit, /assets geometry/);
   assert.match(audit, /Noto Sans SC/);
   assert.match(audit, /external runtime media/);

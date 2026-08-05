@@ -13,7 +13,7 @@ route	page height	h1	page errors
 
 foundation evidence
 /	local-font=1;local-images=5
-/	page-mark=2;transparent=1
+/	page-mark=2;transparent=1;markWidth=33.0;titleGap=7.0
 /analyze/processing	local-font=1;local-images=3
 /analyze/processing	page-mark=1;transparent=1
 /analyze/result	local-font=1;local-images=2
@@ -30,9 +30,9 @@ foundation evidence
 /assets	page-mark=1;transparent=1
 /assets	assets geometry: rows=3;thumbnail=128.0x72.0;no-overlap=1
 /settings	local-font=1;local-images=3
-/settings	page-mark=2;transparent=1
+/settings	page-mark=2;transparent=1;markWidth=33.0;titleGap=7.0
 /vitality/scan	local-font=1;local-images=2
-/vitality/scan	page-mark=2;transparent=1
+/vitality/scan	page-mark=2;transparent=1;markWidth=33.0;titleGap=7.0
 /vitality/scan	shellBackground=rgb(251, 253, 250), primaryBackground=rgb(38, 166, 154), headingColor=rgb(0, 77, 64)
 /vitality/result	local-font=1;local-images=3
 /vitality/result	page-mark=1;transparent=1

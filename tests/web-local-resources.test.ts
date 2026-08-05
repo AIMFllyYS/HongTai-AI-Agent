@@ -33,6 +33,7 @@ test("page brand mark stays transparent while the app icon keeps its frame", () 
   const mark = read("apps/web/public/brand/pulse-flow-mark.svg");
   assert.match(mark, /<path\b/);
   assert.doesNotMatch(mark, /<rect\b|<filter\b/, "the page mark must not carry the app icon frame");
+  assert.match(mark, /viewBox='190 230 650 430'/, "the page mark needs breathing room around its vector edges");
   assert.match(appIcon, /<rect\b/);
   assert.match(appIcon, /<filter\b/);
   assert.match(brandLogo, /variant\?:\s*"mark"\s*\|\s*"icon"\s*\|\s*"lockup"/);
@@ -40,6 +41,7 @@ test("page brand mark stays transparent while the app icon keeps its frame", () 
   assert.match(brandLogo, /\/brand\/pulse-flow-mark\.svg/);
   assert.match(shellStyles, /\.brand-logo--mark[\s\S]*border:\s*0/);
   assert.match(shellStyles, /\.brand-logo--mark[\s\S]*background:\s*transparent/);
+  assert.match(shellStyles, /\.brand-logo--mark\s*\{[\s\S]*width:\s*2\.0625rem;[\s\S]*height:\s*2\.0625rem/);
 });
 
 test("Chinese UI font is bundled locally for web and future APK packaging", () => {

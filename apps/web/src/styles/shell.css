@@ -74,8 +74,8 @@
 }
 
 .brand-logo--mark {
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.0625rem;
+  height: 2.0625rem;
   overflow: visible;
   border: 0;
   border-radius: 0;
@@ -98,8 +98,8 @@
 }
 
 .brand-logo--sm.brand-logo--mark {
-  width: 1.875rem;
-  height: 1.875rem;
+  width: 1.75rem;
+  height: 1.75rem;
   border-radius: 0;
 }
 
