@@ -41,6 +41,7 @@ export interface HomeViewModel {
   readonly recent: readonly RecentAnalysis[];
   readonly emptyTitle: string;
   readonly emptyDescription: string;
+  readonly emptyActionLabel: string;
 }
 
 export interface ProcessingStepViewModel {

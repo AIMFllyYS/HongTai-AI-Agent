@@ -13,7 +13,7 @@ export interface VitalityScanPageProps {
 
 export function VitalityScanPage({ viewModel, navigate }: VitalityScanPageProps) {
   return (
-    <AppShell activeNav="ai" className="vitality-shell" navigate={navigate} title={viewModel.brand}>
+    <AppShell activeNav="ai" className="vitality-shell" navigate={navigate} title={viewModel.brand} visualTheme="warm-soft-tech">
       <div className="page-stack page-vitality-scan">
         <PageHeading eyebrow="VITALITY AI" description={viewModel.description} title={viewModel.title} />
         <GlassCard className="scan-card">

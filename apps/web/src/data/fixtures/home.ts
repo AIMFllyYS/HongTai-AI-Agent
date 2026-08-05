@@ -20,6 +20,7 @@ export const home: HomeViewModel = {
   recent,
   emptyTitle: "暂无拆解记录",
   emptyDescription: "粘贴上方视频链接，开启你的第一份爆款逻辑分析报告。",
+  emptyActionLabel: "了解如何拆解",
 };
 
 export const processing: ProcessingViewModel = {

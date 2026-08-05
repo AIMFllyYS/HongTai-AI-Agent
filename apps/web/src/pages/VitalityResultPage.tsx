@@ -15,7 +15,7 @@ export interface VitalityResultPageProps {
 export function VitalityResultPage({ viewModel, navigate }: VitalityResultPageProps) {
   const scoreProgress = `${(viewModel.score / viewModel.scoreMax) * 360}deg`;
   return (
-    <AppShell activeNav="ai" backPath="/vitality/scan" className="vitality-shell" navigate={navigate} title={viewModel.title}>
+    <AppShell activeNav="ai" backPath="/vitality/scan" className="vitality-shell" navigate={navigate} title={viewModel.title} visualTheme="warm-soft-tech">
       <div className="page-stack page-vitality-result">
         <PageHeading description={viewModel.scoreDescription} title={viewModel.scoreTitle} />
         <GlassCard className="score-card">
