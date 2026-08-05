@@ -10,6 +10,7 @@ test("mobile motion foundation keeps each interaction responsibility isolated", 
   for (const relativePath of [
     "motion/tokens.ts",
     "components/RouteTransition.tsx",
+    "components/SwipeRouteViewport.tsx",
     "hooks/useInteractionFeedback.ts",
     "hooks/useSwipeNavigation.ts",
     "hooks/useScrollMotion.ts",
@@ -77,8 +78,8 @@ test("route motion and feedback are mounted at the shared application boundaries
   const navigation = read("components/BottomNav.tsx");
 
   assert.match(app, /RouteTransition/);
+  assert.match(app, /SwipeRouteViewport/);
   assert.match(app, /useInteractionFeedback/);
-  assert.match(shell, /useSwipeNavigation/);
   assert.match(shell, /useScrollMotion/);
   assert.match(shell, /data-scroll-state/);
   assert.match(navigation, /whileTap/);
@@ -103,19 +104,31 @@ test("bottom navigation stays outside route transforms and supports direct navig
   assert.match(routeTransition, /transitionMode\s*===\s*["']instant["']/);
 });
 
-test("horizontal navigation follows mouse and touch movement with one direction rule", () => {
+test("horizontal navigation renders an adjacent route pane during movement", () => {
   const swipe = read("hooks/useSwipeNavigation.ts");
-  const shell = read("components/AppShell.tsx");
+  const navigation = read("navigation/primary-nav.ts");
+  const viewport = read("components/SwipeRouteViewport.tsx");
+  const shell = read("styles/shell.css");
 
   assert.match(swipe, /pointerType\s*===\s*["']mouse["']/);
   assert.match(swipe, /onPointerMove/);
   assert.match(swipe, /setPointerCapture/);
+  assert.match(swipe, /onCommit/);
+  assert.match(swipe, /isSettling/);
+  assert.match(swipe, /window\.innerWidth/);
   assert.match(swipe, /swipeOffset/);
   assert.match(swipe, /deltaX\s*<\s*0/);
-  assert.match(swipe, /currentIndex\s*\+\s*1/);
-  assert.match(swipe, /currentIndex\s*-\s*1/);
-  assert.match(shell, /app-content--dragging/);
-  assert.match(shell, /--swipe-offset/);
+  assert.match(navigation, /currentIndex/);
+  assert.match(navigation, /direction\s*===\s*["']next["']/);
+  assert.match(navigation, /currentIndex\s*\+\s*1/);
+  assert.match(navigation, /currentIndex\s*-\s*1/);
+  assert.match(viewport, /route-swipe-track/);
+  assert.match(viewport, /previousPath/);
+  assert.match(viewport, /nextPath/);
+  assert.match(viewport, /onTransitionEnd/);
+  assert.match(shell, /route-swipe-viewport/);
+  assert.match(shell, /repeat\(3,\s*100%\)/);
+  assert.match(shell, /overflow-x:\s*hidden/);
 });
 
 test("shared controls expose one press-feedback vocabulary", () => {
@@ -131,5 +144,5 @@ test("shared controls expose one press-feedback vocabulary", () => {
   assert.match(components, /\.button:active/);
   assert.match(components, /\.glass-card--interactive:active/);
   assert.match(components, /\.tabs button:active/);
-  assert.match(shell, /touch-action:\s*pan-y/);
+  assert.match(shell, /route-swipe-viewport[\s\S]*touch-action:\s*pan-y/);
 });

@@ -1,10 +1,9 @@
 import { createContext, useContext } from "react";
-import type { CSSProperties, PropsWithChildren, ReactNode } from "react";
+import type { PropsWithChildren, ReactNode } from "react";
 import { BottomNav, type BottomNavProps } from "./BottomNav";
 import { BrandLogo } from "./BrandLogo";
 import { Icon } from "./Icon";
 import { useScrollMotion } from "../hooks/useScrollMotion";
-import { useSwipeNavigation } from "../hooks/useSwipeNavigation";
 import type { Navigate } from "../router";
 
 export type AppShellVisualTheme = "workbench" | "warm-soft-tech";
@@ -36,8 +35,6 @@ export function AppShell({ title, subtitle, navigate, backPath, activeNav, showN
   const hasBrandLeading = !leadingAction && !backPath;
   const leading = leadingAction ?? (backPath ? <button aria-label="返回" className="icon-button" onClick={back} type="button"><Icon name="arrow_back" size={25} /></button> : <BrandLogo />);
   const scrollState = useScrollMotion();
-  const { isDragging, swipeOffset, ...swipeHandlers } = useSwipeNavigation(activeNav, navigate);
-  const contentStyle = { "--swipe-offset": `${swipeOffset}px` } as CSSProperties;
   const hasExternalNavigation = useContext(externalNavigationContext);
 
   return (
@@ -50,7 +47,7 @@ export function AppShell({ title, subtitle, navigate, backPath, activeNav, showN
         </div>
         <div className="app-header__action">{headerAction ?? <button aria-label="通知" className="icon-button" type="button"><Icon name="notifications" size={24} /></button>}</div>
       </header>
-      <main className={`app-content ${isDragging ? "app-content--dragging" : ""}`.trim()} style={contentStyle} {...swipeHandlers}>{children}</main>
+      <main className="app-content">{children}</main>
       {contextualAction ? <div className="contextual-action">{contextualAction}</div> : null}
       {showNav && !hasExternalNavigation ? <BottomNav active={activeNav} navigate={navigate} visualTheme={visualTheme} /> : null}
     </div>

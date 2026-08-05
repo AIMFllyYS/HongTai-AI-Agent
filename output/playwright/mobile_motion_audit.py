@@ -60,31 +60,44 @@ with sync_playwright() as playwright:
         }"""
     )
 
-    dispatch_pointer(page, ".app-content", "pointerdown", 160, 420)
-    dispatch_pointer(page, ".app-content", "pointermove", 220, 420)
-    dispatch_pointer(page, ".app-content", "pointerup", 250, 420)
+    dispatch_pointer(page, ".route-swipe-viewport", "pointerdown", 160, 420)
+    dispatch_pointer(page, ".route-swipe-viewport", "pointermove", 220, 420)
+    page.wait_for_timeout(50)
+    swipe_mid = page.locator(".route-swipe-viewport").evaluate(
+        """viewport => ({
+          state: viewport.dataset.swipeState,
+          target: viewport.dataset.swipeTarget,
+          headings: [...viewport.querySelectorAll('.route-swipe-pane h1')].map(heading => heading.textContent),
+          visiblePanes: [...viewport.querySelectorAll('.route-swipe-pane')].map(pane => {
+            const rect = pane.getBoundingClientRect();
+            return { left: rect.left, right: rect.right, visible: rect.right > 0 && rect.left < innerWidth };
+          }).filter(pane => pane.visible),
+        })"""
+    )
+    page.screenshot(path=str(SCREEN_DIR / "mobile-swipe-adjacent-panes.png"), full_page=False)
+    dispatch_pointer(page, ".route-swipe-viewport", "pointerup", 250, 420)
     page.wait_for_url(f"{BASE_URL}/assets")
     page.wait_for_timeout(320)
     swipe_route = page.url
 
-    dispatch_pointer(page, ".app-content", "pointerdown", 290, 420, pointer_type="mouse")
-    dispatch_pointer(page, ".app-content", "pointermove", 190, 420, pointer_type="mouse")
+    dispatch_pointer(page, ".route-swipe-viewport", "pointerdown", 290, 420, pointer_type="mouse")
+    dispatch_pointer(page, ".route-swipe-viewport", "pointermove", 190, 420, pointer_type="mouse")
     page.wait_for_timeout(50)
-    mouse_drag_transform = page.locator(".app-content").evaluate("element => getComputedStyle(element).transform")
-    dispatch_pointer(page, ".app-content", "pointerup", 140, 420, pointer_type="mouse")
+    mouse_drag_transform = page.locator(".route-swipe-track").evaluate("element => getComputedStyle(element).transform")
+    dispatch_pointer(page, ".route-swipe-viewport", "pointerup", 140, 420, pointer_type="mouse")
     page.wait_for_url(f"{BASE_URL}/settings")
     page.wait_for_timeout(320)
     mouse_left_route = page.url
 
-    dispatch_pointer(page, ".app-content", "pointerdown", 120, 420, pointer_type="mouse")
-    dispatch_pointer(page, ".app-content", "pointermove", 220, 420, pointer_type="mouse")
-    dispatch_pointer(page, ".app-content", "pointerup", 270, 420, pointer_type="mouse")
+    dispatch_pointer(page, ".route-swipe-viewport", "pointerdown", 120, 420, pointer_type="mouse")
+    dispatch_pointer(page, ".route-swipe-viewport", "pointermove", 220, 420, pointer_type="mouse")
+    dispatch_pointer(page, ".route-swipe-viewport", "pointerup", 270, 420, pointer_type="mouse")
     page.wait_for_url(f"{BASE_URL}/assets")
     mouse_right_route = page.url
 
-    dispatch_pointer(page, ".app-content", "pointerdown", 180, 420, pointer_type="mouse")
-    dispatch_pointer(page, ".app-content", "pointermove", 185, 520, pointer_type="mouse")
-    dispatch_pointer(page, ".app-content", "pointerup", 185, 560, pointer_type="mouse")
+    dispatch_pointer(page, ".route-swipe-viewport", "pointerdown", 180, 420, pointer_type="mouse")
+    dispatch_pointer(page, ".route-swipe-viewport", "pointermove", 185, 520, pointer_type="mouse")
+    dispatch_pointer(page, ".route-swipe-viewport", "pointerup", 185, 560, pointer_type="mouse")
     assert page.url.endswith("/assets")
 
     page.evaluate("window.scrollTo(0, 140)")
@@ -125,6 +138,11 @@ with sync_playwright() as playwright:
     assert not errors, f"page errors: {errors}"
     assert click_route.endswith("/settings")
     assert swipe_route.endswith("/assets")
+    assert swipe_mid["state"] == "dragging"
+    assert swipe_mid["target"] == "/assets"
+    assert len(swipe_mid["headings"]) == 2
+    assert len(swipe_mid["visiblePanes"]) == 2
+    assert abs(swipe_mid["visiblePanes"][0]["right"] - swipe_mid["visiblePanes"][1]["left"]) <= 1
     assert direct_transition == "instant"
     assert nav_snapshot["parentIsBody"] is True
     assert nav_snapshot["position"] == "fixed"
@@ -144,6 +162,7 @@ with sync_playwright() as playwright:
     print(f"scroll-state={scroll_state}; top-state={top_state}")
     print(f"nav-parent-body={int(nav_snapshot['parentIsBody'])}; nav-position={nav_snapshot['position']}; nav-bottom-clearance={nav_after_scroll['viewportHeight'] - nav_after_scroll['bottom']:.1f}")
     print(f"mouse-drag-transform={mouse_drag_transform}")
+    print(f"swipe-mid-state={swipe_mid['state']}; swipe-mid-headings={len(swipe_mid['headings'])}; swipe-mid-visible-panes={len(swipe_mid['visiblePanes'])}")
     print(f"page-entry-transition={animated_transition}")
     print(f"audio-support={int(audio_support)}; vibration-support={int(vibration_support)}")
     print(f"reduced-motion-transform={reduced_transition['transform']}")

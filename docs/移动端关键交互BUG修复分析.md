@@ -23,7 +23,9 @@
 - 只有水平位移超过阈值且显著大于垂直位移时才提交导航；
 - 交互控件、输入控件和显式禁止手势区域不参与页面切换。
 
-当前实现只接受 touch/pen，鼠标拖拽永远不会进入提交路径；同时没有 `pointermove`、`setPointerCapture` 或拖拽偏移，因此用户看不到页面跟随指针的真实水平反馈。修复会统一支持 mouse、touch、pen，在识别为水平手势后让当前内容跟随位移，并在释放时复用同一个 `deltaX` 方向不变量。垂直滚动仍由浏览器处理，不改变 `touch-action: pan-y`。
+此前实现只接受 touch/pen，鼠标拖拽永远不会进入提交路径；虽然补上了 `pointermove`、`setPointerCapture` 和拖拽偏移，但仍只移动一个 `AppShell` 内的 `.app-content`。这会让当前页离开视口后暴露空白，直到 `pointerup` 才由 `RouteTransition` 串行挂载下一页，形成“先空白、再回弹”的错觉。
+
+修复将手势边界提升到 `App` 的 `SwipeRouteViewport`，使用固定的三槽位 track：`previous | current | next`。水平拖动时当前槽位和相邻候选槽位同步移动；提交时先把 track 滑到目标槽位，再以 instant route commit，避免同一手势被 route x 动画重复处理。统一支持 mouse、touch、pen，垂直滚动仍由浏览器处理，不改变 `touch-action: pan-y`。
 
 ### 3. 一级底部导航是直接定位，不应等待页面过渡
 
@@ -38,10 +40,11 @@
 3. 底部导航点击只改变浏览器路径和页面内容，不等待页面退出动画，也不平滑滚动到顶部。
 4. 页面内原有路由过渡、返回路径、五项导航顺序、主题 token 和数据适配器保持不变。
 5. reduced-motion 继续生效，交互控件不会被页面级手势误触发。
+6. 拖拽中当前页与候选页始终共享相邻边界，视口内不出现由单页 transform 造成的空白缝隙。
 
 ## 验收证据
 
 - 静态测试锁定 portal、direct navigation、mouse pointer、pointer capture、live offset 和左右方向映射。
 - `pnpm check`、`pnpm --filter @hongtai/web build` 通过。
-- 浏览器回归覆盖：滚动前后导航位置、底部导航立即跳转、鼠标右拖/左拖、触控左右拖、垂直滚动不切页、无 page error。
+- 浏览器回归覆盖：滚动前后导航位置、底部导航立即跳转、鼠标右拖/左拖、触控左右拖、拖拽中两页同时可见且无空白、垂直滚动不切页、无 page error。
 - 截图只用于核验壳层位置和拖拽后的视觉，不宣称与设计稿像素级一致。

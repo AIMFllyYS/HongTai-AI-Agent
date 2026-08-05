@@ -81,8 +81,4 @@ p {
   html {
     scroll-behavior: auto !important;
   }
-
-  .app-content {
-    transform: none;
-  }
 }
