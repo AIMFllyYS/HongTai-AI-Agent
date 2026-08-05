@@ -84,7 +84,7 @@
   align-items: center;
   gap: 0.3rem;
   color: var(--color-text-muted);
-  font-size: 0.65rem;
+  font-size: var(--text-meta);
 }
 
 .vitality-shell .scan-actions .button--primary {
@@ -132,7 +132,7 @@
 .advice-row p,
 .recommendation-row p {
   color: var(--color-text-subtle);
-  font-size: 0.73rem;
+  font-size: var(--text-meta);
   line-height: 1.35rem;
 }
 
@@ -171,7 +171,7 @@
 .history-card p,
 .history-card > svg {
   color: var(--color-text-muted);
-  font-size: 0.66rem;
+  font-size: var(--text-meta);
 }
 
 .score-card {
@@ -260,7 +260,7 @@
 
 .vitality-media-card span {
   color: var(--color-text-muted);
-  font-size: 0.62rem;
+  font-size: var(--text-meta);
 }
 
 .observation-grid {
@@ -278,7 +278,7 @@
 
 .observation-card span {
   color: var(--color-text-muted);
-  font-size: 0.62rem;
+  font-size: var(--text-meta);
 }
 
 .observation-card strong {

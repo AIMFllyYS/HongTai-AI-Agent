@@ -33,7 +33,7 @@
   margin-bottom: var(--space-2);
   color: var(--color-accent);
   font-family: var(--font-data);
-  font-size: 0.68rem;
+  font-size: var(--text-meta);
   font-weight: 700;
   letter-spacing: 0.13em;
   line-height: 1rem;
@@ -82,7 +82,7 @@
   gap: var(--space-2);
   margin-bottom: var(--space-6);
   color: var(--color-text-muted);
-  font-size: 0.69rem;
+  font-size: var(--text-meta);
   line-height: 1.25rem;
 }
 
@@ -261,7 +261,7 @@
 .recent-list__meta {
   color: var(--color-text-muted);
   font-family: var(--font-data);
-  font-size: 0.67rem;
+  font-size: var(--text-meta);
 }
 
 .recent-list__chevron {

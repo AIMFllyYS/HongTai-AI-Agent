@@ -44,7 +44,7 @@
   background: var(--color-surface-low);
   border-radius: var(--radius-pill);
   font-family: var(--font-data);
-  font-size: 0.68rem;
+  font-size: var(--text-meta);
 }
 
 .progress-card__header {
@@ -72,7 +72,7 @@
 .progress-card__summary {
   color: var(--color-text-muted);
   font-family: var(--font-data);
-  font-size: 0.69rem;
+  font-size: var(--text-meta);
 }
 
 .live-indicator {
@@ -80,7 +80,7 @@
   align-items: center;
   gap: 0.35rem;
   color: var(--color-progress);
-  font-size: 0.68rem;
+  font-size: var(--text-meta);
 }
 
 .live-indicator i {
@@ -134,7 +134,7 @@
   background: rgba(0, 28, 24, 0.68);
   border-radius: var(--radius-pill);
   font-family: var(--font-data);
-  font-size: 0.65rem;
+  font-size: var(--text-meta);
 }
 
 .result-media-card__footer,
@@ -191,7 +191,7 @@
 .asset-count {
   color: var(--color-text-muted);
   font-family: var(--font-data);
-  font-size: 0.68rem;
+  font-size: var(--text-meta);
 }
 
 .timeline-list {
@@ -234,7 +234,7 @@
   background: var(--color-accent-soft);
   border-radius: var(--radius-pill);
   font-family: var(--font-data);
-  font-size: 0.68rem;
+  font-size: var(--text-meta);
   font-weight: 700;
 }
 
@@ -264,7 +264,7 @@
   flex: 0 0 auto;
   color: var(--color-text-muted);
   font-family: var(--font-data);
-  font-size: 0.65rem;
+  font-size: var(--text-meta);
 }
 
 .timeline-item__body p {
@@ -295,7 +295,7 @@
   background: var(--color-surface-low);
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
-  font-size: 0.67rem;
+  font-size: var(--text-meta);
   line-height: 1rem;
   white-space: nowrap;
 }
@@ -343,7 +343,7 @@ button.chip:hover,
 
 .template-meta {
   color: var(--color-text-subtle);
-  font-size: 0.68rem;
+  font-size: var(--text-meta);
 }
 
 .template-meta b {
@@ -379,7 +379,7 @@ button.chip:hover,
 .detail-media-card__title p,
 .detail-media-card__platform {
   color: var(--color-text-muted);
-  font-size: 0.68rem;
+  font-size: var(--text-meta);
 }
 
 .detail-media-card__status,
@@ -394,7 +394,7 @@ button.chip:hover,
   background: var(--color-success-soft);
   border-radius: var(--radius-pill);
   padding: 0.25rem 0.55rem;
-  font-size: 0.65rem;
+  font-size: var(--text-meta);
   font-weight: 600;
 }
 
@@ -423,7 +423,7 @@ button.chip:hover,
 }
 
 .metric-grid__item span {
-  font-size: 0.62rem;
+  font-size: var(--text-meta);
 }
 
 .metric-grid__item strong {
@@ -450,7 +450,7 @@ button.chip:hover,
 .transcript-line time {
   color: var(--color-progress);
   font-family: var(--font-data);
-  font-size: 0.66rem;
+  font-size: var(--text-meta);
 }
 
 .transcript-line p {
@@ -478,7 +478,7 @@ button.chip:hover,
   align-items: center;
   gap: var(--space-3);
   color: var(--color-text-muted);
-  font-size: 0.65rem;
+  font-size: var(--text-meta);
 }
 
 .gallery-preview-card__meta span {
@@ -496,5 +496,5 @@ button.chip:hover,
   min-height: 2.25rem;
   margin-left: auto;
   padding: 0.45rem 0.7rem;
-  font-size: 0.68rem;
+  font-size: var(--text-meta);
 }

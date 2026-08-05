@@ -19,13 +19,13 @@
   align-items: center;
   gap: 0.35rem;
   color: var(--color-text-muted);
-  font-size: 0.67rem;
+  font-size: var(--text-meta);
 }
 
 .prompt-card__footer .button {
   min-height: 2.5rem;
   padding: 0.6rem 0.9rem;
-  font-size: 0.72rem;
+  font-size: var(--text-meta);
 }
 
 .profile-tags-card {
@@ -79,7 +79,7 @@
 
 .template-tile__body small {
   color: var(--color-text-muted);
-  font-size: 0.65rem;
+  font-size: var(--text-meta);
 }
 
 .template-tile__selected {
@@ -118,7 +118,7 @@
 .generation-card small {
   display: block;
   color: var(--color-text-muted);
-  font-size: 0.67rem;
+  font-size: var(--text-meta);
   line-height: 1.2rem;
 }
 

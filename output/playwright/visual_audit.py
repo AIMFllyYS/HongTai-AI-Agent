@@ -58,6 +58,14 @@ def assert_tabs_are_associated(page: Page, route: str) -> None:
         assert tab.get_attribute("aria-controls") == panel_id, f"{route}: tab {index} controls the wrong panel"
 
 
+def assert_local_visual_resources(page: Page, route: str) -> str:
+    assert page.evaluate("document.fonts.check('16px \\\"Noto Sans SC\\\"')"), f"{route}: local Noto Sans SC font is not ready"
+    sources = page.locator("img").evaluate_all("images => images.map(image => image.currentSrc || image.src)")
+    external = [source for source in sources if not source.startswith("http://127.0.0.1:4173/")]
+    assert not external, f"{route}: external runtime media remains: {external}"
+    return f"local-font=1;local-images={len(sources)}"
+
+
 def vitality_color_snapshot(page: Page) -> dict[str, str | None]:
     return page.locator(".app-shell").evaluate(
         """element => {
@@ -165,6 +173,7 @@ def main() -> None:
             assert page.locator(".bottom-nav .brand-logo img").count() == 1, f"{route}: AI nav should use the shared logo"
             if route in {"/", "/vitality/scan"}:
                 assert page.locator(".app-header .brand-logo img").count() == 1, f"{route}: brand header should use the shared logo"
+            evidence_rows.append(f"{route}\t{assert_local_visual_resources(page, route)}")
             assert_tabs_are_associated(page, route)
             if route in VITALITY_ROUTES:
                 evidence_rows.append(f"{route}\t{assert_vitality_theme(page, route)}")
@@ -199,7 +208,7 @@ def main() -> None:
         *evidence_rows,
         "",
         "screenshots: 390x844 mobile routes; 536x900 assets visual check; 1280x900 home desktop; home-empty static state",
-        "remote media/font rendering remains environment-dependent; no pixel identity is claimed",
+        "brand, font and fixture media are bundled locally; browser/platform rasterization can still differ, so no pixel identity is claimed",
     ]
     Path("output/playwright/visual-audit.txt").write_text("\n".join(report) + "\n", encoding="utf-8")
     print("\n".join(report))

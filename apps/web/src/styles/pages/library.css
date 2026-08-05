@@ -47,7 +47,7 @@
   color: #fff;
   border-radius: var(--radius-sm);
   font-family: var(--font-data);
-  font-size: 0.56rem;
+  font-size: var(--text-meta);
   font-weight: 700;
 }
 
@@ -56,7 +56,7 @@
 
 .tag-text {
   color: var(--color-progress);
-  font-size: 0.61rem;
+  font-size: var(--text-meta);
 }
 
 .asset-library {
@@ -84,7 +84,7 @@
   color: var(--color-text-muted);
   background: var(--color-surface-low);
   border-radius: var(--radius-pill);
-  font-size: 0.65rem;
+  font-size: var(--text-meta);
 }
 
 .folder-list button span {
@@ -141,7 +141,7 @@
 .asset-row__body strong {
   overflow: hidden;
   color: var(--color-text-subtle);
-  font-size: 0.72rem;
+  font-size: var(--text-meta);
   line-height: 1.25rem;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -175,13 +175,13 @@
 
 .empty-hint p {
   color: var(--color-text-muted);
-  font-size: 0.65rem;
+  font-size: var(--text-meta);
 }
 
 .empty-hint .button {
   min-height: 2.25rem;
   padding: 0.45rem 0.7rem;
-  font-size: 0.65rem;
+  font-size: var(--text-meta);
 }
 
 /* Settings */
@@ -206,7 +206,7 @@
 
 .profile-card p {
   color: var(--color-text-muted);
-  font-size: 0.68rem;
+  font-size: var(--text-meta);
 }
 
 .plan-badge {
@@ -217,7 +217,7 @@
   background: var(--color-primary-strong);
   border-radius: var(--radius-sm);
   font-family: var(--font-data);
-  font-size: 0.56rem;
+  font-size: var(--text-meta);
   font-weight: 700;
 }
 
@@ -271,7 +271,7 @@
   margin-left: auto;
   color: var(--color-text-muted);
   font-family: var(--font-data);
-  font-size: 0.65rem;
+  font-size: var(--text-meta);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -293,6 +293,6 @@
 .copyright,
 .medical-note {
   color: var(--color-text-muted);
-  font-size: 0.63rem;
+  font-size: var(--text-meta);
   text-align: center;
 }
