@@ -15,7 +15,7 @@ export type RouteKey =
 export interface AppRoute {
   readonly path: string;
   readonly key: Exclude<RouteKey, "not-found">;
-  readonly navKey?: "home" | "create" | "assets" | "settings";
+  readonly navKey?: "ai" | "home" | "create" | "assets" | "settings";
 }
 
 export const appRoutes: readonly AppRoute[] = [
@@ -28,8 +28,8 @@ export const appRoutes: readonly AppRoute[] = [
   { path: "/publish", key: "publish" },
   { path: "/assets", key: "assets", navKey: "assets" },
   { path: "/settings", key: "settings", navKey: "settings" },
-  { path: "/vitality/scan", key: "vitality-scan" },
-  { path: "/vitality/result", key: "vitality-result" },
+  { path: "/vitality/scan", key: "vitality-scan", navKey: "ai" },
+  { path: "/vitality/result", key: "vitality-result", navKey: "ai" },
 ];
 
 function normalizePath(pathname: string): string {
@@ -45,4 +45,21 @@ export function matchRoute(pathname: string): AppRoute | { readonly path: string
 
 export function pathForRoute(key: RouteKey): string {
   return appRoutes.find((route) => route.key === key)?.path ?? "/";
+}
+
+const primaryNavigationOrder = ["ai", "home", "create", "assets", "settings"] as const;
+
+export function routeTransitionDirection(fromPath: string, toPath: string): "forward" | "backward" {
+  const fromRoute = matchRoute(fromPath);
+  const toRoute = matchRoute(toPath);
+  const fromNavIndex = fromRoute.key === "not-found" || !fromRoute.navKey ? -1 : primaryNavigationOrder.indexOf(fromRoute.navKey);
+  const toNavIndex = toRoute.key === "not-found" || !toRoute.navKey ? -1 : primaryNavigationOrder.indexOf(toRoute.navKey);
+
+  if (fromNavIndex >= 0 && toNavIndex >= 0 && fromNavIndex !== toNavIndex) {
+    return toNavIndex > fromNavIndex ? "forward" : "backward";
+  }
+
+  const fromRouteIndex = appRoutes.findIndex((route) => route.path === fromRoute.path);
+  const toRouteIndex = appRoutes.findIndex((route) => route.path === toRoute.path);
+  return toRouteIndex >= fromRouteIndex ? "forward" : "backward";
 }

@@ -2,6 +2,11 @@
   min-height: 100vh;
 }
 
+.route-transition {
+  min-height: 100vh;
+  will-change: opacity, transform;
+}
+
 .app-shell--with-nav {
   padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom));
 }
@@ -19,6 +24,13 @@
   border-bottom: 1px solid rgba(191, 201, 196, 0.3);
   box-shadow: 0 0.25rem 1rem rgba(0, 77, 64, 0.035);
   backdrop-filter: blur(var(--glass-blur));
+  transition: background-color var(--motion-duration-standard) var(--motion-ease-standard), border-color var(--motion-duration-standard) var(--motion-ease-standard), box-shadow var(--motion-duration-standard) var(--motion-ease-standard);
+}
+
+.app-shell[data-scroll-state="scrolled"] .app-header {
+  background: var(--color-surface-paper);
+  border-bottom-color: rgba(191, 201, 196, 0.52);
+  box-shadow: 0 0.35rem 1.1rem rgba(0, 77, 64, 0.08);
 }
 
 .app-header--brand {
@@ -138,6 +150,8 @@
   width: min(100%, var(--content-max));
   margin: 0 auto;
   padding: var(--space-6) var(--page-gutter) var(--space-8);
+  touch-action: pan-y;
+  overscroll-behavior-x: contain;
 }
 
 .page-section {

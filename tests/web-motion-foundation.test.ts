@@ -62,3 +62,24 @@ test("web app declares Motion as its only new animation runtime", () => {
 
   assert.equal(packageJson.dependencies?.motion, "12.43.0");
 });
+
+test("route motion direction follows primary navigation and detail back paths", () => {
+  const router = read("router.ts");
+
+  assert.match(router, /routeTransitionDirection/);
+  assert.match(router, /primaryNavigationOrder/);
+  assert.match(router, /navKey: "ai"/);
+});
+
+test("route motion and feedback are mounted at the shared application boundaries", () => {
+  const app = read("App.tsx");
+  const shell = read("components/AppShell.tsx");
+  const navigation = read("components/BottomNav.tsx");
+
+  assert.match(app, /RouteTransition/);
+  assert.match(app, /useInteractionFeedback/);
+  assert.match(shell, /useSwipeNavigation/);
+  assert.match(shell, /useScrollMotion/);
+  assert.match(shell, /data-scroll-state/);
+  assert.match(navigation, /whileTap/);
+});

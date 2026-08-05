@@ -1,20 +1,7 @@
-import { Icon, type IconName } from "./Icon";
-import { pathForRoute, type RouteKey } from "../router";
-
-interface NavItem {
-  readonly id: "ai" | "home" | "create" | "assets" | "settings";
-  readonly label: string;
-  readonly icon: IconName;
-  readonly path: string;
-}
-
-const navItems: readonly NavItem[] = [
-  { id: "ai", label: "AI", icon: "health_cross", path: "/vitality/scan" },
-  { id: "home", label: "拆解", icon: "analytics", path: pathForRoute("home") },
-  { id: "create", label: "制作", icon: "movie_edit", path: pathForRoute("create") },
-  { id: "assets", label: "素材", icon: "folder_open", path: pathForRoute("assets") },
-  { id: "settings", label: "设置", icon: "settings", path: pathForRoute("settings") },
-];
+import { motion } from "motion/react";
+import { Icon } from "./Icon";
+import { type RouteKey } from "../router";
+import { primaryNavItems } from "../navigation/primary-nav";
 
 export interface BottomNavProps {
   readonly active?: "ai" | "home" | "create" | "assets" | "settings";
@@ -24,10 +11,10 @@ export interface BottomNavProps {
 export function BottomNav({ active, navigate }: BottomNavProps) {
   return (
     <nav aria-label="主导航" className="bottom-nav">
-      {navItems.map((item) => {
+      {primaryNavItems.map((item) => {
         const selected = item.id === active;
         return (
-          <a
+          <motion.a
             aria-current={selected ? "page" : undefined}
             className={`bottom-nav__item bottom-nav__item--${item.id} ${selected ? "is-active" : ""}`.trim()}
             href={item.path}
@@ -36,10 +23,12 @@ export function BottomNav({ active, navigate }: BottomNavProps) {
               event.preventDefault();
               navigate(item.path);
             }}
+            transition={{ duration: 0.14 }}
+            whileTap={{ scale: 0.96 }}
           >
             <span className="bottom-nav__icon-wrap"><Icon name={item.icon} size={22} /></span>
             <span>{item.label}</span>
-          </a>
+          </motion.a>
         );
       })}
     </nav>
