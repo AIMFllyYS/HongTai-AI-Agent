@@ -99,6 +99,7 @@ test("完整流水线覆盖七个阶段、保留两种文稿并清理日志URL",
   assert.doesNotMatch(setup.store.values.get(paths.log) ?? "", /private-token|xsec_token/);
   assert.doesNotMatch(setup.store.values.get(paths.task) ?? "", /复制打开抖音|后续还有|b23\.tv/);
   assert.equal(setup.events.find((event) => event.stage === "detect-platform" && event.status === "succeeded")?.detail?.ignoredSupportedUrlCount, 1);
+  assert.equal(setup.events.some((event) => event.message === "媒体校验通过：时长=10秒"), true);
   assert.deepEqual(new Set(setup.events.map((event) => event.stage)), new Set([
     "detect-platform", "resolve-link", "parse-content", "select-media", "download-media", "obtain-transcript", "save-artifacts",
   ]));

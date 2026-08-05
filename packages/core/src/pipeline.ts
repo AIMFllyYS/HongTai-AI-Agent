@@ -306,7 +306,7 @@ export class IngestPipeline {
         throw new TaskError({ code: "MEDIA_DURATION_EXCEEDED", message: `视频时长 ${Math.ceil(duration)} 秒，超过首版限制 ${maxDuration} 秒`, action: "edit_input", details: { durationSeconds: Math.ceil(duration), maxDurationSeconds: maxDuration } });
       }
 
-      await report("obtain-transcript", "running", `音频时长=${Math.ceil(duration)}秒`);
+      await report("obtain-transcript", "running", `媒体校验通过：时长=${Math.ceil(duration)}秒`);
       let transcript = "";
       let segments: import("./models").TranscriptionResult["segments"] = [];
       let completedCharacters = 0;

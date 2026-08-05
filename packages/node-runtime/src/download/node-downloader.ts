@@ -10,6 +10,41 @@ export interface NodeMediaDownloaderOptions {
   readonly timeoutMs?: number;
 }
 
+const REJECTED_VIDEO_CONTENT_TYPES = new Set([
+  "text/html",
+  "application/xhtml+xml",
+  "application/json",
+  "text/json",
+  "application/vnd.apple.mpegurl",
+  "application/x-mpegurl",
+  "audio/mpegurl",
+  "audio/x-mpegurl",
+]);
+
+function normalizedContentType(value: string | null): string | undefined {
+  return value?.split(";", 1)[0]?.trim().toLowerCase() || undefined;
+}
+
+function validContentLength(value: string | null): number | undefined {
+  if (!value || !/^\d+$/.test(value)) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+export function assertDownloadedLength(downloadedBytes: number, totalBytes?: number): void {
+  if (downloadedBytes === 0) {
+    throw new TaskError({ code: "MEDIA_DOWNLOAD_FAILED", message: "媒体服务器返回了空文件", action: "retry" });
+  }
+  if (totalBytes !== undefined && downloadedBytes !== totalBytes) {
+    throw new TaskError({
+      code: "MEDIA_DOWNLOAD_FAILED",
+      message: "媒体文件下载长度不完整",
+      action: "retry",
+      details: { expectedBytes: totalBytes, downloadedBytes },
+    });
+  }
+}
+
 export class NodeMediaDownloader implements MediaDownloader {
   readonly #dispatcher: Dispatcher;
   readonly #timeoutMs: number;
@@ -81,14 +116,23 @@ export class NodeMediaDownloader implements MediaDownloader {
     if (!response.ok || !response.body) {
       throw new TaskError({ code: response.status === 404 ? "MEDIA_SOURCE_NOT_FOUND" : "MEDIA_DOWNLOAD_FAILED", message: `媒体下载失败：HTTP ${response.status}`, action: "retry", details: { httpStatus: response.status } });
     }
+    const contentType = normalizedContentType(response.headers.get("content-type"));
+    if (source.kind === "video" && contentType && REJECTED_VIDEO_CONTENT_TYPES.has(contentType)) {
+      await response.body.cancel();
+      throw new TaskError({
+        code: "MEDIA_DOWNLOAD_FAILED",
+        message: "媒体服务器返回的不是可下载视频",
+        action: "retry",
+        details: { contentType },
+      });
+    }
 
     try {
       await mkdir(dirname(destination), { recursive: true });
     } catch (error) {
       throw storageTaskError(error, "无法创建媒体目录");
     }
-    const totalHeader = response.headers.get("content-length");
-    const totalBytes = totalHeader ? Number(totalHeader) : undefined;
+    const totalBytes = validContentLength(response.headers.get("content-length"));
     let file;
     try {
       file = await open(destination, "w");
@@ -110,8 +154,10 @@ export class NodeMediaDownloader implements MediaDownloader {
           progress: totalBytes && totalBytes > 0 ? Math.min(1, downloadedBytes / totalBytes) : undefined,
         });
       }
+      assertDownloadedLength(downloadedBytes, totalBytes);
       await onProgress?.({ downloadedBytes, totalBytes, progress: 1 });
     } catch (error) {
+      if (error instanceof TaskError) throw error;
       const code = (error as { code?: string })?.code;
       if (code === "ENOSPC" || code === "EACCES" || code === "EPERM") throw storageTaskError(error, "媒体文件写入失败");
       throw mediaNetworkError(error);
