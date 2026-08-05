@@ -16,7 +16,7 @@ test("asset rows reserve a bounded thumbnail track", () => {
   assert.match(libraryStyles, /\.asset-row__media\s*\{[\s\S]*min-height:\s*0;[\s\S]*aspect-ratio:\s*16\s*\/\s*9/);
 });
 
-test("the design logo is shared by brand headers and the AI navigation item", () => {
+test("the design logo is shared by brand headers while AI navigation uses a medical cross", () => {
   assert.equal(existsSync(join(process.cwd(), "apps", "web", "public", "brand", "pulse-flow-mark.png")), true, "the transparent page mark should be public");
   assert.equal(existsSync(join(process.cwd(), "apps", "web", "public", "brand", "pulse-flow-source.png")), true, "the supplied source should be public");
 
@@ -29,8 +29,10 @@ test("the design logo is shared by brand headers and the AI navigation item", ()
   assert.match(logo, /variant\s*=\s*"mark"/);
   assert.match(logo, /alt="宏泰AI智能体 Pulse Flow"/);
   assert.match(shell, /<BrandLogo/);
-  assert.match(navigation, /<BrandLogo/);
-  assert.doesNotMatch(navigation, /id:\s*"ai"[\s\S]*icon:\s*"smart_toy"/);
+  assert.doesNotMatch(navigation, /BrandLogo/);
+  assert.match(navigation, /id:\s*"ai"[\s\S]*icon:\s*"health_cross"/);
+  assert.match(navigation, /bottom-nav__item--\$\{item\.id\}/);
+  assert.doesNotMatch(navigation, /brandLogo/);
 });
 
 test("page shells do not repeat the same title as the top app bar", () => {
@@ -52,6 +54,7 @@ test("the browser audit checks the asset thumbnail boundary and shared logo", ()
   assert.match(audit, /pulse-flow-mark\.png/);
   assert.match(audit, /page-mark/);
   assert.match(audit, /markWidth/);
+  assert.match(audit, /bottom-nav__item--ai/);
   assert.match(audit, /assets geometry/);
   assert.match(audit, /Noto Sans SC/);
   assert.match(audit, /external runtime media/);

@@ -23,11 +23,12 @@ export interface AppShellProps extends PropsWithChildren {
 export function AppShell({ title, subtitle, navigate, backPath, activeNav, showNav = true, visualTheme = "workbench", headerMode, leadingAction, headerAction, contextualAction, className = "", children }: AppShellProps) {
   const back = () => navigate(backPath ?? "/");
   const isDetailHeader = headerMode === "detail" || Boolean(backPath);
+  const hasBrandLeading = !leadingAction && !backPath;
   const leading = leadingAction ?? (backPath ? <button aria-label="返回" className="icon-button" onClick={back} type="button"><Icon name="arrow_back" size={25} /></button> : <BrandLogo />);
 
   return (
     <div className={`app-shell ${showNav ? "app-shell--with-nav" : ""} ${className}`.trim()} data-visual-theme={visualTheme}>
-      <header className={`app-header ${isDetailHeader ? "app-header--detail" : ""}`.trim()}>
+      <header className={`app-header ${isDetailHeader ? "app-header--detail" : ""} ${hasBrandLeading ? "app-header--brand" : ""}`.trim()}>
         {leading}
         <div className="app-header__title-wrap">
           <h1>{title}</h1>

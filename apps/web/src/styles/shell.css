@@ -21,6 +21,10 @@
   backdrop-filter: blur(var(--glass-blur));
 }
 
+.app-header--brand {
+  grid-template-columns: 3.5625rem minmax(0, 1fr) auto;
+}
+
 .app-header--detail .app-header__title-wrap {
   text-align: center;
 }
@@ -74,13 +78,17 @@
 }
 
 .brand-logo--mark {
-  width: 2.0625rem;
+  width: 3.125rem;
   height: 2.0625rem;
   overflow: visible;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+}
+
+.brand-logo--mark img {
+  object-fit: contain;
 }
 
 .brand-logo img {
@@ -98,8 +106,8 @@
 }
 
 .brand-logo--sm.brand-logo--mark {
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 2.375rem;
+  height: 1.5625rem;
   border-radius: 0;
 }
 

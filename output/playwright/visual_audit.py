@@ -68,6 +68,11 @@ def assert_local_visual_resources(page: Page, route: str) -> str:
 
 def assert_page_mark(page: Page, route: str) -> str:
     marks = page.locator(".brand-logo--mark")
+    header_mark = page.locator(".app-header .brand-logo--mark")
+    if not header_mark.count():
+        assert marks.count() == 0, f"{route}: page mark leaked into a non-brand header"
+        return "page-mark=0;transparent=1"
+
     assert marks.count() >= 1, f"{route}: expected at least one transparent page mark"
     sources = marks.locator("img").evaluate_all("images => images.map(image => image.currentSrc || image.src)")
     assert all(source.endswith("/brand/pulse-flow-mark.png") for source in sources), f"{route}: page mark uses the wrong asset: {sources}"
@@ -86,10 +91,6 @@ def assert_page_mark(page: Page, route: str) -> str:
     assert style["backgroundColor"] in {"rgba(0, 0, 0, 0)", "transparent"}, f"{route}: page mark has a background: {style}"
     assert style["boxShadow"] == "none", f"{route}: page mark has a shadow: {style}"
 
-    header_mark = page.locator(".app-header .brand-logo--mark")
-    if not header_mark.count():
-        return f"page-mark={len(sources)};transparent=1"
-
     geometry = header_mark.first.evaluate(
         """element => {
           const mark = element.getBoundingClientRect();
@@ -97,7 +98,7 @@ def assert_page_mark(page: Page, route: str) -> str:
           return { markWidth: mark.width, titleGap: title.left - mark.right };
         }"""
     )
-    assert 32.5 <= geometry["markWidth"] <= 33.5, f"{route}: page mark size drifted: {geometry}"
+    assert 49.5 <= geometry["markWidth"] <= 50.5, f"{route}: page mark size drifted: {geometry}"
     assert 6.5 <= geometry["titleGap"] <= 7.5, f"{route}: page mark/title gap drifted: {geometry}"
     return f"page-mark={len(sources)};transparent=1;markWidth={geometry['markWidth']:.1f};titleGap={geometry['titleGap']:.1f}"
 
@@ -130,7 +131,8 @@ def assert_vitality_theme(page: Page, route: str) -> str:
 def audit_assets(page: Page) -> str:
     assert page.get_by_role("button", name="上传", exact=True).count() == 1
     assert page.locator(".app-header .brand-logo img").count() == 0, "assets keeps its page-specific folder mark"
-    assert page.locator(".bottom-nav .brand-logo img").count() == 1
+    assert page.locator(".bottom-nav .brand-logo").count() == 0
+    assert page.locator(".bottom-nav__item--ai svg").count() == 1
 
     metrics = page.locator(".asset-row").evaluate_all(
         """rows => rows.map(row => {
@@ -206,7 +208,8 @@ def main() -> None:
             assert body_text.strip()
             assert page.locator(".app-shell").count() == 1
             assert page.locator("h1").count() == 1, f"{route}: expected one h1"
-            assert page.locator(".bottom-nav .brand-logo img").count() == 1, f"{route}: AI nav should use the shared logo"
+            assert page.locator(".bottom-nav .brand-logo").count() == 0, f"{route}: AI nav should not reuse the page logo"
+            assert page.locator(".bottom-nav__item--ai svg").count() == 1, f"{route}: AI nav should use the medical cross icon"
             if route in {"/", "/vitality/scan"}:
                 assert page.locator(".app-header .brand-logo img").count() == 1, f"{route}: brand header should use the shared logo"
             evidence_rows.append(f"{route}\t{assert_local_visual_resources(page, route)}")

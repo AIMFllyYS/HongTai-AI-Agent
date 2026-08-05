@@ -39,7 +39,9 @@ test("page brand mark stays transparent while the app icon keeps its frame", () 
   assert.match(brandLogo, /\/brand\/pulse-flow-source\.png/);
   assert.match(shellStyles, /\.brand-logo--mark[\s\S]*border:\s*0/);
   assert.match(shellStyles, /\.brand-logo--mark[\s\S]*background:\s*transparent/);
-  assert.match(shellStyles, /\.brand-logo--mark\s*\{[\s\S]*width:\s*2\.0625rem;[\s\S]*height:\s*2\.0625rem/);
+  assert.match(shellStyles, /\.app-header--brand\s*\{[\s\S]*grid-template-columns:\s*3\.5625rem/);
+  assert.match(shellStyles, /\.brand-logo--mark\s*\{[\s\S]*width:\s*3\.125rem;[\s\S]*height:\s*2\.0625rem/);
+  assert.match(shellStyles, /\.brand-logo--mark\s+img\s*\{[\s\S]*object-fit:\s*contain/);
 });
 
 test("Chinese UI font is bundled locally for web and future APK packaging", () => {

@@ -1,17 +1,15 @@
-import { BrandLogo } from "./BrandLogo";
 import { Icon, type IconName } from "./Icon";
 import { pathForRoute, type RouteKey } from "../router";
 
 interface NavItem {
   readonly id: "ai" | "home" | "create" | "assets" | "settings";
   readonly label: string;
-  readonly icon?: IconName;
-  readonly brandLogo?: boolean;
+  readonly icon: IconName;
   readonly path: string;
 }
 
 const navItems: readonly NavItem[] = [
-  { id: "ai", label: "AI", brandLogo: true, path: "/vitality/scan" },
+  { id: "ai", label: "AI", icon: "health_cross", path: "/vitality/scan" },
   { id: "home", label: "拆解", icon: "analytics", path: pathForRoute("home") },
   { id: "create", label: "制作", icon: "movie_edit", path: pathForRoute("create") },
   { id: "assets", label: "素材", icon: "folder_open", path: pathForRoute("assets") },
@@ -31,7 +29,7 @@ export function BottomNav({ active, navigate }: BottomNavProps) {
         return (
           <a
             aria-current={selected ? "page" : undefined}
-            className={`bottom-nav__item ${selected ? "is-active" : ""}`.trim()}
+            className={`bottom-nav__item bottom-nav__item--${item.id} ${selected ? "is-active" : ""}`.trim()}
             href={item.path}
             key={item.id}
             onClick={(event) => {
@@ -39,7 +37,7 @@ export function BottomNav({ active, navigate }: BottomNavProps) {
               navigate(item.path);
             }}
           >
-            <span className="bottom-nav__icon-wrap">{item.brandLogo ? <BrandLogo size="sm" /> : <Icon name={item.icon!} size={22} />}</span>
+            <span className="bottom-nav__icon-wrap"><Icon name={item.icon} size={22} /></span>
             <span>{item.label}</span>
           </a>
         );

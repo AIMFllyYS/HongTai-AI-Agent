@@ -4,7 +4,7 @@ export type IconName =
   | "arrow_back" | "analytics" | "aspect_ratio" | "auto_awesome" | "bookmark" | "bolt" | "business_center"
   | "camera" | "check_circle" | "chevron_right" | "chevron_down" | "chevron_up" | "close" | "comment"
   | "content_paste" | "download" | "error" | "expand" | "face" | "file" | "filter" | "folder" | "folder_open"
-  | "folder_special" | "forum" | "grid" | "heart" | "history" | "info" | "key" | "keyboard_voice"
+  | "folder_special" | "forum" | "grid" | "health_cross" | "heart" | "history" | "info" | "key" | "keyboard_voice"
   | "language" | "lightbulb" | "link" | "memory" | "movie" | "movie_edit" | "notifications" | "pending"
   | "play" | "publish" | "query_stats" | "record_voice_over" | "restaurant" | "rocket" | "search" | "self_improvement"
   | "settings" | "share" | "sparkle" | "sunny" | "sync" | "tune" | "update" | "upload" | "upload_file"
@@ -37,6 +37,7 @@ const paths: Record<IconName, readonly string[]> = {
   folder_special: ["M3 6.5A1.5 1.5 0 0 1 4.5 5H10l2 2h7.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5v-11Z", "m12 9 .8 1.8 2 .2-1.5 1.4.4 2-1.7-1-1.7 1 .4-2-1.5-1.4 2-.2L12 9Z"],
   forum: ["M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-5 4v-4.3a2.5 2.5 0 0 1-2-2.4v-7Z", "M8 8h8M8 11h5"],
   grid: ["M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"],
+  health_cross: ["M9 3h6v6h6v6h-6v6H9v-6H3V9h6V3Z"],
   heart: ["M20.8 8.7c0 5.4-8.8 10.1-8.8 10.1S3.2 14.1 3.2 8.7A4.7 4.7 0 0 1 12 6a4.7 4.7 0 0 1 8.8 2.7Z"],
   history: ["M4 12a8 8 0 1 0 2.3-5.7", "M4 5v5h5", "M12 8v4l2.5 1.5"],
   info: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", "M12 11v5M12 8.2v.1"],

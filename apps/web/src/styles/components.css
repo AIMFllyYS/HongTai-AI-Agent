@@ -111,6 +111,10 @@
   background: var(--color-accent-soft);
 }
 
+.bottom-nav__item--ai .bottom-nav__icon-wrap {
+  color: var(--color-primary-strong);
+}
+
 .status-badge {
   display: inline-flex;
   align-items: center;
