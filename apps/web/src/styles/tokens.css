@@ -74,6 +74,16 @@
   --glass-fill: rgba(248, 250, 247, 0.84);
   --glass-blur: 1.25rem;
 
+  /* Motion roles: shared by CSS feedback and the React transition boundary. */
+  --motion-duration-instant: 80ms;
+  --motion-duration-fast: 140ms;
+  --motion-duration-standard: 220ms;
+  --motion-duration-page: 260ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-scale-press: 0.98;
+  --motion-distance-page: 1rem;
+
   /* Semantic roles: components should use these instead of raw palette values. */
   --color-surface-canvas: var(--surface-canvas);
   --color-surface-paper: var(--surface-paper);

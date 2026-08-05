@@ -1,0 +1,64 @@
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { test } from "node:test";
+
+const root = join(process.cwd(), "apps", "web", "src");
+const read = (relativePath: string) => readFileSync(join(root, relativePath), "utf8");
+
+test("mobile motion foundation keeps each interaction responsibility isolated", () => {
+  for (const relativePath of [
+    "motion/tokens.ts",
+    "components/RouteTransition.tsx",
+    "hooks/useInteractionFeedback.ts",
+    "hooks/useSwipeNavigation.ts",
+    "hooks/useScrollMotion.ts",
+    "services/interaction-feedback.ts",
+  ]) {
+    assert.equal(existsSync(join(root, relativePath)), true, `${relativePath} should exist`);
+  }
+
+  assert.match(read("components/RouteTransition.tsx"), /AnimatePresence/);
+  assert.match(read("components/RouteTransition.tsx"), /MotionConfig/);
+  assert.match(read("hooks/useSwipeNavigation.ts"), /onPointerDown/);
+  assert.match(read("hooks/useScrollMotion.ts"), /passive/);
+});
+
+test("mobile feedback uses native capabilities with safe fallbacks", () => {
+  const source = read("services/interaction-feedback.ts");
+  const hook = read("hooks/useInteractionFeedback.ts");
+
+  assert.match(source, /AudioContext/);
+  assert.match(source, /vibrate/);
+  assert.match(source, /catch/);
+  assert.match(hook, /data-feedback/);
+  assert.match(hook, /prefers-reduced-motion/);
+});
+
+test("motion stylesheet exposes shared timing and keeps scrolling available", () => {
+  const tokens = readFileSync(join(root, "styles", "tokens.css"), "utf8");
+  const foundation = readFileSync(join(root, "styles", "foundation.css"), "utf8");
+
+  for (const token of [
+    "--motion-duration-instant",
+    "--motion-duration-fast",
+    "--motion-duration-standard",
+    "--motion-duration-page",
+    "--motion-ease-standard",
+    "--motion-scale-press",
+  ]) {
+    assert.match(tokens, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `${token} should exist`);
+  }
+
+  assert.match(foundation, /scrollbar-width:\s*none/);
+  assert.match(foundation, /::-webkit-scrollbar/);
+  assert.match(foundation, /prefers-reduced-motion/);
+});
+
+test("web app declares Motion as its only new animation runtime", () => {
+  const packageJson = JSON.parse(readFileSync(join(process.cwd(), "apps", "web", "package.json"), "utf8")) as {
+    dependencies?: Record<string, string>;
+  };
+
+  assert.equal(packageJson.dependencies?.motion, "12.43.0");
+});

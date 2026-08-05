@@ -83,7 +83,7 @@
 
 - [ ] **Step 1: 添加 JS/CSS 同步 token**
 
-  `motion/tokens.ts` 导出 `motionDurations`、`motionEasing`、`routeOffset`；CSS 在 `:root` 导出同名语义变量。JS 只引用数字和 easing 字符串，页面不直接写时长。
+  `motion/tokens.ts` 导出 `motionDurations`、`motionEasing`、`routeOffset`；CSS 在 `:root` 导出同名语义变量。Motion 使用 CSS 曲线对应的四元数组，页面不直接写时长。
 
 - [ ] **Step 2: 实现安全反馈 service**
 

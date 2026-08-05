@@ -36,7 +36,7 @@
 
 ### 3.1 时间与缓动
 
-CSS 与 TypeScript 共享同一组语义 token：
+CSS 与 TypeScript 共享同一组语义 token；CSS 使用 `cubic-bezier()` 字符串，Motion 使用同一曲线对应的四元数组：
 
 | Token | 值 | 用途 |
 | --- | ---: | --- |
