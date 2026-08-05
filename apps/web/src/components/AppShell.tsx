@@ -1,5 +1,6 @@
 import type { PropsWithChildren, ReactNode } from "react";
 import { BottomNav, type BottomNavProps } from "./BottomNav";
+import { BrandLogo } from "./BrandLogo";
 import { Icon } from "./Icon";
 
 export type AppShellVisualTheme = "workbench" | "warm-soft-tech";
@@ -22,7 +23,7 @@ export interface AppShellProps extends PropsWithChildren {
 export function AppShell({ title, subtitle, navigate, backPath, activeNav, showNav = true, visualTheme = "workbench", headerMode, leadingAction, headerAction, contextualAction, className = "", children }: AppShellProps) {
   const back = () => navigate(backPath ?? "/");
   const isDetailHeader = headerMode === "detail" || Boolean(backPath);
-  const leading = leadingAction ?? (backPath ? <button aria-label="返回" className="icon-button" onClick={back} type="button"><Icon name="arrow_back" size={25} /></button> : <span className="brand-mark"><Icon name="robot" size={25} /></span>);
+  const leading = leadingAction ?? (backPath ? <button aria-label="返回" className="icon-button" onClick={back} type="button"><Icon name="arrow_back" size={25} /></button> : <BrandLogo />);
 
   return (
     <div className={`app-shell ${showNav ? "app-shell--with-nav" : ""} ${className}`.trim()} data-visual-theme={visualTheme}>
@@ -32,7 +33,7 @@ export function AppShell({ title, subtitle, navigate, backPath, activeNav, showN
           <h1>{title}</h1>
           {subtitle ? <p>{subtitle}</p> : null}
         </div>
-        {headerAction ?? <button aria-label="通知" className="icon-button" type="button"><Icon name="notifications" size={24} /></button>}
+        <div className="app-header__action">{headerAction ?? <button aria-label="通知" className="icon-button" type="button"><Icon name="notifications" size={24} /></button>}</div>
       </header>
       <main className="app-content">{children}</main>
       {contextualAction ? <div className="contextual-action">{contextualAction}</div> : null}

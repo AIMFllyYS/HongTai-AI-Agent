@@ -4,7 +4,7 @@ import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
 import { iconName } from "../components/ContentBlocks";
-import { PageHeading, SectionHeading } from "../components/Headings";
+import { SectionHeading } from "../components/Headings";
 import { MediaFrame } from "../components/MediaFrame";
 
 export interface PublishPageProps {
@@ -16,7 +16,6 @@ export function PublishPage({ viewModel, navigate }: PublishPageProps) {
   return (
     <AppShell backPath="/create" navigate={navigate} title={viewModel.title}>
       <div className="page-stack page-publish">
-        <PageHeading description="确认视频内容与发布渠道" title={viewModel.title} />
         <GlassCard className="publish-preview-card">
           <MediaFrame media={viewModel.media} showPlay><span className="media-overlay-label">AI GENERATED · 00:32</span></MediaFrame>
           <div className="publish-preview-card__footer"><span><Icon name="check_circle" size={17} />生成成功</span><button aria-label="下载视频" className="icon-button" type="button"><Icon name="download" size={19} /></button></div>

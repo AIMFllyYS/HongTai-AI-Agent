@@ -4,7 +4,7 @@ import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
 import { Chip } from "../components/ContentBlocks";
-import { PageHeading, SectionHeading } from "../components/Headings";
+import { SectionHeading } from "../components/Headings";
 import { MediaFrame } from "../components/MediaFrame";
 
 export interface CreatePageProps {
@@ -14,9 +14,8 @@ export interface CreatePageProps {
 
 export function CreatePage({ viewModel, navigate }: CreatePageProps) {
   return (
-    <AppShell activeNav="create" navigate={navigate} title={viewModel.title}>
+    <AppShell activeNav="create" leadingAction={<span className="page-header-icon"><Icon name="movie_edit" size={25} /></span>} navigate={navigate} title={viewModel.title}>
       <div className="page-stack page-create">
-        <PageHeading description="选择一个模板，把你的想法变成可发布的视频。" title={viewModel.title} />
         <GlassCard className="prompt-card">
           <label className="field-label" htmlFor="create-prompt">{viewModel.promptLabel}</label>
           <textarea id="create-prompt" placeholder={viewModel.promptPlaceholder} rows={4} />

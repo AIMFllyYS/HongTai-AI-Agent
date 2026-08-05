@@ -4,7 +4,7 @@ import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
 import { Chip } from "../components/ContentBlocks";
-import { PageHeading, SectionHeading } from "../components/Headings";
+import { SectionHeading } from "../components/Headings";
 import { TabPanel, Tabs, tabId, tabPanelId } from "../components/Tabs";
 import { MediaFrame } from "../components/MediaFrame";
 import { StatusBadge } from "../components/StatusBadge";
@@ -14,14 +14,21 @@ export interface AssetsPageProps {
   readonly navigate: (path: string) => void;
 }
 
+function AssetRowMedia({ asset }: { readonly asset: AssetsViewModel["assets"][number] }) {
+  if (asset.kind === "failed") {
+    return <span aria-hidden="true" className="asset-row__media asset-row__media--failed"><Icon name="error" size={25} /></span>;
+  }
+
+  return <MediaFrame className="asset-row__media" media={asset.media} />;
+}
+
 export function AssetsPage({ viewModel, navigate }: AssetsPageProps) {
   const tabsId = "assets-tabs";
   const activeTabIndex = Math.max(0, viewModel.tabs.indexOf(viewModel.activeTab));
 
   return (
-    <AppShell activeNav="assets" navigate={navigate} title={viewModel.title}>
+    <AppShell activeNav="assets" headerAction={<Button className="header-action__button" onClick={() => undefined} variant="secondary"><Icon name="upload" size={17} />{viewModel.uploadLabel}</Button>} leadingAction={<span className="page-header-icon"><Icon name="folder_special" size={25} /></span>} navigate={navigate} title={viewModel.title}>
       <div className="page-stack page-assets">
-        <PageHeading action={<Button onClick={() => undefined} variant="secondary"><Icon name="upload" size={17} />{viewModel.uploadLabel}</Button>} description="集中管理拆解模板与创作素材" title={viewModel.title} />
         <Tabs active={viewModel.activeTab} id={tabsId} panelId={tabPanelId(tabsId)} tabs={viewModel.tabs} />
         <TabPanel className="page-stack" id={tabPanelId(tabsId)} labelledBy={tabId(tabsId, activeTabIndex)}>
           <div className="search-field"><Icon name="search" size={19} /><input aria-label="搜索素材" placeholder={viewModel.searchPlaceholder} type="search" /><button aria-label="筛选" type="button"><Icon name="tune" size={18} /></button></div>
@@ -36,7 +43,7 @@ export function AssetsPage({ viewModel, navigate }: AssetsPageProps) {
             <SectionHeading action={<span className="asset-count">{viewModel.assetCount}</span>} title={viewModel.assetTitle} />
             <div className="asset-library__layout">
               <aside className="folder-list">{viewModel.folders.map((folder, index) => <button className={index === 0 ? "is-active" : ""} key={folder} type="button"><Icon name={index === 0 ? "folder_open" : "folder"} size={17} />{folder}<span>{index === 0 ? viewModel.assetCount : index + 2}</span></button>)}</aside>
-              <div className="asset-list">{viewModel.assets.map((asset) => <button className="asset-row" key={asset.id} onClick={() => navigate("/create")} type="button"><MediaFrame className="asset-row__media" media={asset.media} /><span className="asset-row__body"><strong>{asset.title}</strong><StatusBadge compact label={asset.statusLabel} status={asset.kind === "failed" ? "failed" : asset.kind === "uploading" ? "processing" : "completed"} /></span><Icon name="chevron_right" size={17} /></button>)}</div>
+              <div className="asset-list">{viewModel.assets.map((asset) => <button className="asset-row" key={asset.id} onClick={() => navigate("/create")} type="button"><AssetRowMedia asset={asset} /><span className="asset-row__body"><strong>{asset.title}</strong><StatusBadge compact label={asset.statusLabel} status={asset.kind === "failed" ? "failed" : asset.kind === "uploading" ? "processing" : "completed"} /></span><Icon name="chevron_right" size={17} /></button>)}</div>
             </div>
           </section>
 

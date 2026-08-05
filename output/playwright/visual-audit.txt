@@ -1,12 +1,21 @@
-route	page height	page errors
-/	1386px	0 errors
-/analyze/processing	1506px	0 errors
-/analyze/result	1378px	0 errors
-/analyze/detail/video	1535px	0 errors
-/analyze/detail/gallery	1876px	0 errors
-/create	1332px	0 errors
-/publish	1268px	0 errors
-/assets	1145px	0 errors
-/settings	1194px	0 errors
-/vitality/scan	997px	0 errors
-/vitality/result	1483px	0 errors
+route	page height	h1	page errors
+/	1282px	h1=1	0 errors
+/analyze/processing	1532px	h1=1	0 errors
+/analyze/result	1378px	h1=1	0 errors
+/analyze/detail/video	1535px	h1=1	0 errors
+/analyze/detail/gallery	1876px	h1=1	0 errors
+/create	1244px	h1=1	0 errors
+/publish	1204px	h1=1	0 errors
+/assets	1158px	h1=1	0 errors
+/settings	1106px	h1=1	0 errors
+/vitality/scan	997px	h1=1	0 errors
+/vitality/result	1483px	h1=1	0 errors
+
+foundation evidence
+/assets	assets geometry: rows=3;thumbnail=128.0x72.0;no-overlap=1
+/vitality/scan	shellBackground=rgb(251, 253, 250), primaryBackground=rgb(38, 166, 154), headingColor=rgb(0, 77, 64)
+/vitality/result	shellBackground=rgb(251, 253, 250), primaryBackground=rgb(38, 166, 154), headingColor=rgb(0, 77, 64)
+/	home-empty=1;nav-clearance=32.0px
+
+screenshots: 390x844 mobile routes; 536x900 assets visual check; 1280x900 home desktop; home-empty static state
+remote media/font rendering remains environment-dependent; no pixel identity is claimed

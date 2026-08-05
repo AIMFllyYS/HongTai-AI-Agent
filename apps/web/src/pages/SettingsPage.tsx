@@ -4,7 +4,7 @@ import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
 import { iconName } from "../components/ContentBlocks";
-import { PageHeading, SectionHeading } from "../components/Headings";
+import { SectionHeading } from "../components/Headings";
 import { MediaFrame } from "../components/MediaFrame";
 
 export interface SettingsPageProps {
@@ -20,7 +20,6 @@ export function SettingsPage({ viewModel, navigate }: SettingsPageProps) {
   return (
     <AppShell activeNav="settings" navigate={navigate} title={viewModel.title}>
       <div className="page-stack page-settings">
-        <PageHeading description="管理账户、AI 模型与通用偏好" title={viewModel.title} />
         <GlassCard className="profile-card">
           <MediaFrame className="profile-card__avatar" media={viewModel.avatar} />
           <div><h2>{viewModel.profileName}</h2><p>{viewModel.accountType}</p><span className="plan-badge">{viewModel.plan}</span></div>

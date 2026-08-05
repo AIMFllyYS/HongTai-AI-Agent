@@ -83,6 +83,32 @@ def assert_vitality_theme(page: Page, route: str) -> str:
     return ", ".join(f"{key}={snapshot[key]}" for key in EXPECTED_VITALITY_COLORS)
 
 
+def audit_assets(page: Page) -> str:
+    assert page.get_by_role("button", name="上传", exact=True).count() == 1
+    assert page.locator(".app-header .brand-logo img").count() == 0, "assets keeps its page-specific folder mark"
+    assert page.locator(".bottom-nav .brand-logo img").count() == 1
+
+    metrics = page.locator(".asset-row").evaluate_all(
+        """rows => rows.map(row => {
+          const media = row.querySelector('.asset-row__media')?.getBoundingClientRect();
+          const body = row.querySelector('.asset-row__body')?.getBoundingClientRect();
+          return {
+            mediaRight: media?.right ?? null,
+            bodyLeft: body?.left ?? null,
+            mediaWidth: media?.width ?? null,
+            mediaHeight: media?.height ?? null,
+          };
+        })"""
+    )
+    assert metrics, "assets: expected asset rows"
+    for index, metric in enumerate(metrics):
+        assert metric["mediaRight"] <= metric["bodyLeft"] + 0.5, f"assets row {index} overlaps its text: {metric}"
+        assert metric["mediaWidth"] >= 120, f"assets row {index} thumbnail is unexpectedly narrow: {metric}"
+        assert metric["mediaHeight"] > 0, f"assets row {index} thumbnail has no height: {metric}"
+
+    return f"assets geometry: rows={len(metrics)};thumbnail={metrics[0]['mediaWidth']:.1f}x{metrics[0]['mediaHeight']:.1f};no-overlap=1"
+
+
 def audit_home_empty_state(browser, output_dir: Path) -> str:
     page = browser.new_page(viewport={"width": 390, "height": 844}, device_scale_factor=1)
     page.goto("http://127.0.0.1:4173/", wait_until="networkidle", timeout=30_000)
@@ -136,9 +162,14 @@ def main() -> None:
             assert body_text.strip()
             assert page.locator(".app-shell").count() == 1
             assert page.locator("h1").count() == 1, f"{route}: expected one h1"
+            assert page.locator(".bottom-nav .brand-logo img").count() == 1, f"{route}: AI nav should use the shared logo"
+            if route in {"/", "/vitality/scan"}:
+                assert page.locator(".app-header .brand-logo img").count() == 1, f"{route}: brand header should use the shared logo"
             assert_tabs_are_associated(page, route)
             if route in VITALITY_ROUTES:
                 evidence_rows.append(f"{route}\t{assert_vitality_theme(page, route)}")
+            if route == "/assets":
+                evidence_rows.append(f"{route}\t{audit_assets(page)}")
             audit_rows.append(f"{route}\t{page.locator('body').bounding_box()['height']:.0f}px\th1=1\t{len(page_errors)} errors")
             if page_errors:
                 raise AssertionError(f"{route}: {page_errors}")
@@ -152,6 +183,12 @@ def main() -> None:
         assert desktop.locator("h1").count() == 1
         desktop.screenshot(path=str(output_dir / "home-desktop.png"), full_page=True)
         desktop.close()
+
+        assets_preview = browser.new_page(viewport={"width": 536, "height": 900}, device_scale_factor=1)
+        assets_preview.goto(f"{base_url}/assets", wait_until="networkidle", timeout=30_000)
+        assets_preview.wait_for_timeout(300)
+        assets_preview.screenshot(path=str(output_dir / "assets-536x900.png"), full_page=True)
+        assets_preview.close()
         browser.close()
 
     report = [
@@ -161,7 +198,7 @@ def main() -> None:
         "foundation evidence",
         *evidence_rows,
         "",
-        "screenshots: 390x844 mobile routes; 1280x900 home desktop; home-empty static state",
+        "screenshots: 390x844 mobile routes; 536x900 assets visual check; 1280x900 home desktop; home-empty static state",
         "remote media/font rendering remains environment-dependent; no pixel identity is claimed",
     ]
     Path("output/playwright/visual-audit.txt").write_text("\n".join(report) + "\n", encoding="utf-8")
