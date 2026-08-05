@@ -5,11 +5,12 @@ const SUPPORTED_LINK = /(^|[^\p{L}\p{N}@._-])((?:https?:\/\/)?(?:www\.)?(?:douyi
 const TRAILING_PUNCTUATION = /[，。！？；：、）》】」』,.!?;:]+$/u;
 
 function platformForHost(hostname: string): SupportedPlatform | undefined {
-  const host = hostname.toLowerCase().replace(/^www\./, "");
+  const rawHost = hostname.toLowerCase();
+  const host = rawHost.replace(/^www\./, "");
   if (host === "douyin.com" || host === "v.douyin.com" || host === "iesdouyin.com") return "douyin";
   if (host === "xiaohongshu.com" || host === "xhslink.com" || host === "xhslink.cn") return "xiaohongshu";
   if (host === "bilibili.com" || host === "b23.tv") return "bilibili";
-  if (host === "kuaishou.com" || host === "v.kuaishou.com") return "kuaishou";
+  if (rawHost === "www.kuaishou.com" || rawHost === "v.kuaishou.com") return "kuaishou";
   return undefined;
 }
 
@@ -23,6 +24,13 @@ function normalizeCandidate(candidate: string): Omit<NormalizedInput, "rawInput"
     parsed.password = "";
     const platform = platformForHost(parsed.hostname);
     if (!platform) return undefined;
+    if (platform === "kuaishou") {
+      const host = parsed.hostname.toLowerCase();
+      const supportedPath = host === "v.kuaishou.com"
+        ? /^\/[A-Za-z0-9_-]+\/?$/.test(parsed.pathname)
+        : host === "www.kuaishou.com" && /^\/short-video\/[A-Za-z0-9_-]+\/?$/.test(parsed.pathname);
+      if (!supportedPath) return undefined;
+    }
     return { extractedText, normalizedUrl: parsed.toString(), platform };
   } catch {
     return undefined;

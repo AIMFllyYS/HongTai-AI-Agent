@@ -1,22 +1,28 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { HttpClient, HttpRequest, HttpResponse } from "../packages/core/src/index";
+import type { HttpClient, HttpPostRequest, HttpRequest, HttpResponse } from "../packages/core/src/index";
 import { TaskError } from "../packages/core/src/index";
 import {
   BilibiliAdapter,
   DouyinAdapter,
+  KuaishouAdapter,
   XiaohongshuAdapter,
   extractAssignedJson,
+  platformRegistry,
 } from "../packages/platforms/src/index";
 
 class FakeHttpClient implements HttpClient {
-  readonly #handler: (request: HttpRequest) => HttpResponse;
+  readonly #handler: (request: HttpRequest | HttpPostRequest) => HttpResponse;
 
-  constructor(handler: (request: HttpRequest) => HttpResponse) {
+  constructor(handler: (request: HttpRequest | HttpPostRequest) => HttpResponse) {
     this.#handler = handler;
   }
 
   async get(request: HttpRequest): Promise<HttpResponse> {
+    return this.#handler(request);
+  }
+
+  async post(request: HttpPostRequest): Promise<HttpResponse> {
     return this.#handler(request);
   }
 }
@@ -37,6 +43,216 @@ test("现有平台显式标记为稳定支持", () => {
   assert.equal(new DouyinAdapter().supportLevel, "stable");
   assert.equal(new XiaohongshuAdapter().supportLevel, "stable");
   assert.equal(new BilibiliAdapter().supportLevel, "stable");
+});
+
+test("平台注册表包含三个稳定平台和一个实验性快手", () => {
+  assert.equal(platformRegistry.size, 4);
+  assert.deepEqual(platformRegistry.all.map((adapter) => [adapter.platform, adapter.supportLevel]), [
+    ["douyin", "stable"],
+    ["xiaohongshu", "stable"],
+    ["bilibili", "stable"],
+    ["kuaishou", "experimental"],
+  ]);
+});
+
+test("快手适配器优先使用photoUrl直链并输出脱敏原始结果", async () => {
+  const postRequests: HttpPostRequest[] = [];
+  const client = new FakeHttpClient((request) => {
+    if ("body" in request) {
+      postRequests.push(request);
+      return {
+        url: request.url,
+        status: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          data: {
+            visionVideoDetail: {
+              status: 1,
+              type: 1,
+              author: { id: "author-1", name: "快手作者" },
+              photo: {
+                id: "3xk22yucqvrwx64",
+                duration: 398_000,
+                caption: "快手测试视频",
+                coverUrl: "https://img.example/cover.jpg?token=cover-secret",
+                photoUrl: "https://v23.kwaicdn.com/video.mp4?token=media-secret",
+                manifest: {
+                  adaptationSet: [{
+                    representation: [
+                      { url: "https://v1.kwaicdn.com/higher.mp4?token=manifest-secret", width: 1920, height: 1080, avgBitrate: 2_000_000 },
+                      { url: "https://v1.kwaicdn.com/playlist.m3u8?token=hls-secret" },
+                    ],
+                  }],
+                },
+              },
+            },
+          },
+        }),
+      };
+    }
+    return response("https://www.kuaishou.com/short-video/3xk22yucqvrwx64", "<html>kuaishou</html>");
+  });
+  const adapter = new KuaishouAdapter();
+  assert.equal(adapter.matches("https://v.kuaishou.com/nvZAnXmn"), true);
+  assert.equal(adapter.matches("https://www.kuaishou.com/short-video/3xk22yucqvrwx64"), true);
+  assert.equal(adapter.matches("https://www.kuaishou.com/graphql"), false);
+  assert.equal(adapter.matches("https://kuaishou.com/short-video/3xk22yucqvrwx64"), false);
+  const resolved = await adapter.resolve("https://v.kuaishou.com/nvZAnXmn", client);
+  const content = await adapter.parse(resolved, client);
+
+  assert.equal(adapter.supportLevel, "experimental");
+  assert.equal(content.platform, "kuaishou");
+  assert.equal(content.title, "快手测试视频");
+  assert.equal(content.author, "快手作者");
+  assert.equal(content.durationSeconds, 398);
+  assert.deepEqual(content.videos.map((source) => source.url), ["https://v23.kwaicdn.com/video.mp4?token=media-secret"]);
+  assert.equal(content.videos[0]?.hasWatermark, undefined);
+  assert.equal(postRequests.length, 1);
+  assert.equal(postRequests[0]?.maxAttempts, 2);
+  assert.equal(postRequests[0]?.maxRedirects, 0);
+  assert.match(postRequests[0]?.body ?? "", /visionVideoDetail/);
+  assert.equal(postRequests[0]?.headers?.Origin, "https://www.kuaishou.com");
+  const raw = JSON.stringify(content.raw);
+  assert.doesNotMatch(raw, /media-secret|manifest-secret|hls-secret|cover-secret/);
+  assert.match(raw, /v23\.kwaicdn\.com/);
+});
+
+test("快手适配器在没有photoUrl时只选择manifest中的MP4", async () => {
+  const client = new FakeHttpClient((request) => {
+    if (!("body" in request)) return response("https://www.kuaishou.com/short-video/photo2", "<html></html>");
+    return {
+      url: request.url,
+      status: 200,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        data: {
+          visionVideoDetail: {
+            status: 1,
+            type: 1,
+            photo: {
+              id: "photo2",
+              duration: 12_000,
+              manifest: {
+                adaptationSet: [{ representation: [
+                  { url: "https://cdn.example/720.mp4?signature=secret", width: 720, height: 1280, avgBitrate: 800_000, codecs: "avc1", qualityType: "720p" },
+                  { url: "https://cdn.example/1080.mp4?signature=secret", width: 1080, height: 1920, avgBitrate: 1_800_000, codecs: "avc1", qualityType: "1080p" },
+                  { url: "https://cdn.example/stream.m3u8?signature=secret" },
+                ] }],
+              },
+            },
+          },
+        },
+      }),
+    };
+  });
+  const adapter = new KuaishouAdapter();
+  const resolved = await adapter.resolve("https://www.kuaishou.com/short-video/photo2", client);
+  const content = await adapter.parse(resolved, client);
+  assert.deepEqual(content.videos.map((source) => source.quality), ["720p", "1080p"]);
+  assert.equal(content.videos.some((source) => source.url.includes("m3u8")), false);
+  assert.equal((content.raw as { media?: { hlsCount?: number } }).media?.hlsCount, 1);
+  assert.doesNotMatch(JSON.stringify(content.raw), /signature=secret/);
+});
+
+test("快手详情只有HLS时保留视频元数据但不伪造下载源", async () => {
+  const client = new FakeHttpClient((request) => ({
+    url: request.url,
+    status: 200,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ data: { visionVideoDetail: { status: 1, type: 1, photo: {
+      id: "hls-only",
+      caption: "只有HLS",
+      manifest: { adaptationSet: [{ representation: [{ url: "https://cdn.example/only.m3u8?token=secret" }] }] },
+    } } } }),
+  }));
+  const content = await new KuaishouAdapter().parse({
+    sourceUrl: "https://v.kuaishou.com/hlsOnly",
+    finalUrl: "https://www.kuaishou.com/short-video/hls-only",
+    status: 200,
+  }, client);
+  assert.equal(content.contentType, "video");
+  assert.equal(content.videos.length, 0);
+  assert.equal((content.raw as { media?: { hlsCount?: number } }).media?.hlsCount, 1);
+});
+
+test("快手验证码结果映射为稳定风控错误且不在适配器内重试", async () => {
+  const payloads = [
+    { errors: [{ message: "Need captcha" }] },
+    { errors: [{ message: "blocked", extensions: { result: 2 } }] },
+    { message: "Need captcha", result: 2 },
+  ];
+  for (const payload of payloads) {
+    let requests = 0;
+    const client = new FakeHttpClient((request) => {
+      requests += 1;
+      return { url: request.url, status: 200, headers: { "content-type": "application/json" }, body: JSON.stringify(payload) };
+    });
+    await assert.rejects(
+      () => new KuaishouAdapter().parse({
+        sourceUrl: "https://v.kuaishou.com/risk",
+        finalUrl: "https://www.kuaishou.com/short-video/risk-photo",
+        status: 200,
+      }, client),
+      (error) => error instanceof TaskError
+        && error.code === "PLATFORM_RISK_CONTROLLED"
+        && error.message === "快手平台触发风控，暂时无法获取视频",
+    );
+    assert.equal(requests, 1);
+  }
+});
+
+test("快手无效JSON和空data返回平台响应错误", async () => {
+  for (const body of ["not-json", JSON.stringify({ data: null })]) {
+    const client = new FakeHttpClient((request) => ({
+      url: request.url,
+      status: 200,
+      headers: { "content-type": "application/json" },
+      body,
+    }));
+    await assert.rejects(
+      () => new KuaishouAdapter().parse({
+        sourceUrl: "https://v.kuaishou.com/invalid",
+        finalUrl: "https://www.kuaishou.com/short-video/invalid-photo",
+        status: 200,
+      }, client),
+      (error) => error instanceof TaskError && error.code === "PLATFORM_API_RESPONSE_INVALID",
+    );
+  }
+});
+
+test("快手HTTP和GraphQL失败映射为既有稳定错误码", async () => {
+  const cases = [
+    { status: 401, body: "{}", code: "CONTENT_PRIVATE_OR_LOGIN_REQUIRED" },
+    { status: 403, body: "{}", code: "CONTENT_PRIVATE_OR_LOGIN_REQUIRED" },
+    { status: 429, body: "{}", code: "PLATFORM_API_RATE_LIMITED" },
+    { status: 503, body: "{}", code: "PLATFORM_API_UNAVAILABLE" },
+    { status: 404, body: "{}", code: "PLATFORM_API_RESPONSE_INVALID" },
+    { status: 200, body: JSON.stringify({ errors: [{ message: "resolver failed" }] }), code: "PLATFORM_API_RESPONSE_INVALID" },
+  ] as const;
+  for (const item of cases) {
+    const client = new FakeHttpClient((request) => ({
+      url: request.url,
+      status: item.status,
+      headers: { "content-type": "application/json" },
+      body: item.body,
+    }));
+    await assert.rejects(
+      () => new KuaishouAdapter().parse({
+        sourceUrl: "https://v.kuaishou.com/error",
+        finalUrl: "https://www.kuaishou.com/short-video/error-photo",
+        status: 200,
+      }, client),
+      (error) => error instanceof TaskError && error.code === item.code,
+    );
+  }
+});
+
+test("快手解析拒绝跳转到未认可域名", async () => {
+  const client = new FakeHttpClient(() => response("https://evil.example/short-video/stolen", "<html></html>"));
+  await assert.rejects(
+    () => new KuaishouAdapter().resolve("https://v.kuaishou.com/example", client),
+    (error) => error instanceof TaskError && error.code === "LINK_REDIRECT_INVALID",
+  );
 });
 
 test("抖音适配器从公开页面状态提取无水印视频", async () => {

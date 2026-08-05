@@ -147,7 +147,7 @@ export class IngestPipeline {
           const normalized = normalizeInput(request.input);
           const adapter = this.#dependencies.adapters.find((candidate) => candidate.platform === normalized.platform);
           if (!adapter) {
-            throw new TaskError({ code: "INPUT_PLATFORM_UNSUPPORTED", message: "当前只支持抖音、小红书和B站链接", action: "edit_input" });
+            throw new TaskError({ code: "INPUT_PLATFORM_UNSUPPORTED", message: "当前只支持抖音、小红书、B站和快手链接", action: "edit_input" });
           }
           platform = adapter.platform;
           sourceUrl = normalized.normalizedUrl;

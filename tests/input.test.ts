@@ -50,8 +50,14 @@ test("无受支持链接返回稳定错误码", () => {
   if (!result.ok) assert.equal(result.issue.code, "INPUT_NO_SUPPORTED_URL");
 });
 
-test("快手GraphQL内部地址不是用户作品链接", () => {
-  const result = inspectInput("https://video.kuaishou.com/graphql");
-  assert.equal(result.ok, false);
-  if (!result.ok) assert.equal(result.issue.code, "INPUT_NO_SUPPORTED_URL");
+test("未验证的快手地址不是用户作品链接", () => {
+  for (const url of [
+    "https://video.kuaishou.com/graphql",
+    "https://www.kuaishou.com/graphql",
+    "https://kuaishou.com/short-video/3xk22yucqvrwx64",
+  ]) {
+    const result = inspectInput(url);
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.issue.code, "INPUT_NO_SUPPORTED_URL");
+  }
 });

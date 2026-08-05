@@ -45,6 +45,7 @@ function dependencies(withVideo: boolean, withAudio = false): { dependencies: In
   const store = new MemoryStore();
   const adapter: PlatformAdapter = {
     platform: "douyin",
+    supportLevel: "stable",
     matches: () => true,
     resolve: async (url) => ({ sourceUrl: url, finalUrl: `${url}?xsec_token=private-token`, status: 200, body: "<html></html>" }),
     parse: async (link) => ({
@@ -61,7 +62,10 @@ function dependencies(withVideo: boolean, withAudio = false): { dependencies: In
       raw: { ok: true },
     }),
   };
-  const http: HttpClient = { get: async () => ({ url: "", status: 200, headers: {}, body: "" }) };
+  const http: HttpClient = {
+    get: async () => ({ url: "", status: 200, headers: {}, body: "" }),
+    post: async () => ({ url: "", status: 200, headers: {}, body: "" }),
+  };
   const downloader: MediaDownloader = { download: async (_source, _destination, progress) => { await progress?.({ downloadedBytes: 10, totalBytes: 10, progress: 1 }); } };
   const mediaTools: MediaTools = {
     merge: async () => {},
@@ -126,6 +130,7 @@ test("小红书图文保存正文和全部图片后正常成功", async () => {
   let transcriberCalled = false;
   const adapter: PlatformAdapter = {
     platform: "xiaohongshu",
+    supportLevel: "stable",
     matches: () => true,
     resolve: async (url) => ({ sourceUrl: url, finalUrl: url, status: 200, body: "<html></html>" }),
     parse: async (link) => ({
@@ -145,7 +150,10 @@ test("小红书图文保存正文和全部图片后正常成功", async () => {
   };
   const result = await new IngestPipeline({
     adapters: [adapter],
-    http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    http: {
+      get: async () => ({ url: "", status: 200, headers: {}, body: "" }),
+      post: async () => ({ url: "", status: 200, headers: {}, body: "" }),
+    },
     downloader: { download: async (_source, _destination, progress) => { await progress?.({ downloadedBytes: 10, totalBytes: 10, progress: 1 }); } },
     mediaTools: { merge: async () => {}, probeDuration: async () => 1, extractAudio: async () => {}, splitAudio: async () => [] },
     transcriber: { transcribe: async () => { transcriberCalled = true; return { status: "failed", text: "", segments: [] }; } },
@@ -210,6 +218,7 @@ test("小红书部分图片下载失败时保留正文并结构化降级", async
   let downloads = 0;
   const adapter: PlatformAdapter = {
     platform: "xiaohongshu",
+    supportLevel: "stable",
     matches: () => true,
     resolve: async (url) => ({ sourceUrl: url, finalUrl: url, status: 200, body: "" }),
     parse: async (link) => ({
@@ -219,7 +228,11 @@ test("小红书部分图片下载失败时保留正文并结构化降级", async
     }),
   };
   const result = await new IngestPipeline({
-    adapters: [adapter], http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    adapters: [adapter],
+    http: {
+      get: async () => ({ url: "", status: 200, headers: {}, body: "" }),
+      post: async () => ({ url: "", status: 200, headers: {}, body: "" }),
+    },
     downloader: { download: async () => { downloads += 1; if (downloads === 2) throw new Error("network"); } },
     mediaTools: { merge: async () => {}, probeDuration: async () => 1, extractAudio: async () => {}, splitAudio: async () => [] },
     store, reporter: { report: () => {} },
