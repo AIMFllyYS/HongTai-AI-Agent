@@ -1,6 +1,7 @@
 package com.hongtai.aiagent.bridge
 
 import android.app.Activity
+import android.content.ClipData
 import androidx.activity.result.ActivityResult
 import android.content.Intent
 import android.net.Uri
@@ -18,10 +19,37 @@ import com.hongtai.aiagent.media.PrivateMediaStore
 @CapacitorPlugin(name = "FileMedia")
 class FileMediaPlugin : Plugin() {
   private val mediaStore: PrivateMediaStore by lazy { PrivateMediaStore(context) }
+  private var pendingPhotoCapture: com.hongtai.aiagent.media.PendingPhotoCapture? = null
 
   @PluginMethod
   fun pickPhoto(call: PluginCall) {
     startActivityForResult(call, imagePickerIntent(), "onPhotoPicked")
+  }
+
+  /** Uses the system camera and immediately copies the result into private storage. */
+  @PluginMethod
+  fun capturePhoto(call: PluginCall) {
+    if (pendingPhotoCapture != null) {
+      call.reject("Another photo capture is already in progress.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED)
+      return
+    }
+    val capture = try {
+      mediaStore.createPhotoCapture()
+    } catch (error: Exception) {
+      call.reject("Could not prepare private camera storage.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
+      return
+    }
+    val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+      .putExtra(MediaStore.EXTRA_OUTPUT, capture.uri)
+      .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+    intent.clipData = ClipData.newRawUri("captured-photo", capture.uri)
+    if (intent.resolveActivity(context.packageManager) == null) {
+      mediaStore.discardCapture(capture)
+      call.reject("No system camera is available.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED)
+      return
+    }
+    pendingPhotoCapture = capture
+    startActivityForResult(call, intent, "onPhotoCaptured")
   }
 
   @ActivityCallback
@@ -37,6 +65,23 @@ class FileMediaPlugin : Plugin() {
       return
     }
     copyAndResolve(call, sourceUri, null)
+  }
+
+  @ActivityCallback
+  private fun onPhotoCaptured(call: PluginCall?, result: ActivityResult) {
+    val capture = pendingPhotoCapture
+    pendingPhotoCapture = null
+    if (call == null || capture == null) return
+    if (result.resultCode != Activity.RESULT_OK) {
+      mediaStore.discardCapture(capture)
+      call.reject("No photo was captured.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED)
+      return
+    }
+    try {
+      call.resolve(mediaFileResult(mediaStore.importCaptured(capture)))
+    } catch (error: Exception) {
+      call.reject("Could not import the captured photo into private storage.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
+    }
   }
 
   @PluginMethod

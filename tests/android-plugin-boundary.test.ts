@@ -6,7 +6,7 @@ import { test } from "node:test";
 const root = process.cwd();
 const read = (relativePath: string) => readFileSync(join(root, relativePath), "utf8");
 
-test("Capacitor sync never registers the community SQLite bridge in the WebView", () => {
+test("the standalone APK registers only its six explicit native plugins", () => {
   const config = read("capacitor.config.ts");
   const mainActivity = read("android/app/src/main/java/com/hongtai/aiagent/MainActivity.kt");
   const generatedRegistry = JSON.parse(read("android/app/src/main/assets/capacitor.plugins.json")) as Array<{
@@ -31,14 +31,16 @@ test("Capacitor sync never registers the community SQLite bridge in the WebView"
     false,
     "the generated Capacitor registry must not expose raw SQL, encryption-secret, or delete-database methods",
   );
-  assert.doesNotMatch(
-    mainActivity,
-    /CapacitorSQLitePlugin|registerPlugin\(CapacitorSQLite/,
-    "the activity must not bypass the generated registry by manually registering the raw SQLite plugin",
-  );
+  for (const plugin of ["SecureSettingsPlugin", "LocalDataPlugin", "LocalFilesPlugin", "NativeNetworkPlugin", "FileMediaPlugin", "MediaRuntimePlugin"]) {
+    assert.match(mainActivity, new RegExp(`registerPlugin\\(${plugin}::class\\.java\\)`));
+  }
+  assert.doesNotMatch(mainActivity, /CapacitorSQLitePlugin|TaskStorePlugin|AnalysisStorePlugin|DiagnosisStorePlugin|TaskRuntimePlugin|TaskRecoveryRegistry|LocalEncryptedStorage/);
 });
 
-test("SQLCipher remains an Android-only Gradle dependency after Capacitor sync", () => {
+test("the standalone APK has no SQLite or SQLCipher build dependency", () => {
+  const rootPackage = JSON.parse(read("package.json")) as {
+    readonly devDependencies?: Readonly<Record<string, string>>;
+  };
   const webPackage = JSON.parse(read("apps/web/package.json")) as {
     readonly dependencies?: Readonly<Record<string, string>>;
   };
@@ -50,6 +52,7 @@ test("SQLCipher remains an Android-only Gradle dependency after Capacitor sync",
     undefined,
     "the React application must not import the community raw-SQL bridge",
   );
-  assert.match(settings, /hongtai-community-sqlite-native/);
-  assert.match(appBuild, /project\(":hongtai-community-sqlite-native"\)/);
+  assert.equal(rootPackage.devDependencies?.["@capacitor-community/sqlite"], undefined);
+  assert.doesNotMatch(settings, /sqlite|sqlcipher/i);
+  assert.doesNotMatch(appBuild, /sqlite|sqlcipher/i);
 });

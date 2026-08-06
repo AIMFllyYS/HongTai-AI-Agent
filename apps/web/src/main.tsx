@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Capacitor, registerPlugin } from "@capacitor/core";
-import { createCapacitorAppRuntime, registerHongTaiNativePlugins } from "@hongtai/capacitor-runtime";
+import { createStandaloneAppRuntime, registerStandaloneNativePlugins } from "@hongtai/capacitor-runtime";
 import type { AppRuntime } from "@hongtai/core";
 
 import { App } from "./App";
@@ -20,9 +20,13 @@ if (!root) {
 let runtimePromise: Promise<AppRuntime> | undefined;
 
 function initializeRuntime(): Promise<AppRuntime> {
-  runtimePromise ??= createCapacitorAppRuntime({
-    plugins: registerHongTaiNativePlugins(registerPlugin),
+  runtimePromise ??= createStandaloneAppRuntime({
+    plugins: registerStandaloneNativePlugins(registerPlugin),
     convertFileSrc: Capacitor.convertFileSrc,
+  }).then(async (runtime) => {
+    // Mark snapshots left active by a terminated process; never resume work.
+    await runtime.tasks.getStartupRecovery().catch(() => undefined);
+    return runtime;
   });
   return runtimePromise;
 }
@@ -53,10 +57,10 @@ function RuntimeBootstrap() {
       {failed ? (
         <ErrorState
           action={<Button onClick={() => window.location.reload()} variant="secondary">重新打开应用</Button>}
-          description="本机加密存储未能安全初始化。请在已安装的 Android APK 中重试；系统不会用临时或静态数据替代本地记录。"
+          description="本地应用运行时未能启动。请在已安装的 Android APK 中重试；系统不会用临时或静态数据替代本地记录。"
           title="本地运行时不可用"
         />
-      ) : <LoadingState description="正在建立 Android Keystore 与本地加密数据边界" title="启动本地运行时" />}
+      ) : <LoadingState description="正在启动本地应用运行时" title="启动本地应用运行时" />}
     </AppShell>
   );
 }

@@ -67,7 +67,7 @@ export function ProfileSettingsPage({ runtime, navigate }: ProfileSettingsPagePr
     try {
       setDraft(draftFromProfile(await runtime.profile.get()));
     } catch (error) {
-      setIssue(issueFromAppError(error, { code: "DATABASE_OPEN_FAILED", message: "本地档案暂时无法读取", action: "none" }));
+      setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "本地档案暂时无法读取", action: "none" }));
     } finally {
       setLoading(false);
     }
@@ -112,13 +112,13 @@ export function ProfileSettingsPage({ runtime, navigate }: ProfileSettingsPagePr
   };
 
   if (loading) {
-    return <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="本地档案"><LoadingState description="正在读取加密档案" title="加载档案" /></AppShell>;
+    return <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="本地档案"><LoadingState description="正在读取本地档案" title="加载档案" /></AppShell>;
   }
 
   return (
     <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="本地档案">
       <form className="page-stack page-settings settings-form" onSubmit={save}>
-        {issue ? <IssueNotice issue={issue} onAction={issue.action === "select_media" ? () => void chooseAvatar() : undefined} /> : null}
+        {issue ? <IssueNotice actions={{ selectMedia: () => void chooseAvatar() }} issue={issue} /> : null}
 
         <GlassCard className="avatar-editor">
           <AvatarPreview draft={draft} />

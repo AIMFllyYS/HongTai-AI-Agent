@@ -161,6 +161,21 @@ workspace/ai/diagnosis/{session-id}/
 
 内容拆解结果保存到原任务的`analysis/`目录，核心文件为`content-analysis.json`。两个AI功能的唯一正式结构化协议都是经过Schema校验的JSON，不使用XML或`thinking`标签。
 
+## 构建 Android Debug APK
+
+APK 不读取开发机 `.env`。请先在应用的设置页填写 Base URL、模型和 API Key；Key 只写入 Android Keystore，不会回传到 React 页面。
+
+```powershell
+pnpm --filter @hongtai/web build
+pnpm exec cap sync android
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+Push-Location android
+.\gradlew.bat :app:assembleDebug --no-daemon
+Pop-Location
+```
+
+生成文件为 `android/app/build/outputs/apk/debug/app-debug.apk`。它由 Android 的 debug 签名签发，适合安装演示；向外部正式分发前必须另行配置发布签名并完成真机验收。
+
 ## 基础检查
 
 ```powershell

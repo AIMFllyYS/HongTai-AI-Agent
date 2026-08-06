@@ -61,10 +61,11 @@ test("the browser audit checks the asset thumbnail boundary and shared logo", ()
   assert.match(audit, /external runtime media/);
 });
 
-test("failed assets use a state-specific media treatment", () => {
+test("planned assets do not use a fake media status treatment", () => {
   const page = read("pages/AssetsPage.tsx");
 
-  assert.match(page, /asset\.kind\s*===\s*"failed"/);
-  assert.match(page, /asset-row__media--failed/);
-  assert.match(page, /name="error"/);
+  assert.match(page, /FeatureUnavailablePanel/);
+  assert.match(page, /feature="assets"/);
+  assert.match(page, /disabled/);
+  assert.doesNotMatch(page, /asset\.kind|asset-row__media--failed|StatusBadge/);
 });

@@ -9,7 +9,7 @@
 1. 舌象或面部图片观察、结构化报告和后续对话；
 2. 对已抓取视频或图文内容进行可复用的结构化拆解。
 
-自动视频合成、素材库和发布仍为 `planned`。本地档案、AI 设置、Capacitor、Kotlin、SQLCipher、私有媒体目录和 React 页面将以不复制 Flow 业务逻辑的方式接入；不引入云端服务、登录或云同步。
+自动视频合成、素材库和发布仍为 `planned`。本地档案、AI 设置、Capacitor、Kotlin、应用私有文件目录和 React 页面将以不复制 Flow 业务逻辑的方式接入；不引入云端服务、登录或云同步。
 
 ## 代码边界
 
@@ -20,7 +20,7 @@ packages/platforms       抖音、小红书、B站稳定解析与快手实验性
 packages/ai              纯TypeScript AI Provider、Schema、Prompt和Flow
 packages/node-runtime    Node文件、图片预处理和开发期产物存储
 packages/capacitor-runtime  APK 的运行时适配与 AppRuntime 组合
-android                  Kotlin 原生插件、SQLCipher 与 Android 生命周期
+android                  Kotlin 原生插件、Keystore、私有文件与 Android 媒体 I/O
 ```
 
 `packages/ai` 不得导入 Node、Capacitor 或 Android API。具体业务 Prompt 和 Schema 彼此隔离，只共享 Provider、流式事件、结构化 JSON 校验和错误机制。页面通过 `AppRuntime.analysis` 与 `AppRuntime.diagnosis` 调用 Flow，不直接读取开发期产物或原始供应商响应。

@@ -4,8 +4,10 @@ import android.content.Context
 import android.database.Cursor
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
+import java.io.InputStream
 import java.text.Normalizer
 import java.util.UUID
 
@@ -15,10 +17,17 @@ data class PrivateMediaFile(
   val sizeBytes: Long,
 )
 
+/** A one-use FileProvider target for an external system camera activity. */
+class PendingPhotoCapture internal constructor(
+  val uri: Uri,
+  internal val file: File,
+)
+
 /** Copies a selected document immediately into the application's private files directory. */
 class PrivateMediaStore(context: Context) {
   private val appContext = context.applicationContext
   private val importsDirectory = File(appContext.filesDir, "media/imports")
+  private val captureDirectory = File(appContext.cacheDir, "media/capture")
 
   fun importFrom(uri: Uri, displayName: String? = null): PrivateMediaFile {
     require(PrivateMediaImportPolicy.acceptsSourceScheme(uri.scheme)) {
@@ -30,15 +39,53 @@ class PrivateMediaStore(context: Context) {
 
     val sourceName = displayName?.takeIf { it.isNotBlank() } ?: displayNameFor(uri) ?: "media"
     val destination = File(importsDirectory, "${UUID.randomUUID()}-${PrivateMediaImportPolicy.safeFileName(sourceName)}")
+    val temporary = File(importsDirectory, ".${destination.name}.${UUID.randomUUID()}.part")
+    val mimeType = appContext.contentResolver.getType(uri)
     val copiedBytes = appContext.contentResolver.openInputStream(uri)?.use { input ->
-      FileOutputStream(destination).use { output -> input.copyTo(output) }
+      PrivateMediaImportPolicy.copyBounded(
+        input = input,
+        temporary = temporary,
+        destination = destination,
+        maxBytes = PrivateMediaImportPolicy.MAX_IMPORT_BYTES,
+      )
     } ?: throw IllegalArgumentException("The selected media could not be opened.")
 
     return PrivateMediaFile(
       uri = Uri.fromFile(destination).toString(),
-      mimeType = appContext.contentResolver.getType(uri),
+      mimeType = mimeType,
       sizeBytes = copiedBytes,
     )
+  }
+
+  /**
+   * Creates a temporary, app-owned output URI for the system camera. It is
+   * deliberately under cache rather than the final imports directory so a
+   * cancelled capture can never appear as user media.
+   */
+  fun createPhotoCapture(): PendingPhotoCapture {
+    if (!captureDirectory.exists() && !captureDirectory.mkdirs()) {
+      throw IllegalStateException("Could not create the private camera staging directory.")
+    }
+    val identifier = UUID.randomUUID().toString()
+    val file = File(captureDirectory, PhotoCapturePolicy.fileNameFor(identifier)).canonicalFile
+    val root = captureDirectory.canonicalFile
+    require(file.parentFile?.canonicalFile == root) { "Camera target is outside private staging storage." }
+    val uri = FileProvider.getUriForFile(appContext, "${appContext.packageName}.fileprovider", file)
+    return PendingPhotoCapture(uri, file)
+  }
+
+  /** Copies a non-empty captured file into the same private imported-media area as picker results. */
+  fun importCaptured(capture: PendingPhotoCapture): PrivateMediaFile = try {
+    require(capture.file.isFile && capture.file.length() > 0L) { "The camera did not produce a usable photo." }
+    val imported = importFrom(capture.uri, "captured-photo.jpg")
+    if (imported.mimeType == null) imported.copy(mimeType = "image/jpeg") else imported
+  } finally {
+    capture.file.delete()
+  }
+
+  /** Removes a cancelled or failed camera staging file without touching imported user media. */
+  fun discardCapture(capture: PendingPhotoCapture) {
+    capture.file.delete()
   }
 
   private fun displayNameFor(uri: Uri): String? = appContext.contentResolver.query(
@@ -57,6 +104,8 @@ class PrivateMediaStore(context: Context) {
 /** Pure policy so URI/file-name boundaries are unit-testable without a device. */
 internal object PrivateMediaImportPolicy {
   private val unsafePathCharacters = Regex("[\\\\/\\u0000-\\u001F\\u007F]")
+  const val MAX_IMPORT_BYTES = 25L * 1024L * 1024L
+  private const val BUFFER_BYTES = 64 * 1024
 
   /**
    * The WebView can ask to copy only a system content URI. In particular, a
@@ -71,5 +120,49 @@ internal object PrivateMediaImportPolicy {
       .trim()
       .take(120)
     return normalized.ifBlank { "media" }
+  }
+
+  /**
+   * Streams an externally selected item into a same-directory temporary file.
+   * The final path becomes visible only after the complete bounded write has
+   * been flushed and atomically renamed into place.
+   */
+  fun copyBounded(
+    input: InputStream,
+    temporary: File,
+    destination: File,
+    maxBytes: Long,
+  ): Long {
+    require(maxBytes >= 0L) { "The private media storage limit is invalid." }
+    val temporaryParent = temporary.parentFile?.canonicalFile
+      ?: throw IllegalArgumentException("The private media temporary path is invalid.")
+    val destinationParent = destination.parentFile?.canonicalFile
+      ?: throw IllegalArgumentException("The private media destination path is invalid.")
+    require(temporaryParent == destinationParent) { "Private media finalization must stay in one directory." }
+    require(!temporary.exists()) { "The private media temporary path already exists." }
+    require(!destination.exists()) { "The private media destination already exists." }
+
+    var written = 0L
+    var published = false
+    try {
+      FileOutputStream(temporary).use { output ->
+        val buffer = ByteArray(BUFFER_BYTES)
+        while (true) {
+          if (Thread.currentThread().isInterrupted) throw InterruptedException("Private media import was cancelled.")
+          val count = input.read(buffer)
+          if (count < 0) break
+          if (count == 0) continue
+          written += count
+          if (written > maxBytes) throw IllegalStateException("The selected media exceeds the private storage limit.")
+          output.write(buffer, 0, count)
+        }
+        output.fd.sync()
+      }
+      if (!temporary.renameTo(destination)) throw IllegalStateException("Could not finalize the private media import.")
+      published = true
+      return written
+    } finally {
+      if (!published && temporary.exists()) temporary.delete()
+    }
   }
 }

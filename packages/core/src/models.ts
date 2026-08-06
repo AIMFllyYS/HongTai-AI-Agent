@@ -4,7 +4,7 @@ export type ContentType = "video" | "image_text" | "unknown";
 export type SpeechStatus = "transcribed" | "no_speech" | "failed";
 
 export type ErrorCode =
-  | "INPUT_EMPTY" | "INPUT_NO_SUPPORTED_URL" | "INPUT_URL_INVALID" | "INPUT_PLATFORM_UNSUPPORTED"
+  | "INPUT_EMPTY" | "INPUT_TOO_LONG" | "INPUT_NO_SUPPORTED_URL" | "INPUT_URL_INVALID" | "INPUT_PLATFORM_UNSUPPORTED"
   | "LINK_NETWORK_FAILED" | "LINK_TIMEOUT" | "LINK_REDIRECT_LIMIT" | "LINK_REDIRECT_INVALID" | "LINK_HTTP_ERROR" | "LINK_EXPIRED"
   | "CONTENT_NOT_FOUND" | "CONTENT_REMOVED" | "CONTENT_PRIVATE_OR_LOGIN_REQUIRED" | "CONTENT_PARSE_FAILED" | "CONTENT_SCHEMA_CHANGED" | "CONTENT_TYPE_UNSUPPORTED"
   | "PLATFORM_API_RATE_LIMITED" | "PLATFORM_API_UNAVAILABLE" | "PLATFORM_API_RESPONSE_INVALID" | "PLATFORM_RISK_CONTROLLED"
@@ -107,6 +107,12 @@ export interface ProgressEvent {
 
 export interface IngestRequest {
   readonly input: string;
+  /**
+   * Optional pre-created local task ID. The application runtime uses this to
+   * preserve retry lineage and immutable task history while the CLI may still
+   * let the pipeline generate its own ID.
+   */
+  readonly taskId?: string;
   readonly outputDirectory?: string;
   readonly maxDurationSeconds?: number;
 }

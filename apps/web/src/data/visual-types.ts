@@ -252,10 +252,8 @@ export interface VitalityObservation {
 export interface VitalityResultViewModel {
   readonly source: VisualSource;
   readonly title: string;
-  readonly scoreTitle: string;
-  readonly scoreDescription: string;
-  readonly score: number;
-  readonly scoreMax: number;
+  readonly overviewTitle: string;
+  readonly overviewDescription: string;
   readonly faceMedia: VisualMedia;
   readonly tongueMedia: VisualMedia;
   readonly faceTitle: string;

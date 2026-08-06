@@ -48,7 +48,7 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
       setSnapshot({ profile, aiConnection });
     } catch (error) {
       setIssue(issueFromAppError(error, {
-        code: "DATABASE_OPEN_FAILED",
+        code: "APP_RUNTIME_UNAVAILABLE",
         message: "设置资料暂时无法读取",
         action: "none",
       }));
@@ -62,7 +62,7 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
   if (!snapshot && !issue) {
     return (
       <AppShell activeNav="settings" navigate={navigate} title="设置">
-        <LoadingState description="正在读取本机加密档案与 AI 设置" title="加载设置" />
+        <LoadingState description="正在读取本机档案与 AI 设置" title="加载设置" />
       </AppShell>
     );
   }
@@ -75,7 +75,7 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
   return (
     <AppShell activeNav="settings" navigate={navigate} title="设置">
       <div className="page-stack page-settings settings-summary">
-        {issue ? <IssueNotice issue={issue} onAction={() => void load()} /> : null}
+        {issue ? <IssueNotice issue={issue} /> : null}
 
         <GlassCard className="settings-profile-overview" onClick={() => navigate(profileSettingsPath())}>
           <Avatar profile={profile} />
@@ -111,7 +111,7 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
 
         <GlassCard className="settings-security-note" tone="soft">
           <Icon name="key" size={20} />
-          <p>本地档案与公开 AI 配置使用加密数据库保存；API Key 仅可写入 Android Keystore，不会回传到页面。</p>
+          <p>本地档案与公开 AI 配置保存在本机应用数据中；API Key 仅写入 Android Keystore，不会回传到页面。</p>
         </GlassCard>
 
         <Button onClick={() => void load()} variant="quiet"><Icon name="sync" size={17} />重新读取</Button>

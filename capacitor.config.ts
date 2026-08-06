@@ -12,9 +12,7 @@ const config: CapacitorConfig = {
     androidScheme: "https",
   },
   android: {
-    // The SQLCipher community module is linked as a native-only Gradle
-    // dependency. Do not let Capacitor inspect package dependencies and expose
-    // its broad `CapacitorSQLite` bridge to the WebView.
+    // Native plugins are explicitly registered from MainActivity.
     includePlugins: [],
   },
 };

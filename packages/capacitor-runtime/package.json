@@ -11,6 +11,8 @@
     "test": "tsx --test src/*.test.ts"
   },
   "dependencies": {
-    "@hongtai/core": "workspace:*"
+    "@hongtai/ai": "workspace:*",
+    "@hongtai/core": "workspace:*",
+    "@hongtai/platforms": "workspace:*"
   }
 }

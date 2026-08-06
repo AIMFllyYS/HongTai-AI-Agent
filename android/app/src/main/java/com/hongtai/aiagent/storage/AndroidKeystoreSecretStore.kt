@@ -6,7 +6,6 @@ import android.security.keystore.KeyProperties
 import android.util.Base64
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
-import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -46,38 +45,6 @@ class AndroidKeystoreSecretStore(context: Context) {
     }
   }
 
-  /**
-   * Supplies a SQLCipher passphrase only to native storage code. When a
-   * database already exists, a missing protected passphrase is terminal: we do
-   * not generate a replacement key, clear the DB, or create an empty database.
-   */
-  internal fun <T> withSqlCipherPassphrase(
-    existingDatabase: Boolean,
-    block: (CharArray) -> T,
-  ): T {
-    val plaintext = when (
-      SqlCipherPassphrasePolicy.actionFor(
-        existingDatabase = existingDatabase,
-        protectedPassphraseExists = preferences.contains(storageKey(SLOT_SQLCIPHER_DATABASE)),
-      )
-    ) {
-      SqlCipherPassphraseAction.USE_EXISTING -> decrypt(SLOT_SQLCIPHER_DATABASE)
-      SqlCipherPassphraseAction.CREATE -> generateSqlCipherPassphrase().also {
-        write(SLOT_SQLCIPHER_DATABASE, it)
-      }
-      SqlCipherPassphraseAction.FAIL_KEY_MISSING -> throw LocalStorageException(
-        LocalStorageErrorCode.KEY_MISSING_FOR_EXISTING_DATABASE,
-        "The Android Keystore key for the existing encrypted database is unavailable.",
-      )
-    }.toCharArray()
-
-    return try {
-      block(plaintext)
-    } finally {
-      plaintext.fill('\u0000')
-    }
-  }
-
   private fun write(slot: String, value: String) {
     val cipher = Cipher.getInstance(TRANSFORMATION)
     cipher.init(Cipher.ENCRYPT_MODE, keyFor(slot))
@@ -109,12 +76,6 @@ class AndroidKeystoreSecretStore(context: Context) {
     }
   }
 
-  private fun generateSqlCipherPassphrase(): String {
-    val bytes = ByteArray(SQLCIPHER_PASSPHRASE_BYTES)
-    SecureRandom().nextBytes(bytes)
-    return Base64.encodeToString(bytes, Base64.NO_WRAP or Base64.URL_SAFE)
-  }
-
   private fun keyFor(slot: String): SecretKey {
     val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
     val alias = "$KEY_ALIAS_PREFIX$slot"
@@ -141,12 +102,10 @@ class AndroidKeystoreSecretStore(context: Context) {
   private companion object {
     const val PREFERENCES_NAME = "hongtai.secure.settings.v1"
     const val SLOT_ACTIVE_AI_CONNECTION = "active-ai-connection"
-    const val SLOT_SQLCIPHER_DATABASE = "sqlcipher-database"
     const val KEY_ALIAS_PREFIX = "com.hongtai.aiagent.secret."
     const val ANDROID_KEYSTORE = "AndroidKeyStore"
     const val TRANSFORMATION = "AES/GCM/NoPadding"
     const val GCM_TAG_LENGTH_BITS = 128
-    const val SQLCIPHER_PASSPHRASE_BYTES = 32
     const val SEPARATOR = "."
   }
 }

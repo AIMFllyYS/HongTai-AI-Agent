@@ -1,49 +1,58 @@
+import type { FeatureCapability } from "@hongtai/core";
+
 import type { CreateViewModel } from "../data/visual-types";
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
+import { FeatureUnavailablePanel } from "../components/FeatureUnavailablePanel";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
-import { Chip } from "../components/ContentBlocks";
 import { SectionHeading } from "../components/Headings";
-import { MediaFrame } from "../components/MediaFrame";
+
+const plannedSteps = [
+  { icon: "content_paste", label: "内容草案", detail: "输入与脚本结构" },
+  { icon: "video_library", label: "素材编排", detail: "媒体选择与镜头组织" },
+  { icon: "movie_edit", label: "成片导出", detail: "本地渲染与保存" },
+] as const;
+
+type CreateShellViewModel = Pick<CreateViewModel, "title">;
 
 export interface CreatePageProps {
-  readonly viewModel: CreateViewModel;
+  /** The fixture may still supply the shell title, never creation state. */
+  readonly viewModel?: CreateShellViewModel;
   readonly navigate: (path: string) => void;
+  readonly capability?: FeatureCapability;
 }
 
-export function CreatePage({ viewModel, navigate }: CreatePageProps) {
+export function CreatePage({ viewModel, navigate, capability = "planned" }: CreatePageProps) {
   return (
-    <AppShell activeNav="create" leadingAction={<span className="page-header-icon"><Icon name="movie_edit" size={25} /></span>} navigate={navigate} title={viewModel.title}>
-      <div className="page-stack page-create">
-        <GlassCard className="prompt-card">
-          <label className="field-label" htmlFor="create-prompt">{viewModel.promptLabel}</label>
-          <textarea id="create-prompt" placeholder={viewModel.promptPlaceholder} rows={4} />
-          <div className="prompt-card__footer"><span><Icon name="auto_awesome" size={16} />AI 会自动匹配素材</span><Button onClick={() => navigate("/publish")}><Icon name="rocket" size={17} />{viewModel.actionLabel}</Button></div>
+    <AppShell activeNav="create" leadingAction={<span className="page-header-icon"><Icon name="movie_edit" size={25} /></span>} navigate={navigate} title={viewModel?.title ?? "制作"}>
+      <div className="page-stack page-create" data-feature-capability={capability}>
+        <FeatureUnavailablePanel capability={capability} feature="create" />
+
+        <GlassCard className="planned-workbench planned-workbench--create">
+          <div className="planned-workbench__heading">
+            <span className="planned-workbench__kicker"><Icon name="movie_edit" size={16} />制作工作台</span>
+            <span className="planned-workbench__state">能力预留</span>
+          </div>
+          <label className="field-label" htmlFor="create-prompt">制作需求</label>
+          <textarea disabled id="create-prompt" placeholder="制作能力接入后，可在这里描述视频需求" rows={4} />
+          <div className="planned-workbench__footer">
+            <span><Icon name="info" size={16} />素材、模板与成片生成将在接入后启用</span>
+            <Button disabled variant="secondary"><Icon name="rocket" size={17} />尚未接入</Button>
+          </div>
         </GlassCard>
 
         <section className="page-section">
-          <SectionHeading title={viewModel.profileTitle} />
-          <GlassCard className="profile-tags-card" tone="soft"><Icon name="business_center" size={22} /><div className="chip-row">{viewModel.profileTags.map((tag) => <Chip key={tag} selected>{tag}</Chip>)}</div><Icon name="chevron_right" size={19} /></GlassCard>
-        </section>
-
-        <section className="page-section">
-          <SectionHeading action={<button className="text-action" type="button">{viewModel.templateMoreLabel}</button>} title={viewModel.templateTitle} />
-          <div className="template-scroller">
-            {viewModel.templates.map((template) => (
-              <button className={`template-tile ${template.selected ? "is-selected" : ""}`.trim()} key={template.id} onClick={() => undefined} type="button">
-                <MediaFrame media={template.media} />
-                {template.selected ? <span className="template-tile__selected"><Icon name="check_circle" size={18} /></span> : null}
-                <span className="template-tile__body"><strong>{template.title}</strong><small>{template.description}</small></span>
-              </button>
+          <SectionHeading title="准备中的工作流" />
+          <ol className="planned-flow">
+            {plannedSteps.map((step) => (
+              <li key={step.label}>
+                <span className="planned-flow__icon"><Icon name={step.icon} size={19} /></span>
+                <span><strong>{step.label}</strong><small>{step.detail}</small></span>
+                <em>预留</em>
+              </li>
             ))}
-          </div>
-        </section>
-
-        <section className="page-section">
-          <SectionHeading title={viewModel.materialTitle} />
-          <div className="chip-row">{viewModel.materialFilters.map((filter, index) => <Chip key={filter} selected={index === 0}>{filter}</Chip>)}</div>
-          <GlassCard className="generation-card" tone="soft"><span className="generation-card__orb"><Icon name="sync" size={25} /></span><div><strong>{viewModel.generationTitle}</strong><p>{viewModel.generationDescription}</p><small>{viewModel.generationEta}</small></div></GlassCard>
+          </ol>
         </section>
       </div>
     </AppShell>

@@ -14,13 +14,17 @@ import { AssetsPage } from "./pages/AssetsPage";
 import { CreatePage } from "./pages/CreatePage";
 import { DetailPage } from "./pages/DetailPage";
 import { HomePage } from "./pages/HomePage";
+import { ObservationReportPage } from "./pages/ObservationReportPage";
+import { ObservationStartPage } from "./pages/ObservationStartPage";
 import { ProcessingPage } from "./pages/ProcessingPage";
+import { TaskAnalysisPage } from "./pages/TaskAnalysisPage";
+import { TaskDetailPage } from "./pages/TaskDetailPage";
+import { TaskHomePage } from "./pages/TaskHomePage";
+import { TaskProcessingPage } from "./pages/TaskProcessingPage";
 import { PublishPage } from "./pages/PublishPage";
 import { AiSettingsPage } from "./pages/AiSettingsPage";
 import { ProfileSettingsPage } from "./pages/ProfileSettingsPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import { VitalityResultPage } from "./pages/VitalityResultPage";
-import { VitalityScanPage } from "./pages/VitalityScanPage";
 
 export interface AppProps {
   /** Real application runtime supplied only by the application composition root. */
@@ -46,7 +50,7 @@ export function App({ runtime, visualData }: AppProps = {}) {
     if (renderedRoute.key === "settings") {
       return runtime
         ? <SettingsPage navigate={navigate} runtime={runtime} />
-        : <RuntimePendingPage description="请在已初始化本地加密存储的 APK 中打开设置。" navigate={navigate} title="本地运行时未初始化" />;
+        : <RuntimePendingPage description="请在已启动本地应用运行时的 APK 中打开设置。" navigate={navigate} title="本地运行时未初始化" />;
     }
     if (renderedRoute.key === "settings-profile") {
       return runtime
@@ -57,6 +61,43 @@ export function App({ runtime, visualData }: AppProps = {}) {
       return runtime
         ? <AiSettingsPage navigate={navigate} runtime={runtime} />
         : <RuntimePendingPage description="AI 设置需要通过应用运行时读取。" navigate={navigate} title="本地运行时未初始化" />;
+    }
+    if (runtime && renderedRoute.key === "home") return <TaskHomePage navigate={navigate} runtime={runtime} />;
+    if (runtime && renderedRoute.key === "task-processing") {
+      const taskId = renderedRoute.params.taskId;
+      return taskId
+        ? <TaskProcessingPage key={taskId} navigate={navigate} runtime={runtime} taskId={taskId} />
+        : <RuntimePendingPage description="任务路由缺少有效标识。" navigate={navigate} title="无法读取任务" />;
+    }
+    if (runtime && renderedRoute.key === "task-detail") {
+      const taskId = renderedRoute.params.taskId;
+      return taskId
+        ? <TaskDetailPage key={taskId} navigate={navigate} runtime={runtime} taskId={taskId} />
+        : <RuntimePendingPage description="任务路由缺少有效标识。" navigate={navigate} title="无法读取任务" />;
+    }
+    if (runtime && renderedRoute.key === "task-analysis") {
+      const taskId = renderedRoute.params.taskId;
+      return taskId
+        ? <TaskAnalysisPage key={taskId} navigate={navigate} runtime={runtime} taskId={taskId} />
+        : <RuntimePendingPage description="任务路由缺少有效标识。" navigate={navigate} title="无法读取任务" />;
+    }
+    if (runtime && renderedRoute.key === "observation-new") {
+      return <ObservationStartPage navigate={navigate} runtime={runtime} />;
+    }
+    if (runtime && renderedRoute.key === "observation-report") {
+      const sessionId = renderedRoute.params.sessionId;
+      return sessionId
+        ? <ObservationReportPage key={sessionId} navigate={navigate} runtime={runtime} sessionId={sessionId} />
+        : <RuntimePendingPage description="观察路由缺少有效标识。" navigate={navigate} title="无法读取观察会话" />;
+    }
+    if (runtime && renderedRoute.key === "create") {
+      return <CreatePage capability={runtime.features.create} navigate={navigate} />;
+    }
+    if (runtime && renderedRoute.key === "assets") {
+      return <AssetsPage capability={runtime.features.assets} navigate={navigate} />;
+    }
+    if (runtime && renderedRoute.key === "publish") {
+      return <PublishPage capability={runtime.features.publish} navigate={navigate} />;
     }
 
     // Visual fixtures remain available only to explicit design/test callers.
@@ -69,8 +110,6 @@ export function App({ runtime, visualData }: AppProps = {}) {
       if (renderedRoute.key === "create") return <CreatePage navigate={navigate} viewModel={visualData.getCreate()} />;
       if (renderedRoute.key === "publish") return <PublishPage navigate={navigate} viewModel={visualData.getPublish()} />;
       if (renderedRoute.key === "assets") return <AssetsPage navigate={navigate} viewModel={visualData.getAssets()} />;
-      if (renderedRoute.key === "vitality-scan") return <VitalityScanPage navigate={navigate} viewModel={visualData.getVitalityScan()} />;
-      if (renderedRoute.key === "vitality-result") return <VitalityResultPage navigate={navigate} viewModel={visualData.getVitalityResult()} />;
     }
 
     const unsupported = renderedRoute.key === "not-found"

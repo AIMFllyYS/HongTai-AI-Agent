@@ -55,9 +55,19 @@ function draftFromConfig(config: PublicAiConnectionConfig | undefined): AiDraft 
   };
 }
 
+/** Probes always use the encrypted saved connection, never the text currently being edited. */
+function hasUnsavedProbeInputs(draft: AiDraft, connection: PublicAiConnectionConfig | undefined, apiKey: string): boolean {
+  if (!connection || apiKey.trim()) return true;
+  return JSON.stringify(draft) !== JSON.stringify(draftFromConfig(connection));
+}
+
 function probeLabel(result: AiCapabilityProbeResult | undefined): string {
   if (!result) return "尚未测试";
   return result.status === "succeeded" ? "测试通过" : "测试未通过";
+}
+
+function focusAiConnectionForm(): void {
+  if (typeof document !== "undefined") document.getElementById("ai-base-url")?.focus();
 }
 
 export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
@@ -70,6 +80,8 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
   const [probing, setProbing] = useState<AiCapability>();
   const [issue, setIssue] = useState<TaskIssue>();
   const [savedMessage, setSavedMessage] = useState<string>();
+  const connectionBusy = saving || probing !== undefined;
+  const probeBlocked = connectionBusy || hasUnsavedProbeInputs(draft, connection, apiKey);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,7 +95,7 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
       setDraft(draftFromConfig(config));
       setProbes(results);
     } catch (error) {
-      setIssue(issueFromAppError(error, { code: "DATABASE_OPEN_FAILED", message: "AI 设置暂时无法读取", action: "none" }));
+      setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "AI 设置暂时无法读取", action: "none" }));
     } finally {
       setLoading(false);
     }
@@ -95,6 +107,7 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (connectionBusy) return;
     setSaving(true);
     setIssue(undefined);
     setSavedMessage(undefined);
@@ -125,6 +138,7 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
   };
 
   const probe = async (capability: AiCapability) => {
+    if (probeBlocked) return;
     setProbing(capability);
     setIssue(undefined);
     try {
@@ -144,7 +158,7 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
   return (
     <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="AI 连接">
       <form className="page-stack page-settings settings-form" onSubmit={save}>
-        {issue ? <IssueNotice issue={issue} onAction={issue.action === "configure_ai" ? () => undefined : undefined} /> : null}
+        {issue ? <IssueNotice actions={{ configureAi: focusAiConnectionForm }} issue={issue} /> : null}
 
         <GlassCard className="settings-security-note" tone="soft">
           <Icon name="key" size={20} />
@@ -169,10 +183,11 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
         </GlassCard>
 
         {savedMessage ? <p className="settings-save-note"><Icon name="check_circle" size={16} />{savedMessage}</p> : null}
-        <Button disabled={saving} size="lg" type="submit"><Icon name="check_circle" size={18} />{saving ? "正在保存" : "保存 AI 设置"}</Button>
+        <Button disabled={connectionBusy} size="lg" type="submit"><Icon name="check_circle" size={18} />{saving ? "正在保存" : "保存 AI 设置"}</Button>
 
         <section className="settings-probes" aria-labelledby="ai-probe-title">
-          <div className="settings-probes__heading"><div><span className="settings-overline">独立能力探测</span><h2 id="ai-probe-title">文本、视觉与 ASR 分别测试</h2></div><Button onClick={() => void load()} size="md" variant="quiet"><Icon name="sync" size={16} />刷新</Button></div>
+          <div className="settings-probes__heading"><div><span className="settings-overline">独立能力探测</span><h2 id="ai-probe-title">文本、视觉与 ASR 分别测试</h2></div><Button disabled={connectionBusy} onClick={() => void load()} size="md" variant="quiet"><Icon name="sync" size={16} />刷新</Button></div>
+          {probeBlocked && !connectionBusy ? <p className="field-hint"><Icon name="info" size={15} />请先保存当前 AI 设置后再测试，测试只会使用已写入本机安全存储的连接。</p> : null}
           <div className="probe-list">
             {(Object.keys(capabilityCopy) as readonly AiCapability[]).map((capability) => {
               const result = probes.find((item) => item.capability === capability);
@@ -181,7 +196,7 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
                 <GlassCard className="probe-row" key={capability}>
                   <span className={`probe-row__status ${result ? `is-${result.status}` : ""}`.trim()}><Icon name={result?.status === "succeeded" ? "check_circle" : "pending"} size={19} /></span>
                   <div><strong>{copy.title}</strong><small>{result?.model ?? copy.detail}</small>{result?.issue ? <em>{result.issue.userMessage}</em> : null}</div>
-                  <div className="probe-row__action"><span>{probeLabel(result)}</span><Button disabled={probing === capability} onClick={() => void probe(capability)} size="md" variant="secondary">{probing === capability ? "测试中" : "测试"}</Button></div>
+                  <div className="probe-row__action"><span>{probeLabel(result)}</span><Button disabled={probeBlocked} onClick={() => void probe(capability)} size="md" variant="secondary">{probing === capability ? "测试中" : "测试"}</Button></div>
                 </GlassCard>
               );
             })}

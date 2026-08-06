@@ -31,6 +31,15 @@ function createTaskId(): string {
   return `${timestamp}-${suffix}`;
 }
 
+function taskIdFor(request: IngestRequest): string {
+  if (request.taskId === undefined) return createTaskId();
+  const taskId = request.taskId.trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(taskId)) {
+    throw new TaskError({ code: "INPUT_URL_INVALID", message: "本地任务标识格式无效", action: "edit_input" });
+  }
+  return taskId;
+}
+
 function mediaSourceForStorage(source: MediaSource): Omit<MediaSource, "headers"> {
   return {
     kind: source.kind,
@@ -48,6 +57,9 @@ function mediaSourceForStorage(source: MediaSource): Omit<MediaSource, "headers"
 function platformContentForStorage(content: PlatformContent): PlatformContent {
   return {
     ...content,
+    // Raw platform payloads are debugging input, not presentation metadata.
+    // Keeping this undefined also makes JSON serialization omit the field.
+    raw: undefined,
     sourceUrl: safeUrlForDisplay(content.sourceUrl),
     canonicalUrl: content.canonicalUrl ? safeUrlForDisplay(content.canonicalUrl) : undefined,
     coverUrl: content.coverUrl ? safeUrlForDisplay(content.coverUrl) : undefined,
@@ -80,7 +92,7 @@ export class IngestPipeline {
   }
 
   async run(request: IngestRequest): Promise<IngestResult> {
-    const taskId = createTaskId();
+    const taskId = taskIdFor(request);
     const createdAt = new Date().toISOString();
     let progressSequence = 0;
     const issues: import("./models").TaskIssue[] = [];

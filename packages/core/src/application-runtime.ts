@@ -207,6 +207,16 @@ export interface CancellableTask {
   cancel(): Promise<void>;
 }
 
+/**
+ * Read-only result of Android's one-time startup recovery. It never re-runs
+ * recovery from the UI; callers use the IDs only to refresh persisted task
+ * projections and offer a manual retry.
+ */
+export interface TaskRecoveryProjection {
+  readonly taskIds: readonly string[];
+  readonly status: Extract<TaskStatus, "interrupted">;
+}
+
 export interface TaskService {
   inspectInput(input: string): InputInspection;
   create(input: TaskCreateRequest): Promise<AppTaskRecord>;
@@ -216,6 +226,8 @@ export interface TaskService {
   list(options?: TaskListOptions): Promise<readonly AppTaskRecord[]>;
   listEvents(taskId: string, options?: { readonly afterSequence?: number }): Promise<readonly TaskEventRecord[]>;
   subscribe(taskId: string, listener: TaskEventListener): Unsubscribe;
+  /** Reads the native one-time startup recovery projection without replaying it. */
+  getStartupRecovery(): Promise<TaskRecoveryProjection>;
   cancel(taskId: string): Promise<AppTaskRecord>;
   /** Creates a new immutable task with a distinct ID and `retryOfTaskId=taskId`. */
   retry(taskId: string): Promise<AppTaskRecord>;
@@ -275,6 +287,8 @@ export type DiagnosisStreamEvent =
 export interface DiagnosisService {
   /** Uses the active platform runtime to pick and copy one image privately. */
   pickImage(): Promise<MediaReference>;
+  /** Uses the platform camera, then copies the completed image into app-private storage. */
+  captureImage(): Promise<MediaReference>;
   createSession(input: { readonly mode: ObservationMode; readonly image: MediaReference }): Promise<DiagnosisSessionRecord>;
   /** Starts the initial report for a pending session; it never fabricates a completed report. */
   runReport(sessionId: string): Promise<DiagnosisReportRecord>;
