@@ -7,5 +7,6 @@
 @import "./pages/analysis.css" layer(pages);
 @import "./pages/creation.css" layer(pages);
 @import "./pages/library.css" layer(pages);
+@import "./pages/settings.css" layer(pages);
 @import "./pages/vitality.css" layer(themes);
 @import "./responsive.css" layer(responsive);

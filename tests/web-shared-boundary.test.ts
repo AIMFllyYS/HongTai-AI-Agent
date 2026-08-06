@@ -55,11 +55,13 @@ test("page blocks and visual fixtures are split by responsibility", () => {
   }
 });
 
-test("App accepts an injectable visual data adapter with a static default", () => {
+test("App accepts an explicit visual fixture while the production entry uses AppRuntime", () => {
   const source = read("App.tsx");
+  const main = read("main.tsx");
 
   assert.match(source, /interface AppProps/);
   assert.match(source, /visualData\?:\s*VisualDataAdapter/);
-  assert.match(source, /createStaticVisualDataAdapter/);
-  assert.match(source, /injectedVisualData\s*\?\?/);
+  assert.match(source, /runtime\?:\s*AppRuntime/);
+  assert.doesNotMatch(source, /injectedVisualData\s*\?\?\s*createStaticVisualDataAdapter/);
+  assert.match(main, /createCapacitorAppRuntime/);
 });
