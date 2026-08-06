@@ -4,6 +4,8 @@ import type { AiMessage, AiRunRecord, DiagnosisImageInput, DiagnosisReportV1, Di
 import { TaskError } from "@hongtai/core";
 import { sanitizeAiArtifactText } from "./sanitize-ai-artifact";
 
+const SOURCE_IMAGE_PATH = join("source", "normalized-image.jpg");
+
 async function readJson<T>(path: string): Promise<T | undefined> {
   try {
     return JSON.parse(await readFile(path, "utf8")) as T;
@@ -11,6 +13,36 @@ async function readJson<T>(path: string): Promise<T | undefined> {
     if ((error as { code?: string }).code === "ENOENT") return undefined;
     throw error;
   }
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Old Node sessions stored `imagePath`; retain their CLI readability while
+ * deliberately projecting only MIME metadata to the shared AI contract.
+ */
+function sessionProjection(value: unknown): DiagnosisSession | undefined {
+  if (!isRecord(value) || typeof value.id !== "string" || !value.id ||
+      typeof value.reportId !== "string" || !value.reportId ||
+      (value.mode !== "tongue" && value.mode !== "face") ||
+      typeof value.createdAt !== "string" || !value.createdAt) {
+    return undefined;
+  }
+  const image = isRecord(value.image) && typeof value.image.mimeType === "string" && value.image.mimeType
+    ? { mimeType: value.image.mimeType }
+    : typeof value.imagePath === "string" && value.imagePath
+      ? { mimeType: "image/jpeg" }
+      : undefined;
+  if (!image) return undefined;
+  return {
+    id: value.id,
+    reportId: value.reportId,
+    mode: value.mode,
+    createdAt: value.createdAt,
+    image,
+  };
 }
 
 export class FileDiagnosisRepository implements DiagnosisRepository {
@@ -28,17 +60,33 @@ export class FileDiagnosisRepository implements DiagnosisRepository {
     const root = this.#sessionRoot(id);
     await mkdir(join(root, "source"), { recursive: true });
     await mkdir(join(root, "runs"), { recursive: true });
-    const imagePath = join("source", "normalized-image.jpg");
-    const session: DiagnosisSession = { id, reportId: crypto.randomUUID(), mode, createdAt: new Date().toISOString(), imagePath };
-    await writeFile(join(root, imagePath), image.data);
+    const session: DiagnosisSession = {
+      id,
+      reportId: crypto.randomUUID(),
+      mode,
+      createdAt: new Date().toISOString(),
+      image: { mimeType: image.mimeType },
+    };
+    await writeFile(join(root, SOURCE_IMAGE_PATH), image.data);
     await this.#writeJson(join(root, "session.json"), session);
     await writeFile(join(root, "messages.jsonl"), "", "utf8");
     await writeFile(join(root, "task.log"), "", "utf8");
     return session;
   }
 
-  getSession(sessionId: string): Promise<DiagnosisSession | undefined> {
-    return readJson(join(this.#sessionRoot(sessionId), "session.json"));
+  async getSession(sessionId: string): Promise<DiagnosisSession | undefined> {
+    return sessionProjection(await readJson<unknown>(join(this.#sessionRoot(sessionId), "session.json")));
+  }
+
+  async loadSessionImage(sessionId: string): Promise<DiagnosisImageInput | undefined> {
+    const session = await this.getSession(sessionId);
+    if (!session) return undefined;
+    try {
+      return { mimeType: session.image.mimeType, data: await readFile(join(this.#sessionRoot(sessionId), SOURCE_IMAGE_PATH)) };
+    } catch (error) {
+      if ((error as { code?: string }).code === "ENOENT") return undefined;
+      throw error;
+    }
   }
 
   async saveReport(sessionId: string, report: DiagnosisReportV1): Promise<void> {

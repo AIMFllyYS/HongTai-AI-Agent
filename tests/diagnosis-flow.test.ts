@@ -6,6 +6,7 @@ import {
   type AiGenerateRequest,
   type AiGenerateResult,
   type AiProvider,
+  type DiagnosisImageInput,
   type DiagnosisRepository,
   type DiagnosisReportV1,
   type DiagnosisSession,
@@ -29,6 +30,7 @@ const validReport: DiagnosisReportV1 = {
 class MemoryRepository implements DiagnosisRepository {
   session: DiagnosisSession | undefined;
   image: { mimeType: string; data?: Uint8Array; uri?: string } | undefined;
+  sessionImage: DiagnosisImageInput | undefined;
   report: DiagnosisReportV1 | undefined;
   messages: import("../packages/ai/src/index").AiMessage[] = [];
   summary = "";
@@ -37,10 +39,14 @@ class MemoryRepository implements DiagnosisRepository {
   async createSession(mode: "tongue" | "face", image: { mimeType: string; data?: Uint8Array; uri?: string }): Promise<DiagnosisSession> {
     assert.ok((image.data?.length ?? 0) > 0 || Boolean(image.uri));
     this.image = image;
-    this.session = { id: "session-1", reportId: "report-1", mode, createdAt: "2026-08-05T00:00:00.000Z", imagePath: "source/normalized-image.jpg" };
+    this.sessionImage = image.data
+      ? { mimeType: image.mimeType, data: image.data }
+      : { mimeType: image.mimeType, uri: image.uri! };
+    this.session = { id: "session-1", reportId: "report-1", mode, createdAt: "2026-08-05T00:00:00.000Z", image: { mimeType: image.mimeType } };
     return this.session;
   }
   async getSession(): Promise<DiagnosisSession | undefined> { return this.session; }
+  async loadSessionImage(): Promise<DiagnosisImageInput | undefined> { return this.sessionImage; }
   async saveReport(_sessionId: string, report: DiagnosisReportV1): Promise<void> { this.report = report; }
   async getReport(): Promise<DiagnosisReportV1 | undefined> { return this.report; }
   async listMessages(): Promise<readonly import("../packages/ai/src/index").AiMessage[]> { return this.messages; }
@@ -67,6 +73,57 @@ test("诊察流程保留原生图片 URI，不将其转成 React Base64", async 
     { type: "image_uri", uri: "content://media/external/images/72", mimeType: "image/jpeg" },
   ]);
   assert.doesNotMatch(JSON.stringify(content), /base64/);
+});
+
+test("已创建会话可复用私有图片运行正式报告，且会话只暴露安全 MIME 元数据", async () => {
+  const repository = new MemoryRepository();
+  repository.session = {
+    id: "session-existing",
+    reportId: "report-existing",
+    mode: "tongue",
+    createdAt: "2026-08-05T00:00:00.000Z",
+    image: { mimeType: "image/png" },
+  };
+  repository.sessionImage = { mimeType: "image/png", uri: "content://app.private/diagnosis/session-existing/image" };
+  const provider = new SequenceProvider(["不是JSON", JSON.stringify(validReport)]);
+  const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
+
+  const result = await flow.runReport("session-existing");
+
+  assert.equal(result.session.id, "session-existing");
+  assert.equal(result.report.schemaVersion, "diagnosis-report.v1");
+  assert.deepEqual(result.session.image, { mimeType: "image/png" });
+  assert.equal("imagePath" in result.session, false);
+  assert.doesNotMatch(JSON.stringify(result.session), /content:\/\/|normalized-image/);
+  assert.equal(provider.calls.length, 2, "structured output repair must still run at most once");
+  assert.deepEqual(provider.calls[0]?.messages[1]?.content, [
+    { type: "text", text: "请分析这张图片并返回完整报告。" },
+    { type: "image_uri", uri: "content://app.private/diagnosis/session-existing/image", mimeType: "image/png" },
+  ]);
+  assert.equal(repository.runs[0]?.kind, "diagnosis");
+  assert.equal(repository.runs[0]?.reasoning, "调试思考\n调试思考");
+  assert.doesNotMatch(JSON.stringify(repository.report), /调试思考/);
+});
+
+test("会话图片 MIME 与私有图片不一致时不调用视觉模型", async () => {
+  const repository = new MemoryRepository();
+  repository.session = {
+    id: "session-mime-mismatch",
+    reportId: "report-mime-mismatch",
+    mode: "tongue",
+    createdAt: "2026-08-05T00:00:00.000Z",
+    image: { mimeType: "image/jpeg" },
+  };
+  repository.sessionImage = { mimeType: "image/png", uri: "content://app.private/diagnosis/session-mime-mismatch/image" };
+  const provider = new SequenceProvider([JSON.stringify(validReport)]);
+  const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
+
+  await assert.rejects(
+    () => flow.runReport("session-mime-mismatch"),
+    (error) => error instanceof TaskError && error.code === "IMAGE_INVALID",
+  );
+  assert.equal(provider.calls.length, 0);
+  assert.equal(repository.runs[0]?.status, "failed");
 });
 
 class SequenceProvider implements AiProvider {
@@ -108,7 +165,7 @@ test("舌象报告在首次JSON无效时只修复一次并保存标准结果", a
 
 test("后续对话保存文本消息信封且不把reasoning写入上下文", async () => {
   const repository = new MemoryRepository();
-  repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", imagePath: "source/normalized-image.jpg" };
+  repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", image: { mimeType: "image/jpeg" } };
   repository.report = validReport;
   const provider = new SequenceProvider(["建议结合规律作息继续观察。"]);
   const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
@@ -120,7 +177,7 @@ test("后续对话保存文本消息信封且不把reasoning写入上下文", as
 
 test("上下文超过窗口80%时摘要较早消息并保留最近六条", async () => {
   const repository = new MemoryRepository();
-  repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", imagePath: "source/normalized-image.jpg" };
+  repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", image: { mimeType: "image/jpeg" } };
   repository.report = validReport;
   repository.messages = Array.from({ length: 10 }, (_, index) => ({
     id: `message-${index}`,
@@ -162,7 +219,7 @@ test("视觉模型无权限时返回稳定的视觉能力错误", async () => {
 
 test("上下文摘要调用失败时返回稳定摘要错误且不追加消息", async () => {
   const repository = new MemoryRepository();
-  repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", imagePath: "source/normalized-image.jpg" };
+  repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", image: { mimeType: "image/jpeg" } };
   repository.report = validReport;
   repository.messages = Array.from({ length: 10 }, (_, index) => ({ id: `m-${index}`, sessionId: "session-1", reportId: "report-1", role: index % 2 ? "assistant" as const : "user" as const, content: "很长的历史".repeat(20), status: "completed" as const, createdAt: "2026-08-05T00:00:00.000Z" }));
   const originalCount = repository.messages.length;
