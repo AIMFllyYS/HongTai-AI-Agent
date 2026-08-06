@@ -126,8 +126,12 @@ test("horizontal navigation renders an adjacent route pane during movement", () 
   assert.match(viewport, /previousPath/);
   assert.match(viewport, /nextPath/);
   assert.match(viewport, /onTransitionEnd/);
+  assert.match(viewport, /routeCommitPath/);
+  assert.match(viewport, /requestAnimationFrame/);
+  assert.match(viewport, /isRouteCommit/);
   assert.match(shell, /route-swipe-viewport/);
   assert.match(shell, /repeat\(3,\s*100%\)/);
+  assert.match(shell, /\.route-swipe-track--route-commit[\s\S]*transition:\s*none/);
   assert.match(shell, /overflow-x:\s*hidden/);
 });
 

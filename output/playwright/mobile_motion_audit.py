@@ -60,6 +60,20 @@ with sync_playwright() as playwright:
         }"""
     )
 
+    page.evaluate(
+        """() => {
+          window.__routeSwipeTransitionEvents = [];
+          const track = document.querySelector('.route-swipe-track');
+          track?.addEventListener('transitionrun', event => {
+            window.__routeSwipeTransitionEvents.push({
+              property: event.propertyName,
+              path: location.pathname,
+              time: performance.now(),
+            });
+          });
+        }"""
+    )
+
     dispatch_pointer(page, ".route-swipe-viewport", "pointerdown", 160, 420)
     dispatch_pointer(page, ".route-swipe-viewport", "pointermove", 220, 420)
     page.wait_for_timeout(50)
@@ -79,6 +93,7 @@ with sync_playwright() as playwright:
     page.wait_for_url(f"{BASE_URL}/assets")
     page.wait_for_timeout(320)
     swipe_route = page.url
+    swipe_transition_events = page.evaluate("() => window.__routeSwipeTransitionEvents")
 
     dispatch_pointer(page, ".route-swipe-viewport", "pointerdown", 290, 420, pointer_type="mouse")
     dispatch_pointer(page, ".route-swipe-viewport", "pointermove", 190, 420, pointer_type="mouse")
@@ -144,6 +159,7 @@ with sync_playwright() as playwright:
     assert len(swipe_mid["visiblePanes"]) == 2
     assert abs(swipe_mid["visiblePanes"][0]["right"] - swipe_mid["visiblePanes"][1]["left"]) <= 1
     assert direct_transition == "instant"
+    assert [event["property"] for event in swipe_transition_events] == ["transform"], swipe_transition_events
     assert nav_snapshot["parentIsBody"] is True
     assert nav_snapshot["position"] == "fixed"
     assert abs(nav_snapshot["bottom"] - nav_snapshot["viewportHeight"]) <= 1

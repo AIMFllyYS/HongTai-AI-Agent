@@ -17,6 +17,7 @@ export interface SwipeRouteViewportProps {
 export function SwipeRouteViewport({ active, currentPath, navigate, renderRoute, children }: SwipeRouteViewportProps) {
   const [pendingSwipe, setPendingSwipe] = useState<SwipeCommit | null>(null);
   const [pendingSourcePath, setPendingSourcePath] = useState<string | null>(null);
+  const [routeCommitPath, setRouteCommitPath] = useState<string | null>(null);
   const hasCommittedPending = useRef(false);
   const commitSwipe = useCallback((commit: SwipeCommit) => {
     hasCommittedPending.current = false;
@@ -27,6 +28,7 @@ export function SwipeRouteViewport({ active, currentPath, navigate, renderRoute,
 
   const pendingPath = pendingSwipe?.path;
   const isPendingRoute = pendingPath === currentPath;
+  const isRouteCommit = isPendingRoute || routeCommitPath === currentPath;
   const isGestureActive = isDragging || isSettling || Boolean(pendingSwipe && !isPendingRoute);
   const swipeDirection = swipeOffset < 0 ? "next" : "previous";
   const previousPath = adjacentPrimaryNavPath(active, "previous");
@@ -36,12 +38,13 @@ export function SwipeRouteViewport({ active, currentPath, navigate, renderRoute,
   const edgeCopy = isGestureActive && !targetPath ? renderRoute(currentPath) : null;
   const previousPane = targetPath === previousPath ? candidate : swipeDirection === "previous" ? edgeCopy : null;
   const nextPane = targetPath === nextPath ? candidate : swipeDirection === "next" ? edgeCopy : null;
-  const effectiveOffset = isPendingRoute ? 0 : swipeOffset;
+  const effectiveOffset = isRouteCommit ? 0 : swipeOffset;
   const trackStyle = { "--swipe-offset": `${effectiveOffset}px` } as CSSProperties;
   const trackClassName = [
     "route-swipe-track",
     isDragging ? "route-swipe-track--dragging" : "",
     isGestureActive && !isDragging ? "route-swipe-track--settling" : "",
+    isRouteCommit ? "route-swipe-track--route-commit" : "",
   ].filter(Boolean).join(" ");
 
   const finishPendingSwipe = useCallback(() => {
@@ -52,13 +55,23 @@ export function SwipeRouteViewport({ active, currentPath, navigate, renderRoute,
 
   useEffect(() => {
     if (pendingSwipe?.path === currentPath) {
+      const committedPath = currentPath;
+      setRouteCommitPath(committedPath);
       setPendingSwipe(null);
       setPendingSourcePath(null);
+      if (typeof window !== "undefined") {
+        window.requestAnimationFrame(() => {
+          setRouteCommitPath((activePath) => activePath === committedPath ? null : activePath);
+        });
+      }
     } else if (pendingSwipe && pendingSourcePath !== currentPath) {
+      setRouteCommitPath(null);
       setPendingSwipe(null);
       setPendingSourcePath(null);
+    } else if (routeCommitPath && routeCommitPath !== currentPath) {
+      setRouteCommitPath(null);
     }
-  }, [currentPath, pendingSourcePath, pendingSwipe]);
+  }, [currentPath, pendingSourcePath, pendingSwipe, routeCommitPath]);
 
   useEffect(() => {
     if (!pendingSwipe || pendingSwipe.path === currentPath || typeof window === "undefined") return;
