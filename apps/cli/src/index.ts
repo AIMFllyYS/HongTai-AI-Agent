@@ -1,6 +1,7 @@
 import process from "node:process";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { ContentAnalysisFlow, DiagnosisFlow, OpenAiCompatibleProvider } from "@hongtai/ai";
+import { ContentAnalysisFlow, DiagnosisFlow } from "@hongtai/ai";
+import { createNodeOpenAiCompatibleProvider } from "@hongtai/ai/node";
 import { IngestPipeline, inspectInput } from "@hongtai/core";
 import {
   FileDiagnosisRepository,
@@ -149,7 +150,7 @@ async function runDiagnosisServe(args: readonly string[]): Promise<void> {
     : resolve(projectRoot, config.workspaceDirectory);
   const diagnosisRoot = join(workspaceDirectory, "ai", "diagnosis");
   const repository = new FileDiagnosisRepository(diagnosisRoot);
-  const provider = new OpenAiCompatibleProvider(aiConfig);
+  const provider = createNodeOpenAiCompatibleProvider(aiConfig);
   const streamPrinter = new TerminalAiStreamPrinter((value) => process.stdout.write(value), sanitizeAiArtifactText);
   const flow = new DiagnosisFlow({
     provider,
@@ -179,7 +180,7 @@ async function runContentAnalysis(args: readonly string[]): Promise<void> {
   const workspaceDirectory = isAbsolute(config.workspaceDirectory)
     ? config.workspaceDirectory
     : resolve(projectRoot, config.workspaceDirectory);
-  const provider = new OpenAiCompatibleProvider(aiConfig);
+  const provider = createNodeOpenAiCompatibleProvider(aiConfig);
   const streamPrinter = new TerminalAiStreamPrinter((value) => process.stdout.write(value), sanitizeAiArtifactText);
   const flow = new ContentAnalysisFlow({
     provider,

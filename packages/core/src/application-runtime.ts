@@ -47,6 +47,8 @@ export interface ProfileUpdate {
 export interface ProfileService {
   get(): Promise<LocalProfile | undefined>;
   update(input: ProfileUpdate): Promise<LocalProfile>;
+  /** Uses the active platform runtime to copy an avatar into app-private storage. */
+  pickAvatar(): Promise<MediaReference>;
 }
 
 export type AiCapability = "text" | "vision" | "asr";
@@ -95,6 +97,8 @@ export interface AiSettingsService {
   /** The key is written to platform secure storage and is never returned by this interface. */
   replaceApiKey(apiKey: string): Promise<void>;
   probe(capability: AiCapability): Promise<AiCapabilityProbeResult>;
+  /** Each capability keeps its own most recent probe result. */
+  getProbeResults(): Promise<readonly AiCapabilityProbeResult[]>;
 }
 
 export interface TaskCreateRequest {
@@ -143,6 +147,50 @@ export interface AppTaskRecord extends Omit<TaskRecord, "paths" | "analysisStatu
   readonly media: readonly MediaReference[];
 }
 
+/**
+ * Safe projection for the detail view. Every optional value originates from a
+ * persisted task artifact; an absent value is intentionally rendered as an
+ * empty state rather than replaced with a fixture or a fabricated metric.
+ */
+export interface TaskDetailRecord {
+  readonly task: AppTaskRecord;
+  readonly content: TaskContentDetail;
+  readonly media: readonly MediaReference[];
+  readonly transcript?: TaskTranscriptDetail;
+  readonly imageText?: TaskImageTextDetail;
+  readonly evidenceUnits: readonly TaskEvidenceUnit[];
+}
+
+export interface TaskContentDetail {
+  readonly title?: string;
+  readonly description?: string;
+  readonly author?: string;
+  /** Display-safe canonical URL: no query, hash, signature, or credential. */
+  readonly canonicalUrl?: string;
+  readonly durationSeconds?: number;
+  readonly cover?: MediaReference;
+}
+
+export interface TaskEvidenceUnit {
+  readonly id: string;
+  readonly source: "transcript" | "image_text";
+  readonly text: string;
+  readonly startSeconds?: number;
+  readonly endSeconds?: number;
+}
+
+export interface TaskTranscriptDetail {
+  readonly source: "asr" | "description";
+  readonly text?: string;
+  readonly segments: readonly TaskEvidenceUnit[];
+}
+
+export interface TaskImageTextDetail {
+  readonly text?: string;
+  readonly images: readonly MediaReference[];
+  readonly paragraphs: readonly TaskEvidenceUnit[];
+}
+
 export interface TaskRepository {
   create(task: TaskRecord): Promise<void>;
   get(taskId: string): Promise<TaskRecord | undefined>;
@@ -164,6 +212,7 @@ export interface TaskService {
   create(input: TaskCreateRequest): Promise<AppTaskRecord>;
   start(taskId: string): Promise<CancellableTask>;
   get(taskId: string): Promise<AppTaskRecord | undefined>;
+  getDetail(taskId: string): Promise<TaskDetailRecord | undefined>;
   list(options?: TaskListOptions): Promise<readonly AppTaskRecord[]>;
   listEvents(taskId: string, options?: { readonly afterSequence?: number }): Promise<readonly TaskEventRecord[]>;
   subscribe(taskId: string, listener: TaskEventListener): Unsubscribe;
@@ -224,8 +273,14 @@ export type DiagnosisStreamEvent =
   | { readonly type: "failed"; readonly issue: TaskIssue };
 
 export interface DiagnosisService {
+  /** Uses the active platform runtime to pick and copy one image privately. */
+  pickImage(): Promise<MediaReference>;
   createSession(input: { readonly mode: ObservationMode; readonly image: MediaReference }): Promise<DiagnosisSessionRecord>;
+  /** Starts the initial report for a pending session; it never fabricates a completed report. */
+  runReport(sessionId: string): Promise<DiagnosisReportRecord>;
   getSession(sessionId: string): Promise<DiagnosisSessionRecord | undefined>;
+  /** Ordered by most recent change, with no image bytes or API reasoning exposed. */
+  listSessions(): Promise<readonly DiagnosisSessionRecord[]>;
   getReport(sessionId: string): Promise<DiagnosisReportRecord | undefined>;
   listMessages(sessionId: string): Promise<readonly DiagnosisMessage[]>;
   followUp(

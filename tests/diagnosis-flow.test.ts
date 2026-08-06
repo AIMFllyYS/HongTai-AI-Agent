@@ -28,13 +28,15 @@ const validReport: DiagnosisReportV1 = {
 
 class MemoryRepository implements DiagnosisRepository {
   session: DiagnosisSession | undefined;
+  image: { mimeType: string; data?: Uint8Array; uri?: string } | undefined;
   report: DiagnosisReportV1 | undefined;
   messages: import("../packages/ai/src/index").AiMessage[] = [];
   summary = "";
   runs: import("../packages/ai/src/index").AiRunRecord[] = [];
 
-  async createSession(mode: "tongue" | "face", image: { mimeType: string; data: Uint8Array }): Promise<DiagnosisSession> {
-    assert.ok(image.data.length > 0);
+  async createSession(mode: "tongue" | "face", image: { mimeType: string; data?: Uint8Array; uri?: string }): Promise<DiagnosisSession> {
+    assert.ok((image.data?.length ?? 0) > 0 || Boolean(image.uri));
+    this.image = image;
     this.session = { id: "session-1", reportId: "report-1", mode, createdAt: "2026-08-05T00:00:00.000Z", imagePath: "source/normalized-image.jpg" };
     return this.session;
   }
@@ -47,6 +49,25 @@ class MemoryRepository implements DiagnosisRepository {
   async saveContextSummary(_sessionId: string, summary: string): Promise<void> { this.summary = summary; }
   async saveRun(_sessionId: string, run: import("../packages/ai/src/index").AiRunRecord): Promise<void> { this.runs.push(run); }
 }
+
+test("诊察流程保留原生图片 URI，不将其转成 React Base64", async () => {
+  const repository = new MemoryRepository();
+  const provider = new SequenceProvider([JSON.stringify(validReport)]);
+  const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
+
+  await flow.analyze({
+    mode: "tongue",
+    image: { mimeType: "image/jpeg", uri: "content://media/external/images/72" },
+  });
+
+  assert.deepEqual(repository.image, { mimeType: "image/jpeg", uri: "content://media/external/images/72" });
+  const content = provider.calls[0]?.messages[1]?.content;
+  assert.deepEqual(content, [
+    { type: "text", text: "请分析这张图片并返回完整报告。" },
+    { type: "image_uri", uri: "content://media/external/images/72", mimeType: "image/jpeg" },
+  ]);
+  assert.doesNotMatch(JSON.stringify(content), /base64/);
+});
 
 class SequenceProvider implements AiProvider {
   calls: AiGenerateRequest[] = [];

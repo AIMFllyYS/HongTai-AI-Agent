@@ -1,20 +1,20 @@
 import { existsSync } from "node:fs";
 import process from "node:process";
-import type { OpenAiCompatibleProviderConfig } from "@hongtai/ai";
+import type { NodeOpenAiCompatibleProviderConfig } from "@hongtai/ai/node";
 import { TaskError } from "@hongtai/core";
 
 export interface NodeRuntimeConfig {
   readonly workspaceDirectory: string;
   readonly maxDurationSeconds: number;
-  readonly ai?: OpenAiCompatibleProviderConfig;
+  readonly ai?: NodeOpenAiCompatibleProviderConfig;
 }
 
-export type AiModelCapability = keyof OpenAiCompatibleProviderConfig["models"];
+export type AiModelCapability = keyof NodeOpenAiCompatibleProviderConfig["models"];
 
 export function requireAiModels(
-  config: OpenAiCompatibleProviderConfig | undefined,
+  config: NodeOpenAiCompatibleProviderConfig | undefined,
   capabilities: readonly AiModelCapability[],
-): OpenAiCompatibleProviderConfig {
+): NodeOpenAiCompatibleProviderConfig {
   if (!config) {
     throw new TaskError({ code: "AI_NOT_CONFIGURED", message: "未配置AI连接，请填写Base URL和API Key", action: "configure_ai" });
   }

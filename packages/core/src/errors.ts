@@ -71,6 +71,39 @@ export function issueFromError(
   };
 }
 
+/**
+ * Maps profile, secure-storage, media-selection and other application-service
+ * failures without inventing an ingest stage. The UI may use this for its one
+ * issue presenter while preserving the stricter seven-stage mapper above.
+ */
+export function issueFromAppError(
+  error: unknown,
+  fallback: Pick<TaskErrorOptions, "code" | "message" | "action"> = {
+    code: "INTERNAL_UNKNOWN_ERROR",
+    message: "本地应用操作失败",
+    action: "none",
+  },
+): TaskIssue {
+  if (error instanceof TaskError) {
+    return {
+      code: error.code,
+      severity: "error",
+      userMessage: error.message,
+      retryable: error.retryable,
+      action: error.action,
+      details: error.details,
+    };
+  }
+  return {
+    code: fallback.code,
+    severity: "error",
+    userMessage: fallback.message,
+    retryable: false,
+    action: fallback.action ?? "none",
+    details: error instanceof Error ? { cause: error.name } : undefined,
+  };
+}
+
 export function warningIssue(
   code: ErrorCode,
   stage: TaskStage,

@@ -1,6 +1,6 @@
 import { TaskError } from "@hongtai/core";
 import type { AiGenerateResult, AiRequestMessage, AiStreamEvent } from "../../contracts/provider";
-import type { AiMessage, DiagnosisFlowDependencies } from "../../contracts/diagnosis";
+import type { AiMessage, DiagnosisFlowDependencies, DiagnosisImageInput } from "../../contracts/diagnosis";
 import { diagnosisConversationPrompt, diagnosisInitialPrompt, diagnosisRepairPrompt } from "../../prompts/diagnosis";
 import { diagnosisReportJsonSchema, diagnosisReportSchema, type ObservationMode } from "../../schemas/diagnosis-report";
 import { parseStructuredOutput } from "../../structured-output/parse-structured-output";
@@ -24,7 +24,7 @@ export class DiagnosisFlow {
     this.#dependencies = dependencies;
   }
 
-  async analyze(input: { readonly mode: ObservationMode; readonly image: { readonly mimeType: string; readonly data: Uint8Array } }) {
+  async analyze(input: { readonly mode: ObservationMode; readonly image: DiagnosisImageInput }) {
     const session = await this.#dependencies.repository.createSession(input.mode, input.image);
     const runId = crypto.randomUUID();
     const startedAt = new Date().toISOString();
@@ -35,6 +35,9 @@ export class DiagnosisFlow {
       await this.#dependencies.onEvent?.({ ...event, runId });
     };
     try {
+      const imageMessage = input.image.data
+        ? { type: "image_url" as const, imageUrl: `data:${input.image.mimeType};base64,${base64(input.image.data)}` }
+        : { type: "image_uri" as const, uri: input.image.uri, mimeType: input.image.mimeType };
       const initial = await this.#dependencies.provider.generate({
         model: "vision",
         output: "json",
@@ -43,7 +46,7 @@ export class DiagnosisFlow {
           { role: "system", content: diagnosisInitialPrompt(input.mode) },
           { role: "user", content: [
             { type: "text", text: "请分析这张图片并返回完整报告。" },
-            { type: "image_url", imageUrl: `data:${input.image.mimeType};base64,${base64(input.image.data)}` },
+            imageMessage,
           ] },
         ],
         onEvent,

@@ -1,0 +1,11 @@
+package com.hongtai.aiagent.bridge
+
+/** Stable errors consumed by the shared TaskIssue presentation mapper. */
+object NativeIssueCode {
+  const val INVALID_ARGUMENT = "ERR_INVALID_ARGUMENT"
+  const val SECURE_STORAGE_UNAVAILABLE = "ERR_SECURE_STORAGE_UNAVAILABLE"
+  const val PRIVATE_FILE_IMPORT_FAILED = "ERR_PRIVATE_FILE_IMPORT_FAILED"
+  const val NATIVE_NETWORK_NOT_READY = "ERR_NATIVE_NETWORK_NOT_READY"
+  const val MEDIA_RUNTIME_NOT_READY = "ERR_MEDIA_RUNTIME_NOT_READY"
+  const val TASK_RECOVERY_STORAGE_UNAVAILABLE = "ERR_TASK_RECOVERY_STORAGE_UNAVAILABLE"
+}

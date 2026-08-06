@@ -1,6 +1,7 @@
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { AiMessage, AiRunRecord, DiagnosisReportV1, DiagnosisRepository, DiagnosisSession, ObservationMode } from "@hongtai/ai";
+import type { AiMessage, AiRunRecord, DiagnosisImageInput, DiagnosisReportV1, DiagnosisRepository, DiagnosisSession, ObservationMode } from "@hongtai/ai";
+import { TaskError } from "@hongtai/core";
 import { sanitizeAiArtifactText } from "./sanitize-ai-artifact";
 
 async function readJson<T>(path: string): Promise<T | undefined> {
@@ -19,7 +20,10 @@ export class FileDiagnosisRepository implements DiagnosisRepository {
     this.#root = root;
   }
 
-  async createSession(mode: ObservationMode, image: { readonly mimeType: string; readonly data: Uint8Array }): Promise<DiagnosisSession> {
+  async createSession(mode: ObservationMode, image: DiagnosisImageInput): Promise<DiagnosisSession> {
+    if (!image.data) {
+      throw new TaskError({ code: "IMAGE_INVALID", message: "Node 本地仓储无法读取原生图片 URI", action: "edit_input" });
+    }
     const id = crypto.randomUUID();
     const root = this.#sessionRoot(id);
     await mkdir(join(root, "source"), { recursive: true });

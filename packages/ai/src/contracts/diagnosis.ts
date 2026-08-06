@@ -9,6 +9,16 @@ export interface DiagnosisSession {
   readonly imagePath: string;
 }
 
+export type DiagnosisImageInput = {
+  readonly mimeType: string;
+  readonly data: Uint8Array;
+  readonly uri?: never;
+} | {
+  readonly mimeType: string;
+  readonly uri: string;
+  readonly data?: never;
+};
+
 export interface AiMessage {
   readonly id: string;
   readonly sessionId: string;
@@ -31,7 +41,7 @@ export interface AiRunRecord {
 }
 
 export interface DiagnosisRepository {
-  createSession(mode: ObservationMode, image: { readonly mimeType: string; readonly data: Uint8Array }): Promise<DiagnosisSession>;
+  createSession(mode: ObservationMode, image: DiagnosisImageInput): Promise<DiagnosisSession>;
   getSession(sessionId: string): Promise<DiagnosisSession | undefined>;
   saveReport(sessionId: string, report: DiagnosisReportV1): Promise<void>;
   getReport(sessionId: string): Promise<DiagnosisReportV1 | undefined>;

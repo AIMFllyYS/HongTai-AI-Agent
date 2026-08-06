@@ -2,9 +2,14 @@ import { TaskError } from "@hongtai/core";
 import type {
   AiGenerateRequest,
   AiGenerateResult,
+  AiMediaSource,
   AiProvider,
   AiRequestMessage,
   AiStreamEvent,
+  AiTransport,
+  AiTransportJsonAttachment,
+  AiTransportRequest,
+  AiTransportResponse,
   AiTranscriptionRequest,
   OpenAiCompatibleProviderConfig,
 } from "../contracts/provider";
@@ -31,29 +36,69 @@ function encodeBase64(data: Uint8Array): string {
   return btoa(binary);
 }
 
-function mapMessages(messages: readonly AiRequestMessage[]): unknown[] {
-  return messages.map((message) => ({
-    role: message.role,
-    content: typeof message.content === "string"
-      ? message.content
-      : message.content.map((part) => part.type === "text"
-        ? part
-        : { type: "image_url", image_url: { url: part.imageUrl } }),
-  }));
+interface OpenAiProtocolConfig {
+  readonly models: OpenAiCompatibleProviderConfig["models"];
+  readonly supportsJsonObject: boolean;
+  readonly supportsJsonSchema?: boolean;
+  readonly asrTransport: OpenAiCompatibleProviderConfig["asrTransport"];
+  readonly contextWindowTokens: number;
+  readonly reasoningMode: OpenAiCompatibleProviderConfig["reasoningMode"];
+  readonly retryDelaysMs?: readonly number[];
+  readonly timeoutMs?: number;
+}
+
+function transcriptionSource(request: AiTranscriptionRequest): AiMediaSource {
+  return request.data
+    ? { kind: "base64", base64: encodeBase64(request.data) }
+    : { kind: "uri", uri: request.uri };
+}
+
+function mapMessages(messages: readonly AiRequestMessage[]): {
+  readonly messages: readonly unknown[];
+  readonly attachments: readonly AiTransportJsonAttachment[];
+} {
+  const attachments: AiTransportJsonAttachment[] = [];
+  return {
+    messages: messages.map((message, messageIndex) => ({
+      role: message.role,
+      content: typeof message.content === "string"
+        ? message.content
+        : message.content.map((part, partIndex) => {
+          if (part.type === "text") return part;
+          if (part.type === "image_url") return { type: "image_url", image_url: { url: part.imageUrl } };
+          const attachmentIndex = attachments.length;
+          attachments.push({
+            pointer: `/messages/${messageIndex}/content/${partIndex}/image_url/url`,
+            source: { kind: "uri", uri: part.uri },
+            mimeType: part.mimeType,
+            materialization: "data-url-base64",
+          });
+          return { type: "image_url", image_url: { url: `transport://attachment/${attachmentIndex}` } };
+        }),
+    })),
+    attachments,
+  };
 }
 
 export class OpenAiCompatibleProvider implements AiProvider {
-  readonly #config: OpenAiCompatibleProviderConfig;
+  readonly #config: OpenAiProtocolConfig;
+  readonly #transport: AiTransport;
 
   constructor(config: OpenAiCompatibleProviderConfig) {
-    if (!config.baseUrl.trim() || !config.apiKey.trim()) {
-      throw new TaskError({ code: "AI_NOT_CONFIGURED", message: "AI连接缺少Base URL或API Key", action: "configure_ai" });
+    if (!config.transport) {
+      throw new TaskError({ code: "AI_NOT_CONFIGURED", message: "AI传输适配器未配置", action: "configure_ai" });
     }
-    const url = new URL(config.baseUrl);
-    if (url.protocol !== "https:") {
-      throw new TaskError({ code: "AI_NETWORK_FAILED", message: "AI Base URL必须使用HTTPS", action: "configure_ai" });
-    }
-    this.#config = config;
+    this.#config = {
+      models: config.models,
+      supportsJsonObject: config.supportsJsonObject,
+      supportsJsonSchema: config.supportsJsonSchema,
+      asrTransport: config.asrTransport,
+      contextWindowTokens: config.contextWindowTokens,
+      reasoningMode: config.reasoningMode,
+      retryDelaysMs: config.retryDelaysMs,
+      timeoutMs: config.timeoutMs,
+    };
+    this.#transport = config.transport;
   }
 
   async generate(request: AiGenerateRequest): Promise<AiGenerateResult> {
@@ -66,9 +111,10 @@ export class OpenAiCompatibleProvider implements AiProvider {
       : request.output === "json" && this.#config.supportsJsonObject
         ? { type: "json_object" }
         : undefined;
+    const mappedMessages = mapMessages(request.messages);
     const body = {
       model,
-      messages: mapMessages(request.messages),
+      messages: mappedMessages.messages,
       stream: true,
       stream_options: { include_usage: true },
       ...(responseFormat ? { response_format: responseFormat } : {}),
@@ -76,10 +122,14 @@ export class OpenAiCompatibleProvider implements AiProvider {
     const response = await this.#request("chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: {
+        kind: "json",
+        json: JSON.stringify(body),
+        ...(mappedMessages.attachments.length > 0 ? { attachments: mappedMessages.attachments } : {}),
+      },
+      responseMode: "stream",
     });
-    const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.includes("text/event-stream")) {
+    if (response.body.kind !== "stream") {
       const payload = await this.#readJson(response);
       const message = payload.choices?.[0]?.message;
       const content = textValue(message?.content).trim();
@@ -98,47 +148,64 @@ export class OpenAiCompatibleProvider implements AiProvider {
   async transcribe(request: AiTranscriptionRequest): Promise<string> {
     const model = this.#config.models.asr;
     if (!model) throw new TaskError({ code: "AI_NOT_CONFIGURED", message: "未配置ASR模型", action: "configure_ai" });
+    const source = transcriptionSource(request);
     if (this.#config.asrTransport === "chat-input-audio") {
       const format = request.filename.split(".").pop()?.toLowerCase() || "wav";
-      const base64 = encodeBase64(request.data);
       const response = await this.#request("chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: "user", content: [{ type: "input_audio", input_audio: { data: `data:${request.mimeType};base64,${base64}`, format } }] }],
-          asr_options: { language: "auto" },
-        }),
+        body: {
+          kind: "json",
+          json: JSON.stringify({
+            model,
+            messages: [{ role: "user", content: [{ type: "input_audio", input_audio: { data: "transport://attachment/0", format } }] }],
+            asr_options: { language: "auto" },
+          }),
+          attachments: [{
+            pointer: "/messages/0/content/0/input_audio/data",
+            source,
+            mimeType: request.mimeType,
+            materialization: "raw-base64",
+          }],
+        },
+        responseMode: "json",
       });
       const payload = await this.#readJson(response);
       const content = payload.choices?.[0]?.message?.content;
       if (typeof content !== "string") throw new TaskError({ code: "AI_EMPTY_RESPONSE", message: "AI转写响应缺少文本字段", action: "retry" });
       return content.trim();
     }
-    const form = new FormData();
-    form.set("model", model);
-    const bytes = new Uint8Array(request.data.byteLength);
-    bytes.set(request.data);
-    form.set("file", new File([bytes.buffer], request.filename, { type: request.mimeType }));
-    const response = await this.#request("audio/transcriptions", { method: "POST", body: form });
+    const response = await this.#request("audio/transcriptions", {
+      method: "POST",
+      headers: {},
+      body: {
+        kind: "multipart",
+        fields: { model },
+        file: {
+          filename: request.filename,
+          mimeType: request.mimeType,
+          source,
+        },
+      },
+      responseMode: "json",
+    });
     const payload = await this.#readJson(response) as ChatPayload & { text?: unknown };
     if (typeof payload.text !== "string") throw new TaskError({ code: "AI_EMPTY_RESPONSE", message: "AI转写响应缺少文本字段", action: "retry" });
     return payload.text.trim();
   }
 
   async #readEventStream(
-    response: Response,
+    response: AiTransportResponse,
     onEvent?: (event: AiStreamEvent) => void | Promise<void>,
   ): Promise<AiGenerateResult> {
     if (!response.body) throw new TaskError({ code: "AI_EMPTY_RESPONSE", message: "AI流式响应没有正文", action: "retry" });
-    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    if (response.body.kind !== "stream") throw new TaskError({ code: "AI_EMPTY_RESPONSE", message: "AI流式响应没有正文", action: "retry" });
     let buffer = "";
     let content = "";
     let reasoning = "";
     let usage: AiGenerateResult["usage"];
-    while (true) {
-      const chunk = await reader.read();
-      buffer += chunk.value ?? "";
+    for await (const chunk of response.body.chunks) {
+      buffer += chunk;
       const blocks = buffer.split(/\r?\n\r?\n/);
       buffer = blocks.pop() ?? "";
       for (const block of blocks) {
@@ -168,7 +235,6 @@ export class OpenAiCompatibleProvider implements AiProvider {
           await onEvent?.({ type: "usage", ...nextUsage });
         }
       }
-      if (chunk.done) break;
     }
     if (!content.trim()) throw new TaskError({ code: "AI_EMPTY_RESPONSE", message: "AI响应缺少最终文本", action: "retry" });
     await onEvent?.({ type: "completed" });
@@ -181,19 +247,22 @@ export class OpenAiCompatibleProvider implements AiProvider {
     return promptTokens == null && completionTokens == null ? undefined : { promptTokens, completionTokens };
   }
 
-  async #request(path: string, init: RequestInit): Promise<Response> {
-    const url = `${this.#config.baseUrl.replace(/\/+$/, "")}/${path}`;
+  async #request(
+    path: string,
+    request: Omit<AiTransportRequest, "version" | "path" | "timeoutMs">,
+  ): Promise<AiTransportResponse> {
     const delays = this.#config.retryDelaysMs ?? [0, 1_000, 3_000];
     let lastError: TaskError | undefined;
     for (const delay of delays) {
       if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
       try {
-        const response = await fetch(url, {
-          ...init,
-          headers: { Authorization: `Bearer ${this.#config.apiKey}`, ...init.headers },
-          signal: AbortSignal.timeout(this.#config.timeoutMs ?? 90_000),
+        const response = await this.#transport.request({
+          version: "ai-transport.v1",
+          path,
+          ...request,
+          timeoutMs: this.#config.timeoutMs ?? 90_000,
         });
-        if (response.ok) return response;
+        if (response.status >= 200 && response.status < 300) return response;
         const payload = await this.#readJson(response).catch(() => ({} as ChatPayload));
         const providerText = `${textValue(payload.error?.code)} ${textValue(payload.error?.type)} ${textValue(payload.error?.message)}`;
         const details = { httpStatus: response.status };
@@ -232,12 +301,22 @@ export class OpenAiCompatibleProvider implements AiProvider {
     throw lastError ?? new TaskError({ code: "AI_NETWORK_FAILED", message: "AI请求失败", action: "retry" });
   }
 
-  async #readJson(response: Response): Promise<ChatPayload> {
-    const text = (await response.text()).slice(0, 65_536);
+  async #readJson(response: AiTransportResponse): Promise<ChatPayload> {
+    const text = (await this.#responseText(response)).slice(0, 65_536);
     try {
       return (text ? JSON.parse(text) : {}) as ChatPayload;
     } catch (error) {
       throw new TaskError({ code: "AI_SERVER_ERROR", message: "AI返回了无效JSON", retryable: true, action: "retry", cause: error });
     }
+  }
+
+  async #responseText(response: AiTransportResponse): Promise<string> {
+    if (response.body.kind === "json") return response.body.text;
+    let text = "";
+    for await (const chunk of response.body.chunks) {
+      text += chunk;
+      if (text.length >= 65_536) return text;
+    }
+    return text;
   }
 }

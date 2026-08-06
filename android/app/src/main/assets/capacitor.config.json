@@ -1,0 +1,11 @@
+{
+	"appId": "com.hongtai.aiagent",
+	"appName": "宏泰AI智能体",
+	"webDir": "apps/web/dist",
+	"server": {
+		"androidScheme": "https"
+	},
+	"android": {
+		"includePlugins": []
+	}
+}
