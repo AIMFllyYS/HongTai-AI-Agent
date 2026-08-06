@@ -113,6 +113,10 @@ test("完整流水线覆盖七个阶段、保留两种文稿并清理日志URL",
   assert.deepEqual(new Set(setup.events.map((event) => event.stage)), new Set([
     "detect-platform", "resolve-link", "parse-content", "select-media", "download-media", "obtain-transcript", "save-artifacts",
   ]));
+  assert.deepEqual(
+    setup.events.map((event) => event.sequence),
+    setup.events.map((_event, index) => index + 1),
+  );
 });
 
 test("分离媒体下载分别标明视频流和音频流", async () => {

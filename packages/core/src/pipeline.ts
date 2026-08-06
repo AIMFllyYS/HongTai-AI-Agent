@@ -1,4 +1,7 @@
 import type { IngestPipelineDependencies } from "./contracts";
+import {
+  TASK_STAGE_VALUES,
+} from "./models";
 import type {
   IngestRequest,
   IngestResult,
@@ -16,14 +19,8 @@ import { TaskError, issueFromError, safeUrlForDisplay, warningIssue } from "./er
 import { normalizeInput } from "./input";
 
 export const PIPELINE_STAGES = [
-  "detect-platform",
-  "resolve-link",
-  "parse-content",
-  "select-media",
-  "download-media",
-  "obtain-transcript",
-  "save-artifacts",
-] as const satisfies readonly TaskStage[];
+  ...TASK_STAGE_VALUES,
+] as const;
 
 const DEFAULT_MAX_DURATION_SECONDS = 1_200;
 const SEGMENT_SECONDS = 30;
@@ -85,6 +82,7 @@ export class IngestPipeline {
   async run(request: IngestRequest): Promise<IngestResult> {
     const taskId = createTaskId();
     const createdAt = new Date().toISOString();
+    let progressSequence = 0;
     const issues: import("./models").TaskIssue[] = [];
     let paths: TaskPaths;
     try {
@@ -94,6 +92,7 @@ export class IngestPipeline {
       issues.push(issue);
       await this.#dependencies.reporter.report({
         taskId,
+        sequence: ++progressSequence,
         stage: "save-artifacts",
         status: "failed",
         message: `失败：${issue.userMessage}`,
@@ -122,6 +121,7 @@ export class IngestPipeline {
         platform,
         contentType,
         speechStatus,
+        analysisStatus: "not_started",
         createdAt,
         updatedAt: new Date().toISOString(),
         issues,
@@ -140,6 +140,7 @@ export class IngestPipeline {
       currentStage = stage;
       const event: ProgressEvent = {
         taskId,
+        sequence: ++progressSequence,
         stage,
         status,
         message,
