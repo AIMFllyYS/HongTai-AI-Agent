@@ -1,0 +1,43 @@
+route	page height	h1	page errors
+/	1288px	h1=1	0 errors
+/analyze/processing	1566px	h1=1	0 errors
+/analyze/result	1418px	h1=1	0 errors
+/analyze/detail/video	1583px	h1=1	0 errors
+/analyze/detail/gallery	1931px	h1=1	0 errors
+/create	1274px	h1=1	0 errors
+/publish	1204px	h1=1	0 errors
+/assets	1199px	h1=1	0 errors
+/settings	1114px	h1=1	0 errors
+/vitality/scan	1003px	h1=1	0 errors
+/vitality/result	1493px	h1=1	0 errors
+
+foundation evidence
+/	local-font=1;local-images=4
+/	page-mark=1;transparent=1;markWidth=50.0;titleGap=7.0
+/analyze/processing	local-font=1;local-images=2
+/analyze/processing	page-mark=0;transparent=1
+/analyze/result	local-font=1;local-images=1
+/analyze/result	page-mark=0;transparent=1
+/analyze/detail/video	local-font=1;local-images=1
+/analyze/detail/video	page-mark=0;transparent=1
+/analyze/detail/gallery	local-font=1;local-images=2
+/analyze/detail/gallery	page-mark=0;transparent=1
+/create	local-font=1;local-images=3
+/create	page-mark=0;transparent=1
+/publish	local-font=1;local-images=1
+/publish	page-mark=0;transparent=1
+/assets	local-font=1;local-images=4
+/assets	page-mark=0;transparent=1
+/assets	assets geometry: rows=3;thumbnail=128.0x72.0;no-overlap=1
+/settings	local-font=1;local-images=2
+/settings	page-mark=1;transparent=1;markWidth=50.0;titleGap=7.0
+/vitality/scan	local-font=1;local-images=1
+/vitality/scan	page-mark=1;transparent=1;markWidth=50.0;titleGap=7.0
+/vitality/scan	shellBackground=rgb(251, 253, 250), primaryBackground=rgb(38, 166, 154), headingColor=rgb(0, 77, 64)
+/vitality/result	local-font=1;local-images=2
+/vitality/result	page-mark=0;transparent=1
+/vitality/result	shellBackground=rgb(251, 253, 250), primaryBackground=rgb(38, 166, 154), headingColor=rgb(0, 77, 64)
+/	home-empty=1;nav-clearance=32.0px
+
+screenshots: 390x844 mobile routes; 536x900 assets visual check; 1280x900 home desktop; home-empty static state
+brand, font and fixture media are bundled locally; browser/platform rasterization can still differ, so no pixel identity is claimed

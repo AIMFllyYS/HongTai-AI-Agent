@@ -1,0 +1,152 @@
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { test } from "node:test";
+
+const root = join(process.cwd(), "apps", "web", "src");
+const read = (relativePath: string) => readFileSync(join(root, relativePath), "utf8");
+
+test("mobile motion foundation keeps each interaction responsibility isolated", () => {
+  for (const relativePath of [
+    "motion/tokens.ts",
+    "components/RouteTransition.tsx",
+    "components/SwipeRouteViewport.tsx",
+    "hooks/useInteractionFeedback.ts",
+    "hooks/useSwipeNavigation.ts",
+    "hooks/useScrollMotion.ts",
+    "services/interaction-feedback.ts",
+  ]) {
+    assert.equal(existsSync(join(root, relativePath)), true, `${relativePath} should exist`);
+  }
+
+  assert.match(read("components/RouteTransition.tsx"), /AnimatePresence/);
+  assert.match(read("components/RouteTransition.tsx"), /MotionConfig/);
+  assert.match(read("hooks/useSwipeNavigation.ts"), /onPointerDown/);
+  assert.match(read("hooks/useScrollMotion.ts"), /passive/);
+});
+
+test("mobile feedback uses native capabilities with safe fallbacks", () => {
+  const source = read("services/interaction-feedback.ts");
+  const hook = read("hooks/useInteractionFeedback.ts");
+
+  assert.match(source, /AudioContext/);
+  assert.match(source, /vibrate/);
+  assert.match(source, /catch/);
+  assert.match(hook, /data-feedback/);
+  assert.match(hook, /prefers-reduced-motion/);
+});
+
+test("motion stylesheet exposes shared timing and keeps scrolling available", () => {
+  const tokens = readFileSync(join(root, "styles", "tokens.css"), "utf8");
+  const foundation = readFileSync(join(root, "styles", "foundation.css"), "utf8");
+
+  for (const token of [
+    "--motion-duration-instant",
+    "--motion-duration-fast",
+    "--motion-duration-standard",
+    "--motion-duration-page",
+    "--motion-ease-standard",
+    "--motion-scale-press",
+  ]) {
+    assert.match(tokens, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `${token} should exist`);
+  }
+
+  assert.match(foundation, /scrollbar-width:\s*none/);
+  assert.match(foundation, /::-webkit-scrollbar/);
+  assert.match(foundation, /prefers-reduced-motion/);
+});
+
+test("web app declares Motion as its only new animation runtime", () => {
+  const packageJson = JSON.parse(readFileSync(join(process.cwd(), "apps", "web", "package.json"), "utf8")) as {
+    dependencies?: Record<string, string>;
+  };
+
+  assert.equal(packageJson.dependencies?.motion, "12.43.0");
+});
+
+test("route motion direction follows primary navigation and detail back paths", () => {
+  const router = read("router.ts");
+
+  assert.match(router, /routeTransitionDirection/);
+  assert.match(router, /primaryNavigationOrder/);
+  assert.match(router, /navKey: "ai"/);
+});
+
+test("route motion and feedback are mounted at the shared application boundaries", () => {
+  const app = read("App.tsx");
+  const shell = read("components/AppShell.tsx");
+  const navigation = read("components/BottomNav.tsx");
+
+  assert.match(app, /RouteTransition/);
+  assert.match(app, /SwipeRouteViewport/);
+  assert.match(app, /useInteractionFeedback/);
+  assert.match(shell, /useScrollMotion/);
+  assert.match(shell, /data-scroll-state/);
+  assert.match(navigation, /whileTap/);
+});
+
+test("bottom navigation stays outside route transforms and supports direct navigation", () => {
+  const app = read("App.tsx");
+  const shell = read("components/AppShell.tsx");
+  const navigation = read("components/BottomNav.tsx");
+  const routeTransition = read("components/RouteTransition.tsx");
+  const browserRoute = read("hooks/useBrowserRoute.ts");
+
+  assert.match(navigation, /createPortal/);
+  assert.match(navigation, /document\.body/);
+  assert.match(navigation, /transition:\s*["']instant["']/);
+  assert.match(app, /AppShellNavigationProvider/);
+  assert.match(app, /<BottomNav active=/);
+  assert.match(shell, /visualTheme=\{visualTheme\}/);
+  assert.match(shell, /externalNavigationContext/);
+  assert.match(app, /transitionMode/);
+  assert.match(browserRoute, /transitionMode/);
+  assert.match(routeTransition, /transitionMode\s*===\s*["']instant["']/);
+});
+
+test("horizontal navigation renders an adjacent route pane during movement", () => {
+  const swipe = read("hooks/useSwipeNavigation.ts");
+  const navigation = read("navigation/primary-nav.ts");
+  const viewport = read("components/SwipeRouteViewport.tsx");
+  const shell = read("styles/shell.css");
+
+  assert.match(swipe, /pointerType\s*===\s*["']mouse["']/);
+  assert.match(swipe, /onPointerMove/);
+  assert.match(swipe, /setPointerCapture/);
+  assert.match(swipe, /onCommit/);
+  assert.match(swipe, /isSettling/);
+  assert.match(swipe, /window\.innerWidth/);
+  assert.match(swipe, /swipeOffset/);
+  assert.match(swipe, /deltaX\s*<\s*0/);
+  assert.match(navigation, /currentIndex/);
+  assert.match(navigation, /direction\s*===\s*["']next["']/);
+  assert.match(navigation, /currentIndex\s*\+\s*1/);
+  assert.match(navigation, /currentIndex\s*-\s*1/);
+  assert.match(viewport, /route-swipe-track/);
+  assert.match(viewport, /previousPath/);
+  assert.match(viewport, /nextPath/);
+  assert.match(viewport, /onTransitionEnd/);
+  assert.match(viewport, /routeCommitPath/);
+  assert.match(viewport, /requestAnimationFrame/);
+  assert.match(viewport, /isRouteCommit/);
+  assert.match(shell, /route-swipe-viewport/);
+  assert.match(shell, /repeat\(3,\s*100%\)/);
+  assert.match(shell, /\.route-swipe-track--route-commit[\s\S]*transition:\s*none/);
+  assert.match(shell, /overflow-x:\s*hidden/);
+});
+
+test("shared controls expose one press-feedback vocabulary", () => {
+  const buttons = read("components/Buttons.tsx");
+  const cards = read("components/GlassCard.tsx");
+  const components = read("styles/components.css");
+  const shell = read("styles/shell.css");
+
+  assert.match(buttons, /button--\$\{size\}/);
+  assert.match(cards, /glass-card--interactive/);
+  assert.match(cards, /data-feedback/);
+  assert.match(components, /--motion-duration-fast/);
+  assert.match(components, /\.button:active/);
+  assert.match(components, /\.glass-card--interactive:active/);
+  assert.match(components, /\.tabs button:active/);
+  assert.match(shell, /route-swipe-viewport[\s\S]*touch-action:\s*pan-y/);
+});

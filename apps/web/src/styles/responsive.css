@@ -1,0 +1,46 @@
+@media (min-width: 48rem) {
+  .app-content {
+    padding-top: var(--space-8);
+  }
+
+  .page-stack {
+    gap: var(--space-8);
+  }
+
+  .page-heading h2 {
+    font-size: 1.8rem;
+  }
+
+  .input-card,
+  .prompt-card,
+  .progress-card,
+  .steps-card,
+  .detail-content-card,
+  .advice-card,
+  .recommendation-card {
+    padding: var(--space-6);
+  }
+
+  .capability-grid,
+  .platform-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .asset-library__layout {
+    grid-template-columns: 11rem minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .folder-list {
+    display: grid;
+    overflow: visible;
+  }
+
+  .folder-list button {
+    justify-content: flex-start;
+  }
+
+  .asset-template-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

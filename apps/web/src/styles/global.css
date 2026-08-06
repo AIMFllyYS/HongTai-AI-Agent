@@ -1,0 +1,11 @@
+@layer reset, base, shell, components, pages, themes, responsive;
+
+@import "./foundation.css" layer(reset);
+@import "./shell.css" layer(shell);
+@import "./components.css" layer(components);
+@import "./pages/home.css" layer(pages);
+@import "./pages/analysis.css" layer(pages);
+@import "./pages/creation.css" layer(pages);
+@import "./pages/library.css" layer(pages);
+@import "./pages/vitality.css" layer(themes);
+@import "./responsive.css" layer(responsive);

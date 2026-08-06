@@ -1,0 +1,181 @@
+:root {
+  color-scheme: light;
+
+  /* Foundation values: stable visual vocabulary shared by every page. */
+  --palette-forest-950: #00342b;
+  --palette-deep-emerald: #004d40;
+  --palette-vitality-turquoise: #26a69a;
+  --palette-primary-soft: #7ebdac;
+  --palette-mint: #bbe9e1;
+  --palette-success: #2e7d32;
+  --palette-progress: #00796b;
+  --palette-warning: #b96100;
+  --palette-error: #ba1a1a;
+  --palette-text: #191c1b;
+  --palette-text-subtle: #3f4945;
+  --palette-text-muted: #707975;
+  --palette-vitality-muted: #606b66;
+  --palette-outline: #bfc9c4;
+  --palette-outline-soft: #e0e7e3;
+
+  --surface-canvas: #f8faf7;
+  --surface-paper: #fbfdfa;
+  --surface-card: #ffffff;
+  --surface-low: #f2f4f1;
+  --surface-vitality-low: #f2f7f2;
+  --surface-container: #eceeec;
+  --surface-high: #e7e9e6;
+  --surface-pressed: #e1e3e0;
+  --surface-success: #dcfce7;
+  --surface-progress: #d9f3ee;
+  --surface-warning: #ffedd5;
+  --surface-error: #ffdad6;
+
+  --font-display: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-data: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+
+  --text-display: 2rem;
+  --text-display-line: 2.5rem;
+  --text-headline: 1.5rem;
+  --text-headline-line: 2rem;
+  --text-module: 1.125rem;
+  --text-module-line: 1.625rem;
+  --text-section: 1rem;
+  --text-section-line: 1.5rem;
+  --text-body: 1rem;
+  --text-body-line: 1.625rem;
+  --text-caption: 0.8125rem;
+  --text-caption-line: 1.25rem;
+  --text-meta: 0.75rem;
+  --text-meta-line: 1.125rem;
+  --text-label: 0.875rem;
+  --text-label-line: 1.25rem;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  --radius-sm: 0.25rem;
+  --radius-control: 0.75rem;
+  --radius-card: 1rem;
+  --radius-large: 1.5rem;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 0.25rem 0.75rem rgba(0, 77, 64, 0.04);
+  --shadow-floating: 0 0.75rem 1.75rem rgba(0, 77, 64, 0.1);
+  --shadow-nav: 0 -0.25rem 0.75rem rgba(0, 77, 64, 0.04);
+  --glass-fill: rgba(248, 250, 247, 0.84);
+  --glass-blur: 1.25rem;
+
+  /* Motion roles: shared by CSS feedback and the React transition boundary. */
+  --motion-duration-instant: 80ms;
+  --motion-duration-fast: 140ms;
+  --motion-duration-standard: 220ms;
+  --motion-duration-page: 260ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-scale-press: 0.98;
+  --motion-distance-page: 1rem;
+
+  /* Semantic roles: components should use these instead of raw palette values. */
+  --color-surface-canvas: var(--surface-canvas);
+  --color-surface-paper: var(--surface-paper);
+  --color-surface-card: var(--surface-card);
+  --color-surface-low: var(--surface-low);
+  --color-surface-container: var(--surface-container);
+  --color-surface-high: var(--surface-high);
+  --color-surface-pressed: var(--surface-pressed);
+  --color-text-primary: var(--palette-text);
+  --color-text-on-primary: #ffffff;
+  --color-text-subtle: var(--palette-text-subtle);
+  --color-text-muted: var(--palette-text-muted);
+  --color-action-primary: var(--palette-deep-emerald);
+  --color-action-primary-hover: var(--palette-forest-950);
+  --color-action-secondary: var(--palette-vitality-turquoise);
+  --color-action-secondary-soft: var(--palette-mint);
+  --color-focus-ring: rgba(38, 166, 154, 0.4);
+  --color-status-success: var(--palette-success);
+  --color-status-success-soft: var(--surface-success);
+  --color-status-progress: var(--palette-progress);
+  --color-status-progress-soft: var(--surface-progress);
+  --color-status-warning: var(--palette-warning);
+  --color-status-warning-soft: var(--surface-warning);
+  --color-status-error: var(--palette-error);
+  --color-status-error-soft: var(--surface-error);
+  --color-outline: var(--palette-outline);
+  --color-outline-soft: var(--palette-outline-soft);
+
+  /* Component roles: local components may override these within a theme scope. */
+  --button-height-md: 3rem;
+  --button-height-lg: 3.5rem;
+  --button-radius: var(--radius-pill);
+  --card-border: rgba(191, 201, 196, 0.42);
+  --card-radius: var(--radius-card);
+  --nav-active-background: var(--color-action-secondary-soft);
+
+  /* Compatibility aliases retained while page CSS migrates to semantic names. */
+  --color-background: var(--color-surface-canvas);
+  --color-surface: var(--color-surface-paper);
+  --color-primary: var(--palette-forest-950);
+  --color-primary-strong: var(--color-action-primary);
+  --color-primary-soft: var(--palette-primary-soft);
+  --color-accent: var(--color-action-secondary);
+  --color-accent-soft: var(--color-action-secondary-soft);
+  --color-text: var(--color-text-primary);
+  --color-success: var(--color-status-success);
+  --color-success-soft: var(--color-status-success-soft);
+  --color-progress: var(--color-status-progress);
+  --color-progress-soft: var(--color-status-progress-soft);
+  --color-warning: var(--color-status-warning);
+  --color-warning-soft: var(--color-status-warning-soft);
+  --color-error: var(--color-status-error);
+  --color-error-soft: var(--color-status-error-soft);
+  --color-data: #1a1c1a;
+
+  --page-gutter: 1rem;
+  --content-max: 48.75rem;
+  --header-height: 4.25rem;
+  --nav-height: 5rem;
+}
+
+[data-visual-theme="warm-soft-tech"] {
+  color-scheme: light;
+
+  --color-background: var(--surface-paper);
+  --color-surface: var(--surface-paper);
+  --color-surface-canvas: var(--surface-paper);
+  --color-surface-low: var(--surface-vitality-low);
+  --color-surface-container: var(--surface-container);
+  --color-primary: var(--palette-deep-emerald);
+  --color-primary-strong: var(--palette-deep-emerald);
+  --color-primary-soft: #94d3c1;
+  --color-action-primary: var(--palette-deep-emerald);
+  --color-action-primary-hover: var(--palette-forest-950);
+  --color-accent: var(--palette-vitality-turquoise);
+  --color-accent-soft: var(--surface-vitality-low);
+  --color-action-secondary: var(--palette-vitality-turquoise);
+  --color-action-secondary-soft: var(--surface-vitality-low);
+  --color-text-muted: var(--palette-vitality-muted);
+  --color-progress: var(--palette-vitality-turquoise);
+  --color-progress-soft: var(--surface-vitality-low);
+  --glass-fill: rgba(251, 253, 250, 0.84);
+  --nav-active-background: rgba(187, 233, 225, 0.5);
+  --vitality-accent: var(--palette-vitality-turquoise);
+  --vitality-accent-soft: var(--surface-vitality-low);
+  --vitality-track: var(--surface-container);
+}
+
+@media (min-width: 48rem) {
+  :root {
+    --page-gutter: 1.5rem;
+    --text-display: 2.5rem;
+    --text-display-line: 3rem;
+  }
+}

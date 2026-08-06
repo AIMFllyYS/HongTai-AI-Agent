@@ -1,0 +1,50 @@
+# 移动端关键交互 BUG 修复分析
+
+## 范围
+
+本次只处理前端壳层的三个移动端交互问题：底部导航常驻、水平左右拖拽、底部导航直接跳转。不会修改 CLI、API、DTO、数据库、鉴权、任务状态机或业务页面的数据边界。
+
+## 第一性原理与证据链
+
+### 1. 底部导航必须属于 viewport chrome
+
+底部导航的职责是跨页面持续提供一级入口，因此它的定位参照物必须是 viewport，而不能依赖某个页面内容容器或路由动画容器。
+
+当前 `RouteTransition` 用 `motion.div` 包住 `AppShell`，并在页面切换时对该祖先设置 `transform`。CSS 中的 fixed 后代在存在 transformed ancestor 时可能改以该祖先作为包含块，导致导航在切换、滚动或不同浏览器实现下表现为跟随页面内容、短暂消失或位置重算。
+
+最小修复是由 `App` 在 `RouteTransition` 外持有唯一的 `BottomNav`，并将它 portal 到 `document.body`，使它同时脱离路由动画的 transform 树和页面组件的卸载周期。`AppShell` 在应用宿主模式下只保留底部安全区和内容 padding，独立使用 `AppShell` 时仍保留原有的本地导航回退。主题属性同时传给 portal 节点，避免脱离壳后丢失 warm-soft-tech 语义 token。
+
+### 2. 水平手势必须使用真实位移和稳定方向不变量
+
+手势的原始事实是 `deltaX = currentX - startX`：
+
+- `deltaX < 0` 表示指针向左移动，切换到主导航顺序中的下一项；
+- `deltaX > 0` 表示指针向右移动，切换到主导航顺序中的上一项；
+- 只有水平位移超过阈值且显著大于垂直位移时才提交导航；
+- 交互控件、输入控件和显式禁止手势区域不参与页面切换。
+
+此前实现只接受 touch/pen，鼠标拖拽永远不会进入提交路径；虽然补上了 `pointermove`、`setPointerCapture` 和拖拽偏移，但仍只移动一个 `AppShell` 内的 `.app-content`。这会让当前页离开视口后暴露空白，直到 `pointerup` 才由 `RouteTransition` 串行挂载下一页，形成“先空白、再回弹”的错觉。
+
+修复将手势边界提升到 `App` 的 `SwipeRouteViewport`，使用固定的三槽位 track：`previous | current | next`。水平拖动时当前槽位和相邻候选槽位同步移动；提交时先把 track 滑到目标槽位，再以 instant route commit，避免同一手势被 route x 动画重复处理。统一支持 mouse、touch、pen，垂直滚动仍由浏览器处理，不改变 `touch-action: pan-y`。
+
+### 3. 一级底部导航是直接定位，不应等待页面过渡
+
+底部导航点击的核心反馈是“立即进入所选一级页面”。当前点击沿用路由的 `AnimatePresence mode="wait"` 和非 reduced-motion 下的 smooth scroll，用户需要等待退出动画和滚动完成，造成点击不直接、像是响应迟缓。
+
+路由仍需要保留页面内进入详情、返回和手势切换的统一过渡；因此不移除全局动效，而是给导航器增加可选的 `transition` 与 `scroll` 选项。底部导航明确传入 `transition: "instant"`、`scroll: "auto"`，只绕过一级导航入口的动画和 smooth scroll。instant 模式直接替换 route 节点；从 instant 页面进入页面内 animated 路由时，只播放新页面的进入动画，避免重复卸载或丢失过渡边界。
+
+## 修复不变量
+
+1. 应用宿主中的唯一 `BottomNav` DOM 不在 `RouteTransition` 的 transformed subtree 中；独立使用 `AppShell` 时，`showNav` 仍控制本地导航回退。
+2. 内容区域具有可观察的水平拖拽偏移；提交方向只由 `deltaX` 决定，左右不反转，越界项不导航。
+3. 底部导航点击只改变浏览器路径和页面内容，不等待页面退出动画，也不平滑滚动到顶部。
+4. 页面内原有路由过渡、返回路径、五项导航顺序、主题 token 和数据适配器保持不变。
+5. reduced-motion 继续生效，交互控件不会被页面级手势误触发。
+6. 拖拽中当前页与候选页始终共享相邻边界，视口内不出现由单页 transform 造成的空白缝隙。
+
+## 验收证据
+
+- 静态测试锁定 portal、direct navigation、mouse pointer、pointer capture、live offset 和左右方向映射。
+- `pnpm check`、`pnpm --filter @hongtai/web build` 通过。
+- 浏览器回归覆盖：滚动前后导航位置、底部导航立即跳转、鼠标右拖/左拖、触控左右拖、拖拽中两页同时可见且无空白、垂直滚动不切页、无 page error。
+- 截图只用于核验壳层位置和拖拽后的视觉，不宣称与设计稿像素级一致。
