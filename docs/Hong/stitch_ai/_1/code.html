@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>宏泰AI智能体 - 拆解中心</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;family=Be+Vietnam+Pro:wght@400;500;600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@100..900&amp;family=Plus+Jakarta+Sans:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary": "#003330",
+                        "background": "#f8faf7",
+                        "surface-tint": "#29695b",
+                        "on-primary-fixed": "#00201a",
+                        "primary": "#00342b",
+                        "surface-dim": "#d8dbd8",
+                        "outline": "#707975",
+                        "surface-bright": "#f8faf7",
+                        "inverse-surface": "#2e3130",
+                        "on-tertiary-fixed": "#00201d",
+                        "secondary-fixed": "#beece4",
+                        "on-tertiary-container": "#59c0b6",
+                        "tertiary-fixed-dim": "#71d7cd",
+                        "outline-variant": "#bfc9c4",
+                        "inverse-primary": "#94d3c1",
+                        "secondary-container": "#bbe9e1",
+                        "on-secondary-fixed-variant": "#224e48",
+                        "primary-fixed-dim": "#94d3c1",
+                        "surface-container": "#eceeec",
+                        "surface-container-highest": "#e1e3e0",
+                        "on-secondary-container": "#3f6a64",
+                        "surface-variant": "#e1e3e0",
+                        "surface-container-high": "#e7e9e6",
+                        "secondary": "#3b6660",
+                        "on-background": "#191c1b",
+                        "inverse-on-surface": "#eff1ef",
+                        "tertiary-container": "#004c47",
+                        "on-tertiary-fixed-variant": "#00504a",
+                        "on-primary-container": "#7ebdac",
+                        "on-error": "#ffffff",
+                        "surface-container-low": "#f2f4f1",
+                        "on-surface": "#191c1b",
+                        "on-secondary-fixed": "#00201d",
+                        "tertiary-fixed": "#8ef4e9",
+                        "on-error-container": "#93000a",
+                        "error-container": "#ffdad6",
+                        "surface": "#f8faf7",
+                        "on-secondary": "#ffffff",
+                        "primary-container": "#004d40",
+                        "primary-fixed": "#afefdd",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-fixed-variant": "#065043",
+                        "error": "#ba1a1a",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed-dim": "#a2cfc8",
+                        "on-surface-variant": "#3f4945"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-gap-sm": "8px",
+                        "stack-gap-md": "16px",
+                        "container-padding": "20px",
+                        "margin-page": "16px",
+                        "gutter": "16px",
+                        "stack-gap-lg": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "module-title": ["Plus Jakarta Sans"],
+                        "section-title": ["Plus Jakarta Sans"],
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "body-md": ["Be Vietnam Pro"],
+                        "body-lg": ["Be Vietnam Pro"],
+                        "label-md": ["Be Vietnam Pro"],
+                        "headline-lg": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "module-title": ["18px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "section-title": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["22px", { "lineHeight": "30px", "fontWeight": "700" }],
+                        "body-md": ["14px", { "lineHeight": "22px", "fontWeight": "400" }],
+                        "body-lg": ["15px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "700" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #f8faf7;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+        .glass-header {
+            background: rgba(248, 250, 247, 0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+    </style>
+</head>
+<body class="font-body-md text-on-surface antialiased">
+<!-- Top App Bar -->
+<header class="docked full-width top-0 sticky z-50 glass-header shadow-sm h-16 flex justify-between items-center w-full px-container-padding">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="smart_toy">smart_toy</span>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-primary">宏泰AI智能体</h1>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-high transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="notifications">notifications</span>
+</button>
+</header>
+<main class="pb-32 px-margin-page">
+<!-- Greetings Section -->
+<section class="mt-stack-gap-md mb-stack-gap-lg">
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-background">今天想拆解哪条爆款？</h2>
+<p class="font-label-md text-label-md text-on-surface-variant mt-1 opacity-70">让 AI 助你洞察爆款逻辑</p>
+</section>
+<!-- Main Input Card -->
+<section class="bg-surface-container-lowest rounded-xl p-5 shadow-[0px_4px_12px_rgba(0,0,0,0.04)] border border-outline-variant/30 mb-stack-gap-lg">
+<div class="flex items-center gap-2 mb-4">
+<span class="material-symbols-outlined text-primary text-[20px]" data-icon="link">link</span>
+<h3 class="font-module-title text-module-title text-on-surface">粘贴参考视频链接</h3>
+</div>
+<div class="relative mb-3">
+<input class="w-full h-12 bg-surface-container-low border border-outline-variant rounded-lg px-4 pr-12 focus:outline-none focus:border-surface-tint focus:ring-1 focus:ring-surface-tint transition-all font-body-md text-on-surface placeholder:text-outline/60" placeholder="https://v.douyin.com/..." type="text"/>
+<button class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-primary hover:bg-primary/5 rounded-md">
+<span class="material-symbols-outlined" data-icon="content_paste">content_paste</span>
+</button>
+</div>
+<div class="flex items-start gap-2 mb-6">
+<span class="material-symbols-outlined text-secondary text-[16px] mt-0.5" data-icon="info">info</span>
+<p class="font-label-md text-label-md text-on-surface-variant">请确保链接合法且遵循平台合规提示，支持主流短视频平台。</p>
+</div>
+<button class="w-full h-14 bg-primary text-white rounded-full font-headline-md text-headline-md flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition-all">
+<span class="material-symbols-outlined" data-icon="bolt" data-weight="fill" style="font-variation-settings: 'FILL' 1;">bolt</span>
+                开始拆解
+            </button>
+</section>
+<!-- Capability Cards (Bento Grid Style) -->
+<section class="grid grid-cols-2 gap-3 mb-stack-gap-lg">
+<div class="bg-secondary-container/30 p-4 rounded-xl border border-secondary-container flex flex-col gap-2">
+<span class="material-symbols-outlined text-secondary" data-icon="video_file">video_file</span>
+<span class="font-section-title text-section-title text-tertiary">提取视频信息</span>
+</div>
+<div class="bg-surface-container p-4 rounded-xl border border-outline-variant/30 flex flex-col gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="keyboard_voice">keyboard_voice</span>
+<span class="font-section-title text-section-title text-tertiary">语音转文字</span>
+</div>
+<div class="bg-surface-container p-4 rounded-xl border border-outline-variant/30 flex flex-col gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="query_stats">query_stats</span>
+<span class="font-section-title text-section-title text-tertiary">爆款结构分析</span>
+</div>
+<div class="bg-secondary-container/30 p-4 rounded-xl border border-secondary-container flex flex-col gap-2">
+<span class="material-symbols-outlined text-secondary" data-icon="temp_preferences_custom">temp_preferences_custom</span>
+<span class="font-section-title text-section-title text-tertiary">生成可复用模板</span>
+</div>
+</section>
+<!-- Recent Content Toggle / List -->
+<section id="content-section">
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-headline-md text-headline-md text-on-surface">最近拆解</h3>
+<button class="font-label-md text-label-md text-primary font-bold" onclick="toggleEmptyState()">切换空状态测试</button>
+</div>
+<!-- List View -->
+<div class="space-y-3" id="recent-list">
+<!-- Item 1 -->
+<div class="bg-surface-container-lowest p-3 rounded-xl border border-outline-variant/20 flex items-center gap-3 shadow-sm active:bg-surface-container transition-colors">
+<div class="w-20 h-20 rounded-lg bg-cover bg-center shrink-0 overflow-hidden" data-alt="A professional vertical smartphone screen displaying a vibrant lifestyle short video with cinematic lighting and deep teal and forest green accents, reflecting a high-end AI analysis aesthetic." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuA9tuFLFL638-d0D9aEJkvehGCC0TKZPBCPvLpG1FkLtPOFr2HfHzhv0RlM3IUXGvg0uUZoGDXxIL5ZZThNm2zKApsc5N2PWsOSP7u31jtIv9o_9VkWdiyXNNeZuVmNLD2AY82KJN4_3edRms7bMp5148nNIauABnIY_NOULbG-kcXTDeH6JwMHLEMbBjBgOlQNdNULmyFXRUrsiTbV9CiEvrasSfBh3GQjFM1RZOKtXwtXIFdN0fUR')">
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="font-section-title text-section-title text-on-surface truncate">职场穿搭爆款逻辑拆解</h4>
+<p class="font-label-md text-label-md text-outline mt-1">2023-11-24 14:30</p>
+<div class="mt-2 flex items-center">
+<span class="px-2 py-0.5 rounded-full bg-green-100 text-[#2E7D32] font-label-md text-[10px] flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]" data-icon="check_circle" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                                已完成
+                            </span>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline" data-icon="chevron_right">chevron_right</span>
+</div>
+<!-- Item 2 -->
+<div class="bg-surface-container-lowest p-3 rounded-xl border border-outline-variant/20 flex items-center gap-3 shadow-sm active:bg-surface-container transition-colors">
+<div class="w-20 h-20 rounded-lg bg-cover bg-center shrink-0 overflow-hidden" data-alt="A macro shot of a delicious gourmet dish being plated in a dark, atmospheric kitchen with spotlighting. The visual style is sleek and minimalist, utilizing the forest green brand palette for subtle color grading." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuA0qt9QBz078_7hK6MmEkdhJtnVfHhJhTXNeCuM7rYe4SdIqoQOL3BYNRC-9ZaPRMCjRUEUYaEm_qy1p91bRmphyXNc3hsTm0r3yCkxB1oyoeLxpp1jFqe9ROe-CPajT3ZKmoVOb89UTOvE0EN4le8zh1cSrwzH4i7EZ53mlF_Ue4RsYj_kGrWzkq-aI5ShuCCELv0FcA5FlSNzgbtSqcebqUxDwQCcJTBBwCf_-eeOHu43is5D2K5-')">
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="font-section-title text-section-title text-on-surface truncate">美食探店类脚本深度分析</h4>
+<p class="font-label-md text-label-md text-outline mt-1">2023-11-23 09:15</p>
+<div class="mt-2 flex items-center">
+<span class="px-2 py-0.5 rounded-full bg-orange-100 text-[#F57C00] font-label-md text-[10px] flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px] animate-spin" data-icon="sync">sync</span>
+                                分析中
+                            </span>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline" data-icon="chevron_right">chevron_right</span>
+</div>
+<!-- Item 3 -->
+<div class="bg-surface-container-lowest p-3 rounded-xl border border-outline-variant/20 flex items-center gap-3 shadow-sm active:bg-surface-container transition-colors">
+<div class="w-20 h-20 rounded-lg bg-cover bg-center shrink-0 overflow-hidden" data-alt="A clean, minimalist digital studio setup for a tech review video. High-key lighting, structured surfaces, and a sophisticated atmosphere in shades of white and deep forest green." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCFvfggHC2WJzkwyQ6TvIPXvpqZxd_gC5-b6gdongjyEl26dPZd-SP6KTykpe0XtbBTMJVV2mQMGQgsqGRCFenZ2zdYDVRj1LnwmUcgCxz3n1RZgHSt7FdLwrhb6abF2nM2bQct4VxqzYNcO6b8vwHj1_N-eZoAWC0ITNrIzCgCP-lDCweRmYxYpcoBJz3WzBjlPXr4Y9H2npd6dfUk54VJPzrtyjPEReg8xnfYeiL_2qFE2tLtSaff')">
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="font-section-title text-section-title text-on-surface truncate">数码测评开头3秒抓人技巧</h4>
+<p class="font-label-md text-label-md text-outline mt-1">2023-11-22 18:45</p>
+<div class="mt-2 flex items-center">
+<span class="px-2 py-0.5 rounded-full bg-green-100 text-[#2E7D32] font-label-md text-[10px] flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]" data-icon="check_circle" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                                已完成
+                            </span>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline" data-icon="chevron_right">chevron_right</span>
+</div>
+</div>
+<!-- Empty State (Hidden by default) -->
+<div class="hidden flex flex-col items-center justify-center py-16 px-8 text-center" id="empty-state">
+<div class="w-48 h-48 mb-6 opacity-60">
+</div>
+<h4 class="font-headline-md text-headline-md text-on-surface mb-2">暂无拆解记录</h4>
+<p class="font-body-md text-body-md text-on-surface-variant mb-8 max-w-[240px]">粘贴上方视频链接，开启你的第一份爆款逻辑分析报告。</p>
+<button class="bg-secondary text-white px-8 h-12 rounded-full font-label-md text-label-md shadow-md active:scale-95 transition-all">
+                    了解如何拆解
+                </button>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center h-20 px-4 bg-surface/80 backdrop-blur-xl shadow-[0_-1px_10px_rgba(0,0,0,0.02)] z-50 pb-safe"><a class="flex flex-col items-center justify-center text-on-surface-variant transition-opacity hover:opacity-80 active:translate-y-[-2px] duration-300" href="#"><div class="w-8 h-8 rounded-full border border-primary/20 p-0.5 flex items-center justify-center overflow-hidden"><img alt="AI" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDHF7BaeMhupCCyu5GSuhOyUDpjpWOK4BsVMcBY-bdG86N2nrDXZ6jIiA1hXB_2ASg0pLMtcocFI5c61Q8UJVrud0f68AtSHAHht4N-LLiVqm0O5S9uCfvRnMGG9E0MJBvnXDsJwQWiXSB2pYff3IGTrwjKDR3ZimohmgT6dMYzXXTeTMQM4V0QT2DQ6-ao06l6P6KmLdqKritEmKHcLN4oirVSfd8lxCxq_8we4PA2RlBzrdTzGXob"/></div><span class="font-label-md text-label-md mt-1">AI</span></a>
+<!-- 拆解 (Active) -->
+<a class="flex flex-col items-center justify-center text-primary font-bold transition-opacity hover:opacity-80 active:translate-y-[-2px] duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="analytics" data-weight="fill" style="font-variation-settings: 'FILL' 1;">analytics</span>
+<span class="font-label-md text-label-md mt-1">拆解</span>
+</a>
+<!-- 制作 -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant transition-opacity hover:opacity-80 active:translate-y-[-2px] duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="movie_edit">movie_edit</span>
+<span class="font-label-md text-label-md mt-1">制作</span>
+</a>
+<!-- 素材 -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant transition-opacity hover:opacity-80 active:translate-y-[-2px] duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="folder_open">folder_open</span>
+<span class="font-label-md text-label-md mt-1">素材</span>
+</a>
+<!-- 设置 -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant transition-opacity hover:opacity-80 active:translate-y-[-2px] duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-md text-label-md mt-1">设置</span>
+</a>
+</nav>
+<script>
+        function toggleEmptyState() {
+            const list = document.getElementById('recent-list');
+            const empty = document.getElementById('empty-state');
+
+            if (list.classList.contains('hidden')) {
+                list.classList.remove('hidden');
+                empty.classList.add('hidden');
+            } else {
+                list.classList.add('hidden');
+                empty.classList.remove('hidden');
+            }
+        }
+    </script>
+</body></html>

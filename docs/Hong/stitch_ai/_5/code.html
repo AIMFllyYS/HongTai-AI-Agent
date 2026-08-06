@@ -1,0 +1,351 @@
+<!DOCTYPE html><html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;family=Be+Vietnam+Pro:wght@400;500;600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@100..900&amp;family=Plus+Jakarta+Sans:wght@100..900&amp;display=swap" rel="stylesheet">
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .step-active-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary": "#003330",
+                        "background": "#f8faf7",
+                        "surface-tint": "#29695b",
+                        "on-primary-fixed": "#00201a",
+                        "primary": "#00342b",
+                        "surface-dim": "#d8dbd8",
+                        "outline": "#707975",
+                        "surface-bright": "#f8faf7",
+                        "inverse-surface": "#2e3130",
+                        "on-tertiary-fixed": "#00201d",
+                        "secondary-fixed": "#beece4",
+                        "on-tertiary-container": "#59c0b6",
+                        "tertiary-fixed-dim": "#71d7cd",
+                        "outline-variant": "#bfc9c4",
+                        "inverse-primary": "#94d3c1",
+                        "secondary-container": "#bbe9e1",
+                        "on-secondary-fixed-variant": "#224e48",
+                        "primary-fixed-dim": "#94d3c1",
+                        "surface-container": "#eceeec",
+                        "surface-container-highest": "#e1e3e0",
+                        "on-secondary-container": "#3f6a64",
+                        "surface-variant": "#e1e3e0",
+                        "surface-container-high": "#e7e9e6",
+                        "secondary": "#3b6660",
+                        "on-background": "#191c1b",
+                        "inverse-on-surface": "#eff1ef",
+                        "tertiary-container": "#004c47",
+                        "on-tertiary-fixed-variant": "#00504a",
+                        "on-primary-container": "#7ebdac",
+                        "on-error": "#ffffff",
+                        "surface-container-low": "#f2f4f1",
+                        "on-surface": "#191c1b",
+                        "on-secondary-fixed": "#00201d",
+                        "tertiary-fixed": "#8ef4e9",
+                        "on-error-container": "#93000a",
+                        "error-container": "#ffdad6",
+                        "surface": "#f8faf7",
+                        "on-secondary": "#ffffff",
+                        "primary-container": "#004d40",
+                        "primary-fixed": "#afefdd",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-fixed-variant": "#065043",
+                        "error": "#ba1a1a",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed-dim": "#a2cfc8",
+                        "on-surface-variant": "#3f4945"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-gap-sm": "8px",
+                        "stack-gap-md": "16px",
+                        "container-padding": "20px",
+                        "margin-page": "16px",
+                        "gutter": "16px",
+                        "stack-gap-lg": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "module-title": ["Plus Jakarta Sans"],
+                        "section-title": ["Plus Jakarta Sans"],
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "body-md": ["Be Vietnam Pro"],
+                        "body-lg": ["Be Vietnam Pro"],
+                        "label-md": ["Be Vietnam Pro"],
+                        "headline-lg": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "module-title": ["18px", {"lineHeight": "26px", "fontWeight": "600"}],
+                        "section-title": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                        "headline-lg-mobile": ["22px", {"lineHeight": "30px", "fontWeight": "700"}],
+                        "body-md": ["14px", {"lineHeight": "22px", "fontWeight": "400"}],
+                        "body-lg": ["15px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                        "headline-lg": ["24px", {"lineHeight": "32px", "fontWeight": "700"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-surface min-h-screen flex flex-col md:flex-row overflow-hidden font-body-md text-body-md">
+<!-- Page A: Processing Screen (Hidden by Default) -->
+<div class="flex-1 flex flex-col w-full max-w-md mx-auto h-screen bg-surface-container-lowest shadow-xl relative z-10 hidden" id="page-processing">
+<!-- Header -->
+<header class="h-16 flex items-center px-container-padding justify-between sticky top-0 bg-surface/80 backdrop-blur-xl z-20">
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors" onclick="togglePages()">
+<span class="material-symbols-outlined text-on-surface-variant">arrow_back</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-primary">正在拆解内容</h1>
+<div class="w-10"></div>
+</header>
+<!-- Main Content -->
+<main class="flex-1 overflow-y-auto px-container-padding py-stack-gap-lg">
+<!-- Video Reference Card -->
+<div class="bg-surface border border-outline-variant/30 rounded-xl overflow-hidden shadow-sm mb-stack-gap-lg p-3 flex gap-3">
+<div class="w-24 h-24 rounded-lg bg-surface-container overflow-hidden flex-shrink-0 relative">
+<img class="w-full h-full object-cover" data-alt="A professional vertical high-definition video frame showing a lifestyle content creator in a bright modern studio setting. Soft daylight filters through windows, creating a clean Minimalist Corporate aesthetic. The scene is crisp and high-quality, with deep forest green and teal accents in the background decor, maintaining a sophisticated professional tone." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDN8xz23Ri5oTfTVJM0NogNYupnev1fUcMoZ1DeDAWJqBh_Yp5uxjUvJ0uOpL1JE6GUqg1R4ll4lfywowfSaiRc--Sb_TOGLr2DnKQBIcYf00Y5y-UDbOsmXuOPBnXqXYuX3K0kx0lhSXYA0knyAwW7Z9Xih1c0AbkacXXmiLKifXDHyoOwZWLJSSV31QIAttwsJHq8dsXnTAYDquBjQBQgo7YJaKJIsp-0f7li5ETQm9ifayBM_VeD">
+<div class="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1 rounded">03:45</div>
+</div>
+<div class="flex flex-col justify-center gap-1">
+<span class="font-bold text-on-surface line-clamp-1">如何用AI提升10倍工作效率</span>
+<div class="flex items-center gap-2 text-on-surface-variant text-label-md">
+<span class="material-symbols-outlined text-[14px]">link</span>
+<span class="">抖音视频</span>
+</div>
+<div class="text-on-surface-variant text-label-md mt-1">开始时间: 14:32:05</div>
+</div>
+</div>
+<!-- Progress Steps -->
+<div class="relative space-y-8 pl-8">
+<!-- Vertical Line -->
+<div class="absolute left-[15px] top-4 bottom-4 w-[2px] bg-outline-variant/30"></div>
+<!-- Step 1: Completed -->
+<div class="relative">
+<div class="absolute -left-[25px] w-5 h-5 rounded-full bg-primary flex items-center justify-center text-white z-10">
+<span class="material-symbols-outlined text-[14px] font-bold">check</span>
+</div>
+<div>
+<h3 class="font-bold text-on-surface">读取链接</h3>
+<p class="text-on-surface-variant text-label-md">内容已成功获取并注入分析引擎</p>
+</div>
+</div>
+<!-- Step 2: Completed -->
+<div class="relative">
+<div class="absolute -left-[25px] w-5 h-5 rounded-full bg-primary flex items-center justify-center text-white z-10">
+<span class="material-symbols-outlined text-[14px] font-bold">check</span>
+</div>
+<div>
+<h3 class="font-bold text-on-surface">整理文字稿</h3>
+<p class="text-on-surface-variant text-label-md">已转录 2,450 字，完成情感极值标注</p>
+</div>
+</div>
+<!-- Step 3: Active -->
+<div class="relative">
+<div class="absolute -left-[25px] w-5 h-5 rounded-full bg-primary flex items-center justify-center text-white z-10 step-active-pulse shadow-[0_0_12px_rgba(0,77,64,0.4)]">
+<span class="material-symbols-outlined text-[14px] animate-spin">sync</span>
+</div>
+<div class="bg-secondary-container/20 p-4 rounded-xl border border-secondary-container">
+<h3 class="font-bold text-primary">分析内容结构</h3>
+<p class="text-on-secondary-container text-body-md mt-1 italic">“正在识别爆款钩子与逻辑转折点...”</p>
+<div class="mt-3 flex items-center gap-2">
+<div class="flex-1 h-1 bg-outline-variant/30 rounded-full overflow-hidden">
+<div class="h-full w-2/3 bg-gradient-to-r from-secondary-fixed-dim to-primary rounded-full"></div>
+</div>
+<span class="text-label-md text-primary font-bold">预计 35s</span>
+</div>
+</div>
+</div>
+<!-- Step 4: Pending -->
+<div class="relative opacity-40">
+<div class="absolute -left-[25px] w-5 h-5 rounded-full bg-outline-variant flex items-center justify-center text-white z-10">
+<span class="material-symbols-outlined text-[14px]">pending</span>
+</div>
+<div>
+<h3 class="font-bold text-on-surface">生成模板</h3>
+<p class="text-on-surface-variant text-label-md">待前序步骤完成后开始</p>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer Notice -->
+<footer class="p-container-padding text-center">
+<div class="inline-flex items-center gap-2 text-on-surface-variant/60 py-2 px-4 rounded-full bg-surface-container-low border border-outline-variant/20">
+<span class="material-symbols-outlined text-[16px]">info</span>
+<span class="text-label-md">进程在后台运行，您可以放心离开此页</span>
+</div>
+</footer>
+</div>
+<!-- Page B: Result Screen -->
+<div class="flex-1 flex flex-col w-full max-w-md mx-auto h-screen bg-background relative" id="page-result">
+<!-- Header -->
+<header class="h-16 flex items-center px-container-padding justify-between bg-surface/80 backdrop-blur-xl sticky top-0 z-20">
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors" onclick="togglePages()">
+<span class="material-symbols-outlined text-on-surface-variant">arrow_back</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-primary">拆解完成</h1>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container">
+<span class="material-symbols-outlined text-on-surface-variant">more_vert</span>
+</button>
+</header>
+<main class="flex-1 overflow-y-auto hide-scrollbar">
+<!-- Video Info Card -->
+<section class="px-container-padding py-stack-gap-md">
+<div class="bg-surface-container-lowest border border-outline-variant/30 p-4 rounded-2xl flex gap-4 items-center">
+<div class="w-20 h-20 rounded-xl bg-surface-container overflow-hidden flex-shrink-0 relative">
+<img class="w-full h-full object-cover" data-alt="A clean, minimalist high-definition video thumbnail showing a sleek desk with a laptop and a steaming cup of green tea. The background is a blurred office space with soft lighting. The color scheme is dominated by deep forest green and teal tones, reflecting a professional Sage Architect persona. Minimal text on the screen reads 'Digital Clarity'." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBdK9_IWr3KjudbK6QM0-BM9Fi2gZr93J5GaLunja2m4FyxZB5bV_4QOOP_k70EcZfXigw1kVrTIgNkB6WT8Vm33SZtR4kQHOPCM4ZdUFBYT4EAJsVE2lAUxFh3wC0IWbpGZmGXHKm7zct5va28mtUMGAz-xahbgw-JaewS0NTfXAMFPYVIdHVWTsnz8ICocB_LzcVU7tNVRPad_jv1HdjVQq9Jf-zM2KdB6bNRDVHem135kvd9qMdo">
+</div>
+<div class="flex-1">
+<h2 class="font-bold text-on-surface line-clamp-2 mb-1">AI工具革命：如何重构你的每日工作流</h2>
+<div class="flex items-center gap-3 text-on-surface-variant text-label-md">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 12:45</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">trending_up</span> 1.2w 完播</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Tabs -->
+<nav class="flex px-container-padding border-b border-outline-variant/20 sticky top-0 bg-background/95 backdrop-blur-sm z-10">
+<button class="flex-1 py-4 text-primary font-bold border-b-2 border-primary" style="transform: scale(1);">爆款结构</button>
+<button class="flex-1 py-4 text-on-surface-variant hover:text-primary transition-colors" style="transform: scale(1);">文字稿</button>
+<button class="flex-1 py-4 text-on-surface-variant hover:text-primary transition-colors">模板库</button>
+</nav>
+<!-- Content Area: Viral Structure -->
+<div class="p-container-padding space-y-stack-gap-lg">
+<!-- Hook -->
+<div class="group">
+<div class="flex justify-between items-center mb-2">
+<span class="px-2 py-0.5 rounded bg-tertiary-fixed text-on-tertiary-fixed text-[10px] font-bold uppercase tracking-wider">00:00 - 00:15</span>
+<span class="text-label-md font-bold text-primary">开场钩子</span>
+</div>
+<div class="bg-surface p-4 rounded-xl border border-outline-variant/30 hover:border-primary/40 transition-colors">
+<p class="text-on-surface font-medium leading-relaxed">“如果你还在手动整理会议纪要，你每天至少浪费了2小时。今天我要教你一个AI神技...”</p>
+<div class="mt-2 flex flex-wrap gap-2">
+<span class="text-[10px] bg-secondary-container/30 text-on-secondary-container px-2 py-0.5 rounded-full">痛点共鸣</span>
+<span class="text-[10px] bg-secondary-container/30 text-on-secondary-container px-2 py-0.5 rounded-full">利益点前置</span>
+</div>
+</div>
+</div>
+<!-- Pain Point -->
+<div class="group">
+<div class="flex justify-between items-center mb-2">
+<span class="px-2 py-0.5 rounded bg-surface-container-high text-on-surface-variant text-[10px] font-bold uppercase tracking-wider">00:15 - 01:20</span>
+<span class="text-label-md font-bold text-primary">痛点铺垫</span>
+</div>
+<div class="bg-surface p-4 rounded-xl border border-outline-variant/30">
+<p class="text-on-surface-variant leading-relaxed">详细拆解了传统流程的低效，列举了职场人最怕的三个瞬间，建立紧迫感。</p>
+</div>
+</div>
+<!-- Core Logic -->
+<div class="group">
+<div class="flex justify-between items-center mb-2">
+<span class="px-2 py-0.5 rounded bg-surface-container-high text-on-surface-variant text-[10px] font-bold uppercase tracking-wider">01:20 - 08:30</span>
+<span class="text-label-md font-bold text-primary">核心论证</span>
+</div>
+<div class="bg-surface p-4 rounded-xl border border-outline-variant/30">
+<ul class="space-y-3">
+<li class="flex gap-3">
+<span class="w-5 h-5 rounded-full bg-primary-container text-primary text-[12px] flex items-center justify-center flex-shrink-0 mt-0.5 font-bold">1</span>
+<span class="text-on-surface">工具矩阵选择（轻量化原则）</span>
+</li>
+<li class="flex gap-3">
+<span class="w-5 h-5 rounded-full bg-primary-container text-primary text-[12px] flex items-center justify-center flex-shrink-0 mt-0.5 font-bold">2</span>
+<span class="text-on-surface">Prompt 三步法实操演示</span>
+</li>
+</ul>
+</div>
+</div>
+<!-- Template Preview Card -->
+<div class="bg-surface-container-low text-on-surface p-6 rounded-2xl shadow-sm border border-outline-variant/20 relative overflow-hidden">
+<div class="absolute -right-10 -top-10 w-40 h-40 bg-white/5 rounded-full blur-3xl"></div>
+<div class="relative z-10">
+<div class="flex items-center gap-2 mb-2 text-primary">
+<span class="material-symbols-outlined text-[18px]">auto_awesome</span>
+<span class="text-label-md uppercase tracking-widest">推荐模板</span>
+</div>
+<h3 class="text-headline-md font-bold mb-4 text-primary">职场效率工具拆解模板</h3>
+<div class="grid grid-cols-2 gap-4 mb-6">
+<div class="bg-surface-container p-3 rounded-lg border border-outline-variant/10">
+<span class="block text-[10px] text-on-surface-variant mb-1">适配场景</span>
+<span class="text-label-md text-on-surface font-medium">知识科普/技能分享</span>
+</div>
+<div class="bg-surface-container p-3 rounded-lg border border-outline-variant/10">
+<span class="block text-[10px] text-on-surface-variant mb-1">结构强度</span>
+<span class="text-label-md text-on-surface font-medium">逻辑严密型</span>
+</div>
+</div>
+<button class="w-full bg-primary text-white font-bold py-3 rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-md">
+                            用此模板制作
+                            <span class="material-symbols-outlined text-[18px]">edit_note</span>
+</button>
+</div>
+</div>
+</div>
+<div class="h-24"></div> <!-- Spacer -->
+</main>
+<!-- Bottom Action Bar -->
+<footer class="px-container-padding py-4 bg-surface/90 backdrop-blur-md border-t border-outline-variant/10 flex gap-3 sticky bottom-0">
+<button class="flex-1 h-12 flex items-center justify-center gap-2 border border-primary text-primary font-bold rounded-xl hover:bg-primary-container/10 transition-colors" style="transform: scale(1);">
+<span class="material-symbols-outlined text-[18px]">bookmark</span>
+                保存模板
+            </button>
+<button class="flex-1 h-12 flex items-center justify-center gap-2 border border-primary text-primary font-bold rounded-xl hover:bg-primary-container/10 transition-colors">
+<span class="material-symbols-outlined text-[18px]">replay</span>
+                重新拆解
+            </button>
+</footer>
+</div>
+<!-- Script to toggle between pages for demonstration -->
+<script>
+        function togglePages() {
+            const p1 = document.getElementById('page-processing');
+            const p2 = document.getElementById('page-result');
+            if (p1.classList.contains('hidden')) {
+                p1.classList.remove('hidden');
+                p2.classList.add('hidden');
+            } else {
+                p1.classList.add('hidden');
+                p2.classList.remove('hidden');
+            }
+        }
+
+        // Interaction micro-animations
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('mousedown', () => {
+                btn.style.transform = 'scale(0.96)';
+            });
+            btn.addEventListener('mouseup', () => {
+                btn.style.transform = 'scale(1)';
+            });
+            btn.addEventListener('mouseleave', () => {
+                btn.style.transform = 'scale(1)';
+            });
+        });
+    </script>
+
+
+</body></html>

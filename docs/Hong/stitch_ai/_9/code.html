@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>宏泰AI智能体 - 个人中心</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Be+Vietnam+Pro:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-container": "#004c47",
+                    "primary-fixed": "#afefdd",
+                    "primary": "#00342b",
+                    "tertiary-fixed": "#8ef4e9",
+                    "error": "#ba1a1a",
+                    "on-primary": "#ffffff",
+                    "surface-dim": "#d8dbd8",
+                    "on-tertiary": "#ffffff",
+                    "on-secondary-fixed": "#00201d",
+                    "inverse-primary": "#94d3c1",
+                    "on-primary-fixed": "#00201a",
+                    "surface-container-high": "#e7e9e6",
+                    "on-tertiary-fixed": "#00201d",
+                    "secondary-fixed-dim": "#a2cfc8",
+                    "tertiary-fixed-dim": "#71d7cd",
+                    "on-error-container": "#93000a",
+                    "surface-tint": "#29695b",
+                    "on-background": "#191c1b",
+                    "on-surface": "#191c1b",
+                    "error-container": "#ffdad6",
+                    "primary-container": "#004d40",
+                    "on-primary-container": "#7ebdac",
+                    "on-tertiary-fixed-variant": "#00504a",
+                    "secondary-fixed": "#beece4",
+                    "surface-container": "#eceeec",
+                    "background": "#f8faf7",
+                    "on-error": "#ffffff",
+                    "on-tertiary-container": "#59c0b6",
+                    "tertiary": "#003330",
+                    "on-surface-variant": "#3f4945",
+                    "inverse-on-surface": "#eff1ef",
+                    "surface-variant": "#e1e3e0",
+                    "surface": "#f8faf7",
+                    "on-secondary-container": "#3f6a64",
+                    "on-secondary": "#ffffff",
+                    "surface-container-lowest": "#ffffff",
+                    "inverse-surface": "#2e3130",
+                    "secondary-container": "#bbe9e1",
+                    "surface-container-highest": "#e1e3e0",
+                    "on-secondary-fixed-variant": "#224e48",
+                    "outline-variant": "#bfc9c4",
+                    "surface-bright": "#f8faf7",
+                    "on-primary-fixed-variant": "#065043",
+                    "surface-container-low": "#f2f4f1",
+                    "primary-fixed-dim": "#94d3c1",
+                    "secondary": "#3b6660",
+                    "outline": "#707975"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "stack-gap-lg": "24px",
+                    "container-padding": "20px",
+                    "stack-gap-sm": "8px",
+                    "margin-page": "16px",
+                    "gutter": "16px",
+                    "stack-gap-md": "16px"
+            },
+            "fontFamily": {
+                    "section-title": ["Plus Jakarta Sans"],
+                    "headline-md": ["Plus Jakarta Sans"],
+                    "headline-lg": ["Plus Jakarta Sans"],
+                    "label-md": ["Be Vietnam Pro"],
+                    "headline-lg-mobile": ["Plus Jakarta Sans"],
+                    "module-title": ["Plus Jakarta Sans"],
+                    "body-lg": ["Be Vietnam Pro"],
+                    "body-md": ["Be Vietnam Pro"]
+            },
+            "fontSize": {
+                    "section-title": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "headline-lg": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                    "headline-lg-mobile": ["22px", {"lineHeight": "30px", "fontWeight": "700"}],
+                    "module-title": ["18px", {"lineHeight": "26px", "fontWeight": "600"}],
+                    "body-lg": ["15px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "body-md": ["14px", {"lineHeight": "22px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #f8faf7; /* Matching surface-bright */
+            color: #191c1b;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .tonal-card {
+            background: #ffffff;
+            border: 1px solid #e0e7e7;
+            box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.04);
+        }
+        .progress-gradient {
+            background: linear-gradient(90deg, #4DB6AC 0%, #004D40 100%);
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md antialiased">
+<!-- TopAppBar -->
+<header class="bg-surface/80 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-sm h-16 flex justify-between items-center px-container-padding transition-all">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-2xl">arrow_back</span>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-primary">个人中心</h1>
+</div>
+<div class="flex items-center gap-4">
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant">notifications</span>
+</button>
+</div>
+</header>
+<main class="min-h-screen pb-32 pt-6 px-margin-page space-y-stack-gap-lg max-w-2xl mx-auto">
+<!-- User Information Section -->
+<section class="tonal-card rounded-xl p-container-padding flex items-center gap-4">
+<div class="relative">
+<img alt="Professional headshot" class="w-16 h-16 rounded-full object-cover ring-2 ring-primary/10" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJSOJAQK302TJ91Uy9YlS62-GBamDLMRhjhsUVLS0e1Lwk9dyax_gqlGmdbvAXrPVAXHAwAtc7Qjkdj0-wV3I_cq5Du_HjaBCE9dNzJJG-jWY-lSEyFWtvAYCJej3nln3UXj6cXox__n_5b3Sn7tW7psOikOb40vQ4iI14y-CDijMA24G10zVFIW2V6F2pejFTvVbzpCfP44jvMu5pd0dCtPN4JBUqkNs8jMOVTa8wl_dIRcbz-ITC"/>
+<div class="absolute bottom-0 right-0 bg-primary-container text-on-primary-container p-1 rounded-full flex items-center justify-center border-2 border-white">
+<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 1;">verified</span>
+</div>
+</div>
+<div class="flex-1">
+<div class="flex items-center gap-2">
+<h2 class="font-module-title text-module-title text-primary">大健康创业者</h2>
+<span class="bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider">PRO</span>
+</div>
+<p class="text-on-surface-variant text-label-md mt-1">账号类型：专业版</p>
+</div>
+<span class="material-symbols-outlined text-outline">chevron_right</span>
+</section>
+<!-- AI Configuration Section -->
+<section class="space-y-stack-gap-sm">
+<h3 class="font-section-title text-section-title text-on-surface-variant px-1">AI 配置</h3>
+<div class="tonal-card rounded-xl divide-y divide-outline-variant overflow-hidden">
+<div class="p-container-padding flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">record_voice_over</span>
+<span class="font-body-lg text-body-lg">首选配音</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-on-surface-variant text-body-md">温润男声</span>
+<span class="material-symbols-outlined text-outline">chevron_right</span>
+</div>
+</div>
+</div>
+</section>
+<!-- AI Model Integration Settings -->
+<section class="space-y-stack-gap-sm">
+<h3 class="font-section-title text-section-title text-on-surface-variant px-1">模型接入设置</h3>
+<div class="space-y-stack-gap-sm">
+<!-- Text Model Category (Expanded) -->
+<div class="tonal-card rounded-xl overflow-hidden">
+<div class="p-container-padding flex items-center justify-between bg-surface-container-low cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">smart_toy</span>
+<span class="font-body-lg text-body-lg font-medium">文本模型</span>
+</div>
+<span class="material-symbols-outlined text-outline">expand_less</span>
+</div>
+<div class="divide-y divide-outline-variant">
+<div class="p-container-padding flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="font-body-md text-body-md">模型选择</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-primary font-medium text-body-md">GPT-4o</span>
+<span class="material-symbols-outlined text-outline">expand_more</span>
+</div>
+</div>
+<div class="p-container-padding flex flex-col gap-2">
+<div class="flex items-center gap-3 mb-1">
+<span class="font-body-md text-body-md">API Key 配置</span>
+</div>
+<div class="relative">
+<input class="w-full bg-surface-container-low border-none rounded-lg px-4 py-2.5 text-body-md focus:ring-2 focus:ring-primary/20 placeholder:text-outline/50" placeholder="sk-••••••••••••••••" type="password"/>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline text-xl cursor-pointer">visibility</span>
+</div>
+</div>
+<div class="p-container-padding flex flex-col gap-2">
+<div class="flex items-center gap-3 mb-1">
+<span class="font-body-md text-body-md">自定义域名/代理</span>
+</div>
+<input class="w-full bg-surface-container-low border-none rounded-lg px-4 py-2.5 text-body-md focus:ring-2 focus:ring-primary/20 placeholder:text-outline/50" placeholder="https://api.openai.com/v1" type="text"/>
+</div>
+</div>
+</div>
+<!-- TTS Category (Collapsed) -->
+<div class="tonal-card rounded-xl overflow-hidden">
+<div class="p-container-padding flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">record_voice_over</span>
+<span class="font-body-lg text-body-lg font-medium">TTS 语音合成</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-on-surface-variant text-label-md">OpenAI TTS</span>
+<span class="material-symbols-outlined text-outline">expand_more</span>
+</div>
+</div>
+</div>
+<!-- STT Category (Collapsed) -->
+<div class="tonal-card rounded-xl overflow-hidden">
+<div class="p-container-padding flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">settings_voice</span>
+<span class="font-body-lg text-body-lg font-medium">语音转写</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-on-surface-variant text-label-md">Whisper-1</span>
+<span class="material-symbols-outlined text-outline">expand_more</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- General Settings -->
+<section class="space-y-stack-gap-sm">
+<h3 class="font-section-title text-section-title text-on-surface-variant px-1">通用</h3>
+<div class="tonal-card rounded-xl divide-y divide-outline-variant overflow-hidden">
+<div class="p-container-padding flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">chat_bubble</span>
+<span class="font-body-lg text-body-lg">意见反馈</span>
+</div>
+<span class="material-symbols-outlined text-outline">chevron_right</span>
+</div>
+<div class="p-container-padding flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">info</span>
+<span class="font-body-lg text-body-lg">关于我们</span>
+</div>
+<span class="material-symbols-outlined text-outline">chevron_right</span>
+</div>
+<div class="p-container-padding flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">update</span>
+<span class="font-body-lg text-body-lg">版本更新</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 bg-error rounded-full animate-pulse"></div>
+<span class="text-on-surface-variant text-body-md">v2.4.0</span>
+<span class="material-symbols-outlined text-outline">chevron_right</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Logout Button -->
+<section class="pt-4 pb-8 flex flex-col items-center">
+<button class="text-error font-medium py-3 px-8 rounded-full hover:bg-error-container/10 transition-colors active:scale-95 duration-200">
+                退出登录
+            </button>
+<p class="text-outline text-[11px] mt-4 opacity-60">© 2024 宏泰AI智能体 版权所有</p>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="bg-surface/80 backdrop-blur-xl fixed bottom-0 left-0 w-full flex justify-around items-center h-20 px-4 z-50 shadow-sm pb-safe"><a class="flex flex-col items-center justify-center text-on-surface-variant transition-all hover:opacity-80" href="#"><div class="w-7 h-7 mb-1 rounded-md overflow-hidden border border-primary/20"><img alt="AI" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDHF7BaeMhupCCyu5GSuhOyUDpjpWOK4BsVMcBY-bdG86N2nrDXZ6jIiA1hXB_2ASg0pLMtcocFI5c61Q8UJVrud0f68AtSHAHht4N-LLiVqm0O5S9uCfvRnMGG9E0MJBvnXDsJwQWiXSB2pYff3IGTrwjKDR3ZimohmgT6dMYzXXTeTMQM4V0QT2DQ6-ao06l6P6KmLdqKritEmKHcLN4oirVSfd8lxCxq_8we4PA2RlBzrdTzGXob"/></div><span class="font-label-md text-label-md">AI</span></a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant transition-all hover:opacity-80" href="#">
+<span class="material-symbols-outlined mb-1">analytics</span>
+<span class="font-label-md text-label-md">拆解</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant transition-all hover:opacity-80" href="#">
+<span class="material-symbols-outlined mb-1">movie_edit</span>
+<span class="font-label-md text-label-md">制作</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant transition-all hover:opacity-80" href="#">
+<span class="material-symbols-outlined mb-1">folder_open</span>
+<span class="font-label-md text-label-md">素材</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary font-bold translate-y-[-2px] transition-all" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">settings</span>
+<span class="font-label-md text-label-md">设置</span>
+</a>
+</nav>
+<!-- Micro-interactions Script -->
+<script>
+        // Simple touch feedback for cards
+        document.querySelectorAll('.tonal-card > div').forEach(item => {
+            item.addEventListener('touchstart', () => {
+                item.style.backgroundColor = 'var(--surface-container-high)';
+            });
+            item.addEventListener('touchend', () => {
+                setTimeout(() => {
+                    item.style.backgroundColor = '';
+                }, 100);
+            });
+        });
+
+        // Adjust header blur on scroll
+        window.addEventListener('scroll', () => {
+            const header = document.querySelector('header');
+            if (window.scrollY > 10) {
+                header.classList.add('shadow-md');
+                header.classList.remove('shadow-sm');
+            } else {
+                header.classList.add('shadow-sm');
+                header.classList.remove('shadow-md');
+            }
+        });
+    </script>
+</body></html>

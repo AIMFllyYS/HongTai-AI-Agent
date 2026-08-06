@@ -1,0 +1,320 @@
+<!DOCTYPE html><html class="light" lang="zh-CN" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport">
+<title>宏泰AI智能体 - 视频拆解中</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;family=Be+Vietnam+Pro:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed-variant": "#065043",
+                        "primary-container": "#004d40",
+                        "outline": "#707975",
+                        "surface-variant": "#e1e3e0",
+                        "surface-container-high": "#e7e9e6",
+                        "surface-container": "#eceeec",
+                        "on-tertiary-fixed": "#00201d",
+                        "secondary": "#3b6660",
+                        "on-secondary-container": "#3f6a64",
+                        "surface-container-low": "#f2f4f1",
+                        "tertiary": "#003330",
+                        "primary-fixed": "#afefdd",
+                        "surface": "#f8faf7",
+                        "on-primary-fixed": "#00201a",
+                        "surface-container-lowest": "#ffffff",
+                        "outline-variant": "#bfc9c4",
+                        "on-tertiary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "surface-tint": "#29695b",
+                        "tertiary-fixed": "#8ef4e9",
+                        "primary-fixed-dim": "#94d3c1",
+                        "on-secondary-fixed-variant": "#224e48",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#00504a",
+                        "on-surface-variant": "#3f4945",
+                        "secondary-fixed-dim": "#a2cfc8",
+                        "error-container": "#ffdad6",
+                        "surface-dim": "#d8dbd8",
+                        "secondary-container": "#bbe9e1",
+                        "on-tertiary-container": "#59c0b6",
+                        "background": "#f8faf7",
+                        "on-surface": "#191c1b",
+                        "secondary-fixed": "#beece4",
+                        "tertiary-container": "#004c47",
+                        "on-secondary-fixed": "#00201d",
+                        "inverse-surface": "#2e3130",
+                        "primary": "#00342b",
+                        "surface-container-highest": "#e1e3e0",
+                        "error": "#ba1a1a",
+                        "on-background": "#191c1b",
+                        "inverse-on-surface": "#eff1ef",
+                        "inverse-primary": "#94d3c1",
+                        "on-secondary": "#ffffff",
+                        "surface-bright": "#f8faf7",
+                        "on-primary-container": "#7ebdac",
+                        "on-error": "#ffffff",
+                        "tertiary-fixed-dim": "#71d7cd"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-gap-sm": "8px",
+                        "stack-gap-md": "16px",
+                        "gutter": "16px",
+                        "stack-gap-lg": "24px",
+                        "container-padding": "20px",
+                        "margin-page": "16px"
+                    },
+                    "fontFamily": {
+                        "module-title": ["Plus Jakarta Sans"],
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "body-md": ["Be Vietnam Pro"],
+                        "section-title": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "label-md": ["Be Vietnam Pro"],
+                        "body-lg": ["Be Vietnam Pro"],
+                        "mono": ["JetBrains Mono", "monospace"]
+                    },
+                    "fontSize": {
+                        "module-title": ["18px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["22px", { "lineHeight": "30px", "fontWeight": "700" }],
+                        "body-md": ["14px", { "lineHeight": "22px", "fontWeight": "400" }],
+                        "section-title": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500" }],
+                        "body-lg": ["15px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    },
+                    "animation": {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'spin-slow': 'spin 3s linear infinite',
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .progress-gradient {
+            background: linear-gradient(90deg, #4DB6AC 0%, #004D40 100%);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background antialiased min-h-screen flex flex-col font-body-md selection:bg-primary-container selection:text-white">
+<!-- TopAppBar -->
+<header class="bg-surface/80 dark:bg-surface-container/80 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-sm flex justify-between items-center w-full px-container-padding h-16"><div class="flex items-center gap-3">
+<button class="text-on-surface-variant dark:text-outline hover:bg-surface-container-high dark:hover:bg-tertiary-container/30 transition-colors p-2 rounded-full active:scale-95 duration-200 ease-in-out flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="smart_toy">smart_toy</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-primary dark:text-primary-fixed">宏泰AI智能体</h1>
+</div>
+<button class="text-on-surface-variant dark:text-outline hover:bg-surface-container-high dark:hover:bg-tertiary-container/30 transition-colors p-2 rounded-full active:scale-95 duration-200 ease-in-out flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button></header>
+<!-- Main Content Canvas -->
+<main class="flex-grow flex flex-col px-margin-page py-stack-gap-lg gap-stack-gap-lg pb-32 overflow-x-hidden">
+<!-- Input Area (Disabled state during processing) -->
+<section class="flex flex-col gap-stack-gap-sm">
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-outline-variant text-lg">link</span>
+</div>
+<input class="block w-full pl-10 pr-3 py-3 border border-surface-variant rounded-lg bg-surface-container-low text-on-surface-variant shadow-sm focus:outline-none sm:text-sm font-body-md opacity-70 cursor-not-allowed" disabled="" type="url" value="https://v.douyin.com/ie9wH...">
+</div>
+</section>
+<!-- CoT Progress Card -->
+<section class="flex flex-col">
+<div class="bg-surface-container-lowest border border-[#E0E7E7] rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.04)] overflow-hidden relative">
+<!-- Card Header -->
+<div class="px-container-padding py-stack-gap-md border-b border-surface-variant bg-surface/50 backdrop-blur-sm flex items-center gap-3">
+<div class="relative w-8 h-8 flex items-center justify-center">
+<div class="absolute inset-0 border-2 border-primary-container/20 rounded-full"></div>
+<div class="absolute inset-0 border-2 border-t-primary-container rounded-full animate-spin"></div>
+<span class="material-symbols-outlined text-primary-container text-sm">auto_awesome</span>
+</div>
+<h2 class="font-module-title text-module-title text-primary">正在深度拆解视频逻辑...</h2>
+</div>
+<!-- Terminal Log Area -->
+<div class="p-container-padding bg-surface-container-low/50 text-sm leading-relaxed flex flex-col gap-3 min-h-[240px]"><!-- Step 1: Completed -->
+<div class="flex items-start gap-3 opacity-80">
+<span class="material-symbols-outlined text-[#2E7D32] text-base mt-0.5" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<div class="flex-grow flex justify-between">
+<span class="text-on-surface font-section-title"> [1/7] 识别平台...</span>
+<span class="text-[#2E7D32] font-medium">完成</span>
+</div>
+</div>
+<!-- Step 2: Completed -->
+<div class="flex items-start gap-3 opacity-80">
+<span class="material-symbols-outlined text-[#2E7D32] text-base mt-0.5" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<div class="flex-grow flex justify-between">
+<span class="text-on-surface font-section-title"> [2/7] 解析链接...</span>
+<span class="text-[#2E7D32] font-medium">完成</span>
+</div>
+</div>
+<!-- Step 3: Completed with data -->
+<div class="flex items-start gap-3 opacity-80">
+<span class="material-symbols-outlined text-[#2E7D32] text-base mt-0.5" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<div class="flex-grow">
+<div class="flex justify-between">
+<span class="text-on-surface font-section-title"> [3/7] 提取内容...</span>
+</div>
+<div class="pl-2 mt-1 text-xs text-outline border-l-2 border-surface-variant">
+                                标题="如何在2024年打造个人IP"<br>
+                                作者="IP架构师老李"<br>
+                                时长=04:12
+                            </div>
+</div>
+</div>
+<!-- Step 4: Completed with data -->
+<div class="flex items-start gap-3 opacity-80">
+<span class="material-symbols-outlined text-[#2E7D32] text-base mt-0.5" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<div class="flex-grow">
+<div class="flex justify-between">
+<span class="text-on-surface font-section-title"> [4/7] 选择资源...</span>
+</div>
+<div class="pl-2 mt-1 text-xs text-outline border-l-2 border-surface-variant">
+                                视频质量=1080p<br>
+                                水印=无水印 (已处理)
+                            </div>
+</div>
+</div>
+<!-- Step 5: Current/Ongoing -->
+<div class="flex items-start gap-3 bg-primary-container/5 -mx-4 px-4 py-2 rounded-md border-l-4 border-primary-container">
+<span class="material-symbols-outlined text-[#00796B] text-base mt-0.5 animate-spin-slow">sync</span>
+<div class="flex-grow flex flex-col gap-2">
+<div class="flex justify-between font-medium">
+<span class="text-primary-container font-section-title"> [5/7] 下载媒体...</span>
+<span class="text-primary-container">下载 82%</span>
+</div>
+<!-- Progress Bar -->
+<div class="w-full bg-[#E0E7E7] h-1.5 rounded-full overflow-hidden">
+<div class="progress-gradient h-full rounded-full transition-all duration-300 ease-out" style="width: 82%"></div>
+</div>
+<div class="text-xs text-on-surface-variant mt-1">
+                                已下载 45.2MB / 55.1MB (2.4MB/s)
+                            </div>
+</div>
+</div>
+<!-- Step 6: Pending -->
+<div class="flex items-start gap-3 opacity-40">
+<span class="material-symbols-outlined text-outline text-base mt-0.5">schedule</span>
+<div class="flex-grow flex justify-between">
+<span class="text-on-surface font-section-title"> [6/7] 语音转文字 (ASR)...</span>
+<span class="text-outline">等待中</span>
+</div>
+</div>
+<!-- Step 7: Pending -->
+<div class="flex items-start gap-3 opacity-40">
+<span class="material-symbols-outlined text-outline text-base mt-0.5">schedule</span>
+<div class="flex-grow flex justify-between">
+<span class="text-on-surface font-section-title"> [7/7] 智能分镜分析...</span>
+<span class="text-outline">等待中</span>
+</div>
+</div></div>
+</div>
+<!-- Cancel Action -->
+<div class="mt-4 flex justify-center">
+<button class="px-6 py-2 rounded-full border border-surface-variant text-on-surface-variant text-sm font-medium hover:bg-surface-container transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">close</span>
+                    取消拆解
+                </button>
+</div>
+</section>
+<!-- Recent Deconstructions (Pushed down) -->
+<section id="content-section" class="">
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-headline-md text-headline-md text-on-surface">最近拆解</h3>
+<button class="font-label-md text-label-md text-primary font-bold" onclick="toggleEmptyState()">切换空状态测试</button>
+</div>
+<div class="space-y-3" id="recent-list">
+<div class="bg-surface-container-lowest p-3 rounded-xl border border-outline-variant/20 flex items-center gap-3 shadow-sm active:bg-surface-container transition-colors">
+<div class="w-20 h-20 rounded-lg bg-cover bg-center shrink-0 overflow-hidden" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuA9tuFLFL638-d0D9aEJkvehGCC0TKZPBCPvLpG1FkLtPOFr2HfHzhv0RlM3IUXGvg0uUZoGDXxIL5ZZThNm2zKApsc5N2PWsOSP7u31jtIv9o_9VkWdiyXNNeZuVmNLD2AY82KJN4_3edRms7bMp5148nNIauABnIY_NOULbG-kcXTDeH6JwMHLEMbBjBgOlQNdNULmyFXRUrsiTbV9CiEvrasSfBh3GQjFM1RZOKtXwtXIFdN0fUR')">
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="font-section-title text-section-title text-on-surface truncate">职场穿搭爆款逻辑拆解</h4>
+<p class="font-label-md text-label-md text-outline mt-1">2023-11-24 14:30</p>
+<div class="mt-2 flex items-center">
+<span class="px-2 py-0.5 rounded-full bg-green-100 text-[#2E7D32] font-label-md text-[10px] flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]" data-icon="check_circle" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                                已完成
+                            </span>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline" data-icon="chevron_right">chevron_right</span>
+</div>
+<div class="bg-surface-container-lowest p-3 rounded-xl border border-outline-variant/20 flex items-center gap-3 shadow-sm active:bg-surface-container transition-colors">
+<div class="w-20 h-20 rounded-lg bg-cover bg-center shrink-0 overflow-hidden" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuA0qt9QBz078_7hK6MmEkdhJtnVfHhJhTXNeCuM7rYe4SdIqoQOL3BYNRC-9ZaPRMCjRUEUYaEm_qy1p91bRmphyXNc3hsTm0r3yCkxB1oyoeLxpp1jFqe9ROe-CPajT3ZKmoVOb89UTOvE0EN4le8zh1cSrwzH4i7EZ53mlF_Ue4RsYj_kGrWzkq-aI5ShuCCELv0FcA5FlSNzgbtSqcebqUxDwQCcJTBBwCf_-eeOHu43is5D2K5-')">
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="font-section-title text-section-title text-on-surface truncate">美食探店类脚本深度分析</h4>
+<p class="font-label-md text-label-md text-outline mt-1">2023-11-23 09:15</p>
+<div class="mt-2 flex items-center">
+<span class="px-2 py-0.5 rounded-full bg-orange-100 text-[#F57C00] font-label-md text-[10px] flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px] animate-spin" data-icon="sync">sync</span>
+                                分析中
+                            </span>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline" data-icon="chevron_right">chevron_right</span>
+</div>
+<div class="bg-surface-container-lowest p-3 rounded-xl border border-outline-variant/20 flex items-center gap-3 shadow-sm active:bg-surface-container transition-colors">
+<div class="w-20 h-20 rounded-lg bg-cover bg-center shrink-0 overflow-hidden" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCFvfggHC2WJzkwyQ6TvIPXvpqZxd_gC5-b6gdongjyEl26dPZd-SP6KTykpe0XtbBTMJVV2mQMGQgsqGRCFenZ2zdYDVRj1LnwmUcgCxz3n1RZgHSt7FdLwrhb6abF2nM2bQct4VxqzYNcO6b8vwHj1_N-eZoAWC0ITNrIzCgCP-lDCweRmYxYpcoBJz3WzBjlPXr4Y9H2npd6dfUk54VJPzrtyjPEReg8xnfYeiL_2qFE2tLtSaff')">
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="font-section-title text-section-title text-on-surface truncate">数码测评开头3秒抓人技巧</h4>
+<p class="font-label-md text-label-md text-outline mt-1">2023-11-22 18:45</p>
+<div class="mt-2 flex items-center">
+<span class="px-2 py-0.5 rounded-full bg-green-100 text-[#2E7D32] font-label-md text-[10px] flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]" data-icon="check_circle" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                                已完成
+                            </span>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline" data-icon="chevron_right">chevron_right</span>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center h-20 px-4 bg-surface/80 backdrop-blur-xl shadow-[0_-1px_10px_rgba(0,0,0,0.02)] z-50 pb-safe">
+<a class="flex flex-col items-center justify-center text-on-surface-variant transition-opacity hover:opacity-80 active:translate-y-[-2px] duration-300" href="#">
+<div class="w-8 h-8 rounded-full border border-primary/20 p-0.5 flex items-center justify-center overflow-hidden">
+<img alt="AI" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDHF7BaeMhupCCyu5GSuhOyUDpjpWOK4BsVMcBY-bdG86N2nrDXZ6jIiA1hXB_2ASg0pLMtcocFI5c61Q8UJVrud0f68AtSHAHht4N-LLiVqm0O5S9uCfvRnMGG9E0MJBvnXDsJwQWiXSB2pYff3IGTrwjKDR3ZimohmgT6dMYzXXTeTMQM4V0QT2DQ6-ao06l6P6KmLdqKritEmKHcLN4oirVSfd8lxCxq_8we4PA2RlBzrdTzGXob">
+</div>
+<span class="font-label-md text-label-md mt-1">AI</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary font-bold transition-opacity hover:opacity-80 active:translate-y-[-2px] duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="analytics" data-weight="fill" style="font-variation-settings: 'FILL' 1;">analytics</span>
+<span class="font-label-md text-label-md mt-1">拆解</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant transition-opacity hover:opacity-80 active:translate-y-[-2px] duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="movie_edit">movie_edit</span>
+<span class="font-label-md text-label-md mt-1">制作</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant transition-opacity hover:opacity-80 active:translate-y-[-2px] duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="folder_open">folder_open</span>
+<span class="font-label-md text-label-md mt-1">素材</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant transition-opacity hover:opacity-80 active:translate-y-[-2px] duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-md text-label-md mt-1">设置</span>
+</a>
+</nav>
+<!-- Overlay for safe area on desktop to match visual height if needed, though hidden on md+ via CSS usually. Handled by responsive classes. -->
+<div class="hidden md:flex h-20 w-full"></div>
+
+
+</body></html>

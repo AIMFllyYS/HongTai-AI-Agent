@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN" style=""><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>拆解详情 - 宏泰AI智能体</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Be+Vietnam+Pro:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-on-surface": "#eff1ef",
+                        "inverse-primary": "#94d3c1",
+                        "secondary-container": "#bbe9e1",
+                        "outline-variant": "#bfc9c4",
+                        "surface-container": "#eceeec",
+                        "background": "#f8faf7",
+                        "tertiary": "#003330",
+                        "on-tertiary-container": "#59c0b6",
+                        "tertiary-fixed-dim": "#71d7cd",
+                        "surface-tint": "#29695b",
+                        "on-primary": "#ffffff",
+                        "on-secondary-container": "#3f6a64",
+                        "surface-container-low": "#f2f4f1",
+                        "surface-container-lowest": "#ffffff",
+                        "surface": "#f8faf7",
+                        "on-surface": "#191c1b",
+                        "surface-container-high": "#e7e9e6",
+                        "primary-fixed": "#afefdd",
+                        "inverse-surface": "#2e3130",
+                        "error": "#ba1a1a",
+                        "tertiary-fixed": "#8ef4e9",
+                        "surface-variant": "#e1e3e0",
+                        "tertiary-container": "#004c47",
+                        "surface-bright": "#f8faf7",
+                        "secondary-fixed-dim": "#a2cfc8",
+                        "primary-fixed-dim": "#94d3c1",
+                        "on-tertiary-fixed-variant": "#00504a",
+                        "on-surface-variant": "#3f4945",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-fixed": "#00201d",
+                        "surface-container-highest": "#e1e3e0",
+                        "on-background": "#191c1b",
+                        "secondary": "#3b6660",
+                        "outline": "#707975",
+                        "on-primary-container": "#7ebdac",
+                        "on-error": "#ffffff",
+                        "on-secondary-fixed-variant": "#224e48",
+                        "on-tertiary": "#ffffff",
+                        "primary-container": "#004d40",
+                        "surface-dim": "#d8dbd8",
+                        "on-primary-fixed": "#00201a",
+                        "on-primary-fixed-variant": "#065043",
+                        "on-error-container": "#93000a",
+                        "error-container": "#ffdad6",
+                        "on-secondary-fixed": "#00201d",
+                        "primary": "#00342b",
+                        "secondary-fixed": "#beece4"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-gap-sm": "8px",
+                        "stack-gap-md": "16px",
+                        "margin-page": "16px",
+                        "container-padding": "20px",
+                        "gutter": "16px",
+                        "stack-gap-lg": "24px"
+                    },
+                    "fontFamily": {
+                        "module-title": ["Plus Jakarta Sans"],
+                        "section-title": ["Plus Jakarta Sans"],
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "body-lg": ["Be Vietnam Pro"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "body-md": ["Be Vietnam Pro"],
+                        "label-md": ["Be Vietnam Pro"]
+                    },
+                    "fontSize": {
+                        "module-title": ["18px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "section-title": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["22px", { "lineHeight": "30px", "fontWeight": "700" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "body-lg": ["15px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "22px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { -webkit-tap-highlight-color: transparent; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col antialiased pb-safe">
+<!-- Top Navigation (Task focus, no bottom nav on this page ideally, but user requested BottomNav to be present with "拆解" active. We will render Top Nav as requested.) -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-surface-container/80 backdrop-blur-xl shadow-sm flex items-center justify-between px-gutter w-full h-16">
+<button aria-label="Back" class="text-on-surface-variant p-2 -ml-2 active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[24px]">arrow_back</span>
+</button>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed-dim absolute left-1/2 transform -translate-x-1/2">拆解详情</h1>
+<div class="w-10"></div> <!-- Spacer for centering -->
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow pt-[80px] pb-[100px] px-margin-page flex flex-col gap-stack-gap-md max-w-3xl mx-auto w-full">
+<!-- Section 1: Task Status & Basic Info -->
+<section class="bg-surface-container-lowest rounded-xl p-4 shadow-[0px_4px_12px_rgba(0,0,0,0.04)] border border-outline-variant/30 flex flex-col gap-4">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded flex items-center justify-center text-white text-xs font-bold bg-white/30 backdrop-blur-md"><img alt="抖音" class="w-full h-full object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCr7V0UK5T_m-VPx7zpoD1PkWgx2ET6XKKhLype2Q9tVpe6zUxB3jJJabpHtZ2ZGPTg1F5XUrWBV8o4XHyAvLAZSmrbh516LDOuCJ_cvMtZTO4FOX-WlPGnG_pz4nelLQDba0q9MqLRGhQcko8crgBBrQD3KhnyBIHmGIlSGyBXdDcZYZUlOHCsq73nAtBU3d8USMlNbyV7NzVlKlDJ-6AU4PEGMsm15l1PQ8ebqclqQIatQ68PH1oU"/></div>
+<span class="bg-surface-variant text-on-surface-variant px-2 py-0.5 rounded text-[11px] font-medium tracking-wider">视频</span>
+</div>
+<div class="flex items-center gap-1 bg-[#2E7D32]/10 text-[#2E7D32] px-2.5 py-1 rounded-full">
+<span class="material-symbols-outlined text-[16px]" style='font-variation-settings: "FILL" 1;'>check_circle</span>
+<span class="text-xs font-semibold">已完成</span>
+</div>
+</div>
+<div class="flex gap-4">
+<div class="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-surface-variant border border-outline-variant/20 relative">
+<img class="w-full h-full object-cover" data-alt="A professional vertical video thumbnail showing a person pointing at code on a screen. High quality, clear, modern corporate aesthetic. The lighting is bright and soft. Deep green and teal tones dominate the composition." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCw_J79Ev8MjdbosOjgiN7j476G33KAp9iXrD9xDPzU2dLOqYTTaBgS8AxUJQI30ffGkrV4EDl2eeMtP0-VulNUcqKTirJdOQpIB-qm-km9wTYIJrD074VkayV5UwKT_00g7wQL5FvcxRB5S9NcUX1bIWKeE3dhAI2eRDb5AsNKdCyD3MhF9u1s26RTCKQTk780G3qsFUXRrw_FwAvBhQFgbp0NurXCotCdhvWAnrSCAhbc8EJuPtVi"/>
+<div class="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1 rounded">03:42</div>
+</div>
+<div class="flex flex-col justify-between py-1">
+<h2 class="font-section-title text-section-title text-on-surface line-clamp-2 leading-tight">健康养生干货分享</h2>
+<div class="flex items-center gap-2 text-on-surface-variant mt-2">
+<span class="material-symbols-outlined text-[16px]">account_circle</span>
+<span class="text-sm">阿宇哥AI学伴</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 2: Media Preview (Video Layout) -->
+<section class="bg-surface-container-lowest rounded-xl p-5 shadow-[0px_4px_12px_rgba(0,0,0,0.04)] border border-outline-variant/30"><div class="flex items-center space-x-2 mb-4 pb-4 border-b border-outline-variant/20"><span class="material-symbols-outlined text-primary">image</span><h3 class="font-section-title text-section-title text-on-surface">素材预览</h3></div><div class="relative group"><div class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar gap-2 rounded-lg"><div class="min-w-full snap-center shrink-0 aspect-video rounded-lg overflow-hidden bg-surface-variant"><img alt="Healthy wellness food" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBMb2p_SaV-64mzE3-C2_TqXLcglyeIZeVdSJsFdCamSt93Wk6nXnJFgOATAnJurFV0Mr9ZrjeoGQGTW87VU0ZdYNzvh2ce_94rRhDA0qBaZJQ_k3yAvBuZDRKBCbgyDcGf-Zx8c6IaN8I5z1SEnZxcoLPBT-3B7e-HDHe0QEDZ5Ysl08L3AmAaZdkW2bnzzI9GX-Bqf5o-6xyU5tdJvUEWki23nN0GFz97ldcRFv0NEY5Bwiqx-_MM"/></div><div class="min-w-full snap-center shrink-0 aspect-video rounded-lg overflow-hidden bg-surface-variant"><img alt="Yoga meditation" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCS1wSeX1NTF2abwJMG_zTRppQvHefW2WFaxN2g_XebnZEyJvfHQYHczlUTriAeQ0u95nMCWZ4clP5dTFtrRHdz3nNUkgHsZa5HP47qKm4A1tL1-ITxxg0r6vj16D9wZ346QpnBz_flg0eX4cc2SwlI2XAlOIIVlazMONgCDus09622HXXIdSR9Rs9JVU_oWGB7sGU1WTgNCKyklCMF9j0tlMCzvvHnNlE9UfHRaY1IB73XwvbqnTq0"/></div></div><div class="flex justify-center gap-1.5 mt-4"><div class="w-2.5 h-1 rounded-full bg-primary"></div><div class="w-1 h-1 rounded-full bg-outline-variant"></div><div class="w-1 h-1 rounded-full bg-outline-variant"></div><div class="w-1 h-1 rounded-full bg-outline-variant"></div></div></div><div class="mt-4 pt-4 border-t border-outline-variant/20 flex items-center justify-between text-outline text-[11px] font-medium"><div class="flex items-center gap-3"><span>4张图片</span><span class="w-px h-2.5 bg-outline-variant/30"></span><span>2.4MB</span><span class="w-px h-2.5 bg-outline-variant/30"></span><span>1.2s</span></div><div class="flex items-center gap-1 text-primary"><span class="material-symbols-outlined text-[14px]">download</span><span>保存全部</span></div></div></section><section class="bg-surface-container-lowest rounded-xl p-4 shadow-[0px_4px_12px_rgba(0,0,0,0.04)] border border-outline-variant/30">
+<div class="grid grid-cols-4 gap-2">
+<div class="flex flex-col items-center gap-1">
+<span class="material-symbols-outlined text-[20px] text-on-surface-variant">favorite</span>
+<span class="text-sm font-semibold text-on-surface">1.2k</span>
+<span class="text-[10px] text-outline">点赞</span>
+</div>
+<div class="flex flex-col items-center gap-1">
+<span class="material-symbols-outlined text-[20px] text-on-surface-variant">bookmark</span>
+<span class="text-sm font-semibold text-on-surface">856</span>
+<span class="text-[10px] text-outline">收藏</span>
+</div>
+<div class="flex flex-col items-center gap-1">
+<span class="material-symbols-outlined text-[20px] text-on-surface-variant">chat_bubble</span>
+<span class="text-sm font-semibold text-on-surface">342</span>
+<span class="text-[10px] text-outline">评论</span>
+</div>
+<div class="flex flex-col items-center gap-1">
+<span class="material-symbols-outlined text-[20px] text-on-surface-variant">share</span>
+<span class="text-sm font-semibold text-on-surface">-</span>
+<span class="text-[10px] text-outline">分享</span>
+</div>
+</div>
+</section>
+<!-- Section 3: Transcript & AI Summary (Core Area) -->
+<section class="bg-surface-container-lowest rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.04)] border border-outline-variant/30 flex flex-col overflow-hidden min-h-[400px]">
+<!-- Tabs -->
+<div class="flex border-b border-outline-variant/30 relative">
+<button class="flex-1 py-3 text-sm font-medium text-on-surface-variant border-b-2 border-transparent transition-colors text-center" id="tab-raw">
+                    原始文稿
+                </button>
+<button class="flex-1 py-3 text-sm font-semibold text-primary hover:text-primary border-b-2 border-primary transition-colors text-center" id="tab-ai">AI自动拆解</button>
+</div>
+<!-- Tab Content: Raw Transcript -->
+<div class="p-4 flex flex-col gap-3 overflow-y-auto max-h-[400px] hidden" id="content-raw">
+<div class="flex gap-3 items-start group">
+<div class="text-xs font-mono text-outline mt-1 shrink-0 bg-surface-container px-1.5 py-0.5 rounded">00:00</div>
+<p class="text-sm text-on-surface leading-relaxed group-hover:bg-primary-fixed/20 p-1 -m-1 rounded transition-colors">兄弟们，不想多说了，给我使劲蹬codex。</p>
+</div>
+<div class="flex gap-3 items-start group">
+<div class="text-xs font-mono text-outline mt-1 shrink-0 bg-surface-container px-1.5 py-0.5 rounded">00:05</div>
+<p class="text-sm text-on-surface leading-relaxed group-hover:bg-primary-fixed/20 p-1 -m-1 rounded transition-colors">这个工具简直是生产力神器，特别是做开发的朋友。</p>
+</div>
+<div class="flex gap-3 items-start group">
+<div class="text-xs font-mono text-outline mt-1 shrink-0 bg-surface-container px-1.5 py-0.5 rounded">00:12</div>
+<p class="text-sm text-on-surface leading-relaxed group-hover:bg-primary-fixed/20 p-1 -m-1 rounded transition-colors">今天手把手教大家怎么配置工作流，把效率拉满。</p>
+</div>
+<div class="flex gap-3 items-start group">
+<div class="text-xs font-mono text-outline mt-1 shrink-0 bg-surface-container px-1.5 py-0.5 rounded">00:20</div>
+<p class="text-sm text-on-surface leading-relaxed group-hover:bg-primary-fixed/20 p-1 -m-1 rounded transition-colors">首先，我们需要准备好环境...</p>
+</div>
+</div>
+<!-- Tab Content: AI Summary (Hidden by default) -->
+<div class="p-4 flex flex-col gap-4 overflow-y-auto max-h-[400px]" id="content-ai">
+<div class="bg-secondary-container/30 border border-secondary-container rounded-lg p-3">
+<div class="flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-[18px] text-primary">auto_awesome</span>
+<h3 class="text-sm font-semibold text-primary">结构化解析完成</h3>
+</div>
+<p class="text-xs text-on-surface-variant">AI已将原始视频文稿重构为标准脚本结构，便于后续复用。</p>
+</div>
+<div class="flex flex-col gap-4 relative before:absolute before:inset-y-0 before:left-[11px] before:w-px before:bg-outline-variant/30 pl-2">
+<div class="relative pl-6">
+<div class="absolute left-[-5px] top-1 w-2.5 h-2.5 rounded-full bg-primary ring-4 ring-surface-container-lowest"></div>
+<h4 class="text-xs font-bold text-on-surface mb-1 flex items-center gap-2">
+<span class="">钩子 (Hook)</span>
+<span class="bg-surface-variant text-outline text-[10px] px-1.5 rounded">00:00 - 00:05</span>
+</h4>
+<p class="text-sm text-on-surface-variant bg-surface p-2 rounded border border-outline-variant/10">兄弟们，不想多说了，给我使劲蹬codex。强调强烈推荐，制造悬念。</p>
+</div>
+<div class="relative pl-6">
+<div class="absolute left-[-5px] top-1 w-2.5 h-2.5 rounded-full bg-tertiary-fixed-dim ring-4 ring-surface-container-lowest"></div>
+<h4 class="text-xs font-bold text-on-surface mb-1 flex items-center gap-2">
+<span class="">痛点/价值 (Value)</span>
+<span class="bg-surface-variant text-outline text-[10px] px-1.5 rounded">00:05 - 00:12</span>
+</h4>
+<p class="text-sm text-on-surface-variant bg-surface p-2 rounded border border-outline-variant/10">点出目标受众（开发的朋友），抛出生产力神器的定位。</p>
+</div>
+<div class="relative pl-6">
+<div class="absolute left-[-5px] top-1 w-2.5 h-2.5 rounded-full bg-outline ring-4 ring-surface-container-lowest"></div>
+<h4 class="text-xs font-bold text-on-surface mb-1 flex items-center gap-2">
+<span class="">正文/干货 (Body)</span>
+<span class="bg-surface-variant text-outline text-[10px] px-1.5 rounded">00:12 - 03:30</span>
+</h4>
+<p class="text-sm text-on-surface-variant bg-surface p-2 rounded border border-outline-variant/10">手把手工作流配置教学（具体步骤略，见原始文稿）。</p>
+</div>
+<div class="relative pl-6">
+<div class="absolute left-[-5px] top-1 w-2.5 h-2.5 rounded-full bg-error ring-4 ring-surface-container-lowest"></div>
+<h4 class="text-xs font-bold text-on-surface mb-1 flex items-center gap-2">
+<span class="">行动呼吁 (CTA)</span>
+<span class="bg-surface-variant text-outline text-[10px] px-1.5 rounded">03:30 - 03:42</span>
+</h4>
+<p class="text-sm text-on-surface-variant bg-surface p-2 rounded border border-outline-variant/10">引导点赞收藏，评论区领取配置清单。</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 4: Tags -->
+<section class="bg-surface-container-lowest rounded-xl p-4 shadow-[0px_4px_12px_rgba(0,0,0,0.04)] border border-outline-variant/30">
+<h3 class="font-section-title text-section-title text-on-surface mb-3 flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-primary">tag</span>
+                话题标签
+            </h3>
+<div class="flex flex-wrap gap-2"><span class="bg-surface-variant/50 text-on-surface-variant border border-outline-variant/30 px-3 py-1 rounded-full text-xs hover:bg-surface-variant transition-colors cursor-pointer">#健康</span>
+<span class="bg-surface-variant/50 text-on-surface-variant border border-outline-variant/30 px-3 py-1 rounded-full text-xs hover:bg-surface-variant transition-colors cursor-pointer">#养生</span>
+<span class="bg-surface-variant/50 text-on-surface-variant border border-outline-variant/30 px-3 py-1 rounded-full text-xs hover:bg-surface-variant transition-colors cursor-pointer">#AI拆解</span></div>
+</section>
+</main>
+<!-- Bottom Navigation Bar (Mandatory rendering per request, active on '拆解') -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-safe h-20 bg-surface/80 dark:bg-surface-container-low/80 backdrop-blur-xl border-t border-outline-variant/30 shadow-[0px_-4px_12px_rgba(0,0,0,0.04)] rounded-t-xl">
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline hover:text-primary dark:hover:text-primary-fixed-dim transition-colors active:scale-90 duration-200 w-16" href="#">
+<span class="material-symbols-outlined mb-1">psychology_alt</span>
+<span class="font-label-md text-label-md">AI</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary dark:text-primary-fixed-dim font-bold bg-secondary-container/50 dark:bg-primary-container/30 rounded-full px-3 py-1 hover:text-primary dark:hover:text-primary-fixed-dim transition-colors active:scale-90 duration-200 w-16" href="#">
+<span class="material-symbols-outlined mb-1" style='font-variation-settings: "FILL" 1;'>analytics</span>
+<span class="font-label-md text-label-md">拆解</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline hover:text-primary dark:hover:text-primary-fixed-dim transition-colors active:scale-90 duration-200 w-16" href="#">
+<span class="material-symbols-outlined mb-1">architecture</span>
+<span class="font-label-md text-label-md">制作</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline hover:text-primary dark:hover:text-primary-fixed-dim transition-colors active:scale-90 duration-200 w-16" href="#">
+<span class="material-symbols-outlined mb-1">inventory_2</span>
+<span class="font-label-md text-label-md">素材</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline hover:text-primary dark:hover:text-primary-fixed-dim transition-colors active:scale-90 duration-200 w-16" href="#">
+<span class="material-symbols-outlined mb-1">settings</span>
+<span class="font-label-md text-label-md">设置</span>
+</a>
+</nav>
+<script>
+        // Simple Tab Switching Logic
+        document.addEventListener('DOMContentLoaded', () => {
+            const tabRaw = document.getElementById('tab-raw');
+            const tabAi = document.getElementById('tab-ai');
+            const contentRaw = document.getElementById('content-raw');
+            const contentAi = document.getElementById('content-ai');
+
+            tabRaw.addEventListener('click', () => {
+                tabRaw.classList.replace('text-on-surface-variant', 'text-primary');
+                tabRaw.classList.replace('font-medium', 'font-semibold');
+                tabRaw.classList.replace('border-transparent', 'border-primary');
+
+                tabAi.classList.replace('text-primary', 'text-on-surface-variant');
+                tabAi.classList.replace('font-semibold', 'font-medium');
+                tabAi.classList.replace('border-primary', 'border-transparent');
+
+                contentRaw.classList.remove('hidden');
+                contentAi.classList.add('hidden');
+            });
+
+            tabAi.addEventListener('click', () => {
+                tabAi.classList.replace('text-on-surface-variant', 'text-primary');
+                tabAi.classList.replace('font-medium', 'font-semibold');
+                tabAi.classList.replace('border-transparent', 'border-primary');
+
+                tabRaw.classList.replace('text-primary', 'text-on-surface-variant');
+                tabRaw.classList.replace('font-semibold', 'font-medium');
+                tabRaw.classList.replace('border-primary', 'border-transparent');
+
+                contentAi.classList.remove('hidden');
+                contentRaw.classList.add('hidden');
+            });
+        });
+    </script>
+<div class="" style="display: none;"><img alt="快手" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC8eSrbpPrhTRefqBg1J0AlyYmOI5B4wL9k-7deBHicNU-RIZKBEQIPTt3cffKJdtCIG7WGGhD_Z8RIIGY_2VL2Tmgl4RElNeEkj64vE3VxfvcT5HkKCIEPI7za8NEsYSU7JOPq4O4Y3jRBQiASgRxR2CbqWq2FNgNIuf1HPy-ojxy4akpPC-TAMYNTXClCIdpnWi0bS3TDVx7-mMM_QSo4Peeijw4VD7q15J8rRobfHCiA-uAVUMlL"/><img alt="抖音" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDKAUYqt68vdUFLg-ym5Jnq6JaGbbNRAIkMj-oTh9yxdc1wIG9JiwRMWjqYoC-zErEKmiq0nVjIpw75nYLPWA_TJJwmZ3EJ56hGiVAGUUmY-sUkLU_RvrqSi9bljSTWyY9e3gi_PVkuHg2HxFrRV-tfD9HXHkVUxGM-SdvJKxOnIMU6tRKFaXpCUbKX5H7aNzlJp8XrNaNHEm6PVDWiTD1cuHHdH8WdO9tzKynszhhNK3uY4M51dIHt"/><img alt="哔哩哔哩" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA1SNzmhMY44J2-Jebb3Uw-ugYOo5QptjYM9NNbc6TAUVlwSLftO8IDHBt3iIMTu6Y7_iYN6U059j59z5Ql3UZlTgQEUjqTfbbtU83wkj7jyc0iXEwlouT0f4VTCjtn9jTBKNNTcs3k13s5h16qU9ZM-sK4lEzjx2lGy1x-04Jj6rvzwM9Eaxaxn9tpvS06UV1T8ZQ8op5y1tkRDMBy0toPpqHZSpMaYXnBHtDuRnWM8KeVjt9PrEyr"/></div></body></html>

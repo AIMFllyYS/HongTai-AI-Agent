@@ -1,0 +1,249 @@
+<!DOCTYPE html><html lang="zh-CN" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>AI 智能诊疗 - Vitality AI</title>
+<!-- Google Fonts & Material Symbols -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=Plus+Jakarta+Sans:wght@400;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Theme Config -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-surface": "#191c1b",
+                        "on-secondary-container": "#006f66",
+                        "secondary-fixed": "#84f5e8",
+                        "outline-variant": "#bfc9c4",
+                        "primary-container": "#004d40",
+                        "muted-text": "#606B66",
+                        "tertiary-container": "#3f4542",
+                        "surface-bright": "#f8faf7",
+                        "on-error-container": "#93000a",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-variant": "#e1e3e0",
+                        "surface-container-highest": "#e1e3e0",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-fixed": "#171d1a",
+                        "on-tertiary-fixed-variant": "#424845",
+                        "on-secondary-fixed": "#00201d",
+                        "vitality-turquoise": "#26A69A",
+                        "primary-fixed-dim": "#94d3c1",
+                        "deep-emerald": "#004D40",
+                        "secondary-fixed-dim": "#66d9cc",
+                        "error": "#ba1a1a",
+                        "inverse-surface": "#2e312f",
+                        "silk-white": "#FBFDFA",
+                        "surface-tint": "#29695b",
+                        "on-secondary": "#ffffff",
+                        "on-primary-fixed": "#00201a",
+                        "on-primary": "#ffffff",
+                        "tertiary-fixed": "#dfe4df",
+                        "data-text": "#1A1C1A",
+                        "on-tertiary-container": "#adb2ae",
+                        "on-error": "#ffffff",
+                        "tertiary": "#292f2c",
+                        "on-surface-variant": "#3f4945",
+                        "surface-dim": "#d8dbd8",
+                        "inverse-primary": "#94d3c1",
+                        "secondary-container": "#81f3e5",
+                        "secondary": "#006a62",
+                        "on-background": "#191c1b",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-fixed-variant": "#065043",
+                        "mint-whisper": "#F2F7F2",
+                        "tertiary-fixed-dim": "#c2c8c3",
+                        "primary": "#00342b",
+                        "outline": "#707975",
+                        "surface-container-low": "#f2f4f1",
+                        "background": "#f8faf7",
+                        "surface-container-high": "#e6e9e6",
+                        "on-secondary-fixed-variant": "#005049",
+                        "surface": "#f8faf7",
+                        "inverse-on-surface": "#eff1ee",
+                        "on-primary-container": "#7ebdac",
+                        "surface-container": "#eceeeb",
+                        "primary-fixed": "#afefdd"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "container-max": "1200px",
+                        "xs": "4px",
+                        "lg": "24px",
+                        "sm": "12px",
+                        "base": "8px",
+                        "xl": "40px",
+                        "md": "16px",
+                        "gutter": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "label-caps": ["Inter"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"],
+                        "headline-sm": ["Plus Jakarta Sans"],
+                        "data-display": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "26px", "letterSpacing": "0.01em", "fontWeight": "400" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.08em", "fontWeight": "700" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "22px", "letterSpacing": "0.01em", "fontWeight": "400" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "data-display": ["18px", { "lineHeight": "24px", "letterSpacing": "0.02em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        /* Custom lightweight animations */
+        @keyframes scan-line {
+            0% { top: 0%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+        .animate-scan {
+            animation: scan-line 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+
+        .glass-panel {
+            background: rgba(251, 253, 250, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(224, 232, 227, 0.5);
+        }
+    </style>
+</head>
+<body class="bg-silk-white text-on-surface font-body-md antialiased min-h-screen flex flex-col relative overflow-x-hidden selection:bg-vitality-turquoise/20 selection:text-deep-emerald">
+<!-- TopAppBar (Shared Component) -->
+<header class="fixed top-0 w-full z-50 bg-silk-white/80 dark:bg-on-surface/80 backdrop-blur-xl border-b border-mint-whisper/20 shadow-sm shadow-deep-emerald/5 flex items-center justify-between px-gutter h-16 transition-all duration-300">
+<button aria-label="Menu" class="text-on-surface-variant hover:opacity-80 transition-opacity active:scale-95 flex items-center justify-center p-2 -ml-2 rounded-full">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">clinical_notes</span>
+</button>
+<h1 class="font-headline-sm-mobile text-headline-sm-mobile font-bold text-deep-emerald dark:text-primary-fixed-dim tracking-tight">
+            Vitality AI
+        </h1>
+<button aria-label="User Profile" class="text-on-surface-variant hover:opacity-80 transition-opacity active:scale-95 flex items-center justify-center p-1 -mr-1 rounded-full overflow-hidden w-8 h-8 bg-mint-whisper">
+<!-- Using an abstract icon for avatar placeholder to keep it clean -->
+<span class="material-symbols-outlined text-deep-emerald/50" style="font-variation-settings: 'FILL' 1;">person</span>
+</button>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 pt-24 pb-32 flex flex-col">
+<!-- Page Intent Header -->
+<div class="px-gutter mb-6">
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-deep-emerald mb-2">AI 智能诊疗</h2>
+<p class="font-body-md text-body-md text-muted-text">请将面部或舌部对准扫描框以获取精准分析。</p>
+</div>
+<!-- Scanning Area Canvas (Bento/Glassmorphism) -->
+<div class="px-gutter w-full mb-8">
+<div class="relative w-full aspect-[4/5] max-h-[500px] glass-panel rounded-[32px] overflow-hidden flex flex-col items-center justify-center shadow-[0_8px_32px_rgba(0,77,64,0.04)]">
+<!-- Corner Brackets indicating scan area -->
+<div class="absolute top-6 left-6 w-12 h-12 border-t-2 border-l-2 border-vitality-turquoise/60 rounded-tl-xl"></div>
+<div class="absolute top-6 right-6 w-12 h-12 border-t-2 border-r-2 border-vitality-turquoise/60 rounded-tr-xl"></div>
+<div class="absolute bottom-6 left-6 w-12 h-12 border-b-2 border-l-2 border-vitality-turquoise/60 rounded-bl-xl"></div>
+<div class="absolute bottom-6 right-6 w-12 h-12 border-b-2 border-r-2 border-vitality-turquoise/60 rounded-br-xl"></div>
+<!-- Animated Scan Line -->
+<div class="absolute left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-vitality-turquoise to-transparent animate-scan z-10 shadow-[0_0_8px_rgba(38,166,154,0.5)]"></div>
+<!-- Central Floating Icon -->
+<div class="relative z-20 flex flex-col items-center">
+<div class="w-24 h-24 rounded-full bg-mint-whisper/50 backdrop-blur-md flex items-center justify-center mb-4 shadow-lg shadow-deep-emerald/10 border border-white/40">
+<span class="material-symbols-outlined text-[48px] text-vitality-turquoise drop-shadow-sm" style="font-variation-settings: 'wght' 300;">photo_camera</span>
+</div>
+<span class="font-label-caps text-label-caps text-deep-emerald/60 tracking-widest uppercase">Ready to Scan</span>
+</div>
+<!-- Soft background glow -->
+<div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(129,243,229,0.1)_0%,transparent_70%)]"></div>
+</div>
+</div>
+<!-- Action Buttons -->
+<div class="px-gutter flex gap-4 mb-10">
+<button class="flex-1 bg-deep-emerald text-white rounded-full py-4 px-6 flex items-center justify-center gap-2 font-headline-sm-mobile text-[16px] shadow-md shadow-deep-emerald/20 hover:opacity-90 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">camera</span>
+                立即拍摄
+            </button>
+<button class="flex-1 bg-mint-whisper text-deep-emerald rounded-full py-4 px-6 flex items-center justify-center gap-2 font-headline-sm-mobile text-[16px] hover:bg-surface-container-high active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[20px]">upload_file</span>
+                上传照片
+            </button>
+</div>
+<!-- Tips Section -->
+<div class="px-gutter mb-8">
+<h3 class="font-headline-sm-mobile text-[18px] text-deep-emerald mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-vitality-turquoise text-[20px]">lightbulb</span>
+                拍摄建议
+            </h3>
+<div class="grid grid-cols-2 gap-3">
+<div class="bg-surface-container-lowest border border-mint-whisper rounded-2xl p-4 flex flex-col gap-2">
+<span class="material-symbols-outlined text-muted-text text-[24px]">wb_sunny</span>
+<span class="font-body-md text-body-md text-on-surface-variant">保持光线明亮自然，避免阴影。</span>
+</div>
+<div class="bg-surface-container-lowest border border-mint-whisper rounded-2xl p-4 flex flex-col gap-2">
+<span class="material-symbols-outlined text-muted-text text-[24px]">face</span>
+<span class="font-body-md text-body-md text-on-surface-variant">面部放松，舌体自然伸出不卷曲。</span>
+</div>
+</div>
+</div>
+<!-- History Entry -->
+<div class="px-gutter mt-auto">
+<button class="w-full glass-panel rounded-2xl p-4 flex items-center justify-between group active:scale-[0.98] transition-transform">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-deep-emerald">
+<span class="material-symbols-outlined text-[20px]">history</span>
+</div>
+<div class="text-left">
+<div class="font-headline-sm-mobile text-[16px] text-deep-emerald">最近诊断记录</div>
+<div class="font-body-md text-[12px] text-muted-text">查看过往分析报告</div>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant group-hover:text-vitality-turquoise transition-colors">chevron_right</span>
+</button>
+</div>
+</main>
+<!-- BottomNavBar (Shared Component) -->
+<!-- Active state applied to "Scan" based on page intent -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-2 py-3 pb-safe bg-silk-white/80 dark:bg-on-surface/80 backdrop-blur-xl border-t border-mint-whisper/20 rounded-t-xl z-50 shadow-[0_-4px_12px_rgba(0,77,64,0.05)] md:hidden"><!-- Tab 1: AI (ACTIVE) -->
+<a class="flex flex-col items-center justify-center text-deep-emerald dark:text-primary-fixed-dim font-bold bg-secondary-container dark:bg-primary-container rounded-full px-4 py-1.5 group active:scale-90 transition-all duration-200" href="#">
+    <span class="material-symbols-outlined mb-1 text-[24px]" style="font-variation-settings: 'FILL' 1;">psychology_alt</span>
+    <span class="font-label-caps text-[10px]">AI</span>
+</a>
+<!-- Tab 2: 拆解 -->
+<a class="flex flex-col items-center justify-center text-muted-text dark:text-outline-variant hover:text-vitality-turquoise transition-colors group active:scale-90 duration-200" href="#">
+    <span class="material-symbols-outlined mb-1 text-[24px]">analytics</span>
+    <span class="font-label-caps text-[10px]">拆解</span>
+</a>
+<!-- Tab 3: 制作 -->
+<a class="flex flex-col items-center justify-center text-muted-text dark:text-outline-variant hover:text-vitality-turquoise transition-colors group active:scale-90 duration-200" href="#">
+    <span class="material-symbols-outlined mb-1 text-[24px]">architecture</span>
+    <span class="font-label-caps text-[10px]">制作</span>
+</a>
+<!-- Tab 4: 素材 -->
+<a class="flex flex-col items-center justify-center text-muted-text dark:text-outline-variant hover:text-vitality-turquoise transition-colors group active:scale-90 duration-200" href="#">
+    <span class="material-symbols-outlined mb-1 text-[24px]">inventory_2</span>
+    <span class="font-label-caps text-[10px]">素材</span>
+</a>
+<!-- Tab 5: 设置 -->
+<a class="flex flex-col items-center justify-center text-muted-text dark:text-outline-variant hover:text-vitality-turquoise transition-colors group active:scale-90 duration-200" href="#">
+    <span class="material-symbols-outlined mb-1 text-[24px]">settings</span>
+    <span class="font-label-caps text-[10px]">设置</span>
+</a></nav>
+
+
+</body></html>

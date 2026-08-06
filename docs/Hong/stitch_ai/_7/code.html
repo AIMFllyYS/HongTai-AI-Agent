@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>宏泰AI智能体 - 视频制作</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;family=Be+Vietnam+Pro:wght@400;500;600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@100..900&amp;family=Plus+Jakarta+Sans:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary": "#003330",
+                    "background": "#f8faf7",
+                    "surface-tint": "#29695b",
+                    "on-primary-fixed": "#00201a",
+                    "primary": "#00342b",
+                    "surface-dim": "#d8dbd8",
+                    "outline": "#707975",
+                    "surface-bright": "#f8faf7",
+                    "inverse-surface": "#2e3130",
+                    "on-tertiary-fixed": "#00201d",
+                    "secondary-fixed": "#beece4",
+                    "on-tertiary-container": "#59c0b6",
+                    "tertiary-fixed-dim": "#71d7cd",
+                    "outline-variant": "#bfc9c4",
+                    "inverse-primary": "#94d3c1",
+                    "secondary-container": "#bbe9e1",
+                    "on-secondary-fixed-variant": "#224e48",
+                    "primary-fixed-dim": "#94d3c1",
+                    "surface-container": "#eceeec",
+                    "surface-container-highest": "#e1e3e0",
+                    "on-secondary-container": "#3f6a64",
+                    "surface-variant": "#e1e3e0",
+                    "surface-container-high": "#e7e9e6",
+                    "secondary": "#3b6660",
+                    "on-background": "#191c1b",
+                    "inverse-on-surface": "#eff1ef",
+                    "tertiary-container": "#004c47",
+                    "on-tertiary-fixed-variant": "#00504a",
+                    "on-primary-container": "#7ebdac",
+                    "on-error": "#ffffff",
+                    "surface-container-low": "#f2f4f1",
+                    "on-surface": "#191c1b",
+                    "on-secondary-fixed": "#00201d",
+                    "tertiary-fixed": "#8ef4e9",
+                    "on-error-container": "#93000a",
+                    "error-container": "#ffdad6",
+                    "surface": "#f8faf7",
+                    "on-secondary": "#ffffff",
+                    "primary-container": "#004d40",
+                    "primary-fixed": "#afefdd",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary": "#ffffff",
+                    "on-primary-fixed-variant": "#065043",
+                    "error": "#ba1a1a",
+                    "on-primary": "#ffffff",
+                    "secondary-fixed-dim": "#a2cfc8",
+                    "on-surface-variant": "#3f4945"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "stack-gap-sm": "8px",
+                    "stack-gap-md": "16px",
+                    "container-padding": "20px",
+                    "margin-page": "16px",
+                    "gutter": "16px",
+                    "stack-gap-lg": "24px"
+            },
+            "fontFamily": {
+                    "headline-md": ["Plus Jakarta Sans"],
+                    "module-title": ["Plus Jakarta Sans"],
+                    "section-title": ["Plus Jakarta Sans"],
+                    "headline-lg-mobile": ["Plus Jakarta Sans"],
+                    "body-md": ["Be Vietnam Pro"],
+                    "body-lg": ["Be Vietnam Pro"],
+                    "label-md": ["Be Vietnam Pro"],
+                    "headline-lg": ["Plus Jakarta Sans"]
+            },
+            "fontSize": {
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "module-title": ["18px", {"lineHeight": "26px", "fontWeight": "600"}],
+                    "section-title": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["22px", {"lineHeight": "30px", "fontWeight": "700"}],
+                    "body-md": ["14px", {"lineHeight": "22px", "fontWeight": "400"}],
+                    "body-lg": ["15px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                    "headline-lg": ["24px", {"lineHeight": "32px", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .transition-all-300 { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        .floating-action-bar {
+            background: rgba(248, 250, 247, 0.8);
+            backdrop-filter: blur(12px);
+            border-top: 1px solid rgba(0, 77, 64, 0.08);
+        }
+
+        .gradient-progress {
+            background: linear-gradient(90deg, #4DB6AC 0%, #004D40 100%);
+        }
+
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        .animate-pulse-slow { animation: pulse-slow 3s infinite ease-in-out; }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md selection:bg-primary-fixed selection:text-on-primary-fixed min-h-screen pb-32">
+<!-- Top App Bar -->
+<header class="bg-surface/80 dark:bg-surface-container/80 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-sm flex justify-between items-center w-full px-container-padding h-16">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="movie_edit">movie_edit</span>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-primary" id="page-title">制作新视频</h1>
+</div>
+<button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="notifications">notifications</span>
+</button>
+</header>
+<main class="px-container-padding py-stack-gap-md space-y-stack-gap-lg max-w-2xl mx-auto" id="main-content">
+<!-- Page A: Create Content -->
+<section class="space-y-stack-gap-lg" id="section-create">
+<!-- Input Area -->
+<div class="space-y-stack-gap-sm">
+<label class="font-section-title text-section-title text-on-surface-variant px-1">这次想讲什么？</label>
+<div class="relative group">
+<textarea class="w-full min-h-[120px] p-4 bg-surface-container-lowest border border-outline-variant rounded-xl focus:border-primary focus:ring-1 focus:ring-primary transition-all-300 resize-none font-body-lg text-on-surface" placeholder="例如：我们家的产品为什么更安全"></textarea>
+<div class="absolute bottom-3 right-3 flex items-center gap-2">
+<span class="text-label-md font-label-md text-outline">0/500</span>
+<span class="material-symbols-outlined text-primary text-[20px]" data-icon="auto_awesome">auto_awesome</span>
+</div>
+</div>
+</div>
+<!-- Profile Info Card -->
+<div class="bg-secondary-container/30 border border-secondary-container p-4 rounded-xl flex items-start gap-4">
+<div class="w-12 h-12 rounded-lg bg-secondary-fixed flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-on-secondary-container" data-icon="business_center">business_center</span>
+</div>
+<div class="space-y-1">
+<h4 class="font-section-title text-section-title text-on-secondary-container">我的生意档案已参与生成</h4>
+<div class="flex flex-wrap gap-2 pt-1">
+<span class="bg-secondary-container px-2 py-0.5 rounded text-label-md font-label-md text-on-secondary-container">全屋定制</span>
+<span class="bg-secondary-container px-2 py-0.5 rounded text-label-md font-label-md text-on-secondary-container">环保E0级</span>
+<span class="bg-secondary-container px-2 py-0.5 rounded text-label-md font-label-md text-on-secondary-container">自有工厂</span>
+</div>
+</div>
+</div>
+<!-- Template Selection -->
+<div class="space-y-stack-gap-sm">
+<div class="flex justify-between items-end px-1">
+<h3 class="font-section-title text-section-title text-on-surface">选择视频模板</h3>
+<button class="text-label-md font-label-md text-primary flex items-center">查看全部 <span class="material-symbols-outlined text-[14px]" data-icon="chevron_right">chevron_right</span></button>
+</div>
+<div class="flex gap-4 overflow-x-auto hide-scrollbar -mx-container-padding px-container-padding py-1">
+<!-- Template Card 1 -->
+<div class="flex-shrink-0 w-40 space-y-2 group cursor-pointer">
+<div class="relative aspect-[9/16] rounded-xl overflow-hidden border-2 border-primary">
+<img class="w-full h-full object-cover" data-alt="A professional vertical video template preview showing a warm domestic interior with a parent and child. The lighting is soft and golden, creating a strong sense of safety and trust. Minimalist UI overlays suggest informative captions in a sophisticated forest green palette." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqChGl3VIRsSOn4MRQckbzZ0tbI9Eyw0GZ4xAijRWeoF8uvcgbOeogjGd_p6mg5y6s_k6ZlF55pxG92GQd7nITsMSc3ZVn7yy4ZU_B0phJ6H1yREwX0vSUEN5apF1EE8wQITuj70jlfSA5DyAn19oPMQXrE5vtagEx-FQyM1iZdUCsLEQPgoSUO0zkDELyFD1uH4lIZX0xwcd4xB2Klt6blIGg-eyZFsCiLAwzJv8Ms6Hn7pj0dzwo"/>
+<div class="absolute inset-0 bg-primary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-3xl" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+</div>
+<p class="text-center font-label-md text-label-md text-primary font-bold">安全感型</p>
+</div>
+<!-- Template Card 2 -->
+<div class="flex-shrink-0 w-40 space-y-2 group cursor-pointer">
+<div class="relative aspect-[9/16] rounded-xl overflow-hidden border border-outline-variant hover:border-primary transition-all-300">
+<img class="w-full h-full object-cover" data-alt="A dynamic vertical video template preview focusing on problem-solving. It shows a split screen comparing a cluttered workspace with a clean, organized one. The color scheme features deep teals and crisp whites, radiating professional efficiency and confidence in a modern minimalist style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0TtJbzwHZRsMtyYKwgJpk4SACGGL0769CvR6rYTsnZg8jadB_zQxLMaxF1rUrD2R6ojiH8Zuu_c9IHX3T8VNHinC-D1pXK0WhQApz7UZBQbZzwxiYjAGuPTKn5-csnkhtMmmoIVbc4O4McHAp2xaXW5NxTiH9azXTtKtgCivN2u_jgjQj9884sklnxVbPBDlxmbPnnjQoAyMAboDVP9ZyrH3uwa6v9c9uSnajrkg3R_LUQynd_QCM"/>
+</div>
+<p class="text-center font-label-md text-label-md text-on-surface-variant">痛点转化型</p>
+</div>
+<!-- Template Card 3 -->
+<div class="flex-shrink-0 w-40 space-y-2 group cursor-pointer">
+<div class="relative aspect-[9/16] rounded-xl overflow-hidden border border-outline-variant hover:border-primary transition-all-300">
+<img class="w-full h-full object-cover" data-alt="A storytelling video template preview featuring a high-precision manufacturing close-up. Sparks flying in a dark factory setting with cool teal lighting. The aesthetic is industrial yet clean, emphasizing growth and technological authority with a paper-and-ink digital feel." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBUeVc5YsjTagWHa-46EoQj-mxwH8NJlK3HInN_UX6dmrWEls2EPHNo1hL8TanKh8Q1D3zdWjrFPNIMPrgX6JS5_3-4RUIQpkQ7F5ZWZyTtr6UgIXvCTtrgwF1s0QV7qBGCroGQI93fp-MYRFk2OtAWvY7mOioVYtBiKGhLn3lSqr10ZpjgsUNKl_O3zSqMB1f8w5nGM0tpiUoUyb9orLIz6GoJoKykPCjcuaSR9s34VB42EoqtiC_t"/>
+</div>
+<p class="text-center font-label-md text-label-md text-on-surface-variant">品牌故事型</p>
+</div>
+</div>
+</div>
+<!-- Asset Filtering -->
+<div class="space-y-stack-gap-sm">
+<h3 class="font-section-title text-section-title text-on-surface px-1">筛选素材来源</h3>
+<div class="flex flex-wrap gap-2">
+<button class="px-4 py-2 rounded-full bg-primary text-white text-label-md font-label-md transition-all-300">全部</button>
+<button class="px-4 py-2 rounded-full bg-surface-container border border-outline-variant text-on-surface-variant text-label-md font-label-md hover:bg-surface-container-high transition-all-300">门店实拍</button>
+<button class="px-4 py-2 rounded-full bg-surface-container border border-outline-variant text-on-surface-variant text-label-md font-label-md hover:bg-surface-container-high transition-all-300">产品特写</button>
+<button class="px-4 py-2 rounded-full bg-surface-container border border-outline-variant text-on-surface-variant text-label-md font-label-md hover:bg-surface-container-high transition-all-300">客户场景</button>
+</div>
+</div>
+</section>
+<!-- Page B: Result (Initially Hidden) -->
+<section class="hidden space-y-stack-gap-lg" id="section-result">
+<!-- Video Preview -->
+<div class="relative max-w-[280px] mx-auto aspect-[9/16] rounded-2xl overflow-hidden shadow-xl bg-black">
+<img class="w-full h-full object-cover opacity-90" data-alt="A high-quality 9:16 vertical video frame showing a finished marketing video. The scene features a beautiful minimalist kitchen with text overlays in a modern serif font and teal highlights. The lighting is professional and airy, reflecting a sophisticated AI-generated aesthetic of clarity and high-precision." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCIulrBsOlMEgftiCjr6qk9jxSjf1zKtxa2TbxONIu4jpyayQstbsGKo7X9aUJrirzQO4NmMvm_LwloLUuEiBHR7ZxvUyo1BiiK3E6Sl7AfTl30625eQEgFc7427HUWA6AGPK1K6sJ5rYYEv8MJAGbtm_UPts7Mu-bJsMuZ76eDQA-vO3n8KytjE9Rown8olwEOdiOlhbFIpf6ET17mBXxNXXo2ahh4ZINgnzgzeDhwlrcT4BIqlrAw"/>
+<div class="absolute inset-0 flex items-center justify-center">
+<button class="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-4xl" data-icon="play_arrow" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+</div>
+<div class="absolute bottom-4 left-4 right-4 flex justify-between items-center text-white text-label-md bg-black/40 px-3 py-1.5 rounded-full backdrop-blur-sm">
+<span>00:15 / 00:30</span>
+<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-error animate-pulse"></span> 4K 高清</span>
+</div>
+</div>
+<!-- Stats & Meta -->
+<div class="grid grid-cols-3 gap-3">
+<div class="p-3 bg-surface-container-low rounded-xl text-center space-y-1 border border-outline-variant/30">
+<p class="text-label-md font-label-md text-outline">所选模板</p>
+<p class="font-section-title text-section-title text-primary">安全感型</p>
+</div>
+<div class="p-3 bg-surface-container-low rounded-xl text-center space-y-1 border border-outline-variant/30">
+<p class="text-label-md font-label-md text-outline">素材数量</p>
+<p class="font-section-title text-section-title text-primary">12</p>
+</div>
+<div class="p-3 bg-surface-container-low rounded-xl text-center space-y-1 border border-outline-variant/30">
+<p class="text-label-md font-label-md text-outline">字幕状态</p>
+<p class="font-section-title text-section-title text-primary">已智能对齐</p>
+</div>
+</div>
+<!-- Tabs -->
+<div class="border-b border-outline-variant">
+<div class="flex">
+<button class="flex-1 py-3 text-section-title font-section-title text-primary border-b-2 border-primary">预览</button>
+<button class="flex-1 py-3 text-section-title font-section-title text-on-surface-variant hover:text-primary transition-colors">文案</button>
+<button class="flex-1 py-3 text-section-title font-section-title text-on-surface-variant hover:text-primary transition-colors">素材</button>
+</div>
+</div>
+<!-- Content Area (Copy Editing) -->
+<div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant space-y-4">
+<div class="flex justify-between items-center">
+<h4 class="font-label-md text-label-md text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]" data-icon="edit_note">edit_note</span> AI 生成文案
+                    </h4>
+<button class="text-primary text-label-md font-label-md">重写</button>
+</div>
+<p class="text-body-lg text-on-surface leading-relaxed">
+                    给孩子选家具，不仅是选款式，更是选一份安心。我们坚持采用E0级环保标准，从源头杜绝甲醛，每一块板材都经过24道工序严选。让安全不再是口号，而是触手可及的温度。
+                </p>
+</div>
+</section>
+</main>
+<!-- Success/Loading Overlay (Example of Feedback Component) -->
+<div class="fixed inset-0 z-[100] bg-background/90 backdrop-blur-md flex flex-col items-center justify-center p-container-padding hidden" id="loading-overlay">
+<div class="w-full max-w-xs space-y-6 text-center">
+<div class="relative w-24 h-24 mx-auto">
+<div class="absolute inset-0 border-4 border-primary-container rounded-full"></div>
+<div class="absolute inset-0 border-4 border-primary rounded-full border-t-transparent animate-spin"></div>
+<span class="absolute inset-0 flex items-center justify-center material-symbols-outlined text-4xl text-primary" data-icon="smart_toy">smart_toy</span>
+</div>
+<div class="space-y-2">
+<h2 class="font-headline-md text-headline-md text-primary">视频生成中...</h2>
+<p class="text-body-md text-on-surface-variant">正在为您调取生意档案，智能匹配安全感模板素材</p>
+</div>
+<div class="w-full bg-outline-variant h-1 rounded-full overflow-hidden">
+<div class="gradient-progress h-full w-2/3 rounded-full"></div>
+</div>
+<p class="text-label-md font-label-md text-primary font-bold">预计还需要 15 秒</p>
+</div>
+</div>
+<!-- Bottom Action Bar (Contextual) -->
+<div class="fixed bottom-20 left-0 w-full px-container-padding py-4 z-40 floating-action-bar" id="action-bar">
+<!-- Page A Action -->
+<button class="w-full bg-primary text-white h-14 rounded-full flex items-center justify-center gap-2 font-section-title text-section-title shadow-lg active:scale-95 transition-all-300" id="btn-generate" onclick="startGeneration()">
+<span class="material-symbols-outlined" data-icon="auto_videocam" style="font-variation-settings: 'FILL' 1;">auto_videocam</span>
+            一键制作视频
+        </button>
+<!-- Page B Actions (Hidden Initially) -->
+<div class="hidden flex gap-3" id="btn-result-actions">
+<button class="flex-1 bg-secondary-container text-on-secondary-container h-14 rounded-full flex items-center justify-center gap-2 font-section-title text-section-title active:scale-95 transition-all-300">
+<span class="material-symbols-outlined" data-icon="tune">tune</span>
+                继续优化
+            </button>
+<button class="flex-1 bg-primary text-white h-14 rounded-full flex items-center justify-center gap-2 font-section-title text-section-title active:scale-95 transition-all-300 shadow-lg">
+<span class="material-symbols-outlined" data-icon="publish">publish</span>
+                发布视频
+            </button>
+</div>
+</div>
+<!-- Bottom Navigation Bar -->
+<nav class="bg-surface/80 dark:bg-surface-container/80 backdrop-blur-xl docked full-width bottom-0 fixed z-50 pb-safe shadow-sm fixed bottom-0 left-0 w-full flex justify-around items-center h-20 px-4"><a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline hover:opacity-80 transition-opacity" href="#"><div class="w-6 h-6 rounded-full border border-outline-variant/30 overflow-hidden flex items-center justify-center mb-0.5"><img alt="AI" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDHF7BaeMhupCCyu5GSuhOyUDpjpWOK4BsVMcBY-bdG86N2nrDXZ6jIiA1hXB_2ASg0pLMtcocFI5c61Q8UJVrud0f68AtSHAHht4N-LLiVqm0O5S9uCfvRnMGG9E0MJBvnXDsJwQWiXSB2pYff3IGTrwjKDR3ZimohmgT6dMYzXXTeTMQM4V0QT2DQ6-ao06l6P6KmLdqKritEmKHcLN4oirVSfd8lxCxq_8we4PA2RlBzrdTzGXob"/></div><span class="font-label-md text-label-md">AI</span></a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline hover:opacity-80 transition-opacity" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span class="font-label-md text-label-md">拆解</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary dark:text-primary-fixed font-bold translate-y-[-2px] transition-all-300" href="#">
+<span class="material-symbols-outlined" data-icon="movie_edit" style="font-variation-settings: 'FILL' 1;">movie_edit</span>
+<span class="font-label-md text-label-md">制作</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline hover:opacity-80 transition-opacity" href="#">
+<span class="material-symbols-outlined" data-icon="folder_open">folder_open</span>
+<span class="font-label-md text-label-md">素材</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline hover:opacity-80 transition-opacity" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-md text-label-md">设置</span>
+</a>
+</nav>
+<script>
+        function startGeneration() {
+            const overlay = document.getElementById('loading-overlay');
+            overlay.classList.remove('hidden');
+
+            // Simulate AI generation process
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+                showResultPage();
+            }, 2500);
+        }
+
+        function showResultPage() {
+            document.getElementById('page-title').innerText = "视频已生成";
+            document.getElementById('section-create').classList.add('hidden');
+            document.getElementById('section-result').classList.remove('hidden');
+
+            document.getElementById('btn-generate').classList.add('hidden');
+            document.getElementById('btn-result-actions').classList.remove('hidden');
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    </script>
+</body></html>

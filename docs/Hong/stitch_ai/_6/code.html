@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>素材库 - 宏泰AI智能体</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;family=Be+Vietnam+Pro:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary": "#003330",
+                        "background": "#f8faf7",
+                        "surface-tint": "#29695b",
+                        "on-primary-fixed": "#00201a",
+                        "primary": "#00342b",
+                        "surface-dim": "#d8dbd8",
+                        "outline": "#707975",
+                        "surface-bright": "#f8faf7",
+                        "inverse-surface": "#2e3130",
+                        "on-tertiary-fixed": "#00201d",
+                        "secondary-fixed": "#beece4",
+                        "on-tertiary-container": "#59c0b6",
+                        "tertiary-fixed-dim": "#71d7cd",
+                        "outline-variant": "#bfc9c4",
+                        "inverse-primary": "#94d3c1",
+                        "secondary-container": "#bbe9e1",
+                        "on-secondary-fixed-variant": "#224e48",
+                        "primary-fixed-dim": "#94d3c1",
+                        "surface-container": "#eceeec",
+                        "surface-container-highest": "#e1e3e0",
+                        "on-secondary-container": "#3f6a64",
+                        "surface-variant": "#e1e3e0",
+                        "surface-container-high": "#e7e9e6",
+                        "secondary": "#3b6660",
+                        "on-background": "#191c1b",
+                        "inverse-on-surface": "#eff1ef",
+                        "tertiary-container": "#004c47",
+                        "on-tertiary-fixed-variant": "#00504a",
+                        "on-primary-container": "#7ebdac",
+                        "on-error": "#ffffff",
+                        "surface-container-low": "#f2f4f1",
+                        "on-surface": "#191c1b",
+                        "on-secondary-fixed": "#00201d",
+                        "tertiary-fixed": "#8ef4e9",
+                        "on-error-container": "#93000a",
+                        "error-container": "#ffdad6",
+                        "surface": "#f8faf7",
+                        "on-secondary": "#ffffff",
+                        "primary-container": "#004d40",
+                        "primary-fixed": "#afefdd",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-fixed-variant": "#065043",
+                        "error": "#ba1a1a",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed-dim": "#a2cfc8",
+                        "on-surface-variant": "#3f4945"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-gap-sm": "8px",
+                        "stack-gap-md": "16px",
+                        "container-padding": "20px",
+                        "margin-page": "16px",
+                        "gutter": "16px",
+                        "stack-gap-lg": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "module-title": ["Plus Jakarta Sans"],
+                        "section-title": ["Plus Jakarta Sans"],
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "body-md": ["Be Vietnam Pro"],
+                        "body-lg": ["Be Vietnam Pro"],
+                        "label-md": ["Be Vietnam Pro"],
+                        "headline-lg": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "module-title": ["18px", {"lineHeight": "26px", "fontWeight": "600"}],
+                        "section-title": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                        "headline-lg-mobile": ["22px", {"lineHeight": "30px", "fontWeight": "700"}],
+                        "body-md": ["14px", {"lineHeight": "22px", "fontWeight": "400"}],
+                        "body-lg": ["15px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                        "headline-lg": ["24px", {"lineHeight": "32px", "fontWeight": "700"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #f8faf7;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .active-tab-indicator {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 24px;
+            height: 3px;
+            border-radius: 2px;
+            background-color: #004d40;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="font-body-md text-on-surface">
+<!-- Top App Bar -->
+<header class="bg-surface/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm flex justify-between items-center w-full px-container-padding h-16">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-2xl" data-icon="folder_special">folder_special</span>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-primary">素材库</h1>
+</div>
+<button class="bg-primary-container text-on-primary-container px-4 py-2 rounded-full flex items-center gap-1 hover:bg-opacity-90 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[20px]" data-icon="upload">upload</span>
+<span class="font-label-md text-label-md">上传</span>
+</button>
+</header>
+<!-- Content Area -->
+<main class="pb-24">
+<!-- Tab Navigation -->
+<div class="sticky top-16 z-40 bg-surface border-b border-outline-variant/30 px-container-padding">
+<nav class="flex gap-8 h-12 items-center">
+<button class="relative h-full flex items-center px-1 font-section-title text-section-title text-primary font-bold" id="btn-templates" onclick="switchTab('templates')">
+                    拆解模板
+                    <div class="active-tab-indicator" id="indicator-templates"></div>
+</button>
+<button class="relative h-full flex items-center px-1 font-section-title text-section-title text-on-surface-variant" id="btn-my-assets" onclick="switchTab('my-assets')">
+                    我的素材
+                    <div class="active-tab-indicator hidden" id="indicator-my-assets"></div>
+</button>
+</nav>
+</div>
+<!-- Section 1: Templates (Active by Default) -->
+<section class="block" id="section-templates">
+<!-- Search & Filters -->
+<div class="px-container-padding pt-6 space-y-4">
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline" data-icon="search">search</span>
+<input class="w-full h-11 pl-10 pr-4 bg-surface-container-low border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-body-md" placeholder="搜索拆解模板..." type="text"/>
+</div>
+<div class="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+<button class="px-4 py-1.5 rounded-full bg-primary-container text-on-primary-container text-label-md font-bold whitespace-nowrap">全部模板</button>
+<button class="px-4 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant text-label-md hover:bg-outline-variant/30 transition-colors whitespace-nowrap">产品介绍</button>
+<button class="px-4 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant text-label-md hover:bg-outline-variant/30 transition-colors whitespace-nowrap">门店宣传</button>
+<button class="px-4 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant text-label-md hover:bg-outline-variant/30 transition-colors whitespace-nowrap">技术讲解</button>
+<button class="px-4 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant text-label-md hover:bg-outline-variant/30 transition-colors whitespace-nowrap">品牌故事</button>
+</div>
+</div>
+<!-- Template Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-stack-gap-md px-container-padding mt-4">
+<!-- Card 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow group">
+<div class="relative h-48 w-full bg-surface-dim overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A cinematic, high-quality still from a professional product showcase video. The setting is a minimalist, modern studio with soft teal-tinted lighting that matches a forest green and deep teal corporate color palette. A sleek electronic device is presented on a textured marble pedestal. The overall atmosphere is sophisticated, precise, and high-end, representing a premium AI technology brand." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7dbE1uSVOsNFmWIt7BFp6N7TFr8dwYGH4O5kOeaWJv5c_KVQR2NEO9-S6Sh1TB7jW3_NzVHwfXHGogh1HH3-HJndzJYSNkAUoVRxygZoJ26HXZtJ_Kt4ZML3aCwemaL368v8EQkds3DVBofE6utBm6QdMYkEsxuSfcgplbjWI-mmoAl1_hErbFWrA4pl-Kv8udD1brKUlq1dMsusm8T-YpIsrqC2RHwrvuFadw9Uw4vfTUwt0PUlG"/>
+<div class="absolute top-2 left-2 bg-black/40 backdrop-blur-md text-white text-[10px] px-2 py-0.5 rounded-sm uppercase tracking-wider">Top Choice</div>
+</div>
+<div class="p-4">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-module-title text-module-title text-on-surface">3C产品高级感展示模板</h3>
+<span class="text-primary-fixed-dim text-[10px] px-1.5 py-0.5 bg-primary-container rounded border border-primary/20">官方</span>
+</div>
+<div class="flex flex-wrap gap-2 mb-4">
+<span class="text-label-md text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded">#产品介绍</span>
+<span class="text-label-md text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded">#快节奏</span>
+</div>
+<button class="w-full bg-primary text-white font-label-md h-10 rounded-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[18px]" data-icon="auto_awesome">auto_awesome</span>
+                            用此模板制作
+                        </button>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow group">
+<div class="relative h-48 w-full bg-surface-dim overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A warm and inviting interior of a high-end luxury furniture boutique. The lighting is soft and golden, highlighting natural wood textures and premium upholstery. The camera angle is wide, capturing a lifestyle-oriented spatial design. The aesthetic is professional and clean, using a palette of sage greens and warm neutrals to evoke a sense of quality and comfort for a promotional video template." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC-9lRiMKV4oLrtsNM7vrG-c3OKAMdCtpOWmogKvE8NKp7BP6lG3FBJkQaT2PQeWMr1PaKdYqIja6KPxKRuqMjxUqRElXE5QMJViTqHZuExVrZmBOuqCD8wznFI08Pt2_vFYjM3Am08apFkCelCet-t6962V6CsOEs8L8b7SjZFl4joAkPOBoKC58y74nuBbeSTCynEgSAgkoo7dd2AL8sYtnm4vrc7yJ4RjgHDSWMIu4QpkVED3xBV"/>
+</div>
+<div class="p-4">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-module-title text-module-title text-on-surface">探店门店沉浸式叙事</h3>
+<span class="text-outline text-[10px] px-1.5 py-0.5 bg-surface-container-high rounded border border-outline-variant/30">创意库</span>
+</div>
+<div class="flex flex-wrap gap-2 mb-4">
+<span class="text-label-md text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded">#门店宣传</span>
+<span class="text-label-md text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded">#Vlog</span>
+</div>
+<button class="w-full bg-primary text-white font-label-md h-10 rounded-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[18px]" data-icon="auto_awesome">auto_awesome</span>
+                            用此模板制作
+                        </button>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 2: My Assets (Hidden by default) -->
+<section class="hidden" id="section-my-assets">
+<!-- Folders -->
+<div class="px-container-padding pt-6">
+<div class="flex items-center justify-between mb-4">
+<h2 class="font-section-title text-section-title text-on-surface font-bold">文件夹</h2>
+<button class="text-primary flex items-center gap-1 text-label-md font-bold">
+<span class="material-symbols-outlined text-[18px]" data-icon="create_new_folder">create_new_folder</span>
+                        新建
+                    </button>
+</div>
+<div class="flex gap-4 overflow-x-auto no-scrollbar pb-2">
+<!-- All -->
+<div class="min-w-[120px] bg-secondary-container p-4 rounded-2xl flex flex-col items-center gap-2 border border-secondary/20 active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-on-secondary-container text-3xl" data-icon="grid_view" data-weight="fill" style="font-variation-settings: 'FILL' 1;">grid_view</span>
+<span class="text-label-md font-bold text-on-secondary-container">全部素材</span>
+</div>
+<!-- Folder 1 -->
+<div class="min-w-[120px] bg-white border border-outline-variant/40 p-4 rounded-2xl flex flex-col items-center gap-2 shadow-sm active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-outline text-3xl" data-icon="folder" data-weight="fill" style="font-variation-settings: 'FILL' 1;">folder</span>
+<span class="text-label-md text-on-surface-variant">门店实拍</span>
+</div>
+<!-- Folder 2 -->
+<div class="min-w-[120px] bg-white border border-outline-variant/40 p-4 rounded-2xl flex flex-col items-center gap-2 shadow-sm active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-outline text-3xl" data-icon="folder" data-weight="fill" style="font-variation-settings: 'FILL' 1;">folder</span>
+<span class="text-label-md text-on-surface-variant">产品渲染图</span>
+</div>
+</div>
+</div>
+<!-- Assets Grid -->
+<div class="px-container-padding mt-8">
+<div class="flex items-center justify-between mb-4">
+<h2 class="font-section-title text-section-title text-on-surface font-bold">所有内容 (12)</h2>
+<button class="text-outline-variant"><span class="material-symbols-outlined" data-icon="filter_list">filter_list</span></button>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+<!-- Item 1: Processing Status -->
+<div class="relative aspect-square rounded-xl overflow-hidden bg-surface-container-high flex flex-col items-center justify-center p-4 border-2 border-dashed border-outline-variant/50">
+<div class="w-12 h-12 rounded-full border-2 border-primary/30 border-t-primary animate-spin mb-3"></div>
+<p class="text-[11px] text-primary font-bold text-center">上传中 65%</p>
+</div>
+<!-- Item 2: Video Asset -->
+<div class="relative aspect-square rounded-xl overflow-hidden bg-surface-dim group">
+<img class="w-full h-full object-cover" data-alt="A high-resolution close-up of a luxury showroom floor with polished tiles reflecting professional track lighting. The color scheme is dominated by sophisticated shades of charcoal, sage, and deep forest green. The atmosphere is professional and high-end, suitable for a background asset in a marketing video for a corporate client." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCQ8zABs0AmxKH_odIGniA3MYnjOceflcNTmmN9pCdjcFjDSDlbxpf2te66lwiNrfere6rmGXJsnMQmWkwK4XPDklqU5LYfUP7sKd1lUnRoqWIP5P1T2lOHKyY2RMeX8FFdjq0h7at7R2XZ8R1Rwskg3nyP2fzdHfDTjFKC7ryjZdCQ3qF6S9xf9jZTdcVwj4Z1fNROxGLqCrMwewBgRbMVf8GQPXtwr1ggPqB_dvisfHuNqJ-M48oz"/>
+<div class="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]" data-icon="play_circle">play_circle</span>
+                            00:15
+                        </div>
+<div class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-3xl" data-icon="more_vert">more_vert</span>
+</div>
+</div>
+<!-- Item 3: Error Status -->
+<div class="relative aspect-square rounded-xl overflow-hidden bg-error-container/30 flex flex-col items-center justify-center p-4 border border-error/20">
+<span class="material-symbols-outlined text-error text-2xl mb-2" data-icon="error_outline">error_outline</span>
+<p class="text-[11px] text-error font-bold text-center leading-tight">处理失败</p>
+<button class="mt-2 text-[10px] text-error underline">重新上传</button>
+</div>
+<!-- Item 4: Photo Asset -->
+<div class="relative aspect-square rounded-xl overflow-hidden bg-surface-dim group">
+<img class="w-full h-full object-cover" data-alt="A professionally staged flat-lay of modern office technology on a dark teal desk surface. Includes a high-end laptop, a digital stylus, and an AI-inspired glass sculpture. The lighting is focused and clean, creating sharp reflections and a sense of high-precision technological development. The mood is calm, studious, and elite, reflecting a sage architect brand persona." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDuabP7JKlwzfzXljyuQ78ocsqcNFLSi2n0jozwRGAF0Qf1AhA95nJwzKbVoIVcwf6xElJR3x99ep5ujHcPqXDzj-BiOASf3GjfSUfp56jAO-Bv2yxeRUeGlO5Zl08pK3_Xii7eK0awXo0vQ1I4mtIWCSMEtEJ3u2HATxB0JvEagys76HEeio8-zgXLiZrxeufPGKl7rVvXc9J4kFrppj-RKSEDolAsC3mitfVPqaCNHXhMiNr0kCuz"/>
+<div class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-3xl" data-icon="more_vert">more_vert</span>
+</div>
+</div>
+</div>
+<!-- Empty State Example (Bottom of list for demo) -->
+<div class="mt-12 flex flex-col items-center justify-center text-center py-12">
+<div class="w-32 h-32 mb-6 opacity-20">
+<span class="material-symbols-outlined text-[120px] text-outline" data-icon="cloud_off">cloud_off</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-2">暂无更多素材</h3>
+<p class="text-body-md text-on-surface-variant max-w-[240px] mb-6">您上传的所有视频和图片素材将出现在这里</p>
+<button class="bg-primary px-8 py-3 rounded-full text-white font-bold flex items-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+                        立即上传
+                    </button>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center h-20 px-4 bg-surface/80 dark:bg-surface-container/80 backdrop-blur-xl shadow-sm z-50 pb-safe"><a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline hover:opacity-80 transition-opacity" href="#">
+<div class="w-6 h-6 rounded-sm border border-outline-variant/30 overflow-hidden mb-0.5">
+<img alt="AI" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDHF7BaeMhupCCyu5GSuhOyUDpjpWOK4BsVMcBY-bdG86N2nrDXZ6jIiA1hXB_2ASg0pLMtcocFI5c61Q8UJVrud0f68AtSHAHht4N-LLiVqm0O5S9uCfvRnMGG9E0MJBvnXDsJwQWiXSB2pYff3IGTrwjKDR3ZimohmgT6dMYzXXTeTMQM4V0QT2DQ6-ao06l6P6KmLdqKritEmKHcLN4oirVSfd8lxCxq_8we4PA2RlBzrdTzGXob"/>
+</div>
+<span class="font-label-md text-label-md">AI</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline hover:opacity-80 transition-opacity" href="#">
+<span class="material-symbols-outlined text-2xl" data-icon="analytics">analytics</span>
+<span class="font-label-md text-label-md">拆解</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline hover:opacity-80 transition-opacity" href="#">
+<span class="material-symbols-outlined text-2xl" data-icon="movie_edit">movie_edit</span>
+<span class="font-label-md text-label-md">制作</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary dark:text-primary-fixed font-bold translate-y-[-2px] duration-300" href="#">
+<span class="material-symbols-outlined text-2xl" data-icon="folder_open" data-weight="fill" style="font-variation-settings: 'FILL' 1;">folder_open</span>
+<span class="font-label-md text-label-md">素材</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline hover:opacity-80 transition-opacity" href="#">
+<span class="material-symbols-outlined text-2xl" data-icon="settings">settings</span>
+<span class="font-label-md text-label-md">设置</span>
+</a></nav>
+<script>
+        function switchTab(tab) {
+            const sectionTemplates = document.getElementById('section-templates');
+            const sectionMyAssets = document.getElementById('section-my-assets');
+            const indicatorTemplates = document.getElementById('indicator-templates');
+            const indicatorMyAssets = document.getElementById('indicator-my-assets');
+            const btnTemplates = document.getElementById('btn-templates');
+            const btnMyAssets = document.getElementById('btn-my-assets');
+
+            if (tab === 'templates') {
+                sectionTemplates.classList.remove('hidden');
+                sectionTemplates.classList.add('block');
+                sectionMyAssets.classList.remove('block');
+                sectionMyAssets.classList.add('hidden');
+
+                indicatorTemplates.classList.remove('hidden');
+                indicatorMyAssets.classList.add('hidden');
+
+                btnTemplates.classList.add('text-primary', 'font-bold');
+                btnTemplates.classList.remove('text-on-surface-variant');
+                btnMyAssets.classList.remove('text-primary', 'font-bold');
+                btnMyAssets.classList.add('text-on-surface-variant');
+            } else {
+                sectionTemplates.classList.add('hidden');
+                sectionTemplates.classList.remove('block');
+                sectionMyAssets.classList.add('block');
+                sectionMyAssets.classList.remove('hidden');
+
+                indicatorTemplates.classList.add('hidden');
+                indicatorMyAssets.classList.remove('hidden');
+
+                btnMyAssets.classList.add('text-primary', 'font-bold');
+                btnMyAssets.classList.remove('text-on-surface-variant');
+                btnTemplates.classList.remove('text-primary', 'font-bold');
+                btnTemplates.classList.add('text-on-surface-variant');
+            }
+
+            // Scroll to top when switching
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    </script>
+</body></html>
