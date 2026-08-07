@@ -79,7 +79,7 @@ function TaskHistory({ tasks, navigate }: { readonly tasks: readonly AppTaskReco
           <button className="runtime-task-history__item" key={task.id} onClick={() => navigate(taskPath(task))} type="button">
             <span className="runtime-task-history__icon"><Icon name={task.contentType === "image_text" ? "grid" : "video_file"} size={19} /></span>
             <span className="runtime-task-history__body">
-              <strong>{safeUrlForDisplay(task.sourceUrl)}</strong>
+              <strong className="technical-value">{safeUrlForDisplay(task.sourceUrl)}</strong>
               <span>{[platform, updatedAt].filter(Boolean).join(" · ") || `任务 ${task.id}`}</span>
             </span>
             <TaskStatusBadge compact status={task.status} />
@@ -165,7 +165,7 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
               <Icon name="check_circle" size={18} />
               <div>
                 <strong>已识别 {platformLabel(inspection.value.platform)}</strong>
-                <span>{safeUrlForDisplay(inspection.value.normalizedUrl)}</span>
+                <span className="technical-value">{safeUrlForDisplay(inspection.value.normalizedUrl)}</span>
                 {inspection.value.ignoredSupportedUrlCount > 0 ? <small>其余 {inspection.value.ignoredSupportedUrlCount} 个受支持链接未被选作本次任务。</small> : null}
                 {inspection.value.platform === "kuaishou" ? <small>快手为实验性支持，平台风控结果会如实记录。</small> : null}
               </div>

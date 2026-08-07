@@ -101,7 +101,7 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
 
         <GlassCard className="task-detail-summary">
           <div className="task-detail-summary__heading"><div><span className="eyebrow">LOCAL TASK</span><h2>{detail.content.title ?? "未提供标题"}</h2></div><TaskStatusBadge status={task.status} /></div>
-          <p>{safeUrlForDisplay(detail.content.canonicalUrl ?? task.sourceUrl)}</p>
+          <p className="technical-value">{safeUrlForDisplay(detail.content.canonicalUrl ?? task.sourceUrl)}</p>
           <div className="task-detail-summary__facts">
             {platform ? <span><Icon name="language" size={15} />{platform}</span> : null}
             {contentType ? <span><Icon name={task.contentType === "image_text" ? "grid" : "video_file"} size={15} />{contentType}</span> : null}
@@ -147,7 +147,7 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
           {task.analysisStatus === "running" ? <GlassCard className="analysis-request-card"><Icon name="sync" size={22} /><p>内容拆解正在运行。采集七阶段不会因此增加新阶段。</p><Button onClick={() => navigate(taskAnalysisPath(task.id))} variant="secondary">查看当前状态</Button></GlassCard> : null}
           {task.analysisStatus === "failed" ? <GlassCard className="analysis-request-card"><Icon name="error" size={22} /><p>上一次内容拆解没有成功完成。请先查看真实错误状态，再由你确认是否重新运行。</p><Button onClick={() => navigate(taskAnalysisPath(task.id))} variant="secondary">查看拆解状态</Button></GlassCard> : null}
           {canRequestAnalysis ? (
-            confirmationOpen ? <GlassCard className="analysis-confirm-card"><strong>确认运行 AI 自动拆解？</strong><p>系统将基于此任务已保存的 {detail.evidenceUnits.length} 条证据生成 content-analysis.v1，不会把它写入采集阶段。</p><div><Button disabled={pendingAction === "analysis"} onClick={() => void runAnalysis()}>{pendingAction === "analysis" ? "正在请求拆解" : "确认运行"}</Button><Button disabled={pendingAction === "analysis"} onClick={() => setConfirmationOpen(false)} variant="quiet">暂不运行</Button></div></GlassCard> : <Button disabled={pendingAction !== undefined} icon={<Icon name="auto_awesome" size={18} />} onClick={() => setConfirmationOpen(true)}>AI 自动拆解</Button>
+            confirmationOpen ? <GlassCard className="analysis-confirm-card"><strong>确认运行 AI 自动拆解？</strong><p>系统将基于此任务已保存的 {detail.evidenceUnits.length} 条证据生成 content-analysis.v1，不会把它写入采集阶段。</p><div className="analysis-confirm-card__actions mobile-action-group"><Button disabled={pendingAction === "analysis"} onClick={() => void runAnalysis()}>{pendingAction === "analysis" ? "正在请求拆解" : "确认运行"}</Button><Button disabled={pendingAction === "analysis"} onClick={() => setConfirmationOpen(false)} variant="quiet">暂不运行</Button></div></GlassCard> : <Button disabled={pendingAction !== undefined} icon={<Icon name="auto_awesome" size={18} />} onClick={() => setConfirmationOpen(true)}>AI 自动拆解</Button>
           ) : task.analysisStatus === "not_started" && analysisAvailable && !terminalWithOutput ? <EmptyState description="采集任务完成或部分完成后，才可以确认运行内容拆解。" icon="pending" title="等待可用产物" /> : null}
         </section>
 

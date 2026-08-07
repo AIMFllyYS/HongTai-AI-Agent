@@ -375,7 +375,7 @@ export class IngestPipeline {
                 "obtain-transcript",
                 segment.status === "failed" ? "degraded" : "running",
                 `转写 ${completed}/${total}，当前分段=${segmentMessage}，已生成约 ${completedCharacters} 字`,
-                {},
+                { progress: total > 0 ? completed / total : undefined },
                 segment.issue,
               );
             },

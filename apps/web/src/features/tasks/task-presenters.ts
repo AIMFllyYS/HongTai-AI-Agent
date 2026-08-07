@@ -122,7 +122,8 @@ function isProgressEvent(event: TaskEventRecord): event is Extract<TaskEventReco
 
 function safeProgress(value: number | undefined): number | undefined {
   if (value === undefined || !Number.isFinite(value)) return undefined;
-  return Math.min(100, Math.max(0, value));
+  const percentage = value >= 0 && value <= 1 ? value * 100 : value;
+  return Math.min(100, Math.max(0, percentage));
 }
 
 /**

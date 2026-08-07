@@ -111,7 +111,7 @@ export function TaskProcessingPage({ runtime, taskId, navigate }: TaskProcessing
           <span className={`task-processing-hero__orb ${task.status === "running" ? "is-running" : ""}`.trim()}><Icon name={task.status === "succeeded" || task.status === "degraded" ? "check_circle" : task.status === "failed" || task.status === "interrupted" ? "error" : "sync"} size={31} /></span>
           <div>
             <div className="task-processing-hero__line"><h2>{platform ? `${platform}采集任务` : "本地采集任务"}</h2><TaskStatusBadge status={task.status} /></div>
-            <p>{source}</p>
+            <p className="technical-value">{source}</p>
           </div>
         </section>
 
@@ -126,7 +126,7 @@ export function TaskProcessingPage({ runtime, taskId, navigate }: TaskProcessing
         {task.status === "cancelled" ? <EmptyState description="这是历史停止任务。本版本不会从这里继续运行；如需再次处理，请返回首页重新提交链接。" icon="pending" title="任务已停止" /> : null}
         {task.status === "failed" || task.status === "interrupted" ? <EmptyState description="本次任务未能完成。系统保留已保存的真实结果；如需再次处理，请返回首页重新提交链接。" icon="error" title={task.status === "interrupted" ? "任务已中断" : "任务未完成"} /> : null}
 
-        <div className="task-page-actions">
+        <div className="task-page-actions mobile-action-group">
           {task.status === "queued" ? <Button disabled={!ingestAvailable || actionPending !== undefined} icon={<Icon name="bolt" size={18} />} onClick={() => void start()}>{actionPending === "start" ? "正在启动" : "开始执行"}</Button> : null}
           {needsNewSubmission ? <Button icon={<Icon name="sync" size={18} />} onClick={() => navigate(pathForRoute("home"))} variant="secondary">重新提交链接</Button> : null}
           {task.status === "succeeded" || task.status === "degraded" || task.status === "failed" || task.status === "cancelled" || task.status === "interrupted" ? <Button icon={<Icon name="chevron_right" size={18} />} onClick={() => navigate(taskDetailPath(task.id))} variant="ghost">查看任务详情</Button> : null}

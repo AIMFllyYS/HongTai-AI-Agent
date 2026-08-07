@@ -18,6 +18,7 @@ class NativeDownloadClient(
 ) {
   fun download(
     request: NativeDownloadRequest,
+    onProgress: ((NativeDownloadProgress) -> Unit)? = null,
   ): NativeDownloadResult {
     val headers = NativeNetworkPolicy.sanitizeDownloadHeaders(request.headers)
     var target = NativeNetworkPolicy.requireHttpsUrl(request.sourceUrl, "download source")
@@ -56,6 +57,7 @@ class NativeDownloadClient(
           }
           val mimeType = connection.contentType?.substringBefore(';')?.trim()?.takeIf(MIME_TYPE::matches)
           requireExpectedMediaType(request.artifact, mimeType)
+          var lastProgressAtNanos = 0L
           val artifact = connection.inputStream.use { input ->
             artifacts.writeStream(
               taskId = request.taskId,
@@ -64,7 +66,21 @@ class NativeDownloadClient(
               maxBytes = MAX_DOWNLOAD_BYTES,
               expectedBytes = totalBytes,
               mimeType = mimeType,
-              onBytesWritten = { ensureNotInterrupted() },
+              onBytesWritten = { written ->
+                ensureNotInterrupted()
+                val now = System.nanoTime()
+                val complete = totalBytes != null && written >= totalBytes
+                if (lastProgressAtNanos == 0L || complete || now - lastProgressAtNanos >= PROGRESS_INTERVAL_NANOS) {
+                  onProgress?.invoke(
+                    NativeDownloadProgress(
+                      downloadedBytes = written,
+                      totalBytes = totalBytes,
+                      progress = totalBytes?.takeIf { it > 0L }?.let { written.toDouble() / it.toDouble() },
+                    ),
+                  )
+                  lastProgressAtNanos = now
+                }
+              },
             )
           }
           ensureNotInterrupted()
@@ -137,6 +153,7 @@ class NativeDownloadClient(
     const val READ_TIMEOUT_MS = 60_000
     const val MAX_REDIRECTS = 5
     const val MAX_DOWNLOAD_BYTES = 1_073_741_824L
+    const val PROGRESS_INTERVAL_NANOS = 500_000_000L
     val HTTP_SUCCESS_RANGE = 200..299
     val REDIRECT_STATUS_CODES = setOf(301, 302, 303, 307, 308)
     val MIME_TYPE = Regex("[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+")

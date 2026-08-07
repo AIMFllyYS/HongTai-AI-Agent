@@ -250,6 +250,7 @@ test("视频无有效口播时任务成功且不生成伪文稿和整理稿", as
   assert.equal(setup.store.values.has(paths.draft), false);
   assert.match(setup.store.values.get(paths.transcriptJson) ?? "", /"speechStatus":"no_speech"/);
   assert.equal(result.issues.length, 0);
+  assert.equal(setup.events.some((event) => event.stage === "obtain-transcript" && event.status === "running" && event.progress === 1), true);
 });
 
 test("ASR全失败并使用平台描述时记录真实来源为description", async () => {

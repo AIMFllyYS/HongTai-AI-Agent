@@ -65,3 +65,15 @@ test("camera capture declares package visibility and cleans up unavailable launc
   assert.match(fileMedia, /ActivityNotFoundException/);
   assert.match(fileMedia, /catch\s*\(error:\s*ActivityNotFoundException\)[\s\S]*discardCapture\(capture\)/);
 });
+
+test("native downloads forward bounded real byte progress to the shared pipeline", () => {
+  const plugin = read("android/app/src/main/java/com/hongtai/aiagent/bridge/NativeNetworkPlugin.kt");
+  const client = read("android/app/src/main/java/com/hongtai/aiagent/network/NativeDownloadClient.kt");
+
+  assert.match(client, /onProgress:\s*\(\(NativeDownloadProgress\)\s*->\s*Unit\)\?/);
+  assert.match(client, /onBytesWritten\s*=\s*\{\s*written/);
+  assert.match(plugin, /notifyListeners\(\s*"downloadProgress"/);
+  assert.match(plugin, /\.put\("downloadedBytes"/);
+  assert.match(plugin, /\.putOptional\("totalBytes"/);
+  assert.match(plugin, /\.putOptional\("progress"/);
+});

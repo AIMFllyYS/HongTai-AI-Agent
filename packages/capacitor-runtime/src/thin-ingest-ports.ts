@@ -48,6 +48,25 @@ export interface NativeDownloadPort {
   }>;
 }
 
+export interface NativeDownloadProgressEvent {
+  readonly taskId: string;
+  readonly artifact: NativeDownloadArtifact;
+  readonly downloadedBytes: number;
+  readonly totalBytes?: number;
+  readonly progress?: number;
+}
+
+export interface NativeDownloadListenerHandle {
+  remove(): Promise<void>;
+}
+
+export interface NativeDownloadProgressPort {
+  addListener(
+    eventName: "downloadProgress",
+    listener: (event: NativeDownloadProgressEvent) => void,
+  ): Promise<NativeDownloadListenerHandle> | NativeDownloadListenerHandle;
+}
+
 export interface NativeTaskMediaFilesPort {
   getUri(options: { readonly taskId: string; readonly relativePath: string }): Promise<{
     readonly uri?: string;
@@ -89,6 +108,7 @@ export interface NativeMediaPort {
 
 export interface NativeIngestPortsOptions {
   readonly network: NativeTextFetchPort & NativeDownloadPort;
+  readonly downloadProgress?: NativeDownloadProgressPort;
   readonly files: NativeTaskMediaFilesPort;
   readonly media: NativeMediaPort;
 }
@@ -110,12 +130,17 @@ function downloadArtifact(source: MediaSource, destination: string): { readonly 
   throw mediaError("MEDIA_DOWNLOAD_FAILED", "本地媒体目标与已解析资源类型不匹配");
 }
 
+function sameDownloadArtifact(left: NativeDownloadArtifact, right: NativeDownloadArtifact): boolean {
+  return left.kind === right.kind && (left.kind !== "image" || (right.kind === "image" && left.index === right.index));
+}
+
 /**
  * Adapter-only implementation of the core I/O contracts. The shared pipeline
  * retains all platform parsing and seven-stage orchestration.
  */
 export class NativeIngestPorts {
   readonly #network: NativeIngestPortsOptions["network"];
+  readonly #downloadProgress?: NativeDownloadProgressPort;
   readonly #files: NativeIngestPortsOptions["files"];
   readonly #media: NativeIngestPortsOptions["media"];
 
@@ -125,6 +150,7 @@ export class NativeIngestPorts {
 
   constructor(options: NativeIngestPortsOptions) {
     this.#network = options.network;
+    this.#downloadProgress = options.downloadProgress;
     this.#files = options.files;
     this.#media = options.media;
     this.http = {
@@ -156,16 +182,32 @@ export class NativeIngestPorts {
 
   async #download(source: MediaSource, destination: string, onProgress?: (progress: DownloadProgress) => void | Promise<void>): Promise<void> {
     const destinationInfo = downloadArtifact(source, destination);
-    const result = await this.#network.download({
-      taskId: destinationInfo.taskId,
-      sourceUrl: source.url,
-      artifact: destinationInfo.artifact,
-      headers: source.headers,
-    });
-    if (!result.uri || !Number.isFinite(result.sizeBytes) || result.sizeBytes < 0) {
-      throw mediaError("MEDIA_DOWNLOAD_FAILED", "原生下载没有返回已保存的私有媒体");
+    let progressQueue = Promise.resolve();
+    const listener = this.#downloadProgress && onProgress
+      ? await Promise.resolve(this.#downloadProgress.addListener("downloadProgress", (event) => {
+        if (event.taskId !== destinationInfo.taskId || !sameDownloadArtifact(event.artifact, destinationInfo.artifact)) return;
+        progressQueue = progressQueue.then(() => onProgress({
+          downloadedBytes: event.downloadedBytes,
+          ...(event.totalBytes === undefined ? {} : { totalBytes: event.totalBytes }),
+          ...(event.progress === undefined ? {} : { progress: event.progress }),
+        }));
+      }))
+      : undefined;
+    try {
+      const result = await this.#network.download({
+        taskId: destinationInfo.taskId,
+        sourceUrl: source.url,
+        artifact: destinationInfo.artifact,
+        headers: source.headers,
+      });
+      await progressQueue;
+      if (!result.uri || !Number.isFinite(result.sizeBytes) || result.sizeBytes < 0) {
+        throw mediaError("MEDIA_DOWNLOAD_FAILED", "原生下载没有返回已保存的私有媒体");
+      }
+      await onProgress?.({ downloadedBytes: result.sizeBytes, totalBytes: result.sizeBytes, progress: 1 });
+    } finally {
+      await listener?.remove();
     }
-    await onProgress?.({ downloadedBytes: result.sizeBytes, totalBytes: result.sizeBytes, progress: 1 });
   }
 
   async #merge(videoPath: string, audioPath: string, outputPath: string): Promise<void> {

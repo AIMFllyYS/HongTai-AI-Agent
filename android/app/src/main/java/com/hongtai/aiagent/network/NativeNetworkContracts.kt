@@ -68,6 +68,12 @@ data class NativeDownloadResult(
   val sizeBytes: Long,
 )
 
+data class NativeDownloadProgress(
+  val downloadedBytes: Long,
+  val totalBytes: Long?,
+  val progress: Double?,
+)
+
 class NativeNetworkException(
   val code: String,
   val userMessage: String,

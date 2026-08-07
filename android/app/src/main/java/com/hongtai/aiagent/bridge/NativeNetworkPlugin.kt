@@ -15,6 +15,7 @@ import com.hongtai.aiagent.network.NativeAiRequestClient
 import com.hongtai.aiagent.network.NativeAiRequestException
 import com.hongtai.aiagent.network.NativeDownloadArtifactSlot
 import com.hongtai.aiagent.network.NativeDownloadClient
+import com.hongtai.aiagent.network.NativeDownloadProgress
 import com.hongtai.aiagent.network.NativeDownloadRequest
 import com.hongtai.aiagent.network.NativeNetworkException
 import com.hongtai.aiagent.network.NativeNetworkPolicy
@@ -122,7 +123,7 @@ class NativeNetworkPlugin : Plugin() {
 
     NETWORK_EXECUTOR.execute {
       try {
-        val result = downloads.download(request)
+        val result = downloads.download(request) { progress -> emitDownloadProgress(request, progress) }
         call.resolve(
           JSObject()
             .put("taskId", result.taskId)
@@ -142,6 +143,21 @@ class NativeNetworkPlugin : Plugin() {
         call.reject(safe.userMessage, safe.code, safe)
       }
     }
+  }
+
+  private fun emitDownloadProgress(request: NativeDownloadRequest, progress: NativeDownloadProgress) {
+    val artifact = JSObject()
+      .put("kind", request.artifact.kind)
+      .putOptional("index", request.artifact.index)
+    notifyListeners(
+      "downloadProgress",
+      JSObject()
+        .put("taskId", request.taskId)
+        .put("artifact", artifact)
+        .put("downloadedBytes", progress.downloadedBytes)
+        .putOptional("totalBytes", progress.totalBytes)
+        .putOptional("progress", progress.progress),
+    )
   }
 
   /**

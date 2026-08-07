@@ -19,6 +19,7 @@ export function TaskProgressSteps({ steps }: TaskProgressStepsProps) {
     <ol className="progress-steps task-progress-steps">
       {steps.map((step) => {
         const timestamp = formatTaskTime(step.timestamp);
+        const progress = step.progress === undefined ? undefined : Math.round(step.progress);
         return (
           <li className={`progress-step progress-step--${step.status}`} data-stage={step.stage} data-sequence={step.sequence} key={step.stage}>
             <span className="progress-step__marker"><Icon name={iconForStatus(step.status)} size={17} /></span>
@@ -29,7 +30,12 @@ export function TaskProgressSteps({ steps }: TaskProgressStepsProps) {
               </span>
               {step.sequence === undefined ? null : <span className="task-progress-steps__event">事件 #{step.sequence}{timestamp ? ` · ${timestamp}` : ""}</span>}
               {step.detail ? <span className="progress-step__detail">{step.detail}</span> : null}
-              {step.progress === undefined ? null : <span className="progress-bar"><span style={{ width: `${step.progress}%` }} /></span>}
+              {progress === undefined ? null : (
+                <span className="task-progress-steps__meter">
+                  <span aria-label={`${step.label} ${progress}%`} aria-valuemax={100} aria-valuemin={0} aria-valuenow={progress} className="progress-bar" role="progressbar"><span style={{ width: `${progress}%` }} /></span>
+                  <span className="task-progress-steps__percent">{progress}%</span>
+                </span>
+              )}
             </span>
           </li>
         );

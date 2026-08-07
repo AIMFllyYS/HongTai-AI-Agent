@@ -6,7 +6,15 @@ import { NativeIngestPorts } from "./thin-ingest-ports.js";
 test("NativeIngestPorts preserves platform HTTP limits and maps a video source slot without overwriting the final video", async () => {
   const fetches: unknown[] = [];
   const downloads: unknown[] = [];
+  const downloadProgress: unknown[] = [];
   const copies: unknown[] = [];
+  let progressListener: ((event: {
+    readonly taskId: string;
+    readonly artifact: { readonly kind: "videoPart" };
+    readonly downloadedBytes: number;
+    readonly totalBytes?: number;
+    readonly progress?: number;
+  }) => void) | undefined;
   const ports = new NativeIngestPorts({
     network: {
       fetchText: async (input: unknown) => {
@@ -15,7 +23,14 @@ test("NativeIngestPorts preserves platform HTTP limits and maps a video source s
       },
       download: async (input: unknown) => {
         downloads.push(input);
+        progressListener?.({ taskId: "task-1", artifact: { kind: "videoPart" }, downloadedBytes: 12, totalBytes: 24, progress: 0.5 });
         return { uri: "file:///private/tasks/task-1/media/video-source.bin", sizeBytes: 24, mimeType: "video/mp4" };
+      },
+    },
+    downloadProgress: {
+      addListener: async (_eventName, listener) => {
+        progressListener = listener as typeof progressListener;
+        return { remove: async () => { progressListener = undefined; } };
       },
     },
     files: {
@@ -40,6 +55,7 @@ test("NativeIngestPorts preserves platform HTTP limits and maps a video source s
   await ports.downloader.download(
     { kind: "video", url: "https://cdn.example/video.m4s" },
     "task://task-1/media/video-source.bin",
+    (progress) => { downloadProgress.push(progress); },
   );
   await ports.mediaTools.merge(
     "task://task-1/media/video-source.bin",
@@ -62,6 +78,10 @@ test("NativeIngestPorts preserves platform HTTP limits and maps a video source s
     artifact: { kind: "videoPart" },
     headers: undefined,
   }]);
+  assert.deepEqual(downloadProgress, [
+    { downloadedBytes: 12, totalBytes: 24, progress: 0.5 },
+    { downloadedBytes: 24, totalBytes: 24, progress: 1 },
+  ]);
   assert.deepEqual(copies, [{
     taskId: "task-1",
     sourceUri: "file:///private/tasks/task-1/media/remux/final.mp4",

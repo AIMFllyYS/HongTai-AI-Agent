@@ -200,6 +200,7 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
 
   const ingestPorts = new NativeIngestPorts({
     network: options.plugins.nativeNetwork,
+    downloadProgress: options.plugins.nativeNetwork,
     files: options.plugins.localFiles,
     media: options.plugins.mediaRuntime,
   });

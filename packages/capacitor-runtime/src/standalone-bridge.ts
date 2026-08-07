@@ -1,6 +1,8 @@
 import type { LocalTaskFilesPlugin } from "./thin-task-files.js";
 import type {
   NativeDownloadPort,
+  NativeDownloadProgressEvent,
+  NativeDownloadListenerHandle,
   NativeMediaPort,
   NativeTaskMediaFilesPort,
   NativeTextFetchPort,
@@ -151,6 +153,10 @@ export interface StandaloneNativeNetworkPlugin extends NativeTextFetchPort, Nati
     eventName: "aiRequestEvent",
     listener: (event: NativeAiRequestEvent) => void,
   ): Promise<NativeAiListenerHandle> | NativeAiListenerHandle;
+  addListener(
+    eventName: "downloadProgress",
+    listener: (event: NativeDownloadProgressEvent) => void,
+  ): Promise<NativeDownloadListenerHandle> | NativeDownloadListenerHandle;
 }
 
 export interface StandaloneFileMediaPlugin {

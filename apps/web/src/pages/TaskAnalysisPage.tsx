@@ -68,7 +68,7 @@ export function TaskAnalysisPage({ runtime, taskId, navigate }: TaskAnalysisPage
         <section className="task-analysis-heading">
           <span className="eyebrow">CONTENT-ANALYSIS.V1</span>
           <h2>{sourceTitle}</h2>
-          <p>{sourceUrl}</p>
+          <p className="technical-value">{sourceUrl}</p>
           {platform ? <span><Icon name="language" size={15} />{platform}</span> : null}
         </section>
 

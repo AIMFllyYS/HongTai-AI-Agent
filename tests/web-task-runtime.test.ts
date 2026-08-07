@@ -112,7 +112,7 @@ test("task UI presents only the persisted seven stages in monotonic event order"
   } as AppTaskRecord;
   const events = [
     { taskId: "task-7", sequence: 2, stage: "resolve-link", status: "running", message: "正在处理跳转", timestamp: "2026-08-07T00:00:02.000Z" },
-    { taskId: "task-7", sequence: 4, stage: "download-media", status: "running", message: "正在下载", progress: 47, timestamp: "2026-08-07T00:00:04.000Z" },
+    { taskId: "task-7", sequence: 4, stage: "download-media", status: "running", message: "正在下载", progress: 0.47, timestamp: "2026-08-07T00:00:04.000Z" },
     { taskId: "task-7", sequence: 3, stage: "resolve-link", status: "succeeded", message: "已获得最终链接", timestamp: "2026-08-07T00:00:03.000Z" },
   ] as const satisfies readonly TaskEventRecord[];
 
@@ -207,4 +207,24 @@ test("task pages keep real events but never offer stop or lineage-retry controls
   assert.match(detail, /重新提交链接/);
   assert.doesNotMatch(processing, /code:\s*"APP_RUNTIME_UNAVAILABLE",\s*message:\s*"任务无法开始执行"/);
   assert.match(processing, /code:\s*"INTERNAL_UNKNOWN_ERROR",\s*message:\s*"任务无法开始执行"/);
+});
+
+test("real task pages constrain technical text and expose persisted stage percentages", () => {
+  const home = read("pages/TaskHomePage.tsx");
+  const processing = read("pages/TaskProcessingPage.tsx");
+  const detail = read("pages/TaskDetailPage.tsx");
+  const analysis = read("pages/TaskAnalysisPage.tsx");
+  const progress = read("components/TaskProgressSteps.tsx");
+  const css = read("styles/pages/tasks-runtime.css");
+
+  assert.match(home, /className="technical-value"/);
+  assert.match(processing, /className="technical-value"/);
+  assert.match(detail, /className="technical-value"/);
+  assert.match(analysis, /className="technical-value"/);
+  assert.match(processing, /task-page-actions mobile-action-group/);
+  assert.match(detail, /analysis-confirm-card__actions mobile-action-group/);
+  assert.match(progress, /role="progressbar"/);
+  assert.match(progress, /task-progress-steps__percent/);
+  assert.match(css, /\.progress-step__detail[^}]*overflow-wrap:\s*anywhere/s);
+  assert.match(css, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.task-page-actions[^}]*grid-template-columns:\s*1fr/);
 });
