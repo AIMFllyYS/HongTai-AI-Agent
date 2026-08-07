@@ -90,15 +90,38 @@ internal class ProductionRenderer(private val context: Context, private val stor
     val engine = TextToSpeech(context) { value -> status.set(value); initialized.countDown() }
     try {
       if (!initialized.await(15, TimeUnit.SECONDS) || status.get() != TextToSpeech.SUCCESS) throw IllegalStateException("System TTS is unavailable.")
-      if (engine.setLanguage(Locale.forLanguageTag(plan.voiceLocale)) < TextToSpeech.LANG_AVAILABLE) throw IllegalStateException("The requested system TTS language is unavailable.")
+      val requestedLocale = Locale.forLanguageTag(plan.voiceLocale)
+      if (engine.setLanguage(requestedLocale) < TextToSpeech.LANG_AVAILABLE) throw IllegalStateException("The requested system TTS language is unavailable.")
+      selectOfflineVoice(engine, requestedLocale)
       if (engine.setSpeechRate(plan.speechRate) != TextToSpeech.SUCCESS) throw IllegalStateException("The system TTS speech rate is unavailable.")
-      return plan.shots.map { shot -> synthesizeShot(engine, projectId, shot) to shot.durationMs }
+      return plan.shots.map { shot -> synthesizeShot(engine, requestedLocale, projectId, shot) to shot.durationMs }
     } finally {
       engine.shutdown()
     }
   }
 
-  private fun synthesizeShot(engine: TextToSpeech, projectId: String, shot: ProductionShot): File {
+  private fun selectOfflineVoice(engine: TextToSpeech, locale: Locale) {
+    engine.voices?.firstOrNull { voice ->
+      voice.locale.language == locale.language && !voice.isNetworkConnectionRequired
+    }?.let { voice -> engine.voice = voice }
+  }
+
+  private fun synthesizeShot(engine: TextToSpeech, locale: Locale, projectId: String, shot: ProductionShot): File {
+    var firstFailure: IllegalStateException? = null
+    repeat(2) { attempt ->
+      try {
+        return synthesizeShotAttempt(engine, projectId, shot)
+      } catch (error: IllegalStateException) {
+        if (attempt == 1) throw error
+        firstFailure = error
+        Thread.sleep(750)
+        selectOfflineVoice(engine, locale)
+      }
+    }
+    throw checkNotNull(firstFailure)
+  }
+
+  private fun synthesizeShotAttempt(engine: TextToSpeech, projectId: String, shot: ProductionShot): File {
     val output = File(store.audioDirectory(projectId), "narration-${shot.order}.wav")
     if (output.exists() && !output.delete()) throw IllegalStateException("Could not replace a previous TTS segment.")
     val finished = CountDownLatch(1)
