@@ -91,7 +91,7 @@ export function App({ runtime, visualData }: AppProps = {}) {
         : <RuntimePendingPage description="观察路由缺少有效标识。" navigate={navigate} title="无法读取观察会话" />;
     }
     if (runtime && renderedRoute.key === "create") {
-      return <CreatePage capability={runtime.features.create} navigate={navigate} />;
+      return <CreatePage navigate={navigate} runtime={runtime} />;
     }
     if (runtime && renderedRoute.key === "assets") {
       return <AssetsPage capability={runtime.features.assets} navigate={navigate} />;

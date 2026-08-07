@@ -17,9 +17,8 @@ test("planned feature panel has a safe default capability and clear availability
   assert.match(source, /data-feature-capability/);
 });
 
-test("creation, assets, and publishing pages do not render fixture success states as live capabilities", () => {
+test("assets and publishing remain planned while creation uses the real production runtime", () => {
   const pages = [
-    "pages/CreatePage.tsx",
     "pages/AssetsPage.tsx",
     "pages/PublishPage.tsx",
   ];
@@ -32,6 +31,10 @@ test("creation, assets, and publishing pages do not render fixture success state
   }
 
   const create = read("pages/CreatePage.tsx");
+  assert.match(create, /runtime\.production\.(create|importAssets|generatePlan|render)/);
+  assert.match(create, /IssueNotice/);
+  assert.match(create, /content-analysis\.v1/);
+  assert.match(create, /production-plan\.v1/);
   assert.doesNotMatch(create, /viewModel\.(templates|profileTags|materialFilters|generationEta|actionLabel)/);
   assert.doesNotMatch(create, /is-selected|template-tile__selected/);
 
@@ -61,7 +64,7 @@ test("planned feature styling makes disabled controls legible without inventing 
 test("production runtime uses capability-gated shells while fixtures stay explicit", () => {
   const app = read("App.tsx");
 
-  assert.match(app, /runtime && renderedRoute\.key === "create"[\s\S]*<CreatePage capability=\{runtime\.features\.create\} navigate=\{navigate\} \/>/);
+  assert.match(app, /runtime && renderedRoute\.key === "create"[\s\S]*<CreatePage navigate=\{navigate\} runtime=\{runtime\} \/>/);
   assert.match(app, /runtime && renderedRoute\.key === "assets"[\s\S]*<AssetsPage capability=\{runtime\.features\.assets\} navigate=\{navigate\} \/>/);
   assert.match(app, /runtime && renderedRoute\.key === "publish"[\s\S]*<PublishPage capability=\{runtime\.features\.publish\} navigate=\{navigate\} \/>/);
   assert.match(app, /if \(visualData\) \{[\s\S]*visualData\.getCreate\(\)[\s\S]*visualData\.getPublish\(\)[\s\S]*visualData\.getAssets\(\)/);

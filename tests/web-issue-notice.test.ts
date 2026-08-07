@@ -57,6 +57,7 @@ test("task, observation, and settings pages use the one IssueNotice action bound
     "pages/SettingsPage.tsx",
     "pages/ProfileSettingsPage.tsx",
     "pages/AiSettingsPage.tsx",
+    "pages/CreatePage.tsx",
   ];
 
   for (const page of pages) {
@@ -76,13 +77,18 @@ test("task, observation, and settings pages use the one IssueNotice action bound
   assert.match(read("pages/ProfileSettingsPage.tsx"), /selectMedia:/);
 });
 
-test("planned shells remain disabled while observation capture uses the native runtime", () => {
-  for (const page of ["pages/CreatePage.tsx", "pages/AssetsPage.tsx", "pages/PublishPage.tsx"]) {
+test("planned shells remain disabled while observation and production use native runtimes", () => {
+  for (const page of ["pages/AssetsPage.tsx", "pages/PublishPage.tsx"]) {
     const source = read(page);
     assert.match(source, /disabled/);
     assert.doesNotMatch(source, /IssueNotice/);
     assert.doesNotMatch(source, /onClick=/);
   }
+
+  const create = read("pages/CreatePage.tsx");
+  assert.match(create, /runtime\.production\.importAssets/);
+  assert.match(create, /runtime\.production\.render/);
+  assert.match(create, /IssueNotice/);
 
   const observation = read("pages/ObservationStartPage.tsx");
   assert.match(observation, /OBSERVATION_CAPTURE_IMAGE_SLOT/);
