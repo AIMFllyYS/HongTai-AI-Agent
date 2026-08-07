@@ -81,7 +81,7 @@ export function TaskProcessingPage({ runtime, taskId, navigate }: TaskProcessing
       await runtime.tasks.start(taskId);
       await load();
     } catch (error) {
-      setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "任务无法开始执行", action: "none" }));
+      setIssue(issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "任务无法开始执行", action: "retry" }));
     } finally {
       setActionPending(undefined);
     }

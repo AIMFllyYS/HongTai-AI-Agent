@@ -18,6 +18,39 @@ export interface TaskHomePageProps {
   readonly navigate: Navigate;
 }
 
+interface TaskSubmissionPort {
+  create(input: { readonly input: string }): Promise<AppTaskRecord>;
+  start(taskId: string): Promise<unknown>;
+}
+
+export type TaskSubmissionResult =
+  | { readonly status: "started"; readonly task: AppTaskRecord }
+  | { readonly status: "create_failed"; readonly issue: TaskIssue }
+  | { readonly status: "start_failed"; readonly task: AppTaskRecord; readonly issue: TaskIssue };
+
+export async function submitLocalTask(tasks: TaskSubmissionPort, input: string): Promise<TaskSubmissionResult> {
+  let task: AppTaskRecord;
+  try {
+    task = await tasks.create({ input });
+  } catch (error) {
+    return {
+      status: "create_failed",
+      issue: issueFromAppError(error, { code: "STORAGE_WRITE_FAILED", message: "无法保存本地采集任务", action: "free_storage" }),
+    };
+  }
+
+  try {
+    await tasks.start(task.id);
+    return { status: "started", task };
+  } catch (error) {
+    return {
+      status: "start_failed",
+      task,
+      issue: issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "本地采集任务无法启动", action: "retry" }),
+    };
+  }
+}
+
 function taskPath(task: AppTaskRecord): string {
   return task.status === "queued" || task.status === "running"
     ? taskProcessingPath(task.id)
@@ -91,12 +124,13 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
     setSubmitting(true);
     setSubmitIssue(undefined);
     try {
-      const task = await runtime.tasks.create({ input });
-      await runtime.tasks.start(task.id);
-      navigate(taskProcessingPath(task.id));
-    } catch (error) {
-      setSubmitIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "无法创建本地采集任务", action: "none" }));
-      void loadHistory();
+      const result = await submitLocalTask(runtime.tasks, input);
+      if (result.status === "started") {
+        navigate(taskProcessingPath(result.task.id));
+      } else {
+        setSubmitIssue(result.issue);
+        if (result.status === "start_failed") await loadHistory();
+      }
     } finally {
       setSubmitting(false);
     }

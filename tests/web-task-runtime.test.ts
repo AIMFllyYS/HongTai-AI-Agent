@@ -25,6 +25,20 @@ interface TaskPresenters {
   };
 }
 
+interface TaskHomeSubject {
+  submitLocalTask(
+    tasks: {
+      create(input: { readonly input: string }): Promise<AppTaskRecord>;
+      start(taskId: string): Promise<unknown>;
+    },
+    input: string,
+  ): Promise<
+    | { readonly status: "started"; readonly task: AppTaskRecord }
+    | { readonly status: "create_failed"; readonly issue: { readonly code: string } }
+    | { readonly status: "start_failed"; readonly task: AppTaskRecord; readonly issue: { readonly code: string } }
+  >;
+}
+
 async function presenters(): Promise<Partial<TaskPresenters>> {
   try {
     return await import("../apps/web/src/features/tasks/task-presenters") as TaskPresenters;
@@ -32,6 +46,45 @@ async function presenters(): Promise<Partial<TaskPresenters>> {
     return {};
   }
 }
+
+async function taskHomeSubject(): Promise<Partial<TaskHomeSubject>> {
+  try {
+    return await import("../apps/web/src/pages/TaskHomePage") as unknown as TaskHomeSubject;
+  } catch {
+    return {};
+  }
+}
+
+test("task submission separates create and start failures without losing a queued task", async () => {
+  const subject = await taskHomeSubject();
+  assert.equal(typeof subject.submitLocalTask, "function");
+  let starts = 0;
+  const createFailure = await subject.submitLocalTask?.({
+    create: async () => { throw new Error("write failed"); },
+    start: async () => { starts += 1; },
+  }, "https://v.douyin.com/demo/");
+  assert.deepEqual(createFailure, {
+    status: "create_failed",
+    issue: {
+      code: "STORAGE_WRITE_FAILED",
+      severity: "error",
+      userMessage: "无法保存本地采集任务",
+      retryable: false,
+      action: "free_storage",
+      details: { cause: "Error" },
+    },
+  });
+  assert.equal(starts, 0);
+
+  const queued = { id: "task-queued" } as AppTaskRecord;
+  const startFailure = await subject.submitLocalTask?.({
+    create: async () => queued,
+    start: async () => { throw new Error("start failed"); },
+  }, "https://v.douyin.com/demo/");
+  assert.equal(startFailure?.status, "start_failed");
+  assert.equal(startFailure && "task" in startFailure ? startFailure.task : undefined, queued);
+  assert.equal(startFailure && "issue" in startFailure ? startFailure.issue.code : undefined, "INTERNAL_UNKNOWN_ERROR");
+});
 
 test("task UI presents only the persisted seven stages in monotonic event order", async () => {
   const subject = await presenters();
@@ -122,7 +175,7 @@ test("runtime task pages are wired to AppRuntime and static fixtures remain outs
     assert.match(app, new RegExp(component));
   }
   assert.match(read("pages/TaskHomePage.tsx"), /runtime\.tasks\.inspectInput/);
-  assert.match(read("pages/TaskHomePage.tsx"), /runtime\.tasks\.create/);
+  assert.match(read("pages/TaskHomePage.tsx"), /submitLocalTask\(runtime\.tasks/);
   assert.match(read("pages/TaskProcessingPage.tsx"), /runtime\.tasks\.subscribe/);
   assert.match(read("pages/TaskProcessingPage.tsx"), /runtime\.tasks\.listEvents/);
   assert.match(read("pages/TaskDetailPage.tsx"), /runtime\.tasks\.getDetail/);
@@ -152,4 +205,6 @@ test("task pages keep real events but never offer stop or lineage-retry controls
   assert.match(detail, /navigate\(pathForRoute\("home"\)\)/);
   assert.match(processing, /重新提交链接/);
   assert.match(detail, /重新提交链接/);
+  assert.doesNotMatch(processing, /code:\s*"APP_RUNTIME_UNAVAILABLE",\s*message:\s*"任务无法开始执行"/);
+  assert.match(processing, /code:\s*"INTERNAL_UNKNOWN_ERROR",\s*message:\s*"任务无法开始执行"/);
 });

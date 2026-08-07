@@ -54,6 +54,12 @@ test("observation pages use the real diagnosis runtime rather than a visual diag
   assert.match(navigation, /id: "ai", label: "AI", icon: "health_cross", path: pathForRoute\("observation-new"\)/);
 });
 
+test("observation session creation uses a storage fallback instead of runtime unavailable", () => {
+  const start = read("pages/ObservationStartPage.tsx");
+  assert.doesNotMatch(start, /code:\s*"APP_RUNTIME_UNAVAILABLE",\s*message:\s*"无法创建本地观察会话"/);
+  assert.match(start, /code:\s*"STORAGE_WRITE_FAILED",\s*message:\s*"无法创建本地观察会话"/);
+});
+
 test("observation presentation only recognizes diagnosis-report.v1 and never turns it into a score", async () => {
   const subject = await import("../apps/web/src/features/diagnosis/diagnosis-presenters");
 

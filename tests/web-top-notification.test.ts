@@ -72,6 +72,8 @@ test("顶部通知使用 Motion、5 秒倒计时和向上拖拽关闭", () => {
   assert.match(component, /dragElastic=\{\{ top: 1, bottom: 0\.12 \}\}/);
   assert.match(component, /onDragStart/);
   assert.match(component, /onDragEnd/);
+  assert.match(component, /notification\.technicalCode/);
+  assert.match(component, /top-notification__technical-code/);
 });
 
 test("顶部通知样式使用安全区、圆角和非阻断悬浮层", () => {

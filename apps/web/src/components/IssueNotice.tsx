@@ -88,11 +88,21 @@ export interface IssueNoticeProps {
   readonly actions?: TaskIssueActionHandlers;
 }
 
+const NATIVE_ERROR_CODE = /^ERR_[A-Z0-9_]{2,116}$/;
+
+export function issueTechnicalCode(issue: Pick<TaskIssue, "code" | "details">): string {
+  const nativeCode = issue.details?.nativeCode;
+  return typeof nativeCode === "string" && NATIVE_ERROR_CODE.test(nativeCode)
+    ? `${issue.code} · ${nativeCode}`
+    : issue.code;
+}
+
 /** Shared presentation mapping for stable application issue codes/actions. */
 export function IssueNotice({ issue, actions }: IssueNoticeProps) {
   const { show } = useNotification();
   const actionsRef = useRef(actions);
   actionsRef.current = actions;
+  const technicalCode = issueTechnicalCode(issue);
 
   useEffect(() => {
     const presentation = issueActionPresentation(issue.action, actionsRef.current);
@@ -100,12 +110,12 @@ export function IssueNotice({ issue, actions }: IssueNoticeProps) {
       level: issue.severity === "error" ? "error" : "warning",
       title: issue.userMessage,
       message: presentation.guidance,
-      technicalCode: issue.code,
+      technicalCode,
       ...(presentation.label && presentation.onAction
         ? { action: { label: presentation.label, onPress: presentation.onAction } }
         : {}),
     });
-  }, [issue.action, issue.code, issue.severity, issue.userMessage, show]);
+  }, [issue.action, issue.severity, issue.userMessage, show, technicalCode]);
 
   return null;
 }

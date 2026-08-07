@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { issueActionPresentation } from "../apps/web/src/components/IssueNotice";
+import { issueActionPresentation, issueTechnicalCode } from "../apps/web/src/components/IssueNotice";
 
 const webRoot = join(process.cwd(), "apps", "web", "src");
 const read = (relativePath: string) => readFileSync(join(webRoot, relativePath), "utf8");
@@ -32,6 +32,18 @@ test("IssueNotice maps TaskIssue.action to explicit safe callbacks without branc
   assert.match(source, /return null/);
   assert.doesNotMatch(source, /GlassCard/);
   assert.doesNotMatch(source, /issue\.code\s*===/);
+});
+
+test("IssueNotice combines the stable application code with a safe native code", () => {
+  assert.equal(issueTechnicalCode({ code: "STORAGE_WRITE_FAILED" }), "STORAGE_WRITE_FAILED");
+  assert.equal(
+    issueTechnicalCode({ code: "AI_NETWORK_FAILED", details: { nativeCode: "ERR_AI_NETWORK_FAILED" } }),
+    "AI_NETWORK_FAILED · ERR_AI_NETWORK_FAILED",
+  );
+  assert.equal(
+    issueTechnicalCode({ code: "AI_NETWORK_FAILED", details: { nativeCode: "not-safe" } }),
+    "AI_NETWORK_FAILED",
+  );
 });
 
 test("task, observation, and settings pages use the one IssueNotice action boundary", () => {

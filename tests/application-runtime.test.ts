@@ -87,3 +87,33 @@ test("非采集界面错误不会被伪装成七阶段任务错误", () => {
   assert.equal(issue.action, "configure_ai");
   assert.equal(issue.stage, undefined);
 });
+
+test("应用错误保留 TaskError 详情和安全的原生错误码", () => {
+  const native = Object.assign(new Error("private native message"), { code: "ERR_AI_NETWORK_FAILED" });
+  const issue = issueFromAppError(
+    new TaskError({
+      code: "AI_NETWORK_FAILED",
+      message: "无法连接 AI 服务",
+      action: "check_network",
+      details: { attempt: 1 },
+      cause: native,
+    }),
+  );
+
+  assert.equal(issue.code, "AI_NETWORK_FAILED");
+  assert.equal(issue.userMessage, "无法连接 AI 服务");
+  assert.deepEqual(issue.details, { attempt: 1, nativeCode: "ERR_AI_NETWORK_FAILED" });
+  assert.doesNotMatch(JSON.stringify(issue), /private native message/);
+});
+
+test("未知 Capacitor 异常使用业务兜底但保留安全原生码", () => {
+  const issue = issueFromAppError(
+    { code: "ERR_PRIVATE_FILE_IMPORT_FAILED", message: "private path leaked" },
+    { code: "MEDIA_IMPORT_FAILED", message: "图片导入失败", action: "select_media" },
+  );
+
+  assert.equal(issue.code, "MEDIA_IMPORT_FAILED");
+  assert.equal(issue.userMessage, "图片导入失败");
+  assert.deepEqual(issue.details, { nativeCode: "ERR_PRIVATE_FILE_IMPORT_FAILED" });
+  assert.doesNotMatch(JSON.stringify(issue), /private path leaked/);
+});

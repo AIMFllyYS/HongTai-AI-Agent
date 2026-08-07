@@ -110,7 +110,7 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
         }
       }
     } catch (error) {
-      setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "无法创建本地观察会话", action: "none" }));
+      setIssue(issueFromAppError(error, { code: "STORAGE_WRITE_FAILED", message: "无法创建本地观察会话", action: "free_storage" }));
       void loadSessions();
     } finally {
       setLoading(false);

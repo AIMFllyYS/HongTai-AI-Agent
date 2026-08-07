@@ -86,6 +86,7 @@ export function TopNotification({ notification, onDismiss }: TopNotificationProp
             <span className="top-notification__copy">
               <strong>{notification.title}</strong>
               {notification.message ? <small>{notification.message}</small> : null}
+              {notification.technicalCode ? <code className="top-notification__technical-code">{notification.technicalCode}</code> : null}
             </span>
             {notification.action ? (
               <button

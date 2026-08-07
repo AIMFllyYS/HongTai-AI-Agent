@@ -470,6 +470,16 @@
   white-space: nowrap;
 }
 
+.top-notification__technical-code {
+  overflow: hidden;
+  color: var(--color-text-subtle);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.625rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .top-notification__action {
   padding: 0.45rem 0.7rem;
   color: var(--color-primary-strong);
