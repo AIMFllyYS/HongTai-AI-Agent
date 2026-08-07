@@ -77,3 +77,12 @@ test("native downloads forward bounded real byte progress to the shared pipeline
   assert.match(plugin, /\.putOptional\("totalBytes"/);
   assert.match(plugin, /\.putOptional\("progress"/);
 });
+
+test("client APK builds are identifiable and never log bridge payloads", () => {
+  const config = read("capacitor.config.ts");
+  const appBuild = read("android/app/build.gradle.kts");
+
+  assert.match(config, /loggingBehavior:\s*"none"/);
+  assert.match(appBuild, /versionCode\s*=\s*[2-9][0-9]*/);
+  assert.doesNotMatch(appBuild, /versionName\s*=\s*"0\.1\.0"/);
+});

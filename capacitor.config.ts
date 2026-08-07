@@ -8,6 +8,9 @@ const config: CapacitorConfig = {
   appId: "com.hongtai.aiagent",
   appName: "宏泰AI智能体",
   webDir: "apps/web/dist",
+  // Bridge arguments may include write-only AI credentials. Never mirror
+  // Capacitor call payloads into Logcat, including in debug APKs.
+  loggingBehavior: "none",
   server: {
     androidScheme: "https",
   },
