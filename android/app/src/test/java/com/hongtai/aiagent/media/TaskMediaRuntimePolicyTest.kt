@@ -42,11 +42,13 @@ class TaskMediaRuntimePolicyTest {
   }
 
   @Test
-  fun `accepts ASR segmentation input only from the owning task pcm directory`() {
-    assertTrue(TaskPrivateMediaPolicy.isTaskPcmInputPath("task-42", "tasks/task-42/media/pcm/source.wav"))
-    assertFalse(TaskPrivateMediaPolicy.isTaskPcmInputPath("task-42", "tasks/other/media/pcm/source.wav"))
-    assertFalse(TaskPrivateMediaPolicy.isTaskPcmInputPath("task-42", "tasks/task-42/media/remux/source.mp4"))
-    assertFalse(TaskPrivateMediaPolicy.isTaskPcmInputPath("task-42", "media/pcm/source.wav"))
+  fun `accepts ASR segmentation input only from the owning task canonical wav paths`() {
+    assertTrue(TaskPrivateMediaPolicy.isTaskSegmentablePcmInputPath("task-42", "tasks/task-42/media/pcm/source.wav"))
+    assertTrue(TaskPrivateMediaPolicy.isTaskSegmentablePcmInputPath("task-42", "tasks/task-42/media/audio.wav"))
+    assertFalse(TaskPrivateMediaPolicy.isTaskSegmentablePcmInputPath("task-42", "tasks/other/media/pcm/source.wav"))
+    assertFalse(TaskPrivateMediaPolicy.isTaskSegmentablePcmInputPath("task-42", "tasks/task-42/media/other.wav"))
+    assertFalse(TaskPrivateMediaPolicy.isTaskSegmentablePcmInputPath("task-42", "tasks/task-42/media/remux/source.mp4"))
+    assertFalse(TaskPrivateMediaPolicy.isTaskSegmentablePcmInputPath("task-42", "media/pcm/source.wav"))
   }
 
   @Test

@@ -122,7 +122,7 @@ class AndroidMediaRuntime(context: Context) : MediaRuntime {
     val source = requireTaskOwnedMediaInput(taskId, sourceUri)
     val normalizedTaskId = PrivateArtifactPolicy.taskDirectoryName(taskId)
     val sourceRelativePath = privateRelativePath(source)
-    require(TaskPrivateMediaPolicy.isTaskPcmInputPath(normalizedTaskId, sourceRelativePath)) {
+    require(TaskPrivateMediaPolicy.isTaskSegmentablePcmInputPath(normalizedTaskId, sourceRelativePath)) {
       "Only task-owned PCM/WAV artifacts can be segmented for ASR."
     }
     val finalizedOutputs = mutableListOf<File>()

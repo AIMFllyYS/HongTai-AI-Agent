@@ -19,11 +19,14 @@ internal object TaskPrivateMediaPolicy {
     return segments[1]
   }
 
-  fun isTaskPcmInputPath(taskId: String, value: String): Boolean {
+  fun isTaskSegmentablePcmInputPath(taskId: String, value: String): Boolean {
     val normalized = value.replace('\\', '/')
-    return taskIdForRelativeInputPath(normalized) == taskId &&
-      normalized.startsWith("tasks/$taskId/media/pcm/") &&
-      normalized.removePrefix("tasks/$taskId/media/pcm/").isNotBlank()
+    if (taskIdForRelativeInputPath(normalized) != taskId) return false
+    return normalized == "tasks/$taskId/media/audio.wav" ||
+      (
+        normalized.startsWith("tasks/$taskId/media/pcm/") &&
+          normalized.removePrefix("tasks/$taskId/media/pcm/").isNotBlank()
+      )
   }
 
   private fun isUnsafeSegment(segment: String): Boolean =
