@@ -105,7 +105,9 @@ export class StandaloneProductionService implements ProductionService {
 
   async importAssets(projectId: string): Promise<ProductionProjectRecord> {
     const project = await this.#required(projectId);
-    const result = await this.#options.native.pickAssets({ projectId, maxItems: 12 });
+    const remaining = 12 - project.assets.length;
+    if (remaining <= 0) throw taskError("每个制作项目最多使用12个素材", "select_media");
+    const result = await this.#options.native.pickAssets({ projectId, maxItems: remaining });
     const imported = result.assets.map(nativeAsset).filter((asset): asset is NativeProductionAsset => Boolean(asset));
     if (imported.length === 0) throw taskError("没有导入可用的图片、视频或音频", "select_media");
     const combined = new Map([...project.assets, ...imported].map((asset) => [asset.id, asset]));

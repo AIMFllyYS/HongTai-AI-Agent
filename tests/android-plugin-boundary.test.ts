@@ -6,7 +6,7 @@ import { test } from "node:test";
 const root = process.cwd();
 const read = (relativePath: string) => readFileSync(join(root, relativePath), "utf8");
 
-test("the standalone APK registers only its six explicit native plugins", () => {
+test("the standalone APK registers only its explicit native plugins", () => {
   const config = read("capacitor.config.ts");
   const mainActivity = read("android/app/src/main/java/com/hongtai/aiagent/MainActivity.kt");
   const generatedRegistry = JSON.parse(read("android/app/src/main/assets/capacitor.plugins.json")) as Array<{
@@ -31,7 +31,7 @@ test("the standalone APK registers only its six explicit native plugins", () => 
     false,
     "the generated Capacitor registry must not expose raw SQL, encryption-secret, or delete-database methods",
   );
-  for (const plugin of ["SecureSettingsPlugin", "LocalDataPlugin", "LocalFilesPlugin", "NativeNetworkPlugin", "FileMediaPlugin", "MediaRuntimePlugin"]) {
+  for (const plugin of ["SecureSettingsPlugin", "LocalDataPlugin", "LocalFilesPlugin", "NativeNetworkPlugin", "FileMediaPlugin", "MediaRuntimePlugin", "ProductionRuntimePlugin"]) {
     assert.match(mainActivity, new RegExp(`registerPlugin\\(${plugin}::class\\.java\\)`));
   }
   assert.doesNotMatch(mainActivity, /CapacitorSQLitePlugin|TaskStorePlugin|AnalysisStorePlugin|DiagnosisStorePlugin|TaskRuntimePlugin|TaskRecoveryRegistry|LocalEncryptedStorage/);

@@ -12,6 +12,7 @@ import com.hongtai.aiagent.bridge.LocalDataPlugin
 import com.hongtai.aiagent.bridge.LocalFilesPlugin
 import com.hongtai.aiagent.bridge.MediaRuntimePlugin
 import com.hongtai.aiagent.bridge.NativeNetworkPlugin
+import com.hongtai.aiagent.bridge.ProductionRuntimePlugin
 import com.hongtai.aiagent.bridge.SecureSettingsPlugin
 
 class MainActivity : BridgeActivity() {
@@ -22,6 +23,7 @@ class MainActivity : BridgeActivity() {
     registerPlugin(NativeNetworkPlugin::class.java)
     registerPlugin(FileMediaPlugin::class.java)
     registerPlugin(MediaRuntimePlugin::class.java)
+    registerPlugin(ProductionRuntimePlugin::class.java)
     super.onCreate(savedInstanceState)
 
     WindowCompat.enableEdgeToEdge(window)
