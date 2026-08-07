@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
 
 import { PausableCountdown } from "../apps/web/src/notifications/notification-countdown";
@@ -9,6 +11,9 @@ import {
   notificationOpacity,
   shouldDismissNotification,
 } from "../apps/web/src/notifications/notification-model";
+
+const webRoot = join(process.cwd(), "apps", "web", "src");
+const read = (path: string) => readFileSync(join(webRoot, path), "utf8");
 
 test("顶部通知只在向上距离或速度越过阈值时关闭", () => {
   assert.equal(shouldDismissNotification(-NOTIFICATION_DISMISS_DISTANCE_PX - 1, 0), true);
@@ -47,4 +52,32 @@ test("通知拖拽暂停计时，回弹后继续剩余时间", () => {
   assert.equal(scheduledDelay, 3_800);
   scheduled?.();
   assert.equal(elapsed, 1);
+});
+
+test("全局通知宿主只维护一条通知并渲染顶部组件", () => {
+  assert.equal(existsSync(join(webRoot, "notifications", "NotificationProvider.tsx")), true);
+  const provider = read("notifications/NotificationProvider.tsx");
+  assert.match(provider, /NotificationContext/);
+  assert.match(provider, /setCurrent/);
+  assert.match(provider, /<TopNotification/);
+});
+
+test("顶部通知使用 Motion、5 秒倒计时和向上拖拽关闭", () => {
+  const component = read("components/TopNotification.tsx");
+  assert.match(component, /AnimatePresence/);
+  assert.match(component, /drag="y"/);
+  assert.match(component, /PausableCountdown/);
+  assert.match(component, /shouldDismissNotification/);
+  assert.match(component, /notificationOpacity/);
+  assert.match(component, /dragElastic=\{\{ top: 1, bottom: 0\.12 \}\}/);
+  assert.match(component, /onDragStart/);
+  assert.match(component, /onDragEnd/);
+});
+
+test("顶部通知样式使用安全区、圆角和非阻断悬浮层", () => {
+  const css = read("styles/components.css");
+  assert.match(css, /\.top-notification-viewport[\s\S]*env\(safe-area-inset-top\)/);
+  assert.match(css, /\.top-notification[\s\S]*border-radius:/);
+  assert.match(css, /\.top-notification-viewport[\s\S]*pointer-events:\s*none/);
+  assert.match(css, /\.top-notification[\s\S]*pointer-events:\s*auto/);
 });
