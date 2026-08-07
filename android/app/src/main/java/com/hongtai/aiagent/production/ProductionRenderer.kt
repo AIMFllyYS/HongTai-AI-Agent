@@ -17,6 +17,7 @@ import android.text.style.BackgroundColorSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.audio.DefaultGainProvider
 import androidx.media3.common.audio.GainProcessor
 import androidx.media3.common.util.UnstableApi
@@ -55,6 +56,7 @@ internal class ProductionRenderer(private val context: Context, private val stor
     val transformerRef = AtomicReference<Transformer?>()
     handler.post {
       val transformer = Transformer.Builder(context)
+        .setVideoMimeType(MimeTypes.VIDEO_H264)
         .addListener(object : Transformer.Listener {
           override fun onCompleted(composition: Composition, exportResult: ExportResult) { finished.countDown() }
           override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {

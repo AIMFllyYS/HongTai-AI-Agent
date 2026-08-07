@@ -60,9 +60,19 @@ class ProductionRendererInstrumentationTest {
     assertEquals(100, progress.last())
     val extractor = MediaExtractor()
     extractor.setDataSource(requireNotNull(android.net.Uri.parse(result.uri).path))
-    val mimes = (0 until extractor.trackCount).map { extractor.getTrackFormat(it).getString("mime") }
+    val formats = (0 until extractor.trackCount).map(extractor::getTrackFormat)
+    val mimes = formats.map { it.getString("mime") }
+    val videoFormat = formats.first { it.getString("mime")?.startsWith("video/") == true }
+    val rotation = videoFormat.getInteger(android.media.MediaFormat.KEY_ROTATION, 0)
+    val encodedWidth = videoFormat.getInteger(android.media.MediaFormat.KEY_WIDTH)
+    val encodedHeight = videoFormat.getInteger(android.media.MediaFormat.KEY_HEIGHT)
+    val displayWidth = if (rotation % 180 == 0) encodedWidth else encodedHeight
+    val displayHeight = if (rotation % 180 == 0) encodedHeight else encodedWidth
     extractor.release()
     assertTrue(mimes.any { it?.startsWith("video/") == true })
     assertTrue(mimes.any { it?.startsWith("audio/") == true })
+    assertEquals("video/avc", videoFormat.getString("mime"))
+    assertEquals(720, displayWidth)
+    assertEquals(1280, displayHeight)
   }
 }
