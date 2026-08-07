@@ -1,6 +1,8 @@
 package com.hongtai.aiagent
 
 import android.os.Bundle
+import android.view.View
+import androidx.core.view.WindowCompat
 import com.getcapacitor.BridgeActivity
 import com.hongtai.aiagent.bridge.FileMediaPlugin
 import com.hongtai.aiagent.bridge.LocalDataPlugin
@@ -18,5 +20,12 @@ class MainActivity : BridgeActivity() {
     registerPlugin(FileMediaPlugin::class.java)
     registerPlugin(MediaRuntimePlugin::class.java)
     super.onCreate(savedInstanceState)
+
+    WindowCompat.enableEdgeToEdge(window)
+    WindowCompat.getInsetsController(window, window.decorView).apply {
+      isAppearanceLightStatusBars = true
+      isAppearanceLightNavigationBars = true
+    }
+    bridge.webView.overScrollMode = View.OVER_SCROLL_ALWAYS
   }
 }

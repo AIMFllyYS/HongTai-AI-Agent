@@ -141,8 +141,8 @@
 
   --page-gutter: 1rem;
   --content-max: 48.75rem;
-  --header-height: 4.25rem;
-  --nav-height: 5rem;
+  --header-height: 3.5rem;
+  --nav-height: 4rem;
 }
 
 [data-visual-theme="warm-soft-tech"] {
