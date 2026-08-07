@@ -82,7 +82,7 @@ export function SwipeRouteViewport({ active, currentPath, navigate, renderRoute,
   }, [currentPath, finishPendingSwipe, pendingSwipe]);
 
   const handleTransitionEnd = useCallback<TransitionEventHandler<HTMLDivElement>>((event) => {
-    if (event.target !== event.currentTarget || event.propertyName !== "transform") return;
+    if (event.target !== event.currentTarget || event.propertyName !== "left") return;
     finishPendingSwipe();
   }, [finishPendingSwipe]);
 

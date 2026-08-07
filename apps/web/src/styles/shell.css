@@ -4,7 +4,7 @@
 
 .route-transition {
   min-height: 100vh;
-  will-change: opacity, transform;
+  will-change: opacity;
 }
 
 .route-swipe-viewport {
@@ -17,21 +17,23 @@
 }
 
 .route-swipe-track {
+  position: relative;
+  left: calc(-100% + var(--swipe-offset, 0px));
   display: grid;
   grid-template-columns: repeat(3, 100%);
   width: 100%;
   align-items: start;
-  transform: translate3d(calc(-100% + var(--swipe-offset, 0px)), 0, 0);
-  transition: transform var(--motion-duration-standard) var(--motion-ease-emphasized);
-  will-change: transform;
+  transition: left var(--motion-duration-standard) var(--motion-ease-emphasized);
 }
 
 .route-swipe-track--dragging {
   transition: none;
+  will-change: left;
 }
 
 .route-swipe-track--settling {
-  transition: transform var(--motion-duration-standard) var(--motion-ease-emphasized);
+  transition: left var(--motion-duration-standard) var(--motion-ease-emphasized);
+  will-change: left;
 }
 
 .route-swipe-track--route-commit {
@@ -45,6 +47,10 @@
 
 .route-swipe-pane:not(.route-swipe-pane--current) {
   pointer-events: none;
+}
+
+.route-swipe-pane:not(.route-swipe-pane--current) .app-header {
+  display: none;
 }
 
 .app-shell--with-nav {
