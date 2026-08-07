@@ -19,7 +19,7 @@ import java.util.UUID
 import java.util.concurrent.Executors
 
 /**
- * Fixed app-private file bridge for standalone task and observation artifacts.
+ * Fixed app-private file bridge for standalone task, observation and production artifacts.
  * It exposes neither arbitrary paths nor directory listing outside the two
  * owned roots. Structured task state is atomically replaced; task events are
  * append-only.
@@ -27,7 +27,12 @@ import java.util.concurrent.Executors
 @CapacitorPlugin(name = "LocalFiles")
 class LocalFilesPlugin : Plugin() {
   private val tasks: PrivateArtifactStore by lazy { PrivateArtifactStore(context) }
-  private val observations: PrivateObservationFiles by lazy { PrivateObservationFiles(context) }
+  private val observations by lazy {
+    PrivateScopedFiles(context, "observations", "observation", LocalFilesPolicy::sessionId, 25L * 1024L * 1024L)
+  }
+  private val productions by lazy {
+    PrivateScopedFiles(context, "productions", "production", LocalFilesPolicy::projectId, 2L * 1024L * 1024L)
+  }
 
   @PluginMethod
   fun ensure(call: PluginCall) = execute(call) {
@@ -105,7 +110,7 @@ class LocalFilesPlugin : Plugin() {
 
   @PluginMethod
   fun listObservationIds(call: PluginCall) = execute(call) {
-    call.resolve(JSObject().put("sessionIds", JSArray(observations.listSessionIds())))
+    call.resolve(JSObject().put("sessionIds", JSArray(observations.listIdentifiers())))
   }
 
   @PluginMethod
@@ -123,6 +128,34 @@ class LocalFilesPlugin : Plugin() {
     call.resolve(observations.fileInfo(call.requiredSessionId(), call.requiredRelativePath()).toJsObject())
   }
 
+  @PluginMethod
+  fun ensureProduction(call: PluginCall) = execute(call) {
+    productions.ensure(call.requiredProjectId())
+    call.resolve()
+  }
+
+  @PluginMethod
+  fun writeProductionText(call: PluginCall) = execute(call) {
+    productions.writeText(
+      call.requiredProjectId(),
+      call.requiredRelativePath(),
+      call.requiredValue(),
+      call.getBoolean("replace", false) ?: false,
+    )
+    call.resolve()
+  }
+
+  @PluginMethod
+  fun readProductionText(call: PluginCall) = execute(call) {
+    val value = productions.readTextOrNull(call.requiredProjectId(), call.requiredRelativePath())
+    call.resolve(JSObject().putOptional("value", value))
+  }
+
+  @PluginMethod
+  fun listProductionIds(call: PluginCall) = execute(call) {
+    call.resolve(JSObject().put("projectIds", JSArray(productions.listIdentifiers())))
+  }
+
   private fun execute(call: PluginCall, action: () -> Unit) {
     FILE_EXECUTOR.execute {
       try {
@@ -138,6 +171,8 @@ class LocalFilesPlugin : Plugin() {
   private fun PluginCall.requiredTaskId(): String = LocalFilesPolicy.taskId(requiredString("taskId"))
 
   private fun PluginCall.requiredSessionId(): String = LocalFilesPolicy.sessionId(requiredString("sessionId"))
+
+  private fun PluginCall.requiredProjectId(): String = LocalFilesPolicy.projectId(requiredString("projectId"))
 
   private fun PluginCall.requiredRelativePath(): String = LocalFilesPolicy.relativePath(requiredString("relativePath"))
 
@@ -174,6 +209,8 @@ internal object LocalFilesPolicy {
 
   fun sessionId(value: String): String = identifierValue(value, "Observation session identifier")
 
+  fun projectId(value: String): String = identifierValue(value, "Production project identifier")
+
   fun relativePath(value: String): String {
     val normalized = value.trim().replace('\\', '/')
     require(normalized.isNotBlank() && !normalized.startsWith('/')) { "Artifact path must be relative." }
@@ -188,9 +225,15 @@ internal object LocalFilesPolicy {
     ?: throw IllegalArgumentException("$label is invalid.")
 }
 
-private class PrivateObservationFiles(context: Context) {
+private class PrivateScopedFiles(
+  context: Context,
+  rootName: String,
+  private val label: String,
+  private val validateIdentifier: (String) -> String,
+  private val maxMediaBytes: Long,
+) {
   private val appContext = context.applicationContext
-  private val root = File(appContext.filesDir, "observations")
+  private val root = File(appContext.filesDir, rootName)
 
   fun ensure(sessionId: String): File = directory(sessionId)
 
@@ -208,19 +251,19 @@ private class PrivateObservationFiles(context: Context) {
     return FileInputStream(target).use { input -> input.readBytes().toString(Charsets.UTF_8) }
   }
 
-  fun listSessionIds(): List<String> = root.listFiles()
+  fun listIdentifiers(): List<String> = root.listFiles()
     ?.asSequence()
     ?.filter { it.isDirectory }
-    ?.mapNotNull { directory -> runCatching { LocalFilesPolicy.sessionId(directory.name) }.getOrNull() }
+    ?.mapNotNull { directory -> runCatching { validateIdentifier(directory.name) }.getOrNull() }
     ?.sorted()
     ?.toList()
     ?: emptyList()
 
   fun copyPrivateFile(sessionId: String, sourceUri: String, relativePath: String): PrivateArtifactFile {
     val source = requirePrivateInput(sourceUri)
-    require(source.length() <= MAX_MEDIA_BYTES) { "The observation image exceeds its storage limit." }
+    require(source.length() <= maxMediaBytes) { "The $label media exceeds its storage limit." }
     return FileInputStream(source).use { input ->
-      writeStream(sessionId, relativePath, input, MAX_MEDIA_BYTES, true, mimeTypeFor(relativePath))
+      writeStream(sessionId, relativePath, input, maxMediaBytes, true, mimeTypeFor(relativePath))
     }
   }
 
@@ -263,7 +306,7 @@ private class PrivateObservationFiles(context: Context) {
   }
 
   private fun fileOrNull(sessionId: String, relativePath: String): File? {
-    val directory = File(root, LocalFilesPolicy.sessionId(sessionId))
+    val directory = File(root, validateIdentifier(sessionId))
     if (!directory.isDirectory) return null
     val target = File(directory, LocalFilesPolicy.relativePath(relativePath)).canonicalFile
     requireInsideRoot(target)
@@ -280,7 +323,7 @@ private class PrivateObservationFiles(context: Context) {
   }
 
   private fun directory(sessionId: String): File {
-    val normalized = LocalFilesPolicy.sessionId(sessionId)
+    val normalized = validateIdentifier(sessionId)
     if (!root.exists() && !root.mkdirs()) throw IllegalStateException("Could not create the private observation root.")
     val directory = File(root, normalized).canonicalFile
     requireInsideRoot(directory)
@@ -317,6 +360,5 @@ private class PrivateObservationFiles(context: Context) {
   private companion object {
     const val BUFFER_BYTES = 64 * 1024
     const val MAX_TEXT_BYTES = 2 * 1024 * 1024
-    const val MAX_MEDIA_BYTES = 25L * 1024L * 1024L
   }
 }

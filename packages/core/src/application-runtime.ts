@@ -247,6 +247,41 @@ export interface AnalysisService {
   run(taskId: string): Promise<ContentAnalysisRecord>;
 }
 
+export type ProductionStatus = "draft" | "planning" | "ready" | "rendering" | "succeeded" | "failed";
+
+export interface ProductionAsset extends MediaReference {
+  readonly id: string;
+}
+
+export interface ProductionProjectRecord {
+  readonly projectId: string;
+  readonly analysisTaskId: string;
+  readonly brief: string;
+  readonly targetDurationSeconds: number;
+  readonly status: ProductionStatus;
+  readonly assets: readonly ProductionAsset[];
+  readonly plan?: VersionedDocument;
+  readonly output?: MediaReference;
+  readonly issue?: TaskIssue;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export type ProductionEvent =
+  | { readonly type: "state"; readonly project: ProductionProjectRecord }
+  | { readonly type: "render-progress"; readonly projectId: string; readonly progress: number; readonly message: string };
+
+export interface ProductionService {
+  create(input: { readonly analysisTaskId: string; readonly brief: string; readonly targetDurationSeconds: number }): Promise<ProductionProjectRecord>;
+  get(projectId: string): Promise<ProductionProjectRecord | undefined>;
+  list(): Promise<readonly ProductionProjectRecord[]>;
+  /** Opens the system picker and copies selected items into this project's private directory. */
+  importAssets(projectId: string): Promise<ProductionProjectRecord>;
+  generatePlan(projectId: string): Promise<ProductionProjectRecord>;
+  render(projectId: string): Promise<ProductionProjectRecord>;
+  subscribe(projectId: string, listener: (event: ProductionEvent) => void | Promise<void>): Unsubscribe;
+}
+
 export type ObservationMode = "tongue" | "face";
 export type DiagnosisReportStatus = "pending" | "running" | "succeeded" | "failed";
 
@@ -323,6 +358,7 @@ export interface AppRuntime {
   readonly tasks: TaskService;
   readonly analysis: AnalysisService;
   readonly diagnosis: DiagnosisService;
+  readonly production: ProductionService;
   readonly features: FeatureCapabilityRegistry;
 }
 

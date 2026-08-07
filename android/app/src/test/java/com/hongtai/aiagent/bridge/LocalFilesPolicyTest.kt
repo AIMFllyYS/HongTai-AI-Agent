@@ -9,6 +9,7 @@ class LocalFilesPolicyTest {
   fun `keeps standalone task and observation artifacts beneath fixed private roots`() {
     assertEquals("report/report.json", LocalFilesPolicy.relativePath("report/report.json"))
     assertEquals("session-2026_08", LocalFilesPolicy.sessionId("session-2026_08"))
+    assertEquals("production-2026_08", LocalFilesPolicy.projectId("production-2026_08"))
   }
 
   @Test
@@ -18,6 +19,9 @@ class LocalFilesPolicyTest {
     }
     assertThrows(IllegalArgumentException::class.java) {
       LocalFilesPolicy.sessionId("../../other")
+    }
+    assertThrows(IllegalArgumentException::class.java) {
+      LocalFilesPolicy.projectId("../../other")
     }
   }
 }

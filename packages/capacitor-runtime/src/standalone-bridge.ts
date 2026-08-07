@@ -145,6 +145,47 @@ export interface StandaloneLocalFilesPlugin extends LocalTaskFilesPlugin, Native
     readonly sizeBytes?: number;
     readonly mimeType?: string;
   }>;
+  ensureProduction(options: { readonly projectId: string }): Promise<void>;
+  writeProductionText(options: {
+    readonly projectId: string;
+    readonly relativePath: string;
+    readonly value: string;
+    readonly replace: boolean;
+  }): Promise<void>;
+  readProductionText(options: { readonly projectId: string; readonly relativePath: string }): Promise<{ readonly value?: string }>;
+  listProductionIds(): Promise<{ readonly projectIds: readonly string[] }>;
+}
+
+export interface NativeProductionAsset {
+  readonly id: string;
+  readonly uri: NativeUri;
+  readonly kind: "image" | "video" | "audio";
+  readonly mimeType: string;
+  readonly displayName: string;
+  readonly sizeBytes: number;
+  readonly durationSeconds?: number;
+}
+
+export interface NativeProductionResult {
+  readonly uri: NativeUri;
+  readonly mimeType: "video/mp4";
+  readonly sizeBytes: number;
+  readonly durationSeconds: number;
+}
+
+export interface NativeProductionProgressEvent {
+  readonly projectId: string;
+  readonly progress: number;
+  readonly message: string;
+}
+
+export interface StandaloneProductionRuntimePlugin {
+  pickAssets(options: { readonly projectId: string; readonly maxItems: number }): Promise<{ readonly assets: readonly NativeProductionAsset[] }>;
+  render(options: { readonly projectId: string; readonly planJson: string }): Promise<NativeProductionResult>;
+  addListener?(
+    eventName: "productionProgress",
+    listener: (event: NativeProductionProgressEvent) => void,
+  ): Promise<NativeAiListenerHandle> | NativeAiListenerHandle;
 }
 
 export interface StandaloneNativeNetworkPlugin extends NativeTextFetchPort, NativeDownloadPort {
@@ -178,6 +219,7 @@ export interface StandaloneNativePlugins {
   readonly nativeNetwork: StandaloneNativeNetworkPlugin;
   readonly fileMedia: StandaloneFileMediaPlugin;
   readonly mediaRuntime: StandaloneMediaRuntimePlugin;
+  readonly productionRuntime?: StandaloneProductionRuntimePlugin;
 }
 
 export function registerStandaloneNativePlugins(registerPlugin: NativePluginRegistrar): StandaloneNativePlugins {
@@ -188,5 +230,6 @@ export function registerStandaloneNativePlugins(registerPlugin: NativePluginRegi
     nativeNetwork: registerPlugin<StandaloneNativeNetworkPlugin>("NativeNetwork"),
     fileMedia: registerPlugin<StandaloneFileMediaPlugin>("FileMedia"),
     mediaRuntime: registerPlugin<StandaloneMediaRuntimePlugin>("MediaRuntime"),
+    productionRuntime: registerPlugin<StandaloneProductionRuntimePlugin>("ProductionRuntime"),
   };
 }

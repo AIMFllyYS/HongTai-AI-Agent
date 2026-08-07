@@ -19,6 +19,7 @@ import { platformRegistry } from "@hongtai/platforms";
 import { CapacitorAiTransport } from "./capacitor-ai-transport.js";
 import { StandaloneAnalysisService } from "./standalone-analysis-service.js";
 import { StandaloneDiagnosisService } from "./standalone-diagnosis-service.js";
+import { StandaloneProductionService } from "./standalone-production-service.js";
 import { NativeIngestPorts } from "./thin-ingest-ports.js";
 import { StandaloneTaskService } from "./standalone-task-service.js";
 import type { StandaloneAiConnection, StandaloneLocalProfile, StandaloneNativePlugins } from "./standalone-bridge.js";
@@ -264,6 +265,18 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
     ...(options.createSessionId ? { createSessionId: options.createSessionId } : {}),
     now,
   });
+  const unavailableProduction = {
+    pickAssets: async () => { throw taskError("APP_RUNTIME_UNAVAILABLE", "本地制作插件尚未加载", "retry"); },
+    render: async () => { throw taskError("APP_RUNTIME_UNAVAILABLE", "本地制作插件尚未加载", "retry"); },
+  };
+  const production = new StandaloneProductionService({
+    files: options.plugins.localFiles,
+    native: options.plugins.productionRuntime ?? unavailableProduction,
+    analysis,
+    getProvider: requireProvider,
+    toDisplayUri: display,
+    now,
+  });
 
   return {
     profile: {
@@ -372,6 +385,7 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
     tasks,
     analysis,
     diagnosis,
+    production,
     features: FEATURES,
   };
 }
