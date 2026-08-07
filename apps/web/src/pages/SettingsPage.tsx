@@ -106,6 +106,11 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
               <span className="settings-row__body"><strong>{modelName}</strong><small>{aiConnection?.hasApiKey ? "API Key 已保存在设备安全存储" : "尚未写入 API Key"}</small></span>
               <Icon className="settings-row__chevron" name="chevron_right" size={17} />
             </button>
+            <div aria-disabled="true" className="settings-row settings-row--planned" data-settings-capability="tts">
+              <span className="settings-row__icon"><Icon name="record_voice_over" size={19} /></span>
+              <span className="settings-row__body"><strong>TTS 语音合成</strong><small>保留产品配置入口，当前版本尚未接入</small></span>
+              <span className="settings-planned-badge">尚未接入</span>
+            </div>
           </GlassCard>
         </section>
 

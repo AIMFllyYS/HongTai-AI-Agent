@@ -196,7 +196,7 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
                 <GlassCard className="probe-row" key={capability}>
                   <span className={`probe-row__status ${result ? `is-${result.status}` : ""}`.trim()}><Icon name={result?.status === "succeeded" ? "check_circle" : "pending"} size={19} /></span>
                   <div><strong>{copy.title}</strong><small>{result?.model ?? copy.detail}</small>{result?.issue ? <em>{result.issue.userMessage}</em> : null}</div>
-                  <div className="probe-row__action"><span>{probeLabel(result)}</span><Button disabled={probeBlocked} onClick={() => void probe(capability)} size="md" variant="secondary">{probing === capability ? "测试中" : "测试"}</Button></div>
+                  <div className="probe-row__action mobile-action-group"><span>{probeLabel(result)}</span><Button disabled={probeBlocked} onClick={() => void probe(capability)} size="md" variant="secondary">{probing === capability ? "测试中" : "测试"}</Button></div>
                 </GlassCard>
               );
             })}

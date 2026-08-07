@@ -127,7 +127,7 @@ export function ProfileSettingsPage({ runtime, navigate }: ProfileSettingsPagePr
             <strong>{draft.avatarUri ? "已选择本地头像" : "尚未设置头像"}</strong>
             <small>通过系统照片选择器导入，页面不直接读取外部文件路径。</small>
           </div>
-          <div className="avatar-editor__actions">
+          <div className="avatar-editor__actions mobile-action-group">
             <Button disabled={picking} onClick={() => void chooseAvatar()} variant="secondary"><Icon name="camera" size={17} />{picking ? "导入中" : "选择头像"}</Button>
             {draft.avatarUri ? <Button disabled={picking} onClick={() => setDraft((current) => ({ ...current, avatarUri: null }))} variant="quiet">移除</Button> : null}
           </div>

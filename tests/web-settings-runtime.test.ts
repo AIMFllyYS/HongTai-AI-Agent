@@ -85,3 +85,16 @@ test("AI capability probes cannot run against a saved connection while the visib
   assert.match(ai, /disabled=\{probeBlocked\}/);
   assert.match(ai, /请先保存当前 AI 设置后再测试/);
 });
+
+test("settings preserve a planned TTS slot without inventing runtime support", () => {
+  const settings = read("pages/SettingsPage.tsx");
+  const profile = read("pages/ProfileSettingsPage.tsx");
+  const ai = read("pages/AiSettingsPage.tsx");
+
+  assert.match(settings, /data-settings-capability="tts"/);
+  assert.match(settings, /TTS 语音合成/);
+  assert.match(settings, /尚未接入/);
+  assert.doesNotMatch(settings, /runtime\.tts|OpenAI TTS|温润男声/);
+  assert.match(profile, /avatar-editor__actions mobile-action-group/);
+  assert.match(ai, /probe-row__action mobile-action-group/);
+});
