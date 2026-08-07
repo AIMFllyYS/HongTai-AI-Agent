@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { NativeTaskFiles } from "./thin-task-files.js";
+import { NativeTaskFiles, parseTaskPath } from "./thin-task-files.js";
 
 function recordingFiles() {
   const writes: Array<{ readonly taskId: string; readonly relativePath: string; readonly value: string; readonly replace: boolean }> = [];
@@ -60,4 +60,40 @@ test("NativeTaskFiles never makes raw platform diagnostics a required APK artifa
   await files.writeJson(paths.rawResponse, { raw: "large platform response" });
 
   assert.deepEqual(native.writes, []);
+});
+
+test("task paths parse without depending on the host URL implementation", () => {
+  const originalUrl = globalThis.URL;
+  Object.defineProperty(globalThis, "URL", {
+    configurable: true,
+    value: class UnsupportedUrl {
+      constructor() {
+        throw new TypeError("custom schemes are unavailable");
+      }
+    },
+    writable: true,
+  });
+  try {
+    assert.deepEqual(parseTaskPath("task://task-42/media/images/image-2.bin"), {
+      taskId: "task-42",
+      relativePath: "media/images/image-2.bin",
+    });
+  } finally {
+    Object.defineProperty(globalThis, "URL", { configurable: true, value: originalUrl, writable: true });
+  }
+});
+
+test("task paths reject URL syntax and unsafe relative segments", () => {
+  for (const value of [
+    "task:///task.json",
+    "task://task-42/../task.json",
+    "task://task-42/media\\image.bin",
+    "task://task-42/task.json?replace=true",
+    "task://task-42/task.json#fragment",
+    "task://task-42/media//image.bin",
+    "task://task-42/media/%2e%2e/image.bin",
+    "task://task-42/media/line\nfeed.bin",
+  ]) {
+    assert.throws(() => parseTaskPath(value), /task path/i, value);
+  }
 });

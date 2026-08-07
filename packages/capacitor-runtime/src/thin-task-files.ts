@@ -42,20 +42,16 @@ function taskPath(taskId: string, relativePath: string): string {
  */
 export function parseTaskPath(value: string): ParsedTaskPath {
   if (!value.startsWith(TASK_URI_PREFIX)) throw new TypeError("Task path must use the private task URI form");
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
+  const logicalPath = value.slice(TASK_URI_PREFIX.length);
+  const separator = logicalPath.indexOf("/");
+  if (separator <= 0 || separator === logicalPath.length - 1) throw new TypeError("Task path is invalid");
+  const taskId = logicalPath.slice(0, separator);
+  const relativePath = logicalPath.slice(separator + 1);
+  if (relativePath.includes("?") || relativePath.includes("#") || relativePath.includes("%") ||
+      relativePath.split("/").some((part) => !part || part === "." || part === ".." || part.includes("\\") || hasAsciiControlCharacter(part))) {
     throw new TypeError("Task path is invalid");
   }
-  if (parsed.protocol !== "task:" || !parsed.hostname || !parsed.pathname.startsWith("/")) {
-    throw new TypeError("Task path is invalid");
-  }
-  const relativePath = decodeURIComponent(parsed.pathname.slice(1));
-  if (!relativePath || relativePath.split("/").some((part) => !part || part === "." || part === ".." || part.includes("\\") || hasAsciiControlCharacter(part))) {
-    throw new TypeError("Task path is invalid");
-  }
-  return { taskId: validTaskId(parsed.hostname), relativePath };
+  return { taskId: validTaskId(taskId), relativePath };
 }
 
 function hasAsciiControlCharacter(value: string): boolean {
