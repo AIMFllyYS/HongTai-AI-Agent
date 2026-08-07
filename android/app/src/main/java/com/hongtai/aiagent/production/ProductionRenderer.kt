@@ -84,41 +84,45 @@ internal class ProductionRenderer(private val context: Context, private val stor
     return ProductionRenderResult(Uri.fromFile(output).toString(), output.length(), durationSeconds)
   }
 
-  private fun synthesize(projectId: String, plan: NativeProductionPlan): File {
+  private fun synthesize(projectId: String, plan: NativeProductionPlan): List<Pair<File, Long>> {
     val initialized = CountDownLatch(1)
     val status = AtomicReference(TextToSpeech.ERROR)
     val engine = TextToSpeech(context) { value -> status.set(value); initialized.countDown() }
     try {
-      require(initialized.await(15, TimeUnit.SECONDS) && status.get() == TextToSpeech.SUCCESS) { "System TTS is unavailable." }
-      require(engine.setLanguage(Locale.forLanguageTag(plan.voiceLocale)) >= TextToSpeech.LANG_AVAILABLE) { "The requested system TTS language is unavailable." }
-      require(engine.setSpeechRate(plan.speechRate) == TextToSpeech.SUCCESS) { "The system TTS speech rate is unavailable." }
-      val output = File(store.audioDirectory(projectId), "narration.wav")
-      output.delete()
-      val finished = CountDownLatch(1)
-      val failure = AtomicReference<String?>()
-      val utteranceId = "production-$projectId"
-      engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-        override fun onStart(id: String?) = Unit
-        override fun onDone(id: String?) { if (id == utteranceId) finished.countDown() }
-        @Deprecated("Deprecated in Java") override fun onError(id: String?) { if (id == utteranceId) { failure.set("TTS synthesis failed."); finished.countDown() } }
-        override fun onError(id: String?, errorCode: Int) { if (id == utteranceId) { failure.set("TTS synthesis failed with code $errorCode."); finished.countDown() } }
-      })
-      val text = plan.shots.joinToString("。") { it.narration }
-      require(engine.synthesizeToFile(text, Bundle(), output, utteranceId) == TextToSpeech.SUCCESS) { "Could not start system TTS synthesis." }
-      require(finished.await(45, TimeUnit.SECONDS)) { "System TTS synthesis timed out." }
-      require(failure.get() == null && output.isFile && output.length() > 0L) { failure.get() ?: "System TTS produced no audio." }
-      return output
+      if (!initialized.await(15, TimeUnit.SECONDS) || status.get() != TextToSpeech.SUCCESS) throw IllegalStateException("System TTS is unavailable.")
+      if (engine.setLanguage(Locale.forLanguageTag(plan.voiceLocale)) < TextToSpeech.LANG_AVAILABLE) throw IllegalStateException("The requested system TTS language is unavailable.")
+      if (engine.setSpeechRate(plan.speechRate) != TextToSpeech.SUCCESS) throw IllegalStateException("The system TTS speech rate is unavailable.")
+      return plan.shots.map { shot -> synthesizeShot(engine, projectId, shot) to shot.durationMs }
     } finally {
       engine.shutdown()
     }
   }
 
-  private fun compile(plan: NativeProductionPlan, narration: File): Composition {
+  private fun synthesizeShot(engine: TextToSpeech, projectId: String, shot: ProductionShot): File {
+    val output = File(store.audioDirectory(projectId), "narration-${shot.order}.wav")
+    if (output.exists() && !output.delete()) throw IllegalStateException("Could not replace a previous TTS segment.")
+    val finished = CountDownLatch(1)
+    val failure = AtomicReference<String?>()
+    val utteranceId = "production-$projectId-${shot.order}"
+    engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+      override fun onStart(id: String?) = Unit
+      override fun onDone(id: String?) { if (id == utteranceId) finished.countDown() }
+      @Deprecated("Deprecated in Java") override fun onError(id: String?) { if (id == utteranceId) { failure.set("TTS synthesis failed."); finished.countDown() } }
+      override fun onError(id: String?, errorCode: Int) { if (id == utteranceId) { failure.set("TTS synthesis failed with code $errorCode."); finished.countDown() } }
+    })
+    if (engine.synthesizeToFile(shot.narration, Bundle(), output, utteranceId) != TextToSpeech.SUCCESS) throw IllegalStateException("Could not start system TTS synthesis.")
+    if (!finished.await(30, TimeUnit.SECONDS)) throw IllegalStateException("System TTS synthesis timed out.")
+    if (failure.get() != null || !output.isFile || output.length() <= 0L) throw IllegalStateException(failure.get() ?: "System TTS produced no audio.")
+    return output
+  }
+
+  private fun compile(plan: NativeProductionPlan, narration: List<Pair<File, Long>>): Composition {
     val visualItems = plan.shots.flatMap { shot -> visualItems(plan, shot) }
     val sequences = mutableListOf(EditedMediaItemSequence.withVideoFrom(visualItems))
-    sequences += EditedMediaItemSequence.withAudioFrom(listOf(
-      EditedMediaItem.Builder(MediaItem.fromUri(narration.toURI().toString())).setRemoveVideo(true).build(),
-    ))
+    sequences += EditedMediaItemSequence.withAudioFrom(narration.map { (file, maximumDurationMs) ->
+      val media = MediaItem.Builder().setUri(file.toURI().toString()).setClipEndPositionMs(maximumDurationMs).build()
+      EditedMediaItem.Builder(media).setRemoveVideo(true).build()
+    })
     plan.backgroundMusic?.let { music ->
       val gain = GainProcessor(DefaultGainProvider.Builder(plan.backgroundMusicVolume).build())
       val item = EditedMediaItem.Builder(MediaItem.fromUri(File(music.path).toURI().toString()))

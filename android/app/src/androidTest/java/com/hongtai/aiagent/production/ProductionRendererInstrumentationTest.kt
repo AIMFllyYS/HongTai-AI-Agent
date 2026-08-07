@@ -18,7 +18,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ProductionRendererInstrumentationTest {
   @Test
-  fun rendersThreePortraitImageShotsWithSystemNarrationAndCaptions() {
+  fun rendersRealLengthPortraitShotsWithSegmentedSystemNarrationAndCaptions() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val projectId = "instrumentation-production"
     val inputsDirectory = File(context.filesDir, "productions/$projectId/inputs").apply { mkdirs() }
@@ -31,6 +31,13 @@ class ProductionRendererInstrumentationTest {
       }
       ProductionInput("asset-${index + 1}", file.absolutePath, ProductionAssetKind.IMAGE)
     }
+    val narrations = listOf(
+      "在我们这里，每一只小生命都值得被温柔以待。",
+      "我们提供专业的喂养建议，用心守护它们的健康。",
+      "干净的环境，耐心的陪伴，让它们在这里快乐成长。",
+      "因为爱，所以用心。欢迎带您和家人一起来看看。",
+    )
+    val durations = listOf(3_000L, 4_000L, 4_000L, 4_000L)
     val plan = NativeProductionPlan(
       width = 720,
       height = 1280,
@@ -40,8 +47,8 @@ class ProductionRendererInstrumentationTest {
       speechRate = 1f,
       backgroundMusic = null,
       backgroundMusicVolume = 0f,
-      shots = inputs.mapIndexed { index, input ->
-        ProductionShot(index + 1, input, 5_000, "这是第${index + 1}个真实镜头", "真实镜头 ${index + 1}", "cover")
+      shots = narrations.mapIndexed { index, narration ->
+        ProductionShot(index + 1, inputs[index % inputs.size], durations[index], narration, "真实镜头 ${index + 1}", "cover")
       },
     )
 
