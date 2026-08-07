@@ -15,7 +15,9 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.hongtai.aiagent.media.PrivateMediaFile
+import com.hongtai.aiagent.media.PrivateImageInvalidException
 import com.hongtai.aiagent.media.PrivateMediaStore
+import com.hongtai.aiagent.media.PrivateMediaTooLargeException
 
 @CapacitorPlugin(name = "FileMedia")
 class FileMediaPlugin : Plugin() {
@@ -86,6 +88,10 @@ class FileMediaPlugin : Plugin() {
     }
     try {
       call.resolve(mediaFileResult(mediaStore.importCaptured(capture)))
+    } catch (error: PrivateMediaTooLargeException) {
+      call.reject("The captured image exceeds the supported size limit.", NativeIssueCode.IMAGE_TOO_LARGE, error)
+    } catch (error: PrivateImageInvalidException) {
+      call.reject("The captured file is not a supported image.", NativeIssueCode.IMAGE_INVALID, error)
     } catch (error: Exception) {
       call.reject("Could not import the captured photo into private storage.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
     }
@@ -104,6 +110,10 @@ class FileMediaPlugin : Plugin() {
   private fun copyAndResolve(call: PluginCall, uri: Uri, displayName: String?) {
     try {
       call.resolve(mediaFileResult(mediaStore.importFrom(uri, displayName)))
+    } catch (error: PrivateMediaTooLargeException) {
+      call.reject("The selected image exceeds the supported size limit.", NativeIssueCode.IMAGE_TOO_LARGE, error)
+    } catch (error: PrivateImageInvalidException) {
+      call.reject("The selected file is not a supported image.", NativeIssueCode.IMAGE_INVALID, error)
     } catch (error: Exception) {
       call.reject("Could not import the selected media into private storage.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
     }

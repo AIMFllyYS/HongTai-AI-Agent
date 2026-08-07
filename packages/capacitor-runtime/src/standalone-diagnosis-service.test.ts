@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { AiProvider } from "@hongtai/ai";
+import { TaskError } from "@hongtai/core";
 
 import { StandaloneDiagnosisService } from "./standalone-diagnosis-service.js";
 
@@ -120,4 +121,58 @@ test("StandaloneDiagnosisService keeps the selected image MIME across private co
   assert.equal(copiedPath, "image.png");
   assert.equal(created.image.mimeType, "image/png");
   assert.equal(reloaded?.image.mimeType, "image/png");
+});
+
+test("StandaloneDiagnosisService maps native image rejection before creating a session", async () => {
+  const native = memoryFiles();
+  const service = new StandaloneDiagnosisService({
+    files: native.plugin,
+    fileMedia: {
+      pickPhoto: async () => { throw { code: "ERR_IMAGE_TOO_LARGE", message: "private native detail" }; },
+      capturePhoto: async () => { throw { code: "ERR_IMAGE_INVALID", message: "private native detail" }; },
+    },
+    getProvider: async () => ({ generate: async () => ({ content: "", reasoning: "" }), transcribe: async () => "" }),
+    toDisplayUri: (value) => value,
+  });
+
+  await assert.rejects(
+    () => service.pickImage(),
+    (error) => error instanceof TaskError && error.code === "IMAGE_TOO_LARGE" && error.message === "图片不能超过15MB",
+  );
+  await assert.rejects(
+    () => service.captureImage(),
+    (error) => error instanceof TaskError && error.code === "IMAGE_INVALID" && error.message === "无法读取或规范化图片",
+  );
+  assert.equal((await native.plugin.listObservationIds()).sessionIds.length, 0);
+});
+
+test("StandaloneDiagnosisService persists report failure and still rejects the original error", async () => {
+  const native = memoryFiles();
+  const failure = new TaskError({
+    code: "AI_NETWORK_FAILED",
+    message: "无法连接AI服务",
+    retryable: true,
+    action: "check_network",
+    cause: { code: "ERR_AI_NETWORK_FAILED" },
+  });
+  const service = new StandaloneDiagnosisService({
+    files: native.plugin,
+    fileMedia: {
+      pickPhoto: async () => ({ uri: "file:///private/media/imported.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      capturePhoto: async () => ({ uri: "file:///private/media/captured.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+    },
+    getProvider: async () => ({ generate: async () => { throw failure; }, transcribe: async () => "" }),
+    toDisplayUri: (value) => value,
+    createSessionId: () => "session-failed",
+    now: () => new Date("2026-08-08T00:00:00.000Z"),
+  });
+
+  const image = await service.pickImage();
+  const session = await service.createSession({ mode: "tongue", image });
+  await assert.rejects(() => service.runReport(session.sessionId), (error) => error === failure);
+
+  const failed = await service.getReport(session.sessionId);
+  assert.equal(failed?.status, "failed");
+  assert.equal(failed?.issue?.code, "AI_NETWORK_FAILED");
+  assert.equal(failed?.issue?.details?.nativeCode, "ERR_AI_NETWORK_FAILED");
 });

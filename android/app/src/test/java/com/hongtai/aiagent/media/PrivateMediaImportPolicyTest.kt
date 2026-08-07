@@ -13,6 +13,11 @@ import org.junit.Test
 
 class PrivateMediaImportPolicyTest {
   @Test
+  fun `caps source images at the same fifteen megabyte budget as the CLI`() {
+    assertEquals(15L * 1024L * 1024L, PrivateMediaImportPolicy.MAX_IMPORT_BYTES)
+  }
+
+  @Test
   fun `accepts only system content uri sources`() {
     assertTrue(PrivateMediaImportPolicy.acceptsSourceScheme("content"))
     assertFalse(PrivateMediaImportPolicy.acceptsSourceScheme("file"))
@@ -55,6 +60,10 @@ class PrivateMediaImportPolicyTest {
       ),
     )
     assertEquals(null, PrivateMediaImportPolicy.imageMimeType(null, "unknown.bin", byteArrayOf(1, 2, 3)))
+    assertEquals(
+      null,
+      PrivateMediaImportPolicy.imageMimeType("image/gif", "animation.gif", "GIF89a".toByteArray()),
+    )
   }
 
   @Test

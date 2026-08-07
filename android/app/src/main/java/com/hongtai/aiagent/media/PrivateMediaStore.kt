@@ -2,6 +2,12 @@ package com.hongtai.aiagent.media
 
 import android.content.Context
 import android.database.Cursor
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
@@ -17,6 +23,10 @@ data class PrivateMediaFile(
   val mimeType: String?,
   val sizeBytes: Long,
 )
+
+class PrivateMediaTooLargeException(message: String) : IllegalStateException(message)
+
+class PrivateImageInvalidException(message: String, cause: Throwable? = null) : IllegalArgumentException(message, cause)
 
 /** A one-use FileProvider target for an external system camera activity. */
 class PendingPhotoCapture internal constructor(
@@ -39,25 +49,42 @@ class PrivateMediaStore(context: Context) {
     }
 
     val sourceName = displayName?.takeIf { it.isNotBlank() } ?: displayNameFor(uri) ?: "media"
-    val destination = File(importsDirectory, "${UUID.randomUUID()}-${PrivateMediaImportPolicy.safeFileName(sourceName)}")
-    val temporary = File(importsDirectory, ".${destination.name}.${UUID.randomUUID()}.part")
+    val identifier = UUID.randomUUID().toString()
+    val stagedSource = File(importsDirectory, ".$identifier.source")
+    val stagedTemporary = File(importsDirectory, ".$identifier.source.part")
+    val destination = File(importsDirectory, "$identifier.jpg")
+    val destinationTemporary = File(importsDirectory, ".$identifier.jpg.part")
     val providerMimeType = appContext.contentResolver.getType(uri)
-    val copiedBytes = appContext.contentResolver.openInputStream(uri)?.use { input ->
-      PrivateMediaImportPolicy.copyBounded(
-        input = input,
-        temporary = temporary,
-        destination = destination,
-        maxBytes = PrivateMediaImportPolicy.MAX_IMPORT_BYTES,
-      )
-    } ?: throw IllegalArgumentException("The selected media could not be opened.")
+    try {
+      appContext.contentResolver.openInputStream(uri)?.use { input ->
+        PrivateMediaImportPolicy.copyBounded(
+          input = input,
+          temporary = stagedTemporary,
+          destination = stagedSource,
+          maxBytes = PrivateMediaImportPolicy.MAX_IMPORT_BYTES,
+        )
+      } ?: throw PrivateImageInvalidException("The selected image could not be opened.")
 
-    val header = destination.inputStream().use { input -> input.readNBytes(12) }
-    val mimeType = PrivateMediaImportPolicy.imageMimeType(providerMimeType, sourceName, header)
-    return PrivateMediaFile(
-      uri = Uri.fromFile(destination).toString(),
-      mimeType = mimeType,
-      sizeBytes = copiedBytes,
-    )
+      val header = stagedSource.inputStream().use { input -> input.readNBytes(12) }
+      val sourceMimeType = PrivateMediaImportPolicy.imageMimeType(providerMimeType, sourceName, header)
+        ?: throw PrivateImageInvalidException("The selected file is not a supported JPEG, PNG, or WebP image.")
+      PrivateObservationImageNormalizer.normalize(
+        source = stagedSource,
+        sourceMimeType = sourceMimeType,
+        temporary = destinationTemporary,
+        destination = destination,
+      )
+      return PrivateMediaFile(
+        uri = Uri.fromFile(destination).toString(),
+        mimeType = "image/jpeg",
+        sizeBytes = destination.length(),
+      )
+    } finally {
+      stagedTemporary.delete()
+      stagedSource.delete()
+      destinationTemporary.delete()
+      if (destination.exists() && destination.length() <= 0L) destination.delete()
+    }
   }
 
   /**
@@ -107,7 +134,7 @@ class PrivateMediaStore(context: Context) {
 /** Pure policy so URI/file-name boundaries are unit-testable without a device. */
 internal object PrivateMediaImportPolicy {
   private val unsafePathCharacters = Regex("[\\\\/\\u0000-\\u001F\\u007F]")
-  const val MAX_IMPORT_BYTES = 25L * 1024L * 1024L
+  const val MAX_IMPORT_BYTES = 15L * 1024L * 1024L
   private const val BUFFER_BYTES = 64 * 1024
 
   /**
@@ -127,7 +154,7 @@ internal object PrivateMediaImportPolicy {
 
   fun imageMimeType(providerMimeType: String?, displayName: String?, header: ByteArray): String? {
     val provider = providerMimeType?.trim()?.lowercase(Locale.ROOT)
-    if (provider?.startsWith("image/") == true) return provider
+    if (provider in SUPPORTED_IMAGE_MIME_TYPES) return provider
 
     when (displayName?.substringAfterLast('.', "")?.lowercase(Locale.ROOT)) {
       "jpg", "jpeg" -> return "image/jpeg"
@@ -179,7 +206,7 @@ internal object PrivateMediaImportPolicy {
           if (count < 0) break
           if (count == 0) continue
           written += count
-          if (written > maxBytes) throw IllegalStateException("The selected media exceeds the private storage limit.")
+          if (written > maxBytes) throw PrivateMediaTooLargeException("The selected image exceeds the private storage limit.")
           output.write(buffer, 0, count)
         }
         output.fd.sync()
@@ -190,5 +217,115 @@ internal object PrivateMediaImportPolicy {
     } finally {
       if (!published && temporary.exists()) temporary.delete()
     }
+  }
+
+  private val SUPPORTED_IMAGE_MIME_TYPES = setOf("image/jpeg", "image/png", "image/webp")
+}
+
+/** Mirrors the CLI image contract before any bytes cross the AI transport boundary. */
+private object PrivateObservationImageNormalizer {
+  private const val MAX_EDGE_PIXELS = 2_048
+  private const val SAFE_DECODE_EDGE_PIXELS = 3_072
+  private const val JPEG_QUALITY = 90
+
+  fun normalize(
+    source: File,
+    sourceMimeType: String,
+    temporary: File,
+    destination: File,
+  ) {
+    require(sourceMimeType == "image/jpeg" || sourceMimeType == "image/png" || sourceMimeType == "image/webp")
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(source.absolutePath, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+      throw PrivateImageInvalidException("The selected image could not be decoded.")
+    }
+
+    val options = BitmapFactory.Options().apply {
+      inPreferredConfig = Bitmap.Config.ARGB_8888
+      inSampleSize = decodeSample(bounds.outWidth, bounds.outHeight)
+    }
+    var decoded: Bitmap? = null
+    var oriented: Bitmap? = null
+    var scaled: Bitmap? = null
+    var flattened: Bitmap? = null
+    var published = false
+    try {
+      decoded = BitmapFactory.decodeFile(source.absolutePath, options)
+        ?: throw PrivateImageInvalidException("The selected image could not be decoded.")
+      oriented = applyExifOrientation(decoded, source)
+      scaled = scaleToFit(oriented, MAX_EDGE_PIXELS)
+      flattened = Bitmap.createBitmap(scaled.width, scaled.height, Bitmap.Config.ARGB_8888)
+      Canvas(flattened).apply {
+        drawColor(Color.WHITE)
+        drawBitmap(scaled, 0f, 0f, null)
+      }
+      FileOutputStream(temporary).use { output ->
+        if (!flattened.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, output)) {
+          throw PrivateImageInvalidException("The selected image could not be normalized.")
+        }
+        output.fd.sync()
+      }
+      if (temporary.length() <= 0L || temporary.length() > PrivateMediaImportPolicy.MAX_IMPORT_BYTES) {
+        throw PrivateMediaTooLargeException("The normalized image exceeds the private storage limit.")
+      }
+      if (!temporary.renameTo(destination)) {
+        throw IllegalStateException("Could not finalize the normalized private image.")
+      }
+      published = true
+    } catch (error: OutOfMemoryError) {
+      throw PrivateImageInvalidException("The selected image is too large to decode safely.", error)
+    } finally {
+      if (!published) temporary.delete()
+      listOf(flattened, scaled, oriented, decoded).distinct().forEach { bitmap ->
+        if (bitmap != null && !bitmap.isRecycled) bitmap.recycle()
+      }
+    }
+  }
+
+  private fun decodeSample(width: Int, height: Int): Int {
+    var sample = 1
+    while (maxOf(width, height) / sample > SAFE_DECODE_EDGE_PIXELS && sample <= Int.MAX_VALUE / 2) {
+      sample *= 2
+    }
+    return sample
+  }
+
+  private fun applyExifOrientation(bitmap: Bitmap, source: File): Bitmap {
+    val orientation = try {
+      ExifInterface(source.absolutePath).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+    } catch (_: Exception) {
+      ExifInterface.ORIENTATION_NORMAL
+    }
+    val matrix = Matrix()
+    when (orientation) {
+      ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.setScale(-1f, 1f)
+      ExifInterface.ORIENTATION_ROTATE_180 -> matrix.setRotate(180f)
+      ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.setScale(1f, -1f)
+      ExifInterface.ORIENTATION_TRANSPOSE -> {
+        matrix.setRotate(90f)
+        matrix.postScale(-1f, 1f)
+      }
+      ExifInterface.ORIENTATION_ROTATE_90 -> matrix.setRotate(90f)
+      ExifInterface.ORIENTATION_TRANSVERSE -> {
+        matrix.setRotate(-90f)
+        matrix.postScale(-1f, 1f)
+      }
+      ExifInterface.ORIENTATION_ROTATE_270 -> matrix.setRotate(-90f)
+      else -> return bitmap
+    }
+    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+  }
+
+  private fun scaleToFit(bitmap: Bitmap, maxEdge: Int): Bitmap {
+    val edge = maxOf(bitmap.width, bitmap.height)
+    if (edge <= maxEdge) return bitmap
+    val scale = maxEdge.toFloat() / edge.toFloat()
+    return Bitmap.createScaledBitmap(
+      bitmap,
+      (bitmap.width * scale).toInt().coerceAtLeast(1),
+      (bitmap.height * scale).toInt().coerceAtLeast(1),
+      true,
+    )
   }
 }

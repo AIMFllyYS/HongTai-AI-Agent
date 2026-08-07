@@ -25,7 +25,7 @@ const REPORT_PATH = "report.json";
 const MESSAGES_PATH = "messages.json";
 const CONTEXT_PATH = "context.txt";
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/;
-const IMAGE_MIME = /^image\/[a-z0-9][a-z0-9.+-]*$/;
+const SUPPORTED_IMAGE_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export interface StandaloneObservationFilesPlugin {
   ensureObservation(options: { readonly sessionId: string }): Promise<void>;
@@ -89,8 +89,20 @@ function generatedId(): string {
 
 function validMime(value: string | undefined): string {
   const mime = value?.trim().toLowerCase() ?? "";
-  if (!IMAGE_MIME.test(mime) || mime === "image/svg+xml") throw taskError("IMAGE_INVALID", "请选择有效的照片文件", "select_media");
+  if (!SUPPORTED_IMAGE_MIME.has(mime)) throw taskError("IMAGE_INVALID", "请选择有效的 JPEG、PNG 或 WebP 照片", "select_media");
   return mime;
+}
+
+function imageImportError(error: unknown): TaskError {
+  if (error instanceof TaskError) return error;
+  const nativeCode = typeof record(error)?.code === "string" ? record(error)?.code : undefined;
+  if (nativeCode === "ERR_IMAGE_TOO_LARGE") {
+    return new TaskError({ code: "IMAGE_TOO_LARGE", message: "图片不能超过15MB", action: "select_media", cause: error });
+  }
+  if (nativeCode === "ERR_IMAGE_INVALID") {
+    return new TaskError({ code: "IMAGE_INVALID", message: "无法读取或规范化图片", action: "select_media", cause: error });
+  }
+  return new TaskError({ code: "MEDIA_IMPORT_FAILED", message: "图片没有成功导入应用私有目录", action: "select_media", cause: error });
 }
 
 function imagePath(mimeType: string): string {
@@ -205,8 +217,7 @@ export class StandaloneDiagnosisService implements DiagnosisService {
     } catch (error) {
       const current = await this.getReport(sessionId).catch(() => undefined);
       if (current?.status !== "succeeded") {
-        const failed = await this.#setStatus(started, "failed", issue(error, "观察报告未能完成")).catch(() => undefined);
-        if (failed) return this.#toReport(failed, undefined);
+        await this.#setStatus(started, "failed", issue(error, "观察报告未能完成")).catch(() => undefined);
       }
       throw error;
     }
@@ -286,7 +297,7 @@ export class StandaloneDiagnosisService implements DiagnosisService {
     pick: () => Promise<{ readonly uri: string; readonly mimeType?: string; readonly sizeBytes: number }>,
     origin: MediaReference["origin"],
   ): Promise<MediaReference> {
-    const raw = await pick();
+    const raw = await pick().catch((error: unknown) => { throw imageImportError(error); });
     const mimeType = validMime(raw.mimeType);
     if (!raw.uri || !Number.isFinite(raw.sizeBytes) || raw.sizeBytes <= 0) throw taskError("MEDIA_IMPORT_FAILED", "图片导入没有返回有效的私有文件", "select_media");
     const uri = this.#toDisplayUri(raw.uri);
