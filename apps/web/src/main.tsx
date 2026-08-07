@@ -8,6 +8,7 @@ import { App } from "./App";
 import { AppShell } from "./components/AppShell";
 import { Button } from "./components/Buttons";
 import { ErrorState, LoadingState } from "./components/StatePanels";
+import { NotificationProvider } from "./notifications/NotificationProvider";
 import "./styles/tokens.css";
 import "./styles/global.css";
 
@@ -67,6 +68,8 @@ function RuntimeBootstrap() {
 
 createRoot(root).render(
   <StrictMode>
-    <RuntimeBootstrap />
+    <NotificationProvider>
+      <RuntimeBootstrap />
+    </NotificationProvider>
   </StrictMode>,
 );

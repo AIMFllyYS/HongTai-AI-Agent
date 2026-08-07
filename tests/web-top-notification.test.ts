@@ -81,3 +81,11 @@ test("顶部通知样式使用安全区、圆角和非阻断悬浮层", () => {
   assert.match(css, /\.top-notification-viewport[\s\S]*pointer-events:\s*none/);
   assert.match(css, /\.top-notification[\s\S]*pointer-events:\s*auto/);
 });
+
+test("生产入口只挂载一个全局通知 Provider，旧错误卡片样式已删除", () => {
+  const main = read("main.tsx");
+  const settings = read("styles/pages/settings.css");
+  assert.match(main, /NotificationProvider/);
+  assert.match(main, /<NotificationProvider>[\s\S]*<RuntimeBootstrap \/>[\s\S]*<\/NotificationProvider>/);
+  assert.doesNotMatch(settings, /\.issue-notice/);
+});

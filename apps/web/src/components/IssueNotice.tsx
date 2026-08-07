@@ -1,8 +1,7 @@
+import { useEffect, useRef } from "react";
 import type { TaskIssue } from "@hongtai/core";
 
-import { Button } from "./Buttons";
-import { GlassCard } from "./GlassCard";
-import { Icon } from "./Icon";
+import { useNotification } from "../notifications/NotificationProvider";
 
 /**
  * Page controllers supply only actions they can perform against real local
@@ -87,21 +86,26 @@ export function issueActionPresentation(
 export interface IssueNoticeProps {
   readonly issue: TaskIssue;
   readonly actions?: TaskIssueActionHandlers;
-  readonly className?: string;
 }
 
 /** Shared presentation mapping for stable application issue codes/actions. */
-export function IssueNotice({ issue, actions, className = "" }: IssueNoticeProps) {
-  const presentation = issueActionPresentation(issue.action, actions);
-  return (
-    <GlassCard className={`issue-notice issue-notice--${issue.severity} ${className}`.trim()} data-issue-action={issue.action} data-issue-action-state={presentation.available ? "available" : "unavailable"} data-issue-code={issue.code} tone="soft">
-      <Icon name={issue.severity === "error" ? "error" : "info"} size={21} />
-      <div>
-        <strong>{issue.userMessage}</strong>
-        <small>错误代码：{issue.code}</small>
-        <p className="issue-notice__guidance">{presentation.guidance}</p>
-      </div>
-      {presentation.label && presentation.onAction ? <Button onClick={presentation.onAction} size="md" variant="quiet">{presentation.label}</Button> : null}
-    </GlassCard>
-  );
+export function IssueNotice({ issue, actions }: IssueNoticeProps) {
+  const { show } = useNotification();
+  const actionsRef = useRef(actions);
+  actionsRef.current = actions;
+
+  useEffect(() => {
+    const presentation = issueActionPresentation(issue.action, actionsRef.current);
+    show({
+      level: issue.severity === "error" ? "error" : "warning",
+      title: issue.userMessage,
+      message: presentation.guidance,
+      technicalCode: issue.code,
+      ...(presentation.label && presentation.onAction
+        ? { action: { label: presentation.label, onPress: presentation.onAction } }
+        : {}),
+    });
+  }, [issue.action, issue.code, issue.severity, issue.userMessage, show]);
+
+  return null;
 }

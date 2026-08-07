@@ -353,50 +353,6 @@
   font-size: var(--text-caption);
 }
 
-.issue-notice {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-3);
-  align-items: start;
-  padding: var(--space-3);
-  border-color: rgba(186, 26, 26, 0.2);
-}
-
-.issue-notice > svg {
-  color: var(--color-error);
-}
-
-.issue-notice > div {
-  display: grid;
-  gap: 0.2rem;
-}
-
-.issue-notice strong {
-  color: var(--color-text-subtle);
-  font-size: var(--text-caption);
-  line-height: var(--text-caption-line);
-}
-
-.issue-notice small {
-  color: var(--color-text-muted);
-  font-family: var(--font-data);
-  font-size: var(--text-meta);
-}
-
-.issue-notice__guidance {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-meta);
-  line-height: 1.5;
-}
-
-.issue-notice .button {
-  grid-column: 2;
-  width: fit-content;
-  min-height: 2.35rem;
-  font-size: var(--text-caption);
-}
-
 @media (min-width: 34rem) {
   .avatar-editor {
     grid-template-columns: auto minmax(0, 1fr) auto;

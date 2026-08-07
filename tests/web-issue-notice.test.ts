@@ -28,7 +28,9 @@ test("IssueNotice maps TaskIssue.action to explicit safe callbacks without branc
 
   const source = read("components/IssueNotice.tsx");
   assert.match(source, /TaskIssueActionHandlers/);
-  assert.match(source, /data-issue-action-state/);
+  assert.match(source, /useNotification/);
+  assert.match(source, /return null/);
+  assert.doesNotMatch(source, /GlassCard/);
   assert.doesNotMatch(source, /issue\.code\s*===/);
 });
 
