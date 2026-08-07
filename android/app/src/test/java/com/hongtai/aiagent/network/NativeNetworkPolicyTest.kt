@@ -43,6 +43,34 @@ class NativeNetworkPolicyTest {
   }
 
   @Test
+  fun `allows HTTPS domain names without resolving proxy fake IP addresses`() {
+    val target = NativeNetworkPolicy.requireHttpsUrl(
+      "https://provider-that-does-not-resolve.invalid/v1/chat/completions",
+      "AI endpoint",
+    )
+
+    assertEquals(target, NativeNetworkPolicy.requirePublicNetworkTarget(target, "AI endpoint"))
+  }
+
+  @Test
+  fun `still rejects local and benchmark addresses when entered as literals`() {
+    for (value in listOf(
+      "https://127.0.0.1/private",
+      "https://10.0.0.1/private",
+      "https://192.168.1.1/private",
+      "https://198.18.1.108/private",
+      "https://[fc00::1]/private",
+    )) {
+      assertThrows(IllegalArgumentException::class.java) {
+        NativeNetworkPolicy.requirePublicNetworkTarget(
+          NativeNetworkPolicy.requireHttpsUrl(value, "download source"),
+          "download source",
+        )
+      }
+    }
+  }
+
+  @Test
   fun `allows only non-credential download headers`() {
     assertEquals(
       mapOf("accept" to "video/*", "user-agent" to "HongTai/1.0"),

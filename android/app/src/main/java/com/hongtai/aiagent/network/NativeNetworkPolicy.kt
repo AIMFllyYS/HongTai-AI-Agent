@@ -13,6 +13,7 @@ import org.json.JSONTokener
  * validation at the Android boundary.
  */
 internal object NativeNetworkPolicy {
+  private val ipv4Literal = Regex("(?:[0-9]{1,3}\\.){3}[0-9]{1,3}")
   private val safePathSegment = Regex("[A-Za-z0-9._~!$&'()*+,;=:@%-]+")
   private val safeHeaderName = Regex("[!#$%&'*+.^_`|~0-9A-Za-z-]+")
   private val allowedDownloadHeaders = setOf("accept", "accept-language", "referer", "user-agent")
@@ -41,22 +42,27 @@ internal object NativeNetworkPolicy {
   }
 
   /**
-   * Checks the resolved host immediately before a native connection. This
-   * blocks loopback, link-local, multicast and private-space targets so the
-   * WebView cannot use the downloader or AI transport as a LAN proxy.
+   * Allows HTTPS domain names to follow Android's configured VPN/proxy DNS.
+   * Literal addresses are still checked locally, so a caller cannot directly
+   * turn the native bridge into a loopback or LAN client.
    */
   fun requirePublicNetworkTarget(url: URL, label: String): URL {
     val host = url.host.trim().removePrefix("[").removeSuffix("]")
     require(host.isNotBlank() && !host.equals("localhost", ignoreCase = true) && !host.endsWith(".local", ignoreCase = true)) {
       "$label must not target a local network host."
     }
-    val addresses = try {
-      InetAddress.getAllByName(host)
-    } catch (error: Exception) {
-      throw IllegalArgumentException("$label host could not be resolved.", error)
+    val literalAddress = when {
+      ipv4Literal.matches(host) || host.contains(':') -> try {
+        InetAddress.getByName(host)
+      } catch (error: Exception) {
+        throw IllegalArgumentException("$label contains an invalid IP address.", error)
+      }
+      else -> null
     }
-    require(addresses.isNotEmpty() && addresses.none(::isPrivateOrLocalAddress)) {
-      "$label must not target a private or local network address."
+    if (literalAddress != null) {
+      require(!isPrivateOrLocalAddress(literalAddress)) {
+        "$label must not target a private or local network address."
+      }
     }
     return url
   }
