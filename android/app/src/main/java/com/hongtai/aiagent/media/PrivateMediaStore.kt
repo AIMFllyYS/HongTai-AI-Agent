@@ -9,6 +9,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.text.Normalizer
+import java.util.Locale
 import java.util.UUID
 
 data class PrivateMediaFile(
@@ -40,7 +41,7 @@ class PrivateMediaStore(context: Context) {
     val sourceName = displayName?.takeIf { it.isNotBlank() } ?: displayNameFor(uri) ?: "media"
     val destination = File(importsDirectory, "${UUID.randomUUID()}-${PrivateMediaImportPolicy.safeFileName(sourceName)}")
     val temporary = File(importsDirectory, ".${destination.name}.${UUID.randomUUID()}.part")
-    val mimeType = appContext.contentResolver.getType(uri)
+    val providerMimeType = appContext.contentResolver.getType(uri)
     val copiedBytes = appContext.contentResolver.openInputStream(uri)?.use { input ->
       PrivateMediaImportPolicy.copyBounded(
         input = input,
@@ -50,6 +51,8 @@ class PrivateMediaStore(context: Context) {
       )
     } ?: throw IllegalArgumentException("The selected media could not be opened.")
 
+    val header = destination.inputStream().use { input -> input.readNBytes(12) }
+    val mimeType = PrivateMediaImportPolicy.imageMimeType(providerMimeType, sourceName, header)
     return PrivateMediaFile(
       uri = Uri.fromFile(destination).toString(),
       mimeType = mimeType,
@@ -120,6 +123,29 @@ internal object PrivateMediaImportPolicy {
       .trim()
       .take(120)
     return normalized.ifBlank { "media" }
+  }
+
+  fun imageMimeType(providerMimeType: String?, displayName: String?, header: ByteArray): String? {
+    val provider = providerMimeType?.trim()?.lowercase(Locale.ROOT)
+    if (provider?.startsWith("image/") == true) return provider
+
+    when (displayName?.substringAfterLast('.', "")?.lowercase(Locale.ROOT)) {
+      "jpg", "jpeg" -> return "image/jpeg"
+      "png" -> return "image/png"
+      "webp" -> return "image/webp"
+    }
+
+    if (header.size >= 3 && header[0] == 0xff.toByte() && header[1] == 0xd8.toByte() && header[2] == 0xff.toByte()) {
+      return "image/jpeg"
+    }
+    if (header.size >= 8 && header.copyOfRange(0, 8).contentEquals(byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a))) {
+      return "image/png"
+    }
+    if (header.size >= 12 && header.copyOfRange(0, 4).toString(Charsets.US_ASCII) == "RIFF" &&
+      header.copyOfRange(8, 12).toString(Charsets.US_ASCII) == "WEBP") {
+      return "image/webp"
+    }
+    return null
   }
 
   /**

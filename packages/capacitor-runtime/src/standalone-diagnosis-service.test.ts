@@ -31,11 +31,11 @@ function memoryFiles() {
       writeObservationText: async ({ sessionId, relativePath, value }: { readonly sessionId: string; readonly relativePath: string; readonly value: string; readonly replace: boolean }) => { values.set(key(sessionId, relativePath), value); },
       readObservationText: async ({ sessionId, relativePath }: { readonly sessionId: string; readonly relativePath: string }) => ({ value: values.get(key(sessionId, relativePath)) }),
       listObservationIds: async () => ({ sessionIds: [...ids] }),
-      copyToObservation: async ({ sessionId }: { readonly sessionId: string; readonly sourceUri: string; readonly relativePath: string }) => ({
-        uri: `file:///private/observations/${sessionId}/image.bin`, sizeBytes: 128, mimeType: "image/jpeg",
+      copyToObservation: async ({ sessionId, relativePath }: { readonly sessionId: string; readonly sourceUri: string; readonly relativePath: string }) => ({
+        uri: `file:///private/observations/${sessionId}/${relativePath}`, sizeBytes: 128, mimeType: "image/jpeg",
       }),
-      getObservationUri: async ({ sessionId }: { readonly sessionId: string; readonly relativePath: string }) => ({
-        uri: ids.has(sessionId) ? `file:///private/observations/${sessionId}/image.bin` : undefined, sizeBytes: 128, mimeType: "image/jpeg",
+      getObservationUri: async ({ sessionId, relativePath }: { readonly sessionId: string; readonly relativePath: string }) => ({
+        uri: ids.has(sessionId) ? `file:///private/observations/${sessionId}/${relativePath}` : undefined, sizeBytes: 128, mimeType: "image/jpeg",
       }),
     },
   };
@@ -82,4 +82,42 @@ test("StandaloneDiagnosisService saves a formal report and real follow-up histor
   assert.doesNotMatch(JSON.stringify(session), /file:\/\//);
   assert.doesNotMatch(JSON.stringify(savedReport), /private reasoning|file:\/\//);
   assert.equal((await service.listMessages(session.sessionId)).length, 2);
+});
+
+test("StandaloneDiagnosisService keeps the selected image MIME across private copy and reload", async () => {
+  const values = new Map<string, string>();
+  let copiedPath = "";
+  const service = new StandaloneDiagnosisService({
+    files: {
+      ensureObservation: async () => undefined,
+      writeObservationText: async ({ relativePath, value }) => { values.set(relativePath, value); },
+      readObservationText: async ({ relativePath }) => ({ value: values.get(relativePath) }),
+      listObservationIds: async () => ({ sessionIds: ["session-png"] }),
+      copyToObservation: async ({ relativePath }) => {
+        copiedPath = relativePath;
+        return { uri: `file:///private/observations/session-png/${relativePath}`, sizeBytes: 256, mimeType: "application/octet-stream" };
+      },
+      getObservationUri: async ({ relativePath }) => ({
+        uri: `file:///private/observations/session-png/${relativePath}`,
+        sizeBytes: 256,
+        mimeType: "application/octet-stream",
+      }),
+    },
+    fileMedia: {
+      pickPhoto: async () => ({ uri: "file:///private/media/imported.png", mimeType: "image/png", sizeBytes: 256 }),
+      capturePhoto: async () => ({ uri: "file:///private/media/captured.jpg", mimeType: "image/jpeg", sizeBytes: 256 }),
+    },
+    getProvider: async () => ({ generate: async () => ({ content: "", reasoning: "" }), transcribe: async () => "" }),
+    toDisplayUri: (value) => `capacitor://localhost/observation/${encodeURIComponent(value)}`,
+    createSessionId: () => "session-png",
+    now: () => new Date("2026-08-07T00:00:00.000Z"),
+  });
+
+  const selected = await service.pickImage();
+  const created = await service.createSession({ mode: "tongue", image: selected });
+  const reloaded = await service.getSession(created.sessionId);
+
+  assert.equal(copiedPath, "image.png");
+  assert.equal(created.image.mimeType, "image/png");
+  assert.equal(reloaded?.image.mimeType, "image/png");
 });

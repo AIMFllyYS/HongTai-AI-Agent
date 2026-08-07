@@ -1,6 +1,7 @@
 package com.hongtai.aiagent.bridge
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import androidx.activity.result.ActivityResult
 import android.content.Intent
@@ -49,7 +50,13 @@ class FileMediaPlugin : Plugin() {
       return
     }
     pendingPhotoCapture = capture
-    startActivityForResult(call, intent, "onPhotoCaptured")
+    try {
+      startActivityForResult(call, intent, "onPhotoCaptured")
+    } catch (error: ActivityNotFoundException) {
+      pendingPhotoCapture = null
+      mediaStore.discardCapture(capture)
+      call.reject("No system camera is available.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
+    }
   }
 
   @ActivityCallback

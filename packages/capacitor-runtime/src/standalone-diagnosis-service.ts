@@ -24,7 +24,6 @@ const SESSION_PATH = "session.json";
 const REPORT_PATH = "report.json";
 const MESSAGES_PATH = "messages.json";
 const CONTEXT_PATH = "context.txt";
-const IMAGE_PATH = "image.bin";
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/;
 const IMAGE_MIME = /^image\/[a-z0-9][a-z0-9.+-]*$/;
 
@@ -92,6 +91,15 @@ function validMime(value: string | undefined): string {
   const mime = value?.trim().toLowerCase() ?? "";
   if (!IMAGE_MIME.test(mime) || mime === "image/svg+xml") throw taskError("IMAGE_INVALID", "请选择有效的照片文件", "select_media");
   return mime;
+}
+
+function imagePath(mimeType: string): string {
+  switch (mimeType) {
+    case "image/jpeg": return "image.jpg";
+    case "image/png": return "image.png";
+    case "image/webp": return "image.webp";
+    default: return "image.bin";
+  }
 }
 
 function record(value: unknown): Readonly<Record<string, unknown>> | undefined {
@@ -168,13 +176,14 @@ export class StandaloneDiagnosisService implements DiagnosisService {
     const sessionId = this.#createSessionId();
     if (!ID_PATTERN.test(sessionId)) throw taskError("IMAGE_INVALID", "本地观察会话标识无效", "select_media");
     await this.#files.ensureObservation({ sessionId });
-    const copied = await this.#files.copyToObservation({ sessionId, sourceUri: picked.nativeUri, relativePath: IMAGE_PATH });
+    const relativePath = imagePath(picked.mimeType);
+    const copied = await this.#files.copyToObservation({ sessionId, sourceUri: picked.nativeUri, relativePath });
     const timestamp = nowIso(this.#now);
     const state: StoredSession = {
       sessionId,
       reportId: `report-${sessionId}`,
       mode: input.mode,
-      image: { relativePath: IMAGE_PATH, mimeType: validMime(copied.mimeType ?? picked.mimeType), sizeBytes: copied.sizeBytes },
+      image: { relativePath, mimeType: picked.mimeType, sizeBytes: copied.sizeBytes },
       reportStatus: "pending",
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -208,7 +217,7 @@ export class StandaloneDiagnosisService implements DiagnosisService {
     if (!state) return undefined;
     const image = await this.#files.getObservationUri({ sessionId, relativePath: state.image.relativePath });
     if (!image.uri) return undefined;
-    return this.#toUiSession(state, image.uri, image.sizeBytes, image.mimeType);
+    return this.#toUiSession(state, image.uri, image.sizeBytes);
   }
 
   async listSessions(): Promise<readonly DiagnosisSessionRecord[]> {
@@ -357,13 +366,15 @@ export class StandaloneDiagnosisService implements DiagnosisService {
     if (!("uri" in image) || typeof image.uri !== "string") throw taskError("IMAGE_INVALID", "本地观察只接受私有图片引用", "select_media");
     const sessionId = this.#createSessionId();
     await this.#files.ensureObservation({ sessionId });
-    const copied = await this.#files.copyToObservation({ sessionId, sourceUri: image.uri, relativePath: IMAGE_PATH });
+    const mimeType = validMime(image.mimeType);
+    const relativePath = imagePath(mimeType);
+    const copied = await this.#files.copyToObservation({ sessionId, sourceUri: image.uri, relativePath });
     const timestamp = nowIso(this.#now);
     const state: StoredSession = {
       sessionId,
       reportId: `report-${sessionId}`,
       mode,
-      image: { relativePath: IMAGE_PATH, mimeType: validMime(image.mimeType), sizeBytes: copied.sizeBytes },
+      image: { relativePath, mimeType, sizeBytes: copied.sizeBytes },
       reportStatus: "pending",
       createdAt: timestamp,
       updatedAt: timestamp,

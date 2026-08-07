@@ -56,3 +56,12 @@ test("the standalone APK has no SQLite or SQLCipher build dependency", () => {
   assert.doesNotMatch(settings, /sqlite|sqlcipher/i);
   assert.doesNotMatch(appBuild, /sqlite|sqlcipher/i);
 });
+
+test("camera capture declares package visibility and cleans up unavailable launches", () => {
+  const manifest = read("android/app/src/main/AndroidManifest.xml");
+  const fileMedia = read("android/app/src/main/java/com/hongtai/aiagent/bridge/FileMediaPlugin.kt");
+
+  assert.match(manifest, /<queries>[\s\S]*android\.media\.action\.IMAGE_CAPTURE[\s\S]*<\/queries>/);
+  assert.match(fileMedia, /ActivityNotFoundException/);
+  assert.match(fileMedia, /catch\s*\(error:\s*ActivityNotFoundException\)[\s\S]*discardCapture\(capture\)/);
+});
