@@ -377,7 +377,7 @@ For each route, verify:
 - button labels remain on one line;
 - the final content block can scroll above the fixed bottom navigation;
 - technical values break inside their card;
-- no replacement glyph `�` appears.
+- no `U+FFFD` replacement character appears.
 
 - [ ] **Step 3: Confirm frozen interactions**
 
