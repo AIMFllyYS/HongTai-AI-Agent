@@ -53,6 +53,9 @@ test("planned feature styling makes disabled controls legible without inventing 
   assert.match(componentStyles, /\.button:disabled/);
   assert.match(creationStyles, /\.planned-workbench/);
   assert.match(libraryStyles, /\.planned-library/);
+  assert.match(creationStyles, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.planned-workbench__footer[^}]*grid-template-columns:\s*1fr/);
+  assert.match(creationStyles, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.platform-grid[^}]*grid-template-columns:\s*1fr/);
+  assert.match(libraryStyles, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.planned-library__toolbar[^}]*grid-template-columns:\s*1fr/);
 });
 
 test("production runtime uses capability-gated shells while fixtures stay explicit", () => {

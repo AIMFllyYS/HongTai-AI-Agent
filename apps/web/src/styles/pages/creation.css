@@ -364,3 +364,21 @@
   color: var(--color-text-muted);
   font-size: var(--text-meta);
 }
+
+@media (max-width: 26.875rem) {
+  .planned-workbench__footer,
+  .planned-publish-preview__footer {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .planned-workbench__footer .button,
+  .planned-publish-preview__footer .button {
+    width: 100%;
+  }
+
+  .platform-grid {
+    grid-template-columns: 1fr;
+  }
+}

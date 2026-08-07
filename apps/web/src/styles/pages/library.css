@@ -283,6 +283,16 @@
   color: var(--color-primary-strong);
 }
 
+@media (max-width: 26.875rem) {
+  .planned-library__toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .planned-library__toolbar .button {
+    width: 100%;
+  }
+}
+
 /* Settings */
 .profile-card {
   display: grid;
