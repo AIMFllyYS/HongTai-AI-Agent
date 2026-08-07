@@ -112,3 +112,16 @@ test("the packaged source contains no diagnostic-treatment or health-score copy"
     for (const phrase of forbidden) assert.doesNotMatch(text, new RegExp(phrase));
   }
 });
+
+test("observation controls stay compact and clear above the fixed Android navigation", () => {
+  const start = read("pages/ObservationStartPage.tsx");
+  const report = read("pages/ObservationReportPage.tsx");
+  const css = read("styles/pages/observation-runtime.css");
+
+  assert.match(start, /observation-capture-card__actions mobile-action-group/);
+  assert.match(report, /observation-question-composer__actions/);
+  assert.match(css, /\.observation-capture-card__actions \.button--primary\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s);
+  assert.match(css, /\.observation-question-composer\s*\{[^}]*bottom:\s*calc\([^;]*--nav-height[^;]*safe-area-inset-bottom/s);
+  assert.match(css, /\.observation-message p\s*\{[^}]*overflow-wrap:\s*anywhere/s);
+  assert.match(css, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.observation-question-composer__actions[^}]*grid-template-columns:\s*1fr/);
+});
