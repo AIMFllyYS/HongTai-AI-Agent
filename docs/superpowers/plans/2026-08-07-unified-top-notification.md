@@ -43,7 +43,7 @@ import {
   NOTIFICATION_DISMISS_DISTANCE_PX,
   NOTIFICATION_DISMISS_VELOCITY_PX_PER_SECOND,
   NOTIFICATION_VISIBLE_MS,
-  notificationDragPresentation,
+  notificationOpacity,
   shouldDismissNotification,
 } from "../apps/web/src/notifications/notification-model";
 
@@ -54,9 +54,9 @@ test("顶部通知只在向上距离或速度越过阈值时关闭", () => {
   assert.equal(shouldDismissNotification(40, 900), false);
 });
 
-test("通知向上跟手并淡出，向下拖动只保留阻尼", () => {
-  assert.deepEqual(notificationDragPresentation(-60), { y: -60, opacity: 0.5 });
-  assert.deepEqual(notificationDragPresentation(40), { y: 6, opacity: 1 });
+test("通知向上拖动时逐渐淡出，向下拖动保持不透明", () => {
+  assert.equal(notificationOpacity(-60), 0.5);
+  assert.equal(notificationOpacity(40), 1);
 });
 
 test("通知拖拽暂停计时，回弹后继续剩余时间", () => {
@@ -125,9 +125,9 @@ export function shouldDismissNotification(deltaY: number, velocityY: number): bo
   return deltaY < -NOTIFICATION_DISMISS_DISTANCE_PX || velocityY < -NOTIFICATION_DISMISS_VELOCITY_PX_PER_SECOND;
 }
 
-export function notificationDragPresentation(deltaY: number): { readonly y: number; readonly opacity: number } {
-  if (deltaY >= 0) return { y: Math.round(deltaY * 0.15), opacity: 1 };
-  return { y: deltaY, opacity: Math.max(0.25, 1 - Math.abs(deltaY) / 120) };
+export function notificationOpacity(deltaY: number): number {
+  if (deltaY >= 0) return 1;
+  return Math.max(0.25, 1 - Math.abs(deltaY) / 120);
 }
 ```
 
@@ -254,6 +254,8 @@ test("顶部通知使用 Motion、5 秒倒计时和向上拖拽关闭", () => {
   assert.match(component, /drag="y"/);
   assert.match(component, /PausableCountdown/);
   assert.match(component, /shouldDismissNotification/);
+  assert.match(component, /notificationOpacity/);
+  assert.match(component, /dragElastic=\{\{ top: 1, bottom: 0\.12 \}\}/);
   assert.match(component, /onDragStart/);
   assert.match(component, /onDragEnd/);
 });
@@ -331,6 +333,7 @@ import { Icon } from "./Icon";
 import { PausableCountdown } from "../notifications/notification-countdown";
 import {
   NOTIFICATION_VISIBLE_MS,
+  notificationOpacity,
   shouldDismissNotification,
   type AppNotification,
   type NotificationLevel,
@@ -352,7 +355,7 @@ export function TopNotification({ notification, onDismiss }: TopNotificationProp
   const reducedMotion = useReducedMotion();
   const countdown = useRef<PausableCountdown | undefined>(undefined);
   const dragY = useMotionValue(0);
-  const dragOpacity = useTransform(dragY, [-120, 0], [0.25, 1]);
+  const dragOpacity = useTransform(dragY, notificationOpacity);
 
   useEffect(() => {
     if (!notification) return undefined;
@@ -390,7 +393,7 @@ export function TopNotification({ notification, onDismiss }: TopNotificationProp
             aria-live={notification.level === "error" ? "assertive" : "polite"}
             className={`top-notification top-notification--${notification.level}`}
             data-technical-code={notification.technicalCode}
-            drag={reducedMotion ? false : "y"}
+            drag="y"
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 1, bottom: 0.12 }}
             onDragEnd={(_event, info) => {
