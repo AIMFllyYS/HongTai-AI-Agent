@@ -67,7 +67,7 @@ class PrivateMediaStore(context: Context) {
 
       val header = stagedSource.inputStream().use { input -> input.readNBytes(12) }
       val sourceMimeType = PrivateMediaImportPolicy.imageMimeType(providerMimeType, sourceName, header)
-        ?: throw PrivateImageInvalidException("The selected file is not a supported JPEG, PNG, or WebP image.")
+        ?: throw PrivateImageInvalidException("The selected file is not a supported JPEG, PNG, WebP, or HEIF image.")
       PrivateObservationImageNormalizer.normalize(
         source = stagedSource,
         sourceMimeType = sourceMimeType,
