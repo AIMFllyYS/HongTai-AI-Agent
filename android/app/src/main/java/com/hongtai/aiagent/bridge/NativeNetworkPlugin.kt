@@ -17,6 +17,9 @@ import com.hongtai.aiagent.network.NativeDownloadArtifactSlot
 import com.hongtai.aiagent.network.NativeDownloadClient
 import com.hongtai.aiagent.network.NativeDownloadProgress
 import com.hongtai.aiagent.network.NativeDownloadRequest
+import com.hongtai.aiagent.network.NativeLinkDiagnostic
+import com.hongtai.aiagent.network.NativeLinkFailureClassifier
+import com.hongtai.aiagent.network.NativeLinkFailureContext
 import com.hongtai.aiagent.network.NativeNetworkException
 import com.hongtai.aiagent.network.NativeNetworkPolicy
 import com.hongtai.aiagent.network.NativeTextFetchClient
@@ -27,6 +30,7 @@ import com.hongtai.aiagent.storage.SecureStorageException
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
+import java.net.URL
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -77,7 +81,7 @@ class NativeNetworkPlugin : Plugin() {
         NativeNetworkPolicy.requireFetchRequest(candidate.method, candidate.body, headers)
       }
     } catch (error: IllegalArgumentException) {
-      call.reject(error.message ?: "Invalid page fetch input.", NativeIssueCode.INVALID_ARGUMENT, error)
+      call.reject("Invalid page fetch input.", NativeIssueCode.INVALID_ARGUMENT)
       return
     }
 
@@ -92,9 +96,19 @@ class NativeNetworkPlugin : Plugin() {
             .put("body", result.body),
         )
       } catch (error: NativeNetworkException) {
-        call.reject(error.userMessage, error.code, error)
+        call.reject(error.userMessage, error.code, error.diagnostic?.toJsObject())
       } catch (error: Exception) {
-        call.reject("The page fetch could not finish safely.", "PAGE_FETCH_FAILED", error)
+        val safe = NativeLinkFailureClassifier.classify(
+          error,
+          NativeLinkFailureContext.safe(
+            phase = "response",
+            hostname = runCatching { URL(request.url).host }.getOrNull(),
+            elapsedMs = 0,
+            attempt = 1,
+            redirectCount = 0,
+          ),
+        )
+        call.reject(safe.userMessage, safe.code, safe.diagnostic?.toJsObject())
       }
     }
   }
@@ -440,6 +454,10 @@ class NativeNetworkPlugin : Plugin() {
 
   private fun JSObject.putOptional(name: String, value: Any?): JSObject = apply {
     if (value != null) put(name, value)
+  }
+
+  private fun NativeLinkDiagnostic.toJsObject(): JSObject = JSObject().also { target ->
+    toSafeData().forEach { (name, value) -> target.put(name, value) }
   }
 
   private fun Map<String, String>.toJsObject(): JSObject = JSObject().also { target ->

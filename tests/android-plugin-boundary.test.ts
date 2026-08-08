@@ -130,6 +130,33 @@ test("native downloads forward bounded real byte progress to the shared pipeline
   assert.match(plugin, /\.putOptional\("progress"/);
 });
 
+test("native page fetches reject with stable link codes and allowlisted data without logging Throwable details", () => {
+  const manifest = read("android/app/src/main/AndroidManifest.xml");
+  const plugin = read("android/app/src/main/java/com/hongtai/aiagent/bridge/NativeNetworkPlugin.kt");
+  const fetchClient = read("android/app/src/main/java/com/hongtai/aiagent/network/NativeTextFetchClient.kt");
+  const issueCodes = read("android/app/src/main/java/com/hongtai/aiagent/bridge/NativeIssueCode.kt");
+  const fetchMethod = plugin.slice(plugin.indexOf("fun fetchText"), plugin.indexOf("fun download"));
+
+  for (const code of [
+    "ERR_LINK_DNS_FAILED",
+    "ERR_LINK_TLS_FAILED",
+    "ERR_LINK_CONNECTION_FAILED",
+    "ERR_LINK_TIMEOUT",
+    "ERR_LINK_REDIRECT_LIMIT",
+    "ERR_LINK_REDIRECT_INVALID",
+    "ERR_LINK_RESPONSE_TOO_LARGE",
+    "ERR_LINK_RESPONSE_INVALID",
+    "ERR_LINK_RESPONSE_FAILED",
+  ]) {
+    assert.match(issueCodes, new RegExp(code));
+  }
+  assert.match(fetchClient, /NativeLinkFailureClassifier\.classify/);
+  assert.doesNotMatch(fetchClient, /PAGE_FETCH_/);
+  assert.match(fetchMethod, /call\.reject\(error\.userMessage, error\.code, error\.diagnostic\?\.toJsObject\(\)\)/);
+  assert.doesNotMatch(fetchMethod, /call\.reject\([^\n]*,\s*error\)/);
+  assert.doesNotMatch(manifest, /ACCESS_NETWORK_STATE/);
+});
+
 test("the foreground APK keeps the screen awake while its in-process tasks are active", () => {
   const mainActivity = read("android/app/src/main/java/com/hongtai/aiagent/MainActivity.kt");
 

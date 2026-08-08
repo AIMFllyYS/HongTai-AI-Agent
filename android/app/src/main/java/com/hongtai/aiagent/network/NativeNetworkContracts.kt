@@ -78,5 +78,6 @@ class NativeNetworkException(
   val code: String,
   val userMessage: String,
   val retryable: Boolean = false,
+  val diagnostic: NativeLinkDiagnostic? = null,
   cause: Throwable? = null,
 ) : IllegalStateException(userMessage, cause)

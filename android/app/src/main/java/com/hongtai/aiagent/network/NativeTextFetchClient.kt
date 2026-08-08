@@ -1,9 +1,7 @@
 package com.hongtai.aiagent.network
 
 import java.io.ByteArrayOutputStream
-import java.io.IOException
 import java.net.HttpURLConnection
-import java.net.SocketTimeoutException
 import java.net.URL
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
@@ -22,7 +20,7 @@ class NativeTextFetchClient {
     var lastFailure: NativeNetworkException? = null
     for (attempt in 1..options.maxAttempts) {
       try {
-        return fetchOnce(request, headers, options)
+        return fetchOnce(request, headers, options, attempt)
       } catch (error: NativeNetworkException) {
         lastFailure = error
         if (!error.retryable || attempt == options.maxAttempts) throw error
@@ -35,14 +33,17 @@ class NativeTextFetchClient {
     request: NativeTextFetchRequest,
     headers: Map<String, String>,
     options: FetchOptions,
+    attempt: Int,
   ): NativeTextFetchResult {
+    val startedAtNanos = System.nanoTime()
     var target = NativeNetworkPolicy.requireHttpsUrl(request.url, "page fetch source")
     var redirects = 0
+    var phase = "request"
     try {
       while (true) {
         NativeNetworkPolicy.requirePublicNetworkTarget(target, "page fetch source")
         val connection = (target.openConnection() as? HttpsURLConnection)
-          ?: throw NativeNetworkException("PAGE_FETCH_FAILED", "The page source is not HTTPS.")
+          ?: throw NativeNetworkException("ERR_LINK_REQUEST_INVALID", "The page source is not HTTPS.")
         try {
           connection.instanceFollowRedirects = false
           connection.requestMethod = request.method
@@ -59,20 +60,23 @@ class NativeTextFetchClient {
             }
           }
 
+          phase = "connect"
           val status = connection.responseCode
           if (status in REDIRECT_STATUS_CODES) {
+            phase = "redirect"
             if (redirects >= options.maxRedirects) {
-              throw NativeNetworkException("LINK_REDIRECT_LIMIT", "The page source redirected too many times.", retryable = true)
+              throw NativeNetworkException("ERR_LINK_REDIRECT_LIMIT", "The page source redirected too many times.")
             }
             val location = connection.getHeaderField("Location")?.trim().orEmpty()
             if (location.isBlank()) {
-              throw NativeNetworkException("LINK_REDIRECT_INVALID", "The page source returned an invalid redirect.")
+              throw NativeNetworkException("ERR_LINK_REDIRECT_INVALID", "The page source returned an invalid redirect.")
             }
             target = NativeNetworkPolicy.requireHttpsUrl(URL(target, location).toExternalForm(), "page fetch redirect")
             redirects += 1
             continue
           }
 
+          phase = "response"
           val bodyStream = if (status >= HttpURLConnection.HTTP_BAD_REQUEST) connection.errorStream else connection.inputStream
           val body = bodyStream?.use(::readBoundedUtf8) ?: ""
           return NativeTextFetchResult(
@@ -85,16 +89,32 @@ class NativeTextFetchClient {
           connection.disconnect()
         }
       }
-    } catch (error: NativeNetworkException) {
-      throw error
-    } catch (error: SocketTimeoutException) {
-      throw NativeNetworkException("PAGE_FETCH_TIMEOUT", "The page fetch timed out.", retryable = true, cause = error)
-    } catch (error: IOException) {
-      throw NativeNetworkException("PAGE_FETCH_FAILED", "The page fetch could not finish.", retryable = true, cause = error)
     } catch (error: IllegalArgumentException) {
-      throw NativeNetworkException("PAGE_FETCH_INVALID", "The page fetch could not be prepared safely.", cause = error)
+      throw NativeLinkFailureClassifier.classify(
+        NativeNetworkException("ERR_LINK_REQUEST_INVALID", "The page fetch could not be prepared safely."),
+        failureContext(phase, target, startedAtNanos, attempt, redirects),
+      )
+    } catch (error: Throwable) {
+      throw NativeLinkFailureClassifier.classify(
+        error,
+        failureContext(phase, target, startedAtNanos, attempt, redirects),
+      )
     }
   }
+
+  private fun failureContext(
+    phase: String,
+    target: URL,
+    startedAtNanos: Long,
+    attempt: Int,
+    redirects: Int,
+  ): NativeLinkFailureContext = NativeLinkFailureContext.safe(
+    phase = phase,
+    hostname = target.host,
+    elapsedMs = ((System.nanoTime() - startedAtNanos) / 1_000_000L).coerceAtLeast(0),
+    attempt = attempt,
+    redirectCount = redirects,
+  )
 
   private fun NativeTextFetchRequest.options(): FetchOptions = FetchOptions(
     maxRedirects = (maxRedirects ?: MAX_REDIRECTS).also { value ->
@@ -115,7 +135,7 @@ class NativeTextFetchClient {
       val count = input.read(buffer)
       if (count < 0) break
       if (output.size() + count > MAX_RESPONSE_BYTES) {
-        throw NativeNetworkException("PAGE_FETCH_RESPONSE_TOO_LARGE", "The page response is larger than the parser limit.")
+        throw NativeNetworkException("ERR_LINK_RESPONSE_TOO_LARGE", "The page response is larger than the parser limit.")
       }
       output.write(buffer, 0, count)
     }
@@ -126,7 +146,7 @@ class NativeTextFetchClient {
         .decode(ByteBuffer.wrap(output.toByteArray()))
         .toString()
     } catch (error: Exception) {
-      throw NativeNetworkException("PAGE_FETCH_INVALID_ENCODING", "The page response is not valid UTF-8.", cause = error)
+      throw NativeNetworkException("ERR_LINK_RESPONSE_INVALID", "The page response is not valid UTF-8.")
     }
   }
 
