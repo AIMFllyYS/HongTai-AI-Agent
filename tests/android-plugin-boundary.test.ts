@@ -76,8 +76,8 @@ test("photo activity callbacks persist recovery state and dispatch heavy import 
   assert.match(fileMedia, /PHOTO_IMPORT_EXECUTOR\s*=\s*Executors\.newSingleThreadExecutor/);
   assert.match(fileMedia, /PHOTO_IMPORT_EXECUTOR\.execute\s*\{/);
 
-  const pickerCallback = fileMedia.match(/private fun onPhotoPicked[\s\S]*?\n  }\n\n  @ActivityCallback/)?.[0] ?? "";
-  const captureCallback = fileMedia.match(/private fun onPhotoCaptured[\s\S]*?\n  }\n\n  @PluginMethod/)?.[0] ?? "";
+  const pickerCallback = fileMedia.match(/private fun onPhotoPicked[\s\S]*?\n {2}}\n\n {2}@ActivityCallback/)?.[0] ?? "";
+  const captureCallback = fileMedia.match(/private fun onPhotoCaptured[\s\S]*?\n {2}}\n\n {2}@PluginMethod/)?.[0] ?? "";
   assert.doesNotMatch(pickerCallback, /mediaStore\.importFrom|BitmapFactory|FileOutputStream/);
   assert.doesNotMatch(captureCallback, /mediaStore\.importCaptured|BitmapFactory|FileOutputStream/);
 });

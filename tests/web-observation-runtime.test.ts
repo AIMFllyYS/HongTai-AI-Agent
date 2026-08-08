@@ -68,8 +68,8 @@ test("observation photo selection and capture own an importing state with every 
   assert.match(start, /recovered\.status === "succeeded"[\s\S]*setImage\(recovered\.image\)/);
   assert.match(start, /recovered\.status === "failed"[\s\S]*setIssue\(recovered\.issue\)/);
 
-  const picker = start.match(/const pickImage = async \(\) => \{[\s\S]*?\n  \};/)?.[0] ?? "";
-  const capture = start.match(/const captureImage = async \(\) => \{[\s\S]*?\n  \};/)?.[0] ?? "";
+  const picker = start.match(/const pickImage = async \(\) => \{[\s\S]*?\n {2}\};/)?.[0] ?? "";
+  const capture = start.match(/const captureImage = async \(\) => \{[\s\S]*?\n {2}\};/)?.[0] ?? "";
   for (const operation of [picker, capture]) {
     assert.match(operation, /setImporting\(true\)/);
     assert.match(operation, /finally\s*\{[\s\S]*setImporting\(false\)/);
