@@ -82,6 +82,16 @@ test("photo activity callbacks persist recovery state and dispatch heavy import 
   assert.doesNotMatch(captureCallback, /mediaStore\.importCaptured|BitmapFactory|FileOutputStream/);
 });
 
+test("a resumed activity terminates a photo operation whose external result was lost", () => {
+  const fileMedia = read("android/app/src/main/java/com/hongtai/aiagent/bridge/FileMediaPlugin.kt");
+
+  assert.match(
+    fileMedia,
+    /override fun handleOnResume\(\)[\s\S]*PhotoOperationAwaitingResult[\s\S]*PHOTO_RECOVERY_FAILED/,
+    "an awaiting operation must become an explicit retryable terminal when Android resumes without its result callback",
+  );
+});
+
 test("native downloads forward bounded real byte progress to the shared pipeline", () => {
   const plugin = read("android/app/src/main/java/com/hongtai/aiagent/bridge/NativeNetworkPlugin.kt");
   const client = read("android/app/src/main/java/com/hongtai/aiagent/network/NativeDownloadClient.kt");

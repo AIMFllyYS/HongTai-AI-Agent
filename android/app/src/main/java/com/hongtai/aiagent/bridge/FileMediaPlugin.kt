@@ -42,6 +42,12 @@ class FileMediaPlugin : Plugin() {
     resumePersistedImport()
   }
 
+  override fun handleOnResume() {
+    super.handleOnResume()
+    val awaiting = photoOperations.current() as? PhotoOperationAwaitingResult ?: return
+    finishFailure(null, awaiting.operationId, NativeIssueCode.PHOTO_RECOVERY_FAILED)
+  }
+
   @PluginMethod
   fun pickPhoto(call: PluginCall) {
     val operation = try {
