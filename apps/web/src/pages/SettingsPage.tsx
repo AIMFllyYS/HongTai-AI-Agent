@@ -1,37 +1,125 @@
-import type { SettingsRow, SettingsViewModel } from "../data/visual-types";
+import { useCallback, useEffect, useState } from "react";
+
+import { issueFromAppError } from "@hongtai/core";
+import type { AppRuntime, LocalProfile, PublicAiConnectionConfig, TaskIssue } from "@hongtai/core";
+
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
-import { iconName } from "../components/ContentBlocks";
+import { IssueNotice } from "../components/IssueNotice";
+import { LoadingState } from "../components/StatePanels";
 import { SectionHeading } from "../components/Headings";
-import { MediaFrame } from "../components/MediaFrame";
+import { aiSettingsPath, profileSettingsPath } from "../router";
 
 export interface SettingsPageProps {
-  readonly viewModel: SettingsViewModel;
+  readonly runtime: AppRuntime;
   readonly navigate: (path: string) => void;
 }
 
-function SettingsRowView({ row }: { readonly row: SettingsRow }) {
-  return <button className={`settings-row ${row.disabled ? "is-disabled" : ""}`.trim()} disabled={row.disabled} type="button"><span className="settings-row__icon"><Icon name={iconName(row.icon)} size={19} /></span><span className="settings-row__label">{row.label}</span>{row.value ? <span className="settings-row__value">{row.value}</span> : null}{row.action === "disclosure" || row.action === "select" ? <Icon className="settings-row__chevron" name="chevron_right" size={17} /> : null}</button>;
+interface SettingsSnapshot {
+  readonly profile: LocalProfile | undefined;
+  readonly aiConnection: PublicAiConnectionConfig | undefined;
 }
 
-export function SettingsPage({ viewModel, navigate }: SettingsPageProps) {
+function profileDetail(profile: LocalProfile | undefined): string {
+  if (!profile) return "尚未建立本地档案";
+  return [profile.businessName, profile.industry].filter((value): value is string => Boolean(value)).join(" · ") || "本地档案";
+}
+
+function Avatar({ profile }: { readonly profile: LocalProfile | undefined }) {
+  if (profile?.avatarUri) {
+    return <img alt={`${profile.displayName}的头像`} className="runtime-avatar" src={profile.avatarUri} />;
+  }
+  return <span aria-hidden="true" className="runtime-avatar runtime-avatar--empty"><Icon name="face" size={28} /></span>;
+}
+
+export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
+  const [snapshot, setSnapshot] = useState<SettingsSnapshot>();
+  const [issue, setIssue] = useState<TaskIssue>();
+
+  const load = useCallback(async () => {
+    setIssue(undefined);
+    try {
+      const [profile, aiConnection] = await Promise.all([
+        runtime.profile.get(),
+        runtime.aiSettings.getPublic(),
+      ]);
+      setSnapshot({ profile, aiConnection });
+    } catch (error) {
+      setIssue(issueFromAppError(error, {
+        code: "APP_RUNTIME_UNAVAILABLE",
+        message: "设置资料暂时无法读取",
+        action: "none",
+      }));
+    }
+  }, [runtime]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (!snapshot && !issue) {
+    return (
+      <AppShell activeNav="settings" navigate={navigate} title="设置">
+        <LoadingState description="正在读取本机档案与 AI 设置" title="加载设置" />
+      </AppShell>
+    );
+  }
+
+  const profile = snapshot?.profile;
+  const aiConnection = snapshot?.aiConnection;
+  const profileName = profile?.displayName ?? "建立本地档案";
+  const modelName = aiConnection?.textModel ?? "尚未填写文本模型";
+
   return (
-    <AppShell activeNav="settings" navigate={navigate} title={viewModel.title}>
-      <div className="page-stack page-settings">
-        <GlassCard className="profile-card">
-          <MediaFrame className="profile-card__avatar" media={viewModel.avatar} />
-          <div><h2>{viewModel.profileName}</h2><p>{viewModel.accountType}</p><span className="plan-badge">{viewModel.plan}</span></div>
-          <Icon className="profile-card__chevron" name="chevron_right" size={19} />
+    <AppShell activeNav="settings" navigate={navigate} title="设置">
+      <div className="page-stack page-settings settings-summary">
+        {issue ? <IssueNotice issue={issue} /> : null}
+
+        <GlassCard className="settings-profile-overview" onClick={() => navigate(profileSettingsPath())}>
+          <Avatar profile={profile} />
+          <div className="settings-profile-overview__body">
+            <span className="settings-overline">本地档案</span>
+            <h2>{profileName}</h2>
+            <p>{profileDetail(profile)}</p>
+          </div>
+          <Icon className="settings-row__chevron" name="chevron_right" size={19} />
         </GlassCard>
 
-        <section className="settings-section"><SectionHeading title={viewModel.aiConfigTitle} /><GlassCard className="settings-card"><SettingsRowView row={viewModel.voiceRow} /></GlassCard></section>
-        <section className="settings-section"><SectionHeading title={viewModel.modelTitle} /><GlassCard className="settings-card">{viewModel.modelRows.map((row) => <SettingsRowView key={row.id} row={row} />)}</GlassCard></section>
-        <section className="settings-section"><SectionHeading title={viewModel.generalTitle} /><GlassCard className="settings-card">{viewModel.generalRows.map((row) => <SettingsRowView key={row.id} row={row} />)}</GlassCard></section>
+        <section className="settings-section">
+          <SectionHeading title="本地资料" />
+          <GlassCard className="settings-card">
+            <button className="settings-row" onClick={() => navigate(profileSettingsPath())} type="button">
+              <span className="settings-row__icon"><Icon name="business_center" size={19} /></span>
+              <span className="settings-row__body"><strong>档案与头像</strong><small>名称、门店、行业与经营标签</small></span>
+              <Icon className="settings-row__chevron" name="chevron_right" size={17} />
+            </button>
+          </GlassCard>
+        </section>
 
-        <Button className="logout-button" onClick={() => navigate("/")} variant="ghost"><Icon name="logout" size={18} />{viewModel.logoutLabel}</Button>
-        <p className="copyright">{viewModel.copyright}</p>
+        <section className="settings-section">
+          <SectionHeading title="AI 连接" />
+          <GlassCard className="settings-card">
+            <button className="settings-row" onClick={() => navigate(aiSettingsPath())} type="button">
+              <span className="settings-row__icon settings-row__icon--key"><Icon name="key" size={19} /></span>
+              <span className="settings-row__body"><strong>{modelName}</strong><small>{aiConnection?.hasApiKey ? "API Key 已保存在设备安全存储" : "尚未写入 API Key"}</small></span>
+              <Icon className="settings-row__chevron" name="chevron_right" size={17} />
+            </button>
+            <div aria-disabled="true" className="settings-row settings-row--planned" data-settings-capability="tts">
+              <span className="settings-row__icon"><Icon name="record_voice_over" size={19} /></span>
+              <span className="settings-row__body"><strong>TTS 语音合成</strong><small>保留产品配置入口，当前版本尚未接入</small></span>
+              <span className="settings-planned-badge">尚未接入</span>
+            </div>
+          </GlassCard>
+        </section>
+
+        <GlassCard className="settings-security-note" tone="soft">
+          <Icon name="key" size={20} />
+          <p>本地档案与公开 AI 配置保存在本机应用数据中；API Key 仅写入 Android Keystore，不会回传到页面。</p>
+        </GlassCard>
+
+        <Button onClick={() => void load()} variant="quiet"><Icon name="sync" size={17} />重新读取</Button>
       </div>
     </AppShell>
   );

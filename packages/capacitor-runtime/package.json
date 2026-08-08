@@ -1,0 +1,18 @@
+{
+  "name": "@hongtai/capacitor-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsx --test src/*.test.ts"
+  },
+  "dependencies": {
+    "@hongtai/ai": "workspace:*",
+    "@hongtai/core": "workspace:*",
+    "@hongtai/platforms": "workspace:*"
+  }
+}

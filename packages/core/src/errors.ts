@@ -31,6 +31,29 @@ export class TaskError extends Error {
   }
 }
 
+const NATIVE_ERROR_CODE = /^ERR_[A-Z0-9_]{2,116}$/;
+
+function nativeCodeFrom(error: unknown, remainingDepth = 3): string | undefined {
+  if (remainingDepth <= 0 || typeof error !== "object" || error === null) return undefined;
+  const value = error as Readonly<Record<string, unknown>>;
+  if (typeof value.code === "string" && NATIVE_ERROR_CODE.test(value.code)) return value.code;
+  return nativeCodeFrom(value.cause, remainingDepth - 1);
+}
+
+function safeDetails(
+  error: unknown,
+  existing?: Readonly<Record<string, string | number | boolean>>,
+): Readonly<Record<string, string | number | boolean>> | undefined {
+  const nativeCode = nativeCodeFrom(error);
+  const cause = error instanceof Error ? error.name : undefined;
+  if (!existing && !nativeCode && !cause) return undefined;
+  return {
+    ...existing,
+    ...(cause && !existing ? { cause } : {}),
+    ...(nativeCode ? { nativeCode } : {}),
+  };
+}
+
 const FALLBACK_BY_STAGE: Readonly<Record<TaskStage, Pick<TaskErrorOptions, "code" | "message" | "action">>> = {
   "detect-platform": { code: "INPUT_URL_INVALID", message: "无法识别输入中的视频或笔记链接", action: "edit_input" },
   "resolve-link": { code: "LINK_NETWORK_FAILED", message: "链接解析失败，请检查网络后重试", action: "check_network" },
@@ -55,7 +78,7 @@ export function issueFromError(
       retryable: error.retryable,
       action: error.action,
       platform,
-      details: error.details,
+      details: safeDetails(error.cause, error.details),
     };
   }
   const fallback = FALLBACK_BY_STAGE[stage];
@@ -67,7 +90,40 @@ export function issueFromError(
     retryable: false,
     action: fallback.action ?? "none",
     platform,
-    details: error instanceof Error ? { cause: error.name } : undefined,
+    details: safeDetails(error),
+  };
+}
+
+/**
+ * Maps profile, secure-storage, media-selection and other application-service
+ * failures without inventing an ingest stage. The UI may use this for its one
+ * issue presenter while preserving the stricter seven-stage mapper above.
+ */
+export function issueFromAppError(
+  error: unknown,
+  fallback: Pick<TaskErrorOptions, "code" | "message" | "action"> = {
+    code: "INTERNAL_UNKNOWN_ERROR",
+    message: "本地应用操作失败",
+    action: "none",
+  },
+): TaskIssue {
+  if (error instanceof TaskError) {
+    return {
+      code: error.code,
+      severity: "error",
+      userMessage: error.message,
+      retryable: error.retryable,
+      action: error.action,
+      details: safeDetails(error.cause, error.details),
+    };
+  }
+  return {
+    code: fallback.code,
+    severity: "error",
+    userMessage: fallback.message,
+    retryable: false,
+    action: fallback.action ?? "none",
+    details: safeDetails(error),
   };
 }
 

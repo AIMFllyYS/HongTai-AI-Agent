@@ -1,4 +1,7 @@
 import type { IngestPipelineDependencies } from "./contracts";
+import {
+  TASK_STAGE_VALUES,
+} from "./models";
 import type {
   IngestRequest,
   IngestResult,
@@ -16,14 +19,8 @@ import { TaskError, issueFromError, safeUrlForDisplay, warningIssue } from "./er
 import { normalizeInput } from "./input";
 
 export const PIPELINE_STAGES = [
-  "detect-platform",
-  "resolve-link",
-  "parse-content",
-  "select-media",
-  "download-media",
-  "obtain-transcript",
-  "save-artifacts",
-] as const satisfies readonly TaskStage[];
+  ...TASK_STAGE_VALUES,
+] as const;
 
 const DEFAULT_MAX_DURATION_SECONDS = 1_200;
 const SEGMENT_SECONDS = 30;
@@ -32,6 +29,15 @@ function createTaskId(): string {
   const timestamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
   const suffix = Math.random().toString(36).slice(2, 8);
   return `${timestamp}-${suffix}`;
+}
+
+function taskIdFor(request: IngestRequest): string {
+  if (request.taskId === undefined) return createTaskId();
+  const taskId = request.taskId.trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(taskId)) {
+    throw new TaskError({ code: "INPUT_URL_INVALID", message: "本地任务标识格式无效", action: "edit_input" });
+  }
+  return taskId;
 }
 
 function mediaSourceForStorage(source: MediaSource): Omit<MediaSource, "headers"> {
@@ -51,6 +57,9 @@ function mediaSourceForStorage(source: MediaSource): Omit<MediaSource, "headers"
 function platformContentForStorage(content: PlatformContent): PlatformContent {
   return {
     ...content,
+    // Raw platform payloads are debugging input, not presentation metadata.
+    // Keeping this undefined also makes JSON serialization omit the field.
+    raw: undefined,
     sourceUrl: safeUrlForDisplay(content.sourceUrl),
     canonicalUrl: content.canonicalUrl ? safeUrlForDisplay(content.canonicalUrl) : undefined,
     coverUrl: content.coverUrl ? safeUrlForDisplay(content.coverUrl) : undefined,
@@ -83,8 +92,9 @@ export class IngestPipeline {
   }
 
   async run(request: IngestRequest): Promise<IngestResult> {
-    const taskId = createTaskId();
+    const taskId = taskIdFor(request);
     const createdAt = new Date().toISOString();
+    let progressSequence = 0;
     const issues: import("./models").TaskIssue[] = [];
     let paths: TaskPaths;
     try {
@@ -94,6 +104,7 @@ export class IngestPipeline {
       issues.push(issue);
       await this.#dependencies.reporter.report({
         taskId,
+        sequence: ++progressSequence,
         stage: "save-artifacts",
         status: "failed",
         message: `失败：${issue.userMessage}`,
@@ -122,6 +133,7 @@ export class IngestPipeline {
         platform,
         contentType,
         speechStatus,
+        analysisStatus: "not_started",
         createdAt,
         updatedAt: new Date().toISOString(),
         issues,
@@ -140,6 +152,7 @@ export class IngestPipeline {
       currentStage = stage;
       const event: ProgressEvent = {
         taskId,
+        sequence: ++progressSequence,
         stage,
         status,
         message,
@@ -362,7 +375,7 @@ export class IngestPipeline {
                 "obtain-transcript",
                 segment.status === "failed" ? "degraded" : "running",
                 `转写 ${completed}/${total}，当前分段=${segmentMessage}，已生成约 ${completedCharacters} 字`,
-                {},
+                { progress: total > 0 ? completed / total : undefined },
                 segment.issue,
               );
             },

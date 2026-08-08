@@ -16,7 +16,7 @@ const variants = {
     opacity: 0,
     x: direction === "forward" ? routeOffset : -routeOffset,
   }),
-  center: { opacity: 1, x: 0 },
+  center: { opacity: 1, x: 0, transitionEnd: { transform: "none" } },
   exit: (direction: RouteTransitionDirection) => ({
     opacity: 0,
     x: direction === "forward" ? -routeOffset : routeOffset,

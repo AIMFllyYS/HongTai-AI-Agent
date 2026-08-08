@@ -174,62 +174,24 @@
   font-size: var(--text-meta);
 }
 
-.score-card {
+.static-observation-overview-card {
   display: grid;
-  justify-items: center;
-  gap: var(--space-4);
-  padding: var(--space-6);
+  gap: var(--space-3);
+  padding: var(--space-5);
   background: linear-gradient(145deg, var(--surface-card), var(--surface-vitality-low));
   border-color: var(--color-outline-soft);
 }
 
-.score-ring {
-  display: grid;
-  width: 10.5rem;
-  height: 10.5rem;
-  place-items: center;
-  border-radius: var(--radius-pill);
-  transform: rotate(-35deg);
-}
-
-.score-ring > div {
-  display: grid;
-  width: 8.8rem;
-  height: 8.8rem;
-  place-items: center;
-  align-content: center;
-  background: var(--surface-card);
-  border-radius: var(--radius-pill);
-  transform: rotate(35deg);
-}
-
-.score-ring strong {
-  color: var(--color-primary);
-  font-family: var(--font-data);
-  font-size: 3rem;
-  line-height: 3rem;
-}
-
-.score-ring span {
-  color: var(--color-text-muted);
-  font-family: var(--font-data);
-  font-size: 0.75rem;
-}
-
-.score-card__caption {
-  display: grid;
-  justify-items: center;
-  gap: var(--space-2);
-}
-
-.score-card__caption .status-badge--completed {
+.static-observation-overview-card .status-badge--completed {
+  width: fit-content;
   color: var(--color-primary);
   background: var(--vitality-accent-soft);
 }
 
-.score-card__caption p {
+.static-observation-overview-card p {
   color: var(--color-text-muted);
-  font-size: 0.7rem;
+  font-size: var(--text-caption);
+  line-height: var(--text-caption-line);
 }
 
 .vitality-media-grid,

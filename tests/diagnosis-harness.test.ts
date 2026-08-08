@@ -52,6 +52,9 @@ test("本地测试入口只绑定回环地址并保存标准图片、报告与re
     const body = await response.json() as { sessionId: string; report: { summary: { headline: string } } };
     assert.equal(body.report.summary.headline, "测试报告");
     const root = join(directory, body.sessionId);
+    const session = JSON.parse(await readFile(join(root, "session.json"), "utf8")) as { image?: unknown; imagePath?: unknown };
+    assert.deepEqual(session.image, { mimeType: "image/jpeg" });
+    assert.equal("imagePath" in session, false, "session metadata must not reveal the private image path");
     assert.equal((await readFile(join(root, "source", "normalized-image.jpg"))).subarray(0, 2).toString("hex"), "ffd8");
     assert.equal(JSON.parse(await readFile(join(root, "report.json"), "utf8")).schemaVersion, "diagnosis-report.v1");
     const runIds = await readdir(join(root, "runs"));

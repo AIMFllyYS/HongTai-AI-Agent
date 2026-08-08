@@ -184,6 +184,115 @@
   font-size: var(--text-meta);
 }
 
+/* Planned asset library shell: no count, media, or upload state is inferred. */
+.planned-library {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.planned-library__heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.planned-library__heading > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.planned-library__heading strong {
+  color: var(--color-primary);
+  font-size: var(--text-label);
+}
+
+.planned-library__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--color-primary-strong);
+  font-size: var(--text-meta);
+  font-weight: 700;
+}
+
+.planned-library__toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+}
+
+.planned-library__toolbar .search-field {
+  min-width: 0;
+  opacity: 0.8;
+}
+
+.planned-library__canvas {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: repeat(3, auto);
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+  min-height: 9.5rem;
+  padding: var(--space-5);
+  background:
+    linear-gradient(135deg, rgba(187, 233, 225, 0.68), rgba(242, 244, 241, 0.94)),
+    var(--color-surface-low);
+  border: 1px dashed var(--color-outline);
+  border-radius: var(--radius-control);
+}
+
+.planned-library__folder {
+  display: grid;
+  grid-row: span 3;
+  width: 3.6rem;
+  height: 3.6rem;
+  place-items: center;
+  color: var(--color-primary-strong);
+  background: rgba(255, 255, 255, 0.64);
+  border-radius: 1rem;
+}
+
+.planned-library__line {
+  display: block;
+  width: 62%;
+  height: 0.46rem;
+  background: rgba(0, 77, 64, 0.16);
+  border-radius: var(--radius-pill);
+}
+
+.planned-library__line--wide { width: 84%; }
+.planned-library__line--short { width: 38%; }
+
+.planned-library__capabilities {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.planned-library__capabilities span {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+}
+
+.planned-library__capabilities svg {
+  color: var(--color-primary-strong);
+}
+
+@media (max-width: 26.875rem) {
+  .planned-library__toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .planned-library__toolbar .button {
+    width: 100%;
+  }
+}
+
 /* Settings */
 .profile-card {
   display: grid;

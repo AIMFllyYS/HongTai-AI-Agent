@@ -1,3 +1,9 @@
+@media (max-width: 26.875rem) {
+  .mobile-action-group {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (min-width: 48rem) {
   .app-content {
     padding-top: var(--space-8);

@@ -10,6 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/android": "8.0.0",
+    "@capacitor/core": "8.0.0",
+    "@hongtai/capacitor-runtime": "workspace:*",
     "@hongtai/core": "workspace:*",
     "motion": "12.43.0",
     "react": "^19.0.0",

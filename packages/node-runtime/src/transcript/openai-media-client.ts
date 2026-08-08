@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { OpenAiCompatibleProvider, type OpenAiCompatibleProviderConfig } from "@hongtai/ai";
+import type { OpenAiCompatibleProvider } from "@hongtai/ai";
+import { createNodeOpenAiCompatibleProvider, type NodeOpenAiCompatibleProviderConfig } from "@hongtai/ai/node";
 import { issueFromError, summarizeTranscription, type MediaTranscriber, type TextRewriter, type TranscriptionResult, type TranscriptSegment } from "@hongtai/core";
 
 const REWRITE_SYSTEM_PROMPT = `你是短视频文稿整理助手。请严格遵守：
@@ -11,8 +12,8 @@ const REWRITE_SYSTEM_PROMPT = `你是短视频文稿整理助手。请严格遵�
 export class OpenAiMediaClient implements MediaTranscriber, TextRewriter {
   readonly #provider: OpenAiCompatibleProvider;
 
-  constructor(options: OpenAiCompatibleProviderConfig) {
-    this.#provider = new OpenAiCompatibleProvider(options);
+  constructor(options: NodeOpenAiCompatibleProviderConfig) {
+    this.#provider = createNodeOpenAiCompatibleProvider(options);
   }
 
   async transcribe(

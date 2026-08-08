@@ -13,14 +13,13 @@ export interface VitalityResultPageProps {
 }
 
 export function VitalityResultPage({ viewModel, navigate }: VitalityResultPageProps) {
-  const scoreProgress = `${(viewModel.score / viewModel.scoreMax) * 360}deg`;
   return (
     <AppShell activeNav="ai" backPath="/vitality/scan" className="vitality-shell" navigate={navigate} title={viewModel.title} visualTheme="warm-soft-tech">
       <div className="page-stack page-vitality-result">
-        <PageHeading description={viewModel.scoreDescription} title={viewModel.scoreTitle} />
-        <GlassCard className="score-card">
-          <div className="score-ring" style={{ background: `conic-gradient(var(--vitality-accent) ${scoreProgress}, var(--vitality-track) 0)` }}><div><strong>{viewModel.score}</strong><span>/ {viewModel.scoreMax}</span></div></div>
-          <div className="score-card__caption"><span className="status-badge status-badge--completed"><Icon name="check_circle" size={15} />{viewModel.completedLabel}</span><p>整体状态良好，继续保持规律作息</p></div>
+        <PageHeading description={viewModel.overviewDescription} title={viewModel.overviewTitle} />
+        <GlassCard className="static-observation-overview-card">
+          <span className="status-badge status-badge--completed"><Icon name="check_circle" size={15} />{viewModel.completedLabel}</span>
+          <p>此视觉夹具不提供任何评分或结论；真实页面只读取本地保存的正式报告。</p>
         </GlassCard>
 
         <div className="vitality-media-grid">

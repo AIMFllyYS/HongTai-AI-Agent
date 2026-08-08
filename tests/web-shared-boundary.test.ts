@@ -47,19 +47,27 @@ test("page blocks and visual fixtures are split by responsibility", () => {
   assert.equal(existsSync(join(root, "data/static-visual-adapter.ts")), true);
   assert.match(read("data/static-visual-adapter.ts"), /fixtures\/(home|analysis|creation-library|vitality)/);
 
-  for (const page of ["pages/AnalysisResultPage.tsx", "pages/AssetsPage.tsx", "pages/DetailPage.tsx"]) {
+  for (const page of ["pages/AnalysisResultPage.tsx", "pages/DetailPage.tsx"]) {
     const source = read(page);
     assert.match(source, /TabPanel/);
     assert.match(source, /tabId/);
     assert.match(source, /tabPanelId/);
   }
+
+  const plannedAssets = read("pages/AssetsPage.tsx");
+  assert.match(plannedAssets, /FeatureUnavailablePanel/);
+  assert.doesNotMatch(plannedAssets, /TabPanel/);
 });
 
-test("App accepts an injectable visual data adapter with a static default", () => {
+test("App accepts an explicit visual fixture while the production entry uses AppRuntime", () => {
   const source = read("App.tsx");
+  const main = read("main.tsx");
 
   assert.match(source, /interface AppProps/);
   assert.match(source, /visualData\?:\s*VisualDataAdapter/);
-  assert.match(source, /createStaticVisualDataAdapter/);
-  assert.match(source, /injectedVisualData\s*\?\?/);
+  assert.match(source, /runtime\?:\s*AppRuntime/);
+  assert.doesNotMatch(source, /injectedVisualData\s*\?\?\s*createStaticVisualDataAdapter/);
+  assert.match(main, /createStandaloneAppRuntime/);
+  assert.match(main, /registerStandaloneNativePlugins/);
+  assert.doesNotMatch(main, /createCapacitorAppRuntime|registerHongTaiNativePlugins/);
 });

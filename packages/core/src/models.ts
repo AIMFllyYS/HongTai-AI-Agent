@@ -4,29 +4,48 @@ export type ContentType = "video" | "image_text" | "unknown";
 export type SpeechStatus = "transcribed" | "no_speech" | "failed";
 
 export type ErrorCode =
-  | "INPUT_EMPTY" | "INPUT_NO_SUPPORTED_URL" | "INPUT_URL_INVALID" | "INPUT_PLATFORM_UNSUPPORTED"
+  | "INPUT_EMPTY" | "INPUT_TOO_LONG" | "INPUT_NO_SUPPORTED_URL" | "INPUT_URL_INVALID" | "INPUT_PLATFORM_UNSUPPORTED"
   | "LINK_NETWORK_FAILED" | "LINK_TIMEOUT" | "LINK_REDIRECT_LIMIT" | "LINK_REDIRECT_INVALID" | "LINK_HTTP_ERROR" | "LINK_EXPIRED"
   | "CONTENT_NOT_FOUND" | "CONTENT_REMOVED" | "CONTENT_PRIVATE_OR_LOGIN_REQUIRED" | "CONTENT_PARSE_FAILED" | "CONTENT_SCHEMA_CHANGED" | "CONTENT_TYPE_UNSUPPORTED"
   | "PLATFORM_API_RATE_LIMITED" | "PLATFORM_API_UNAVAILABLE" | "PLATFORM_API_RESPONSE_INVALID" | "PLATFORM_RISK_CONTROLLED"
   | "MEDIA_SOURCE_NOT_FOUND" | "MEDIA_DOWNLOAD_FAILED" | "MEDIA_DOWNLOAD_TIMEOUT" | "MEDIA_DURATION_EXCEEDED" | "MEDIA_PROBE_FAILED" | "MEDIA_MERGE_FAILED"
-  | "AI_NOT_CONFIGURED" | "AI_AUTH_INVALID" | "AI_PERMISSION_DENIED" | "AI_QUOTA_EXHAUSTED" | "AI_RATE_LIMITED" | "AI_NETWORK_FAILED" | "AI_TIMEOUT" | "AI_SERVER_ERROR" | "AI_EMPTY_RESPONSE" | "AI_STRUCTURED_OUTPUT_INVALID" | "AI_FORMAT_REPAIR_FAILED" | "AI_VISION_UNAVAILABLE" | "AI_CONTEXT_SUMMARY_FAILED" | "AI_SESSION_NOT_FOUND" | "ASR_PARTIAL_FAILURE" | "TEXT_REWRITE_FAILED"
-  | "IMAGE_INVALID" | "IMAGE_TOO_LARGE" | "TASK_ARTIFACT_MISSING"
-  | "STORAGE_WRITE_FAILED" | "STORAGE_SPACE_INSUFFICIENT" | "STORAGE_PERMISSION_DENIED"
-  | "INTERNAL_UNKNOWN_ERROR";
+  | "MEDIA_IMPORT_FAILED" | "MEDIA_READ_FAILED"
+  | "AI_NOT_CONFIGURED" | "AI_SETTINGS_INVALID" | "AI_SECRET_STORE_FAILED" | "AI_CAPABILITY_PROBE_FAILED" | "AI_AUTH_INVALID" | "AI_PERMISSION_DENIED" | "AI_QUOTA_EXHAUSTED" | "AI_RATE_LIMITED" | "AI_NETWORK_FAILED" | "AI_TIMEOUT" | "AI_SERVER_ERROR" | "AI_EMPTY_RESPONSE" | "AI_STRUCTURED_OUTPUT_INVALID" | "AI_FORMAT_REPAIR_FAILED" | "AI_VISION_UNAVAILABLE" | "AI_CONTEXT_SUMMARY_FAILED" | "AI_SESSION_NOT_FOUND" | "ASR_PARTIAL_FAILURE" | "TEXT_REWRITE_FAILED"
+  | "IMAGE_INVALID" | "IMAGE_TOO_LARGE" | "IMAGE_QUALITY_INSUFFICIENT" | "DIAGNOSIS_REPORT_INVALID" | "DIAGNOSIS_FOLLOW_UP_FAILED"
+  | "PROFILE_SAVE_FAILED" | "TASK_ARTIFACT_MISSING" | "TASK_INTERRUPTED" | "TASK_CANCEL_FAILED"
+  | "STORAGE_WRITE_FAILED" | "STORAGE_SPACE_INSUFFICIENT" | "STORAGE_PERMISSION_DENIED" | "DATABASE_MIGRATION_FAILED" | "DATABASE_KEY_UNAVAILABLE" | "DATABASE_OPEN_FAILED"
+  | "APP_RUNTIME_UNAVAILABLE" | "INTERNAL_UNKNOWN_ERROR";
 
-export type IssueAction = "edit_input" | "retry" | "wait_and_retry" | "check_network" | "configure_ai" | "free_storage" | "view_partial_result" | "none";
+export type IssueAction = "edit_input" | "retry" | "wait_and_retry" | "check_network" | "configure_ai" | "free_storage" | "select_media" | "view_partial_result" | "none";
+export type TaskIssueAction = IssueAction;
 
-export type TaskStage =
-  | "detect-platform"
-  | "resolve-link"
-  | "parse-content"
-  | "select-media"
-  | "download-media"
-  | "obtain-transcript"
-  | "save-artifacts";
+export const TASK_STAGE_VALUES = [
+  "detect-platform",
+  "resolve-link",
+  "parse-content",
+  "select-media",
+  "download-media",
+  "obtain-transcript",
+  "save-artifacts",
+] as const;
+
+export type TaskStage = typeof TASK_STAGE_VALUES[number];
 
 export type StageStatus = "pending" | "running" | "succeeded" | "degraded" | "failed";
-export type TaskStatus = "running" | "succeeded" | "degraded" | "failed";
+export const TASK_STATUS_VALUES = [
+  "queued",
+  "running",
+  "succeeded",
+  "degraded",
+  "failed",
+  "cancelled",
+  "interrupted",
+] as const;
+export type TaskStatus = typeof TASK_STATUS_VALUES[number];
+
+export const ANALYSIS_STATUS_VALUES = ["not_started", "running", "succeeded", "failed"] as const;
+export type AnalysisStatus = typeof ANALYSIS_STATUS_VALUES[number];
+export type TaskAnalysisStatus = AnalysisStatus;
 
 export interface MediaSource {
   readonly url: string;
@@ -75,6 +94,8 @@ export interface PlatformContent {
 
 export interface ProgressEvent {
   readonly taskId: string;
+  /** Per-task, one-based sequence. A progress event is never valid without it. */
+  readonly sequence: number;
   readonly stage: TaskStage;
   readonly status: StageStatus;
   readonly message: string;
@@ -86,6 +107,12 @@ export interface ProgressEvent {
 
 export interface IngestRequest {
   readonly input: string;
+  /**
+   * Optional pre-created local task ID. The application runtime uses this to
+   * preserve retry lineage and immutable task history while the CLI may still
+   * let the pipeline generate its own ID.
+   */
+  readonly taskId?: string;
   readonly outputDirectory?: string;
   readonly maxDurationSeconds?: number;
 }
@@ -108,7 +135,8 @@ export interface TranscriptionResult {
 export interface TaskIssue {
   readonly code: ErrorCode;
   readonly severity: "warning" | "error";
-  readonly stage: TaskStage;
+  /** Omitted for profile, AI configuration, encrypted-storage and other non-ingest operations. */
+  readonly stage?: TaskStage;
   readonly userMessage: string;
   readonly retryable: boolean;
   readonly action: IssueAction;
@@ -147,6 +175,23 @@ export interface TaskPaths {
   readonly draft: string;
 }
 
+/**
+ * A storage-implementation-neutral media locator. `uri` may be an app-private
+ * content URI, a Capacitor file URI, or a Node filesystem URI; UI code never
+ * needs to infer the underlying platform from it.
+ */
+export interface MediaReference {
+  readonly uri: string;
+  readonly kind: "video" | "audio" | "image" | "document";
+  readonly origin: "downloaded" | "imported" | "captured";
+  readonly mimeType?: string;
+  readonly displayName?: string;
+  readonly byteLength?: number;
+  readonly width?: number;
+  readonly height?: number;
+  readonly durationSeconds?: number;
+}
+
 export interface TaskRecord {
   readonly id: string;
   readonly sourceUrl: string;
@@ -155,6 +200,14 @@ export interface TaskRecord {
   readonly platform?: SupportedPlatform;
   readonly contentType?: ContentType;
   readonly speechStatus?: SpeechStatus;
+  /** Kept separate from TaskStage so content analysis never becomes an eighth ingest stage. */
+  readonly analysisStatus?: TaskAnalysisStatus;
+  /** A retry is a new task that keeps a non-destructive link to its source task. */
+  readonly retryOfTaskId?: string;
+  readonly cancelRequestedAt?: string;
+  readonly cancelledAt?: string;
+  readonly interruptedAt?: string;
+  readonly media?: readonly MediaReference[];
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly issues: readonly TaskIssue[];

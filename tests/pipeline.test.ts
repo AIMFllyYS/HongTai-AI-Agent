@@ -104,6 +104,7 @@ test("完整流水线覆盖七个阶段、保留两种文稿并清理日志URL",
   assert.doesNotMatch(setup.store.values.get(paths.log) ?? "", /private-token|xsec_token/);
   assert.doesNotMatch(setup.store.values.get(paths.task) ?? "", /复制打开抖音|后续还有|b23\.tv/);
   assert.doesNotMatch(setup.store.values.get(paths.metadata) ?? "", /private-token|xsec_token|media-secret|signature|Cookie|session=secret/);
+  assert.doesNotMatch(setup.store.values.get(paths.metadata) ?? "", /"raw"/, "metadata is the safe presentation projection, not a raw platform response");
   assert.equal(setup.events.find((event) => event.stage === "detect-platform" && event.status === "succeeded")?.detail?.ignoredSupportedUrlCount, 1);
   assert.equal(setup.events.some((event) => event.message === "媒体校验通过：时长=10秒"), true);
   for (const stage of ["detect-platform", "resolve-link", "parse-content", "select-media", "download-media"] as const) {
@@ -113,6 +114,23 @@ test("完整流水线覆盖七个阶段、保留两种文稿并清理日志URL",
   assert.deepEqual(new Set(setup.events.map((event) => event.stage)), new Set([
     "detect-platform", "resolve-link", "parse-content", "select-media", "download-media", "obtain-transcript", "save-artifacts",
   ]));
+  assert.deepEqual(
+    setup.events.map((event) => event.sequence),
+    setup.events.map((_event, index) => index + 1),
+  );
+});
+
+test("已创建的本地任务可把固定任务ID交给共享流水线而不重新生成记录", async () => {
+  const setup = dependencies(true);
+
+  const result = await new IngestPipeline(setup.dependencies).run({
+    input: "https://www.douyin.com/video/1",
+    taskId: "local-task-42",
+  });
+
+  assert.equal(result.taskId, "local-task-42");
+  assert.equal(setup.events.every((event) => event.taskId === "local-task-42"), true);
+  assert.match(setup.store.values.get(paths.task) ?? "", /"id":"local-task-42"/);
 });
 
 test("分离媒体下载分别标明视频流和音频流", async () => {
@@ -232,6 +250,7 @@ test("视频无有效口播时任务成功且不生成伪文稿和整理稿", as
   assert.equal(setup.store.values.has(paths.draft), false);
   assert.match(setup.store.values.get(paths.transcriptJson) ?? "", /"speechStatus":"no_speech"/);
   assert.equal(result.issues.length, 0);
+  assert.equal(setup.events.some((event) => event.stage === "obtain-transcript" && event.status === "running" && event.progress === 1), true);
 });
 
 test("ASR全失败并使用平台描述时记录真实来源为description", async () => {
