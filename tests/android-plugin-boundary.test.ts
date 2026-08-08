@@ -147,6 +147,7 @@ test("native page fetches reject with stable link codes and allowlisted data wit
     "ERR_LINK_RESPONSE_TOO_LARGE",
     "ERR_LINK_RESPONSE_INVALID",
     "ERR_LINK_RESPONSE_FAILED",
+    "ERR_LINK_REQUEST_INVALID",
   ]) {
     assert.match(issueCodes, new RegExp(code));
   }
