@@ -160,6 +160,8 @@ internal object PrivateMediaImportPolicy {
       "jpg", "jpeg" -> return "image/jpeg"
       "png" -> return "image/png"
       "webp" -> return "image/webp"
+      "heic" -> return "image/heic"
+      "heif" -> return "image/heif"
     }
 
     if (header.size >= 3 && header[0] == 0xff.toByte() && header[1] == 0xd8.toByte() && header[2] == 0xff.toByte()) {
@@ -219,7 +221,13 @@ internal object PrivateMediaImportPolicy {
     }
   }
 
-  private val SUPPORTED_IMAGE_MIME_TYPES = setOf("image/jpeg", "image/png", "image/webp")
+  private val SUPPORTED_IMAGE_MIME_TYPES = setOf(
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+  )
 }
 
 /** Mirrors the CLI image contract before any bytes cross the AI transport boundary. */
@@ -234,7 +242,7 @@ private object PrivateObservationImageNormalizer {
     temporary: File,
     destination: File,
   ) {
-    require(sourceMimeType == "image/jpeg" || sourceMimeType == "image/png" || sourceMimeType == "image/webp")
+    require(sourceMimeType in setOf("image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"))
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(source.absolutePath, bounds)
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {

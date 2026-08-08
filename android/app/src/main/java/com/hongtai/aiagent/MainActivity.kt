@@ -3,6 +3,7 @@ package com.hongtai.aiagent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
+import android.view.WindowManager
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -26,6 +27,10 @@ class MainActivity : BridgeActivity() {
     registerPlugin(ProductionRuntimePlugin::class.java)
     super.onCreate(savedInstanceState)
 
+    // Long ingest and on-device render work is owned by this foreground
+    // WebView process. Avoid moving it into the background merely because the
+    // user waited for the screen timeout; Android clears this when hidden.
+    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     WindowCompat.enableEdgeToEdge(window)
     WindowCompat.getInsetsController(window, window.decorView).apply {
       isAppearanceLightStatusBars = true

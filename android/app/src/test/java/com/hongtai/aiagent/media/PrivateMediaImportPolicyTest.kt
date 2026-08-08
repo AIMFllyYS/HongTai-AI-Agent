@@ -67,6 +67,18 @@ class PrivateMediaImportPolicyTest {
   }
 
   @Test
+  fun `accepts Android HEIF photos for normalization into the private JPEG contract`() {
+    assertEquals(
+      "image/heic",
+      PrivateMediaImportPolicy.imageMimeType("image/heic", "IMG_20260808.HEIC", byteArrayOf()),
+    )
+    assertEquals(
+      "image/heif",
+      PrivateMediaImportPolicy.imageMimeType(null, "IMG_20260808.heif", byteArrayOf()),
+    )
+  }
+
+  @Test
   fun `publishes an imported file only after its bounded stream completes`() {
     val directory = Files.createTempDirectory("hongtai-private-media").toFile()
     val temporary = File(directory, ".photo.jpg.part")

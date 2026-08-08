@@ -78,6 +78,13 @@ test("native downloads forward bounded real byte progress to the shared pipeline
   assert.match(plugin, /\.putOptional\("progress"/);
 });
 
+test("the foreground APK keeps the screen awake while its in-process tasks are active", () => {
+  const mainActivity = read("android/app/src/main/java/com/hongtai/aiagent/MainActivity.kt");
+
+  assert.match(mainActivity, /WindowManager\.LayoutParams\.FLAG_KEEP_SCREEN_ON/);
+  assert.match(mainActivity, /window\.addFlags\(/);
+});
+
 test("client APK builds are identifiable and never log bridge payloads", () => {
   const config = read("capacitor.config.ts");
   const appBuild = read("android/app/build.gradle.kts");
