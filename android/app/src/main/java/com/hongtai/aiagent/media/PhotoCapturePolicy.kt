@@ -7,9 +7,12 @@ package com.hongtai.aiagent.media
  */
 internal object PhotoCapturePolicy {
   private val captureId = Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
+  private val captureFileName = Regex("capture-[A-Za-z0-9][A-Za-z0-9_-]{0,99}\\.jpg")
 
   fun fileNameFor(identifier: String): String {
     require(captureId.matches(identifier)) { "Capture identifier is invalid." }
     return "capture-$identifier.jpg"
   }
+
+  fun isCaptureFileName(value: String): Boolean = captureFileName.matches(value)
 }

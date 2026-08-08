@@ -66,6 +66,22 @@ test("camera capture declares package visibility and cleans up unavailable launc
   assert.match(fileMedia, /catch\s*\(error:\s*ActivityNotFoundException\)[\s\S]*discardCapture\(capture\)/);
 });
 
+test("photo activity callbacks persist recovery state and dispatch heavy import to one native executor", () => {
+  const fileMedia = read("android/app/src/main/java/com/hongtai/aiagent/bridge/FileMediaPlugin.kt");
+
+  assert.match(fileMedia, /PhotoOperationStateStore/);
+  assert.match(fileMedia, /override fun load\(\)[\s\S]*resumePersistedImport/);
+  assert.match(fileMedia, /PluginCall\.CALLBACK_ID_DANGLING/);
+  assert.match(fileMedia, /fun consumePhotoOperation\(call: PluginCall\)/);
+  assert.match(fileMedia, /PHOTO_IMPORT_EXECUTOR\s*=\s*Executors\.newSingleThreadExecutor/);
+  assert.match(fileMedia, /PHOTO_IMPORT_EXECUTOR\.execute\s*\{/);
+
+  const pickerCallback = fileMedia.match(/private fun onPhotoPicked[\s\S]*?\n  }\n\n  @ActivityCallback/)?.[0] ?? "";
+  const captureCallback = fileMedia.match(/private fun onPhotoCaptured[\s\S]*?\n  }\n\n  @PluginMethod/)?.[0] ?? "";
+  assert.doesNotMatch(pickerCallback, /mediaStore\.importFrom|BitmapFactory|FileOutputStream/);
+  assert.doesNotMatch(captureCallback, /mediaStore\.importCaptured|BitmapFactory|FileOutputStream/);
+});
+
 test("native downloads forward bounded real byte progress to the shared pipeline", () => {
   const plugin = read("android/app/src/main/java/com/hongtai/aiagent/bridge/NativeNetworkPlugin.kt");
   const client = read("android/app/src/main/java/com/hongtai/aiagent/network/NativeDownloadClient.kt");

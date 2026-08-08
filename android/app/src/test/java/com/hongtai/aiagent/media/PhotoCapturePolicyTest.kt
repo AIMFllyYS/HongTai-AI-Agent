@@ -13,10 +13,19 @@ class PhotoCapturePolicyTest {
     assertTrue(name.endsWith(".jpg"))
     assertFalse(name.contains('/'))
     assertFalse(name.contains('\\'))
+    assertTrue(PhotoCapturePolicy.isCaptureFileName(name))
   }
 
   @Test(expected = IllegalArgumentException::class)
   fun `capture name refuses a path shaped identifier`() {
     PhotoCapturePolicy.fileNameFor("../not-a-capture")
+  }
+
+  @Test
+  fun `persisted capture recovery rejects paths and unrelated leaf names`() {
+    assertFalse(PhotoCapturePolicy.isCaptureFileName("../capture-photo.jpg"))
+    assertFalse(PhotoCapturePolicy.isCaptureFileName("capture/photo.jpg"))
+    assertFalse(PhotoCapturePolicy.isCaptureFileName("photo.jpg"))
+    assertFalse(PhotoCapturePolicy.isCaptureFileName("capture-photo.png"))
   }
 }

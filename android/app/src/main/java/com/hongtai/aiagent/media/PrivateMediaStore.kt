@@ -13,6 +13,7 @@ import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.text.Normalizer
 import java.util.Locale
@@ -27,6 +28,8 @@ data class PrivateMediaFile(
 class PrivateMediaTooLargeException(message: String) : IllegalStateException(message)
 
 class PrivateImageInvalidException(message: String, cause: Throwable? = null) : IllegalArgumentException(message, cause)
+
+class PrivateMediaReadException(message: String, cause: Throwable? = null) : IOException(message, cause)
 
 /** A one-use FileProvider target for an external system camera activity. */
 class PendingPhotoCapture internal constructor(
@@ -56,14 +59,29 @@ class PrivateMediaStore(context: Context) {
     val destinationTemporary = File(importsDirectory, ".$identifier.jpg.part")
     val providerMimeType = appContext.contentResolver.getType(uri)
     try {
-      appContext.contentResolver.openInputStream(uri)?.use { input ->
-        PrivateMediaImportPolicy.copyBounded(
-          input = input,
-          temporary = stagedTemporary,
-          destination = stagedSource,
-          maxBytes = PrivateMediaImportPolicy.MAX_IMPORT_BYTES,
-        )
-      } ?: throw PrivateImageInvalidException("The selected image could not be opened.")
+      val source = try {
+        appContext.contentResolver.openInputStream(uri)
+      } catch (error: IOException) {
+        throw PrivateMediaReadException("The selected image could not be opened.", error)
+      } catch (error: SecurityException) {
+        throw PrivateMediaReadException("The selected image permission is no longer available.", error)
+      } ?: throw PrivateMediaReadException("The selected image could not be opened.")
+      try {
+        source.use { input ->
+          PrivateMediaImportPolicy.copyBounded(
+            input = input,
+            temporary = stagedTemporary,
+            destination = stagedSource,
+            maxBytes = PrivateMediaImportPolicy.MAX_IMPORT_BYTES,
+          )
+        }
+      } catch (error: PrivateMediaTooLargeException) {
+        throw error
+      } catch (error: IOException) {
+        throw PrivateMediaReadException("The selected image could not be read.", error)
+      } catch (error: SecurityException) {
+        throw PrivateMediaReadException("The selected image permission is no longer available.", error)
+      }
 
       val header = stagedSource.inputStream().use { input -> input.readNBytes(12) }
       val sourceMimeType = PrivateMediaImportPolicy.imageMimeType(providerMimeType, sourceName, header)
@@ -101,6 +119,20 @@ class PrivateMediaStore(context: Context) {
     val root = captureDirectory.canonicalFile
     require(file.parentFile?.canonicalFile == root) { "Camera target is outside private staging storage." }
     val uri = FileProvider.getUriForFile(appContext, "${appContext.packageName}.fileprovider", file)
+    return PendingPhotoCapture(uri, file)
+  }
+
+  /** Rebuilds a camera staging handle without persisting or accepting a private path. */
+  fun restorePhotoCapture(captureFileName: String): PendingPhotoCapture? {
+    if (!PhotoCapturePolicy.isCaptureFileName(captureFileName)) return null
+    val root = captureDirectory.canonicalFile
+    val file = File(root, captureFileName).canonicalFile
+    if (file.parentFile?.canonicalFile != root || !file.isFile) return null
+    val uri = try {
+      FileProvider.getUriForFile(appContext, "${appContext.packageName}.fileprovider", file)
+    } catch (_: IllegalArgumentException) {
+      return null
+    }
     return PendingPhotoCapture(uri, file)
   }
 

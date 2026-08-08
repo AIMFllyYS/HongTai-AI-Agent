@@ -8,8 +8,13 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.File
 import java.io.FileOutputStream
+import java.io.RandomAccessFile
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertThrows
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -37,12 +42,70 @@ class PrivateMediaStoreInstrumentationTest {
 
     try {
       assertEquals("image/jpeg", imported.mimeType)
+      assertTrue(importedFile.canonicalPath.startsWith(File(context.filesDir, "media/imports").canonicalPath))
       assertTrue(importedFile.inputStream().use { it.readNBytes(3) }.contentEquals(byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte())))
       assertTrue(maxOf(bounds.outWidth, bounds.outHeight) <= 2_048)
       assertTrue(imported.sizeBytes in 1..(15L * 1024L * 1024L))
+      assertFalse(File(context.filesDir, "media/imports").listFiles().orEmpty().any { it.name.endsWith(".part") || it.name.endsWith(".source") })
     } finally {
       importedFile.delete()
       source.delete()
     }
+  }
+
+  @Test
+  fun captureRecoveryUsesOnlyAnExistingConstrainedLeafFile() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val store = PrivateMediaStore(context)
+    val capture = store.createPhotoCapture()
+    capture.file.writeBytes(byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte(), 0xd9.toByte()))
+
+    try {
+      val restored = store.restorePhotoCapture(capture.file.name)
+      assertNotNull(restored)
+      assertEquals(capture.file.canonicalPath, restored?.file?.canonicalPath)
+      assertEquals(capture.uri, restored?.uri)
+      assertNull(store.restorePhotoCapture("../${capture.file.name}"))
+      assertNull(store.restorePhotoCapture("capture-missing-file.jpg"))
+    } finally {
+      store.discardCapture(capture)
+    }
+  }
+
+  @Test
+  fun oversizedPickerSourceLeavesNoImportOrTemporaryFile() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val captureDirectory = File(context.cacheDir, "media/capture").apply { mkdirs() }
+    val source = File(captureDirectory, "oversized-instrumentation-source.jpg")
+    RandomAccessFile(source, "rw").use { file ->
+      file.write(byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte()))
+      file.setLength(PrivateMediaImportPolicy.MAX_IMPORT_BYTES + 1L)
+    }
+    val importsDirectory = File(context.filesDir, "media/imports").apply { mkdirs() }
+    val before = importsDirectory.listFiles().orEmpty().map(File::getName).toSet()
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", source)
+
+    try {
+      assertThrows(PrivateMediaTooLargeException::class.java) {
+        PrivateMediaStore(context).importFrom(uri, source.name)
+      }
+      assertEquals(before, importsDirectory.listFiles().orEmpty().map(File::getName).toSet())
+      assertFalse(importsDirectory.listFiles().orEmpty().any { it.name.endsWith(".part") || it.name.endsWith(".source") })
+    } finally {
+      source.delete()
+    }
+  }
+
+  @Test
+  fun unreadablePickerSourceHasADistinctReadFailureAndLeavesNoTemporaryFile() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val importsDirectory = File(context.filesDir, "media/imports").apply { mkdirs() }
+    val before = importsDirectory.listFiles().orEmpty().map(File::getName).toSet()
+
+    assertThrows(PrivateMediaReadException::class.java) {
+      PrivateMediaStore(context).importFrom(android.net.Uri.parse("content://com.hongtai.aiagent.missing/photo"), "missing.jpg")
+    }
+    assertEquals(before, importsDirectory.listFiles().orEmpty().map(File::getName).toSet())
+    assertFalse(importsDirectory.listFiles().orEmpty().any { it.name.endsWith(".part") || it.name.endsWith(".source") })
   }
 }
