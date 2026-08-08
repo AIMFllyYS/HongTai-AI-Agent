@@ -61,6 +61,7 @@ test("StandaloneDiagnosisService saves a formal report and real follow-up histor
     fileMedia: {
       pickPhoto: async () => ({ uri: "file:///private/media/imported.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
       capturePhoto: async () => ({ uri: "file:///private/media/captured.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      consumePhotoOperation: async () => ({ status: "none" }),
     },
     getProvider: async () => provider,
     toDisplayUri: (value) => `capacitor://localhost/observation/${encodeURIComponent(value)}`,
@@ -107,6 +108,7 @@ test("StandaloneDiagnosisService keeps the selected image MIME across private co
     fileMedia: {
       pickPhoto: async () => ({ uri: "file:///private/media/imported.png", mimeType: "image/png", sizeBytes: 256 }),
       capturePhoto: async () => ({ uri: "file:///private/media/captured.jpg", mimeType: "image/jpeg", sizeBytes: 256 }),
+      consumePhotoOperation: async () => ({ status: "none" }),
     },
     getProvider: async () => ({ generate: async () => ({ content: "", reasoning: "" }), transcribe: async () => "" }),
     toDisplayUri: (value) => `capacitor://localhost/observation/${encodeURIComponent(value)}`,
@@ -130,6 +132,7 @@ test("StandaloneDiagnosisService maps native image rejection before creating a s
     fileMedia: {
       pickPhoto: async () => { throw { code: "ERR_IMAGE_TOO_LARGE", message: "private native detail" }; },
       capturePhoto: async () => { throw { code: "ERR_IMAGE_INVALID", message: "private native detail" }; },
+      consumePhotoOperation: async () => ({ status: "none" }),
     },
     getProvider: async () => ({ generate: async () => ({ content: "", reasoning: "" }), transcribe: async () => "" }),
     toDisplayUri: (value) => value,
@@ -160,6 +163,7 @@ test("StandaloneDiagnosisService persists report failure and still rejects the o
     fileMedia: {
       pickPhoto: async () => ({ uri: "file:///private/media/imported.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
       capturePhoto: async () => ({ uri: "file:///private/media/captured.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      consumePhotoOperation: async () => ({ status: "none" }),
     },
     getProvider: async () => ({ generate: async () => { throw failure; }, transcribe: async () => "" }),
     toDisplayUri: (value) => value,
@@ -175,4 +179,88 @@ test("StandaloneDiagnosisService persists report failure and still rejects the o
   assert.equal(failed?.status, "failed");
   assert.equal(failed?.issue?.code, "AI_NETWORK_FAILED");
   assert.equal(failed?.issue?.details?.nativeCode, "ERR_AI_NETWORK_FAILED");
+});
+
+test("StandaloneDiagnosisService consumes a recovered native photo as a safe MediaReference", async () => {
+  const native = memoryFiles();
+  const service = new StandaloneDiagnosisService({
+    files: native.plugin,
+    fileMedia: {
+      pickPhoto: async () => ({ uri: "file:///private/media/imported.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      capturePhoto: async () => ({ uri: "file:///private/media/captured.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      consumePhotoOperation: async () => ({
+        status: "succeeded" as const,
+        origin: "captured" as const,
+        uri: "file:///private/media/recovered.jpg",
+        mimeType: "image/jpeg",
+        sizeBytes: 512,
+      }),
+    },
+    getProvider: async () => ({ generate: async () => ({ content: "", reasoning: "" }), transcribe: async () => "" }),
+    toDisplayUri: (value) => `capacitor://localhost/observation/${encodeURIComponent(value)}`,
+  });
+
+  const recovered = await service.consumeImageRecovery();
+
+  assert.equal(recovered.status, "succeeded");
+  if (recovered.status !== "succeeded") assert.fail("expected a recovered image");
+  assert.equal(recovered.image.origin, "captured");
+  assert.equal(recovered.image.mimeType, "image/jpeg");
+  assert.equal(recovered.image.byteLength, 512);
+  assert.doesNotMatch(JSON.stringify(recovered), /file:\/\//);
+});
+
+test("StandaloneDiagnosisService maps every recovered native photo terminal to a stable TaskIssue", async () => {
+  const expected = new Map<string, string>([
+    ["ERR_MEDIA_SELECTION_CANCELLED", "MEDIA_SELECTION_CANCELLED"],
+    ["ERR_MEDIA_SOURCE_MISSING", "MEDIA_SOURCE_NOT_FOUND"],
+    ["ERR_PHOTO_CAPTURE_LOST", "TASK_INTERRUPTED"],
+    ["ERR_PHOTO_RECOVERY_FAILED", "TASK_INTERRUPTED"],
+    ["ERR_MEDIA_READ_FAILED", "MEDIA_READ_FAILED"],
+    ["ERR_PRIVATE_FILE_IMPORT_FAILED", "MEDIA_IMPORT_FAILED"],
+    ["ERR_IMAGE_TOO_LARGE", "IMAGE_TOO_LARGE"],
+    ["ERR_IMAGE_INVALID", "IMAGE_INVALID"],
+  ]);
+
+  for (const [nativeCode, taskCode] of expected) {
+    const native = memoryFiles();
+    const service = new StandaloneDiagnosisService({
+      files: native.plugin,
+      fileMedia: {
+        pickPhoto: async () => ({ uri: "file:///private/media/imported.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+        capturePhoto: async () => ({ uri: "file:///private/media/captured.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+        consumePhotoOperation: async () => ({ status: "failed" as const, code: nativeCode }),
+      },
+      getProvider: async () => ({ generate: async () => ({ content: "", reasoning: "" }), transcribe: async () => "" }),
+      toDisplayUri: (value) => value,
+    });
+
+    const recovered = await service.consumeImageRecovery();
+
+    assert.equal(recovered.status, "failed", nativeCode);
+    if (recovered.status !== "failed") assert.fail(`expected ${nativeCode} to fail`);
+    assert.equal(recovered.issue.code, taskCode, nativeCode);
+    assert.equal(recovered.issue.action, "select_media", nativeCode);
+    assert.equal(recovered.issue.details?.nativeCode, nativeCode);
+  }
+});
+
+test("StandaloneDiagnosisService maps cancellation from a live picker call without creating a session", async () => {
+  const native = memoryFiles();
+  const service = new StandaloneDiagnosisService({
+    files: native.plugin,
+    fileMedia: {
+      pickPhoto: async () => { throw { code: "ERR_MEDIA_SELECTION_CANCELLED" }; },
+      capturePhoto: async () => ({ uri: "file:///private/media/captured.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      consumePhotoOperation: async () => ({ status: "none" as const }),
+    },
+    getProvider: async () => ({ generate: async () => ({ content: "", reasoning: "" }), transcribe: async () => "" }),
+    toDisplayUri: (value) => value,
+  });
+
+  await assert.rejects(
+    () => service.pickImage(),
+    (error) => error instanceof TaskError && error.code === "MEDIA_SELECTION_CANCELLED" && error.action === "select_media",
+  );
+  assert.equal((await native.plugin.listObservationIds()).sessionIds.length, 0);
 });

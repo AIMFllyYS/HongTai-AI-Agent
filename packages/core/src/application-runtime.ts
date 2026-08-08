@@ -319,11 +319,18 @@ export type DiagnosisStreamEvent =
   | { readonly type: "completed"; readonly message: DiagnosisMessage }
   | { readonly type: "failed"; readonly issue: TaskIssue };
 
+export type DiagnosisImageRecovery =
+  | { readonly status: "none" }
+  | { readonly status: "succeeded"; readonly image: MediaReference }
+  | { readonly status: "failed"; readonly issue: TaskIssue };
+
 export interface DiagnosisService {
   /** Uses the active platform runtime to pick and copy one image privately. */
   pickImage(): Promise<MediaReference>;
   /** Uses the platform camera, then copies the completed image into app-private storage. */
   captureImage(): Promise<MediaReference>;
+  /** Consumes at most one terminal photo result left by an external Activity/WebView rebuild. */
+  consumeImageRecovery(): Promise<DiagnosisImageRecovery>;
   createSession(input: { readonly mode: ObservationMode; readonly image: MediaReference }): Promise<DiagnosisSessionRecord>;
   /** Starts the initial report for a pending session; it never fabricates a completed report. */
   runReport(sessionId: string): Promise<DiagnosisReportRecord>;

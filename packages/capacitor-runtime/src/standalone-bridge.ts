@@ -203,12 +203,24 @@ export interface StandaloneNativeNetworkPlugin extends NativeTextFetchPort, Nati
 export interface StandaloneFileMediaPlugin {
   pickPhoto(): Promise<{ readonly uri: NativeUri; readonly mimeType?: string; readonly sizeBytes: number }>;
   capturePhoto(): Promise<{ readonly uri: NativeUri; readonly mimeType?: string; readonly sizeBytes: number }>;
+  consumePhotoOperation(): Promise<NativePhotoOperationResult>;
   copyFromUri(options: { readonly sourceUri: NativeUri; readonly displayName?: string }): Promise<{
     readonly uri: NativeUri;
     readonly mimeType?: string;
     readonly sizeBytes: number;
   }>;
 }
+
+export type NativePhotoOperationResult =
+  | { readonly status: "none" }
+  | {
+      readonly status: "succeeded";
+      readonly origin: "imported" | "captured";
+      readonly uri: NativeUri;
+      readonly mimeType?: string;
+      readonly sizeBytes: number;
+    }
+  | { readonly status: "failed"; readonly code: string };
 
 export type StandaloneMediaRuntimePlugin = NativeMediaPort;
 
