@@ -131,6 +131,7 @@ class FileMediaPlugin : Plugin() {
     }
     val importing = photoOperations.markPickerImporting(operation.operationId, sourceUri.toString())
     if (importing == null) {
+      releasePickerReadPermission(sourceUri.toString())
       finishFailure(call, operation.operationId, NativeIssueCode.PHOTO_RECOVERY_FAILED)
       return
     }

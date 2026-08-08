@@ -102,6 +102,11 @@ test("picker recovery retains the granted read URI permission until the private 
   const importWorker = fileMedia.slice(importStart, fileMedia.indexOf("private fun importAndResolve", importStart));
 
   assert.match(pickerCallback, /persistPickerReadPermission\(sourceUri\)[\s\S]*markPickerImporting/);
+  assert.match(
+    pickerCallback,
+    /if \(importing == null\) \{\s*releasePickerReadPermission\(sourceUri\.toString\(\)\)\s*finishFailure/,
+    "a failed state transition after a granted picker URI must not leak its persistent read permission",
+  );
   assert.match(fileMedia, /private fun persistPickerReadPermission[\s\S]*takePersistableUriPermission\(sourceUri, Intent\.FLAG_GRANT_READ_URI_PERMISSION\)/);
   assert.match(importWorker, /finally\s*\{[\s\S]*releasePickerReadPermission\(operation\.sourceUri\)[\s\S]*scheduledOperations\.remove/);
   assert.match(fileMedia, /private fun releasePickerReadPermission[\s\S]*releasePersistableUriPermission\([^,]+, Intent\.FLAG_GRANT_READ_URI_PERMISSION\)/);
