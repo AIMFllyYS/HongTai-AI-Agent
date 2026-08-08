@@ -92,6 +92,32 @@ test("a resumed activity terminates a photo operation whose external result was 
   );
 });
 
+test("picker recovery retains the granted read URI permission until the private copy reaches a terminal", () => {
+  const fileMedia = read("android/app/src/main/java/com/hongtai/aiagent/bridge/FileMediaPlugin.kt");
+  const pickerStart = fileMedia.indexOf("private fun onPhotoPicked");
+  const pickerCallback = fileMedia.slice(pickerStart, fileMedia.indexOf("@ActivityCallback", pickerStart));
+  const importStart = fileMedia.indexOf("private fun submitImport");
+  const importWorker = fileMedia.slice(importStart, fileMedia.indexOf("private fun importAndResolve", importStart));
+
+  assert.match(pickerCallback, /persistPickerReadPermission\(sourceUri\)[\s\S]*markPickerImporting/);
+  assert.match(fileMedia, /private fun persistPickerReadPermission[\s\S]*takePersistableUriPermission\(sourceUri, Intent\.FLAG_GRANT_READ_URI_PERMISSION\)/);
+  assert.match(importWorker, /finally\s*\{[\s\S]*releasePickerReadPermission\(operation\.sourceUri\)[\s\S]*scheduledOperations\.remove/);
+  assert.match(fileMedia, /private fun releasePickerReadPermission[\s\S]*releasePersistableUriPermission\([^,]+, Intent\.FLAG_GRANT_READ_URI_PERMISSION\)/);
+});
+
+test("lost camera callbacks discard only the constrained staging capture before recovery failure", () => {
+  const fileMedia = read("android/app/src/main/java/com/hongtai/aiagent/bridge/FileMediaPlugin.kt");
+  const resumeStart = fileMedia.indexOf("override fun handleOnResume");
+  const resume = fileMedia.slice(resumeStart, fileMedia.indexOf("@PluginMethod", resumeStart));
+
+  assert.match(resume, /awaiting\.kind == PhotoOperationKind\.CAPTURE/);
+  assert.match(resume, /awaiting\.captureFileName\?\.let\(mediaStore::restorePhotoCapture\)\?\.let\(mediaStore::discardCapture\)/);
+  assert.ok(
+    resume.indexOf("discardCapture") < resume.indexOf("finishFailure"),
+    "camera staging data must be discarded before the operation becomes an unrecoverable failure",
+  );
+});
+
 test("native downloads forward bounded real byte progress to the shared pipeline", () => {
   const plugin = read("android/app/src/main/java/com/hongtai/aiagent/bridge/NativeNetworkPlugin.kt");
   const client = read("android/app/src/main/java/com/hongtai/aiagent/network/NativeDownloadClient.kt");

@@ -45,6 +45,9 @@ class FileMediaPlugin : Plugin() {
   override fun handleOnResume() {
     super.handleOnResume()
     val awaiting = photoOperations.current() as? PhotoOperationAwaitingResult ?: return
+    if (awaiting.kind == PhotoOperationKind.CAPTURE) {
+      awaiting.captureFileName?.let(mediaStore::restorePhotoCapture)?.let(mediaStore::discardCapture)
+    }
     finishFailure(null, awaiting.operationId, NativeIssueCode.PHOTO_RECOVERY_FAILED)
   }
 
@@ -118,6 +121,12 @@ class FileMediaPlugin : Plugin() {
     val sourceUri = result.data?.data
     if (sourceUri == null) {
       finishFailure(call, operation.operationId, NativeIssueCode.MEDIA_SOURCE_MISSING)
+      return
+    }
+    try {
+      persistPickerReadPermission(sourceUri)
+    } catch (error: PhotoOperationImportException) {
+      finishFailure(call, operation.operationId, error.nativeCode, error)
       return
     }
     val importing = photoOperations.markPickerImporting(operation.operationId, sourceUri.toString())
@@ -224,6 +233,7 @@ class FileMediaPlugin : Plugin() {
         } catch (error: Exception) {
           finishFailure(call, operation.operationId, nativeCodeFor(error), error)
         } finally {
+          if (operation.kind == PhotoOperationKind.PICKER) releasePickerReadPermission(operation.sourceUri)
           scheduledOperations.remove(operation.operationId)
         }
       }
@@ -239,6 +249,27 @@ class FileMediaPlugin : Plugin() {
     } catch (error: Exception) {
       val code = nativeCodeFor(error)
       call.reject(messageFor(code), code, error)
+    }
+  }
+
+  private fun persistPickerReadPermission(sourceUri: Uri) {
+    try {
+      context.contentResolver.takePersistableUriPermission(sourceUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    } catch (_: SecurityException) {
+      throw PhotoOperationImportException(NativeIssueCode.MEDIA_READ_FAILED)
+    } catch (_: IllegalArgumentException) {
+      throw PhotoOperationImportException(NativeIssueCode.MEDIA_READ_FAILED)
+    }
+  }
+
+  private fun releasePickerReadPermission(sourceUri: String?) {
+    val uri = sourceUri?.let(Uri::parse) ?: return
+    try {
+      context.contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    } catch (_: SecurityException) {
+      // The permission can be absent after an interrupted import; the terminal state is already persisted.
+    } catch (_: IllegalArgumentException) {
+      // A malformed persisted URI cannot be released and must not block terminal cleanup.
     }
   }
 
