@@ -7,6 +7,7 @@ import android.view.WindowManager
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.media3.common.util.UnstableApi
 import com.getcapacitor.BridgeActivity
 import com.hongtai.aiagent.bridge.FileMediaPlugin
 import com.hongtai.aiagent.bridge.LocalDataPlugin
@@ -17,6 +18,7 @@ import com.hongtai.aiagent.bridge.ProductionRuntimePlugin
 import com.hongtai.aiagent.bridge.SecureSettingsPlugin
 
 class MainActivity : BridgeActivity() {
+  @UnstableApi
   override fun onCreate(savedInstanceState: Bundle?) {
     registerPlugin(SecureSettingsPlugin::class.java)
     registerPlugin(LocalDataPlugin::class.java)

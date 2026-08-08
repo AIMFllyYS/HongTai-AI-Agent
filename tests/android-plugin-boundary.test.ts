@@ -34,6 +34,8 @@ test("the standalone APK registers only its explicit native plugins", () => {
   for (const plugin of ["SecureSettingsPlugin", "LocalDataPlugin", "LocalFilesPlugin", "NativeNetworkPlugin", "FileMediaPlugin", "MediaRuntimePlugin", "ProductionRuntimePlugin"]) {
     assert.match(mainActivity, new RegExp(`registerPlugin\\(${plugin}::class\\.java\\)`));
   }
+  assert.match(mainActivity, /import androidx\.media3\.common\.util\.UnstableApi/);
+  assert.match(mainActivity, /@UnstableApi\s*\r?\n\s*override fun onCreate/);
   assert.doesNotMatch(mainActivity, /CapacitorSQLitePlugin|TaskStorePlugin|AnalysisStorePlugin|DiagnosisStorePlugin|TaskRuntimePlugin|TaskRecoveryRegistry|LocalEncryptedStorage/);
 });
 
