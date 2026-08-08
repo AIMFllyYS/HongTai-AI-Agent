@@ -34,6 +34,20 @@ class PrivateMediaImportPolicyTest {
   }
 
   @Test
+  fun `reads a bounded signature across partial input reads`() {
+    val bytes = "RIFF1234WEBPextra".toByteArray(Charsets.US_ASCII)
+    val partialInput = object : ByteArrayInputStream(bytes) {
+      override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
+        super.read(buffer, offset, minOf(length, 2))
+    }
+
+    assertTrue(
+      PrivateMediaImportPolicy.readHeader(partialInput)
+        .contentEquals("RIFF1234WEBP".toByteArray(Charsets.US_ASCII)),
+    )
+  }
+
+  @Test
   fun `resolves image MIME from provider then name then file signature`() {
     assertEquals(
       "image/png",

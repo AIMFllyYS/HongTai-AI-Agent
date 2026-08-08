@@ -83,7 +83,7 @@ class PrivateMediaStore(context: Context) {
         throw PrivateMediaReadException("The selected image permission is no longer available.", error)
       }
 
-      val header = stagedSource.inputStream().use { input -> input.readNBytes(12) }
+      val header = stagedSource.inputStream().use(PrivateMediaImportPolicy::readHeader)
       val sourceMimeType = PrivateMediaImportPolicy.imageMimeType(providerMimeType, sourceName, header)
         ?: throw PrivateImageInvalidException("The selected file is not a supported JPEG, PNG, WebP, or HEIF image.")
       PrivateObservationImageNormalizer.normalize(
@@ -182,6 +182,17 @@ internal object PrivateMediaImportPolicy {
       .trim()
       .take(120)
     return normalized.ifBlank { "media" }
+  }
+
+  fun readHeader(input: InputStream): ByteArray {
+    val header = ByteArray(12)
+    var offset = 0
+    while (offset < header.size) {
+      val count = input.read(header, offset, header.size - offset)
+      if (count <= 0) break
+      offset += count
+    }
+    return header.copyOf(offset)
   }
 
   fun imageMimeType(providerMimeType: String?, displayName: String?, header: ByteArray): String? {
