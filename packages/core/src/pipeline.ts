@@ -116,6 +116,7 @@ export class IngestPipeline {
     let currentStage: TaskStage = "detect-platform";
     let platform: PlatformContent["platform"] | undefined;
     let contentType: PlatformContent["contentType"] | undefined;
+    let requestUrl = "";
     let sourceUrl = "";
     let videoDownloaded = false;
     let transcriptWritten = false;
@@ -193,7 +194,8 @@ export class IngestPipeline {
             throw new TaskError({ code: "INPUT_PLATFORM_UNSUPPORTED", message: "当前只支持抖音、小红书、B站和快手链接", action: "edit_input" });
           }
           platform = adapter.platform;
-          sourceUrl = normalized.normalizedUrl;
+          requestUrl = normalized.normalizedUrl;
+          sourceUrl = safeUrlForDisplay(requestUrl);
           return { adapter, normalized };
         },
         (value, elapsedMs) => `完成：${value.adapter.platform}${value.normalized.ignoredSupportedUrlCount > 0 ? `，已忽略其他${value.normalized.ignoredSupportedUrlCount}个链接` : ""}，耗时 ${elapsedMs}ms`,
@@ -209,7 +211,7 @@ export class IngestPipeline {
       const resolved = await complete(
         "resolve-link",
         `开始：${sourceUrl}`,
-        async () => adapter.resolve(sourceUrl, this.#dependencies.http),
+        async () => adapter.resolve(requestUrl, this.#dependencies.http),
         (value, elapsedMs) => `完成：最终链接 ${safeUrlForDisplay(value.finalUrl)}，耗时 ${elapsedMs}ms`,
       );
       resolvedLink = resolved;
@@ -484,6 +486,7 @@ export class IngestPipeline {
           finalUrl: resolvedLink?.finalUrl ? safeUrlForDisplay(resolvedLink.finalUrl) : undefined,
           httpStatus: resolvedLink?.status,
           details: issue.details,
+          diagnostic: issue.diagnostic,
           pageSummary: resolvedLink?.body
             ?.replace(/<script[\s\S]*?<\/script>/gi, " ")
             .replace(/<[^>]+>/g, " ")

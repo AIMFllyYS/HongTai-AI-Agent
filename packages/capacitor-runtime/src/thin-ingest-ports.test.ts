@@ -1,7 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { TaskError } from "@hongtai/core";
 import { NativeIngestPorts } from "./thin-ingest-ports.js";
+
+function portsWithFetchFailure(failure: unknown): NativeIngestPorts {
+  return new NativeIngestPorts({
+    network: {
+      fetchText: async () => { throw failure; },
+      download: async () => ({ uri: "file:///private/media.bin", sizeBytes: 1 }),
+    },
+    files: {
+      getUri: async () => ({ uri: "file:///private/media.bin" }),
+      copyPrivateFile: async () => {},
+    },
+    media: {
+      remuxVideo: async () => ({ uri: "file:///private/video.mp4", sizeBytes: 1, mimeType: "video/mp4", hasAudio: true }),
+      probe: async () => ({ durationMs: 1_000 }),
+      extractPcmWav: async () => ({ uri: "file:///private/audio.wav", sizeBytes: 1, sampleRateHz: 8_000, channelCount: 1 }),
+      segmentPcmWav: async () => ({ sourceDurationMs: 1_000, segments: [] }),
+    },
+  });
+}
 
 test("NativeIngestPorts preserves platform HTTP limits and maps a video source slot without overwriting the final video", async () => {
   const fetches: unknown[] = [];
@@ -87,4 +107,105 @@ test("NativeIngestPorts preserves platform HTTP limits and maps a video source s
     sourceUri: "file:///private/tasks/task-1/media/remux/final.mp4",
     relativePath: "media/video.mp4",
   }]);
+});
+
+test("NativeIngestPorts maps Capacitor link rejection codes to stable TaskErrors", async () => {
+  const cases = [
+    ["ERR_LINK_DNS_FAILED", "LINK_NETWORK_FAILED", "check_network", true],
+    ["ERR_LINK_TLS_FAILED", "LINK_NETWORK_FAILED", "check_network", true],
+    ["ERR_LINK_CONNECTION_FAILED", "LINK_NETWORK_FAILED", "check_network", true],
+    ["ERR_LINK_TIMEOUT", "LINK_TIMEOUT", "check_network", true],
+    ["ERR_LINK_REDIRECT_LIMIT", "LINK_REDIRECT_LIMIT", "edit_input", false],
+    ["ERR_LINK_REDIRECT_INVALID", "LINK_REDIRECT_INVALID", "edit_input", false],
+    ["ERR_LINK_RESPONSE_TOO_LARGE", "LINK_HTTP_ERROR", "retry", false],
+    ["ERR_LINK_RESPONSE_INVALID", "LINK_HTTP_ERROR", "retry", false],
+    ["ERR_LINK_RESPONSE_FAILED", "LINK_NETWORK_FAILED", "check_network", true],
+  ] as const;
+
+  for (const [nativeCode, applicationCode, action, retryable] of cases) {
+    const ports = portsWithFetchFailure({
+      code: nativeCode,
+      message: "raw native message must not be rendered",
+      data: {
+        schemaVersion: "native-link-diagnostic.v1",
+        operation: "fetch-text",
+        phase: nativeCode.includes("REDIRECT") ? "redirect" : "connect",
+        hostname: "www.douyin.com",
+        errorClass: "timeout",
+        elapsedMs: 345,
+        attempt: 1,
+        redirectCount: 0,
+      },
+    });
+
+    await assert.rejects(
+      () => ports.http.get({ url: "https://www.douyin.com/video/1" }),
+      (error) => error instanceof TaskError
+        && error.code === applicationCode
+        && error.action === action
+        && error.retryable === retryable
+        && error.details?.nativeCode === nativeCode
+        && !error.message.includes("raw native message"),
+    );
+  }
+});
+
+test("NativeIngestPorts allowlists native-link-diagnostic v1 fields before TaskIssue persistence", async () => {
+  const ports = portsWithFetchFailure({
+    code: "ERR_LINK_TIMEOUT",
+    message: "SocketTimeoutException https://www.douyin.com/video/1?query-secret",
+    data: {
+      schemaVersion: "native-link-diagnostic.v1",
+      operation: "fetch-text",
+      phase: "response",
+      hostname: "www.douyin.com",
+      errorClass: "timeout",
+      elapsedMs: 1_234,
+      networkType: "wifi",
+      attempt: 2,
+      redirectCount: 1,
+      url: "https://www.douyin.com/video/1?query-secret",
+      Cookie: "session-secret",
+      throwableMessage: "SocketTimeoutException raw-text",
+    },
+  });
+
+  await assert.rejects(
+    () => ports.http.get({ url: "https://www.douyin.com/video/1" }),
+    (error) => {
+      if (!(error instanceof TaskError)) return false;
+      assert.deepEqual(error.diagnostic, {
+        schemaVersion: "native-link-diagnostic.v1",
+        operation: "fetch-text",
+        phase: "response",
+        hostname: "www.douyin.com",
+        errorClass: "timeout",
+        elapsedMs: 1_234,
+        networkType: "wifi",
+        attempt: 2,
+        redirectCount: 1,
+      });
+      const serialized = JSON.stringify(error);
+      assert.doesNotMatch(serialized, /query-secret|session-secret|SocketTimeoutException|raw-text|Cookie|throwableMessage/);
+      return true;
+    },
+  );
+
+  const ipPorts = portsWithFetchFailure({
+    code: "ERR_LINK_CONNECTION_FAILED",
+    data: {
+      schemaVersion: "native-link-diagnostic.v1",
+      operation: "fetch-text",
+      phase: "connect",
+      hostname: "192.0.2.42",
+      errorClass: "connection",
+      elapsedMs: 12,
+      attempt: 1,
+      redirectCount: 0,
+    },
+  });
+  await assert.rejects(
+    () => ipPorts.http.get({ url: "https://www.douyin.com/video/1" }),
+    (error) => error instanceof TaskError && error.diagnostic?.hostname === undefined,
+  );
 });

@@ -176,6 +176,78 @@ test("快手风控失败保存安全诊断投影", async () => {
   assert.match(raw, /"errorCode":"PLATFORM_RISK_CONTROLLED"/);
   assert.doesNotMatch(raw, /signature|secret/);
 });
+
+test("原生链接超时保持在resolve-link且持久化投影不含输入query或原始异常", async () => {
+  const setup = dependencies(true);
+  const adapter: PlatformAdapter = {
+    platform: "douyin",
+    supportLevel: "stable",
+    matches: () => true,
+    resolve: async () => {
+      throw new TaskError({
+        code: "LINK_TIMEOUT",
+        message: "页面抓取超时，请检查网络后重试",
+        action: "check_network",
+        retryable: true,
+        details: { nativeCode: "ERR_LINK_TIMEOUT" },
+        diagnostic: {
+          schemaVersion: "native-link-diagnostic.v1",
+          operation: "fetch-text",
+          phase: "response",
+          hostname: "www.douyin.com",
+          errorClass: "timeout",
+          elapsedMs: 30_000,
+          attempt: 2,
+          redirectCount: 1,
+        },
+      });
+    },
+    parse: async () => { throw new Error("parse must not run"); },
+  };
+
+  const result = await new IngestPipeline({ ...setup.dependencies, adapters: [adapter] }).run({
+    input: "https://www.douyin.com/video/1?token=query-secret",
+  });
+  const persisted = [...setup.store.values.values()].join("\n");
+  const task = JSON.parse(setup.store.values.get(paths.task) ?? "{}") as {
+    readonly currentStage?: string;
+    readonly sourceUrl?: string;
+    readonly issues?: readonly { readonly diagnostic?: { readonly schemaVersion?: string } }[];
+  };
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.issues[0]?.stage, "resolve-link");
+  assert.equal(result.issues[0]?.code, "LINK_TIMEOUT");
+  assert.equal(result.issues[0]?.diagnostic?.schemaVersion, "native-link-diagnostic.v1");
+  assert.equal(task.currentStage, "resolve-link");
+  assert.equal(task.sourceUrl, "https://www.douyin.com/video/1");
+  assert.equal(task.issues?.[0]?.diagnostic?.schemaVersion, "native-link-diagnostic.v1");
+  assert.doesNotMatch(persisted, /query-secret|token=|Cookie|Authorization|SocketTimeoutException|raw native/);
+});
+
+test("平台结构变化和无媒体保持既有业务码而不被映射成链接网络错误", async () => {
+  const schemaSetup = dependencies(true);
+  const schemaAdapter: PlatformAdapter = {
+    platform: "douyin",
+    supportLevel: "stable",
+    matches: () => true,
+    resolve: async (url) => ({ sourceUrl: url, finalUrl: url, status: 200, body: "<html>changed</html>" }),
+    parse: async () => {
+      throw new TaskError({ code: "CONTENT_SCHEMA_CHANGED", message: "页面结构已经变化", action: "retry" });
+    },
+  };
+  const schemaResult = await new IngestPipeline({ ...schemaSetup.dependencies, adapters: [schemaAdapter] }).run({
+    input: "https://www.douyin.com/video/1",
+  });
+  const noMediaResult = await new IngestPipeline(dependencies(false).dependencies).run({
+    input: "https://www.douyin.com/video/1",
+  });
+
+  assert.equal(schemaResult.issues[0]?.code, "CONTENT_SCHEMA_CHANGED");
+  assert.equal(schemaResult.issues[0]?.stage, "parse-content");
+  assert.equal(noMediaResult.issues[0]?.code, "MEDIA_SOURCE_NOT_FOUND");
+  assert.equal(noMediaResult.issues.some((issue) => issue.code === "LINK_NETWORK_FAILED"), false);
+});
 test("没有视频源时返回降级并保存任务", async () => {
   const setup = dependencies(false);
   const result = await new IngestPipeline(setup.dependencies).run({ input: "https://www.douyin.com/note/1" });

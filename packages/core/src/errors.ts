@@ -1,6 +1,7 @@
 import type {
   ErrorCode,
   IssueAction,
+  NativeLinkDiagnosticV1,
   SupportedPlatform,
   TaskIssue,
   TaskStage,
@@ -12,6 +13,7 @@ interface TaskErrorOptions {
   readonly retryable?: boolean;
   readonly action?: IssueAction;
   readonly details?: Readonly<Record<string, string | number | boolean>>;
+  readonly diagnostic?: NativeLinkDiagnosticV1;
   readonly cause?: unknown;
 }
 
@@ -20,6 +22,7 @@ export class TaskError extends Error {
   readonly retryable: boolean;
   readonly action: IssueAction;
   readonly details?: Readonly<Record<string, string | number | boolean>>;
+  readonly diagnostic?: NativeLinkDiagnosticV1;
 
   constructor(options: TaskErrorOptions) {
     super(options.message, { cause: options.cause });
@@ -28,6 +31,7 @@ export class TaskError extends Error {
     this.retryable = options.retryable ?? false;
     this.action = options.action ?? "none";
     this.details = options.details;
+    this.diagnostic = options.diagnostic;
   }
 }
 
@@ -79,6 +83,7 @@ export function issueFromError(
       action: error.action,
       platform,
       details: safeDetails(error.cause, error.details),
+      diagnostic: error.diagnostic,
     };
   }
   const fallback = FALLBACK_BY_STAGE[stage];
@@ -115,6 +120,7 @@ export function issueFromAppError(
       retryable: error.retryable,
       action: error.action,
       details: safeDetails(error.cause, error.details),
+      diagnostic: error.diagnostic,
     };
   }
   return {

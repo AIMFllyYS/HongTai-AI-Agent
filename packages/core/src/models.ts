@@ -3,6 +3,33 @@ export type PlatformSupportLevel = "stable" | "experimental";
 export type ContentType = "video" | "image_text" | "unknown";
 export type SpeechStatus = "transcribed" | "no_speech" | "failed";
 
+export type NativeLinkDiagnosticPhase = "request" | "connect" | "redirect" | "response" | "decode";
+export type NativeLinkDiagnosticErrorClass =
+  | "dns"
+  | "tls"
+  | "connection"
+  | "timeout"
+  | "redirect_limit"
+  | "redirect_invalid"
+  | "response_too_large"
+  | "response_invalid_encoding"
+  | "response_io"
+  | "invalid_request";
+export type NativeNetworkType = "wifi" | "cellular" | "ethernet" | "vpn" | "offline" | "other" | "unknown";
+
+/** Safe diagnostic projection accepted from the Android page-fetch bridge. */
+export interface NativeLinkDiagnosticV1 {
+  readonly schemaVersion: "native-link-diagnostic.v1";
+  readonly operation: "fetch-text";
+  readonly phase: NativeLinkDiagnosticPhase;
+  readonly hostname?: string;
+  readonly errorClass: NativeLinkDiagnosticErrorClass;
+  readonly elapsedMs: number;
+  readonly networkType?: NativeNetworkType;
+  readonly attempt: number;
+  readonly redirectCount: number;
+}
+
 export type ErrorCode =
   | "INPUT_EMPTY" | "INPUT_TOO_LONG" | "INPUT_NO_SUPPORTED_URL" | "INPUT_URL_INVALID" | "INPUT_PLATFORM_UNSUPPORTED"
   | "LINK_NETWORK_FAILED" | "LINK_TIMEOUT" | "LINK_REDIRECT_LIMIT" | "LINK_REDIRECT_INVALID" | "LINK_HTTP_ERROR" | "LINK_EXPIRED"
@@ -142,6 +169,7 @@ export interface TaskIssue {
   readonly action: IssueAction;
   readonly platform?: SupportedPlatform;
   readonly details?: Readonly<Record<string, string | number | boolean>>;
+  readonly diagnostic?: NativeLinkDiagnosticV1;
 }
 
 export interface NormalizedInput {

@@ -10,6 +10,7 @@ import type {
   MediaTools,
 } from "@hongtai/core";
 
+import { mappedNativeLinkError } from "./native-link-errors.js";
 import { parseTaskPath } from "./thin-task-files.js";
 
 export interface NativeTextFetchPort {
@@ -168,16 +169,20 @@ export class NativeIngestPorts {
 
   async #fetch(method: "GET" | "POST", request: HttpRequest | HttpPostRequest): Promise<HttpResponse> {
     const body = method === "POST" ? (request as HttpPostRequest).body : undefined;
-    const result = await this.#network.fetchText({
-      method,
-      url: request.url,
-      headers: request.headers,
-      ...(body === undefined ? {} : { body }),
-      maxRedirects: request.maxRedirects,
-      timeoutMs: request.timeoutMs,
-      maxAttempts: request.maxAttempts,
-    });
-    return { url: result.finalUrl, status: result.status, headers: result.headers, body: result.body };
+    try {
+      const result = await this.#network.fetchText({
+        method,
+        url: request.url,
+        headers: request.headers,
+        ...(body === undefined ? {} : { body }),
+        maxRedirects: request.maxRedirects,
+        timeoutMs: request.timeoutMs,
+        maxAttempts: request.maxAttempts,
+      });
+      return { url: result.finalUrl, status: result.status, headers: result.headers, body: result.body };
+    } catch (error) {
+      throw mappedNativeLinkError(error) ?? error;
+    }
   }
 
   async #download(source: MediaSource, destination: string, onProgress?: (progress: DownloadProgress) => void | Promise<void>): Promise<void> {
