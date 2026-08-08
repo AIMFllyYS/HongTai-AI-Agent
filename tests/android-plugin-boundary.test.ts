@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
@@ -90,6 +90,19 @@ test("client APK builds are identifiable and never log bridge payloads", () => {
   const appBuild = read("android/app/build.gradle.kts");
 
   assert.match(config, /loggingBehavior:\s*"none"/);
-  assert.match(appBuild, /versionCode\s*=\s*[2-9][0-9]*/);
+  assert.match(appBuild, /versionCode\s*=\s*[1-9][0-9]*/);
   assert.doesNotMatch(appBuild, /versionName\s*=\s*"0\.1\.0"/);
+});
+
+test("release APK v0.0.1 uses the supplied Pulse Flow design icon", () => {
+  const appBuild = read("android/app/build.gradle.kts");
+  const manifest = read("android/app/src/main/AndroidManifest.xml");
+  const sourcePath = join(root, "apps/web/public/brand/pulse-flow-source.png");
+  const iconPath = join(root, "android/app/src/main/res/drawable-nodpi/pulse_flow_launcher.png");
+
+  assert.match(appBuild, /versionCode\s*=\s*1\b/);
+  assert.match(appBuild, /versionName\s*=\s*"0\.0\.1"/);
+  assert.match(manifest, /android:icon="@drawable\/pulse_flow_launcher"/);
+  assert.equal(existsSync(iconPath), true, "the Android launcher icon must be packaged from the design asset");
+  assert.deepEqual(readFileSync(iconPath), readFileSync(sourcePath), "the launcher icon must remain the supplied design asset");
 });
