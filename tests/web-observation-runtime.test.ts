@@ -60,6 +60,27 @@ test("observation session creation uses a storage fallback instead of runtime un
   assert.match(start, /code:\s*"STORAGE_WRITE_FAILED",\s*message:\s*"无法创建本地观察会话"/);
 });
 
+test("observation photo selection and capture own an importing state with every terminal clearing busy", () => {
+  const start = read("pages/ObservationStartPage.tsx");
+
+  assert.match(start, /const \[importing, setImporting\] = useState\(true\)/);
+  assert.match(start, /runtime\.diagnosis\.consumeImageRecovery\(\)/);
+  assert.match(start, /recovered\.status === "succeeded"[\s\S]*setImage\(recovered\.image\)/);
+  assert.match(start, /recovered\.status === "failed"[\s\S]*setIssue\(recovered\.issue\)/);
+
+  const picker = start.match(/const pickImage = async \(\) => \{[\s\S]*?\n  \};/)?.[0] ?? "";
+  const capture = start.match(/const captureImage = async \(\) => \{[\s\S]*?\n  \};/)?.[0] ?? "";
+  for (const operation of [picker, capture]) {
+    assert.match(operation, /setImporting\(true\)/);
+    assert.match(operation, /finally\s*\{[\s\S]*setImporting\(false\)/);
+    assert.match(operation, /loading \|\| importing/);
+  }
+
+  assert.match(start, /正在导入图片/);
+  assert.match(start, /disabled=\{!diagnosisAvailable \|\| loading \|\| importing\}/);
+  assert.match(start, /disabled=\{!diagnosisAvailable \|\| !image \|\| loading \|\| importing\}/);
+});
+
 test("observation presentation only recognizes diagnosis-report.v1 and never turns it into a score", async () => {
   const subject = await import("../apps/web/src/features/diagnosis/diagnosis-presenters");
 

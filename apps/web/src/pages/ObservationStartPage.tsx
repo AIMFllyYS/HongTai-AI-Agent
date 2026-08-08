@@ -49,6 +49,7 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
   const [sessions, setSessions] = useState<readonly DiagnosisSessionRecord[]>();
   const [issue, setIssue] = useState<TaskIssue>();
   const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(true);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -62,6 +63,26 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
     void loadSessions();
   }, [loadSessions]);
 
+  useEffect(() => {
+    let active = true;
+    const consumeRecovery = async () => {
+      try {
+        const recovered = await runtime.diagnosis.consumeImageRecovery();
+        if (!active) return;
+        if (recovered.status === "succeeded") setImage(recovered.image);
+        if (recovered.status === "failed") setIssue(recovered.issue);
+      } catch (error) {
+        if (active) {
+          setIssue(issueFromAppError(error, { code: "TASK_INTERRUPTED", message: "图片操作恢复失败，请重新选择或拍摄", action: "select_media" }));
+        }
+      } finally {
+        if (active) setImporting(false);
+      }
+    };
+    void consumeRecovery();
+    return () => { active = false; };
+  }, [runtime]);
+
   const chooseMode = (nextMode: ObservationMode) => {
     setMode(nextMode);
     setImage(undefined);
@@ -69,27 +90,33 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
   };
 
   const pickImage = async () => {
-    if (!diagnosisAvailable || loading) return;
+    if (!diagnosisAvailable || loading || importing) return;
+    setImporting(true);
     setIssue(undefined);
     try {
       setImage(await runtime.diagnosis.pickImage());
     } catch (error) {
       setIssue(issueFromAppError(error, { code: "MEDIA_IMPORT_FAILED", message: "无法将图片安全导入本地私有目录", action: "select_media" }));
+    } finally {
+      setImporting(false);
     }
   };
 
   const captureImage = async () => {
-    if (!diagnosisAvailable || loading) return;
+    if (!diagnosisAvailable || loading || importing) return;
+    setImporting(true);
     setIssue(undefined);
     try {
       setImage(await runtime.diagnosis.captureImage());
     } catch (error) {
       setIssue(issueFromAppError(error, { code: "MEDIA_IMPORT_FAILED", message: "无法将拍摄图片安全导入本地私有目录", action: "select_media" }));
+    } finally {
+      setImporting(false);
     }
   };
 
   const createReport = async () => {
-    if (!diagnosisAvailable || !image || loading) return;
+    if (!diagnosisAvailable || !image || loading || importing) return;
     setLoading(true);
     setIssue(undefined);
     try {
@@ -131,7 +158,7 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
 
         <section aria-label="选择观察方式" className="observation-mode-grid">
           {modes.map((item) => (
-            <button aria-pressed={mode === item.id} className={`observation-mode-card ${mode === item.id ? "is-selected" : ""}`.trim()} key={item.id} onClick={() => chooseMode(item.id)} type="button">
+            <button aria-pressed={mode === item.id} className={`observation-mode-card ${mode === item.id ? "is-selected" : ""}`.trim()} disabled={loading || importing} key={item.id} onClick={() => chooseMode(item.id)} type="button">
               <span><Icon name={item.icon} size={28} /></span>
               <strong>{item.title}</strong>
               <small>{item.description}</small>
@@ -142,8 +169,8 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
 
         <GlassCard className="observation-capture-card">
           <div className="observation-capture-card__copy"><span className="eyebrow">STEP 2</span><h3>{observationModeLabel(mode)}图片</h3><p>{mode === "tongue" ? "尽量保持舌面清晰、避免滤镜和强色光。" : "尽量保持正面、自然光和无遮挡。"}</p></div>
-          {image ? <RuntimeMediaFrame className="observation-capture-card__image" label={`${observationModeLabel(mode)}图片`} media={image} /> : <div className="observation-capture-card__empty"><Icon name="camera" size={30} /><span>尚未选择图片</span></div>}
-          <div className="observation-capture-card__actions mobile-action-group"><Button disabled={!diagnosisAvailable || loading} icon={<Icon name="camera" size={18} />} onClick={() => void captureImage()} variant="secondary">拍摄图片</Button><Button disabled={!diagnosisAvailable || loading} icon={<Icon name="upload_file" size={18} />} onClick={() => void pickImage()} variant="secondary">选择图片</Button><Button disabled={!diagnosisAvailable || !image || loading} icon={<Icon name="auto_awesome" size={18} />} onClick={() => void createReport()}>{loading ? "正在创建报告" : "生成观察报告"}</Button></div>
+          {importing ? <div aria-live="polite" className="observation-capture-card__empty" role="status"><Icon name="sync" size={30} /><span>正在导入图片</span></div> : image ? <RuntimeMediaFrame className="observation-capture-card__image" label={`${observationModeLabel(mode)}图片`} media={image} /> : <div className="observation-capture-card__empty"><Icon name="camera" size={30} /><span>尚未选择图片</span></div>}
+          <div className="observation-capture-card__actions mobile-action-group"><Button disabled={!diagnosisAvailable || loading || importing} icon={<Icon name="camera" size={18} />} onClick={() => void captureImage()} variant="secondary">拍摄图片</Button><Button disabled={!diagnosisAvailable || loading || importing} icon={<Icon name="upload_file" size={18} />} onClick={() => void pickImage()} variant="secondary">选择图片</Button><Button disabled={!diagnosisAvailable || !image || loading || importing} icon={<Icon name="auto_awesome" size={18} />} onClick={() => void createReport()}>{loading ? "正在创建报告" : "生成观察报告"}</Button></div>
           <small className="observation-privacy-note"><Icon name="folder_special" size={15} />图片会复制到应用私有目录；不会作为公开素材或自动发布内容。</small>
         </GlassCard>
 
