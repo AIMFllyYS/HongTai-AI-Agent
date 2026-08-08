@@ -60,13 +60,13 @@
 - Inspect: `packages/core/src/models.ts`
 - Inspect: `tests/android-plugin-boundary.test.ts`
 
-- [ ] **Step 1: Verify the shared base and clean candidate ranges**
+- [x] **Step 1: Verify the shared base and clean candidate ranges**
 
 Run: `git merge-base 8d20ad9 codex/p0-photo-reliability`, then repeat for the link and upgrade branches; run `git diff --check` for each range.
 
 Expected: each merge base is `8d20ad9f657fd57baab0506ff86b2dcfc6a7fece` and no whitespace errors.
 
-- [ ] **Step 2: Record the union that the main branch must retain**
+- [x] **Step 2: Record the union that the main branch must retain**
 
 Retain photo `ERR_MEDIA_SELECTION_CANCELLED`/recovery codes, link `ERR_LINK_*` codes and `NativeLinkDiagnosticV1`, plus the v3 versionCode assertion. Do not resolve an overlap by choosing one branch wholesale.
 
@@ -76,21 +76,21 @@ Retain photo `ERR_MEDIA_SELECTION_CANCELLED`/recovery codes, link `ERR_LINK_*` c
 - Modify: `tests/android-plugin-boundary.test.ts`
 - Modify: `android/app/src/main/java/com/hongtai/aiagent/bridge/FileMediaPlugin.kt`
 
-- [ ] **Step 1: Write the failing source-boundary regression test**
+- [x] **Step 1: Write the failing source-boundary regression test**
 
 Add a test named `picker recovery persists and releases only the granted read URI permission` that reads `FileMediaPlugin.kt`, asserts `takePersistableUriPermission` occurs before `markPickerImporting`, and asserts a matching `releasePersistableUriPermission` is reached from picker import finalization.
 
-- [ ] **Step 2: Run the focused test and confirm RED**
+- [x] **Step 2: Run the focused test and confirm RED**
 
 Run: `pnpm exec tsx --test tests/android-plugin-boundary.test.ts`
 
 Expected before implementation: the new assertion fails because `takePersistableUriPermission` is absent.
 
-- [ ] **Step 3: Implement the smallest native grant lifecycle**
+- [x] **Step 3: Implement the smallest native grant lifecycle**
 
 Before persisting picker `sourceUri`, request `Intent.FLAG_GRANT_READ_URI_PERMISSION` using `contentResolver.takePersistableUriPermission`. If the system cannot provide a durable read grant, finish the operation with the existing safe `ERR_MEDIA_READ_FAILED` code rather than persisting an import that cannot be recovered. In the picker import `finally` path, safely release that same read grant after the private copy has either succeeded or reached a terminal failure.
 
-- [ ] **Step 4: Run the focused test and confirm GREEN**
+- [x] **Step 4: Run the focused test and confirm GREEN**
 
 Run: `pnpm exec tsx --test tests/android-plugin-boundary.test.ts`
 
@@ -103,21 +103,21 @@ Expected: the new test and existing boundary tests pass.
 - Modify: `android/app/src/main/java/com/hongtai/aiagent/bridge/FileMediaPlugin.kt`
 - Test: `android/app/src/test/java/com/hongtai/aiagent/media/PhotoOperationStateStoreTest.kt`
 
-- [ ] **Step 1: Write the failing lost-result cleanup assertion**
+- [x] **Step 1: Write the failing lost-result cleanup assertion**
 
 Add a test named `lost camera callbacks discard the constrained staging capture before terminal recovery failure`. It must assert that the `handleOnResume` path restores only the stored capture leaf name and calls `discardCapture` before `PHOTO_RECOVERY_FAILED` is persisted.
 
-- [ ] **Step 2: Run the focused test and confirm RED**
+- [x] **Step 2: Run the focused test and confirm RED**
 
 Run: `pnpm exec tsx --test tests/android-plugin-boundary.test.ts`
 
 Expected before implementation: the cleanup assertion fails because `handleOnResume` only calls `finishFailure`.
 
-- [ ] **Step 3: Implement the constrained cleanup**
+- [x] **Step 3: Implement the constrained cleanup**
 
 When the persisted awaiting state is a capture, call `restorePhotoCapture(awaiting.captureFileName)` and `discardCapture` only if the constrained file exists, then finish with `ERR_PHOTO_RECOVERY_FAILED`. Never touch imported media or an arbitrary path.
 
-- [ ] **Step 4: Run the focused test and confirm GREEN**
+- [x] **Step 4: Run the focused test and confirm GREEN**
 
 Run: `pnpm exec tsx --test tests/android-plugin-boundary.test.ts`
 
@@ -128,25 +128,25 @@ Expected: the cleanup assertion and current capture-boundary assertions pass.
 **Files:**
 - Modify: all files in `e17d5f4^..photo-fix-head`, `63ca239^..3fe7a34`, and `bfdf772`.
 
-- [ ] **Step 1: Cherry-pick the finalized photo range**
+- [x] **Step 1: Cherry-pick the finalized photo range**
 
 Run: `git cherry-pick e17d5f4e03612f41f6b44a293a695b30418bb1db^..photo-fix-head`
 
 Expected: photo I/O, recovery state, tests and evidence are present on `main`.
 
-- [ ] **Step 2: Cherry-pick the link-diagnostic commits in order**
+- [x] **Step 2: Cherry-pick the link-diagnostic commits in order**
 
 Run: `git cherry-pick 63ca239c0f2fd16759334cd763c25a35486446a8^..3fe7a3447d9cf9dd3858d3637f226c6138a4d305`
 
 Expected: Android safe diagnostics, core mapping, UI notice, contract documentation and visual evidence are present.
 
-- [ ] **Step 3: Cherry-pick the normal-upgrade commit**
+- [x] **Step 3: Cherry-pick the normal-upgrade commit**
 
 Run: `git cherry-pick bfdf772e2ba8086b789123504d90bfa493c22169`
 
 Expected: `versionCode = 3` and its v2→v3 QA regression assertion are present.
 
-- [ ] **Step 4: Resolve any overlap by retaining both behavior sets**
+- [x] **Step 4: Resolve any overlap by retaining both behavior sets**
 
 For `NativeIssueCode.kt`, `models.ts`, and `android-plugin-boundary.test.ts`, retain photo, link and upgrade additions. Validate with `git diff --check` before continuing.
 
@@ -157,24 +157,26 @@ For `NativeIssueCode.kt`, `models.ts`, and `android-plugin-boundary.test.ts`, re
 - Modify: `docs/当前能力与发布状态.md`
 - Create: `docs/验收/2026-08-09-p0-main-integration.md`
 
-- [ ] **Step 1: Update only current facts**
+- [x] **Step 1: Update only current facts**
 
 Record the stable image cancellation/recovery and link-diagnostic contracts; state versionCode 3 and emulator QA upgrade evidence; keep physical-device and formal release-signing status explicitly unverified.
 
-- [ ] **Step 2: Run combined gates**
+- [x] **Step 2: Run combined gates**
 
 Run: `pnpm check`; `pnpm --filter @hongtai/web build`; `android/gradlew.bat :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --no-daemon --console=plain`.
 
 Expected: report exact pass/fail output. If remaining lint is a pre-existing `@UnstableApi` declaration, fix it only as a separately scoped minimal Android compatibility commit and rerun lint.
 
-- [ ] **Step 3: Run available device evidence and package checks**
+- [x] **Step 3: Run available device evidence and package checks**
 
 Use the connected emulator only if it is idle. Verify the final debug APK manifest/version, SHA-256, and an ordinary `adb install -r` upgrade from a same-signature v2 fixture when available. Do not claim physical-device validation without a connected physical device.
 
-- [ ] **Step 4: UTF-8, sensitive-data, and staged-diff checks**
+Actual: the connected emulator was not idle, so this integration used only read-only package inspection and did not overwrite its running QA state. The prior same-signature v2→v3 normal-upgrade evidence remains linked from the acceptance record.
+
+- [x] **Step 4: UTF-8, sensitive-data, and staged-diff checks**
 
 Run strict UTF-8/U+FFFD scanning for changed text, inspect sensitive-data patterns without printing secrets, and run `git diff --cached --check` before each commit.
 
-- [ ] **Step 5: Commit completed phases precisely**
+- [x] **Step 5: Commit completed phases precisely**
 
 Commit the recovery gap repair, integrated candidate commits, and current-documentation evidence with exact path staging. Do not use `git add .`, push, close Issues, delete branches, or delete worktrees.
