@@ -2,7 +2,7 @@
 
 ## 结论
 
-Issue #6 的 Android 7.x 原生 HEIF fallback 已在独立 API 24、API 25 x86_64 AVD 上分别通过 6/6 instrumentation：真实 HEVC HEIF 解码、`irot`、尺寸与四角像素、损坏输入、8193 超限、外部引用、PNG 回归、JPEG 归一化与临时文件清理均由设备侧断言。上述端测使用 v5；当前源码候选已递增为 `versionCode=6`、`versionName=0.0.1`，v6 完成主机回归与签名后验但尚未做设备端复验。
+Issue #6 的 Android 7.x 原生 HEIF fallback 已在独立 API 24、API 25 x86_64 AVD 上分别通过 6/6 instrumentation：真实 HEVC HEIF 解码、`irot`、尺寸与四角像素、损坏输入、8193 超限、外部引用、PNG 回归、JPEG 归一化与临时文件清理均由设备侧断言。上述端测使用 v5；v6 主机回归与签名后验历史保留在下方。当前候选已递增为 `versionCode=7`、`versionName=0.0.1`，v7 完成主机全量、release builder 与静态后验，但尚未做设备端复验。
 
 这仍不是“Android 7.x 完整 UI 已通过”的声明。官方 SDK 镜像没有同时满足 API 24/25、x86_64 与 WebView ≥99 的可安全组合；API 24/25 原生 fallback 与 API 35 现代 WebView 的真实 UI/bridge/system picker 证据来自两组环境，不能拼接成同一设备的完整通过。物理 Android 7.x、ARM、OEM HEIC 和低内存压力也未验证。
 
@@ -12,6 +12,12 @@ Issue #6 的 Android 7.x 原生 HEIF fallback 已在独立 API 24、API 25 x86_6
 - WebView 边界：标准 Android provider 继续要求 Chromium 99；Huawei provider 没有可信的 product-major → Chromium 映射，因此 `minHuaweiWebViewVersion=2147483647` fail-closed，不声明受支持并进入本地静态中文页。错误页文案只泛指系统 WebView 或浏览器组件，不包含脚本、外链、网络或自动跳转。
 - v6 release builder 唯一一次正式运行通过：release APK 为 25,890,603 字节，版本 `0.0.1 (6)`，证书 SHA-256 为 `54df122cd4f99720c613737815385e771bfaeb17715c160aed178062ab5b2fde`，精确包含 12 个目标 `.so`，四 ABI 的 `LOAD` alignment 均为 `0x4000`，`zipalign -c -P 16 4` 通过，APK SHA-256 为 `666465ccfa291d3df70adafb9e139f03d5c144dd7f324c2cd14333f5b2e6a3ec`。
 - 本节只记录 v6 主机证据；没有启动或改动 endpoint AVD，不把下方 v5 设备事实改写为 v6 通过。
+
+## 第二轮复审后的 v7 实现状态
+
+- Gradle 只让真实 `configureCMake*` 与 `buildCMake*` 依赖 `verifyHeifNativeSources`；`externalNativeBuildDebug/Release` 通过这些真实构建任务传递执行校验。`externalNativeBuildClean*` 和项目 `clean` 不再因不存在的源码缓存被 verifier 阻断，也不会创建该缓存；dirty configure/build 仍在进入 CMake 前失败。
+- Huawei fail-closed 静态页改为诚实说明“网页运行组件版本过低，或当前提供程序尚未验证支持”；用户先更新系统 WebView 或浏览器组件，更新后仍显示时明确告知当前版本暂不支持该组件。页面仍无脚本、外链、网络或自动跳转。
+- HTML 生产内容变化使候选递增为 v7。focused Node 为 22/22，`pnpm check` 为 214/214；Kotlin focused JVM、Debug Kotlin、androidTest 编译、Web build、Capacitor sync 与 clean/dirty gate 均通过。正式 release builder 唯一一次运行成功，release APK 为 25,890,671 字节，版本 `0.0.1 (7)`，证书 SHA-256 为 `54df122cd4f99720c613737815385e771bfaeb17715c160aed178062ab5b2fde`，精确包含四 ABI × 三个目标 `.so`，所有 `LOAD` alignment 为 `0x4000`，`zipalign -c -P 16 4` 与 v2/v3 签名验证通过，APK SHA-256 为 `85c669347ed6c9d80fcf085d20a841b2c62a5dea2ee7462501633e5a996f4a0f`。APK 内配置仍为 Chromium 99、Huawei fail-closed 与本地错误页，错误页包含 v7 的诚实终态文案且保持无脚本、外链、网络和自动跳转。本轮没有运行 AVD，不把 v5 设备事实改写为 v7 通过。
 
 ## 已观察证据
 

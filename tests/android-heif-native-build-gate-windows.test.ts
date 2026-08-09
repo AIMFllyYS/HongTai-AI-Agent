@@ -28,7 +28,11 @@ const fetchScript = join(root, "scripts", "fetch-android-heif-sources.ps1");
 const canonicalCache = join(root, "android", ".native-deps", "heif-sources");
 const libheifRevision = "libheif-2c4bbb54c2738d4a5efbbe3e5fa1d5d76bb88eb0";
 
-function runNativeConfigure(sourceCache: string) {
+function runNativeGradleTask(
+  sourceCache: string,
+  task: string,
+  options: string[] = ["--rerun-tasks"],
+) {
   const environment = windowsAndroidEnvironment();
   environment.HONGTAI_HEIF_SOURCE_CACHE = sourceCache;
   return spawnSync(
@@ -38,8 +42,8 @@ function runNativeConfigure(sourceCache: string) {
       "/s",
       "/c",
       "gradlew.bat",
-      ":app:configureCMakeDebug[arm64-v8a]",
-      "--rerun-tasks",
+      task,
+      ...options,
       "--no-daemon",
     ],
     {
@@ -118,7 +122,41 @@ test(
 );
 
 test(
-  "direct native Gradle configure rejects a dirty override before CMake and accepts a clean copy",
+  "native clean tasks do not require or mutate a HEIF source cache",
+  { skip: windowsOnly },
+  () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "hongtai-heif-native-clean-"));
+    const missingCache = join(fixtureRoot, "missing", "heif-sources");
+    const canonicalFile = join(canonicalCache, libheifRevision, "CMakeLists.txt");
+    const canonicalMarker = join(canonicalCache, libheifRevision, ".hongtai-source-lock.json");
+    const canonicalFileHash = fileSha256(canonicalFile);
+    const canonicalMarkerHash = fileSha256(canonicalMarker);
+    try {
+      const nativeClean = runNativeGradleTask(
+        missingCache,
+        ":app:externalNativeBuildCleanDebug",
+      );
+      assert.equal(nativeClean.error, undefined);
+      assert.equal(nativeClean.status, 0, commandOutput(nativeClean));
+      assert.match(commandOutput(nativeClean), /> Task :app:externalNativeBuildCleanDebug/);
+      assert.doesNotMatch(commandOutput(nativeClean), /:app:verifyHeifNativeSources/);
+
+      const cleanGraph = runNativeGradleTask(missingCache, "clean", ["--dry-run"]);
+      assert.equal(cleanGraph.error, undefined);
+      assert.equal(cleanGraph.status, 0, commandOutput(cleanGraph));
+      assert.doesNotMatch(commandOutput(cleanGraph), /:app:verifyHeifNativeSources/);
+
+      assert.equal(existsSync(join(fixtureRoot, "missing")), false);
+      assert.equal(fileSha256(canonicalFile), canonicalFileHash);
+      assert.equal(fileSha256(canonicalMarker), canonicalMarkerHash);
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "direct native Gradle configure and build reject a dirty override before CMake",
   { skip: windowsOnly },
   () => {
     assert.equal(existsSync(canonicalCache), true, "fetch the pinned native sources before this gate");
@@ -152,24 +190,47 @@ test(
       writeFileSync(copiedMarker, cleanMarkerBytes);
       appendFileSync(copiedFile, "\n# dirty tree review fixture\n", "utf8");
 
-      const dirty = runNativeConfigure(copiedCache);
-      assert.equal(dirty.error, undefined);
-      assert.notEqual(dirty.status, 0, commandOutput(dirty));
+      const dirtyConfigure = runNativeGradleTask(
+        copiedCache,
+        ":app:configureCMakeDebug[arm64-v8a]",
+      );
+      assert.equal(dirtyConfigure.error, undefined);
+      assert.notEqual(dirtyConfigure.status, 0, commandOutput(dirtyConfigure));
       assert.match(
-        commandOutput(dirty),
+        commandOutput(dirtyConfigure),
         /Native source verification failed for libheif: source tree hash mismatch\./,
       );
-      assert.match(commandOutput(dirty), /:app:verifyHeifNativeSources FAILED/);
-      assert.doesNotMatch(commandOutput(dirty), /> Task :app:configureCMakeDebug\[arm64-v8a\]/);
+      assert.match(commandOutput(dirtyConfigure), /:app:verifyHeifNativeSources FAILED/);
+      assert.doesNotMatch(
+        commandOutput(dirtyConfigure),
+        /> Task :app:configureCMakeDebug\[arm64-v8a\]/,
+      );
+
+      const dirtyBuild = runNativeGradleTask(
+        copiedCache,
+        ":app:buildCMakeDebug[arm64-v8a]",
+      );
+      assert.equal(dirtyBuild.error, undefined);
+      assert.notEqual(dirtyBuild.status, 0, commandOutput(dirtyBuild));
+      assert.match(
+        commandOutput(dirtyBuild),
+        /Native source verification failed for libheif: source tree hash mismatch\./,
+      );
+      assert.match(commandOutput(dirtyBuild), /:app:verifyHeifNativeSources FAILED/);
+      assert.doesNotMatch(commandOutput(dirtyBuild), /> Task :app:buildCMakeDebug\[arm64-v8a\]/);
       assert.equal(fileSha256(canonicalFile), canonicalFileHash);
       assert.equal(fileSha256(canonicalMarker), canonicalMarkerHash);
 
       writeFileSync(copiedFile, cleanBytes);
-      const clean = runNativeConfigure(copiedCache);
-      assert.equal(clean.error, undefined);
-      assert.equal(clean.status, 0, commandOutput(clean));
-      assert.match(commandOutput(clean), /> Task :app:verifyHeifNativeSources/);
-      assert.match(commandOutput(clean), /> Task :app:configureCMakeDebug\[arm64-v8a\]/);
+      const cleanBuild = runNativeGradleTask(
+        copiedCache,
+        ":app:buildCMakeDebug[arm64-v8a]",
+      );
+      assert.equal(cleanBuild.error, undefined);
+      assert.equal(cleanBuild.status, 0, commandOutput(cleanBuild));
+      assert.match(commandOutput(cleanBuild), /> Task :app:verifyHeifNativeSources/);
+      assert.match(commandOutput(cleanBuild), /> Task :app:configureCMakeDebug\[arm64-v8a\]/);
+      assert.match(commandOutput(cleanBuild), /> Task :app:buildCMakeDebug\[arm64-v8a\]/);
 
       const canonicalVerification = powershellFile(fetchScript, [
         "-VerifyOnly",

@@ -29,11 +29,11 @@ fallback 只接受一个静态 HEVC primary image，并拒绝序列、外部 `il
 
 脚本先验证 SHA-256、唯一 revision 根、路径、重复项和链接项，再通过 staging 发布到已忽略的 `android/.native-deps/heif-sources/`。相同 lock 再次执行是可验证 no-op；缓存存在但 marker/hash 不匹配时会失败。
 
-日常 Gradle native configure/build 不调用下载分支，而是先执行纯离线 `verifyHeifNativeSources`：逐项核对 marker 的 commit、archive SHA-256、source tree SHA-256、patch set 四个字段，实时复算源码树，并在枚举普通文件前拒绝源码树、marker 或子项中的 reparse point、symlink 与 junction。验证不创建、下载、改写或删除文件，任何不一致都在 CMake 之前停止。需要从仓库外只读缓存构建时，可设置绝对路径 `HONGTAI_HEIF_SOURCE_CACHE`；相对路径会被拒绝，同一绝对路径同时传给验证脚本和 CMake。
+日常 Gradle native configure/build 不调用下载分支，而是先执行纯离线 `verifyHeifNativeSources`：逐项核对 marker 的 commit、archive SHA-256、source tree SHA-256、patch set 四个字段，实时复算源码树，并在枚举普通文件前拒绝源码树、marker 或子项中的 reparse point、symlink 与 junction。验证不创建、下载、改写或删除文件，任何不一致都在 CMake 之前停止。`externalNativeBuildClean*` 与项目 `clean` 只清理生成物，不读取源码，因此不依赖 verifier；真实 configure/build 仍通过各自的前置依赖强制校验。需要从仓库外只读缓存构建时，可设置绝对路径 `HONGTAI_HEIF_SOURCE_CACHE`；相对路径会被拒绝，同一绝对路径同时传给验证脚本和 CMake。
 
 ## WebView 能力边界
 
-生产 Web bundle 以 Chromium 99 为能力下限，标准 Android WebView provider 低于该版本时进入本地静态中文终态页。Huawei provider 的 product version 不能可靠映射为 Chromium major；当前没有经设备验证的能力映射，因此配置为 fail-closed，不声明支持 Huawei provider，并进入同一静态页。该页不含脚本、外链、网络或自动跳转，提示用户更新系统 WebView 或浏览器组件。
+生产 Web bundle 以 Chromium 99 为能力下限，标准 Android WebView provider 低于该版本时进入本地静态中文终态页。Huawei provider 的 product version 不能可靠映射为 Chromium major；当前没有经设备验证的能力映射，因此配置为 fail-closed，不声明支持 Huawei provider，并进入同一静态页。该页不含脚本、外链、网络或自动跳转，明确说明可能是版本过低或当前 provider 尚未验证支持；用户先更新系统 WebView 或浏览器组件，更新后仍显示时则当前版本暂不支持该组件。
 
 ## 构建与静态核验
 
@@ -53,7 +53,7 @@ zipalign -c -P 16 4 android/app/build/outputs/apk/debug/app-debug.apk
 
 instrumentation assets 仅含仓库脚本生成的 96×64 非对称色块及确定性变异，不进入生产 Web bundle。来源、host encoder 固定版本、预期方向、权利声明和 SHA-256 见 `android/app/src/androidTest/assets/heif/PROVENANCE.md` 与相邻清单。离线 encoder 只是测试数据生成工具，不是 APK 能力。
 
-当前实现、JVM 测试、instrumentation 编译、四 ABI 构建与静态打包检查已完成。API 24、API 25 独立 x86_64 AVD 已分别通过 6/6 instrumentation，覆盖真实 HEVC 解码、方向像素、异常终态和临时文件清理；API 35 现代 WebView 还完成了 UI、bridge 与 Photo Picker 组合回归。待补的是在 WebView ≥99 的同一 API 24/25 设备上，通过真实系统 DocumentsUI 完成 UI + fallback 闭环。物理 Android 7.x、ARM 运行、OEM 相机 HEIC 和真实低内存行为仍未验证；当前 v6 候选的审查回修也尚未做设备端复验。
+API 24、API 25 独立 x86_64 AVD 已分别通过 6/6 instrumentation，覆盖真实 HEVC 解码、方向像素、异常终态和临时文件清理；API 35 现代 WebView 还完成了 UI、bridge 与 Photo Picker 组合回归，这些都是 v5 历史端测。v6 主机 release 历史证据继续保留。当前 v7 候选已完成 `pnpm check`、Kotlin/Web 基础验证、正式 release builder、签名和四 ABI 静态后验，但尚未做设备端复验。待补的 Android 7.x 组合仍是在 WebView ≥99 的同一 API 24/25 设备上，通过真实系统 DocumentsUI 完成 UI + fallback 闭环；物理 Android 7.x、ARM 运行、OEM 相机 HEIC 和真实低内存行为也仍未验证。
 
 ## LGPL 分发责任
 

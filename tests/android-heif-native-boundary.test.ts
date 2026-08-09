@@ -59,6 +59,7 @@ test("native build and LGPL delivery boundaries are checked in without binaries"
   assert.match(gradle, /HONGTAI_HEIF_SOURCE_CACHE/);
   assert.match(gradle, /verifyHeifNativeSources/);
   assert.match(gradle, /dependsOn\(verifyHeifNativeSources\)/);
+  assert.doesNotMatch(gradle, /name\.startsWith\("externalNativeBuild"\)/);
   assert.match(fetch, /\[switch\]\$VerifyOnly/);
   assert.match(fetch, /FileAttributes\]::ReparsePoint/);
   assert.match(cmake, /BUILD_SHARED_LIBS\s+ON/);
