@@ -16,7 +16,7 @@
 .\scripts\init-android-release-signing.ps1 -SigningDirectory "D:\受控备份盘\HongTai-signing"
 ```
 
-脚本使用 JDK 21 `keytool` 创建长期非 Debug 身份，并把目录 ACL 限制为当前用户、SYSTEM 和 Administrators。keystore、properties 或公有证书任一目标已存在时都会失败，绝不覆盖。控制台只显示 properties 路径与公有证书 SHA-256，不显示口令。
+脚本会规范化仓库根与目标目录，目录等于或位于仓库内部时直接拒绝。它使用 JDK 21 `keytool` 创建长期非 Debug 身份，并把目录 ACL 限制为当前用户、SYSTEM 和 Administrators。keystore、properties 或公有证书任一目标已存在时都会失败，绝不覆盖。控制台只显示 properties 路径与公有证书 SHA-256，不显示口令。
 
 外部 properties 文件只包含四个必要字段：
 
@@ -27,7 +27,7 @@ keyAlias=hongtai-release
 keyPassword=replace-with-secret
 ```
 
-`storeFile` 必须是已存在的绝对文件，alias 不得为 `androiddebugkey`。仓库中的 `android/keystore.properties.example` 只是无秘密的字段模板；真实 properties、keystore 和口令不得进入 Git、日志、Issue、截图或聊天记录。
+properties 文件和 `storeFile` 都必须是仓库外的绝对路径，`storeFile` 必须存在，alias 不得为 `androiddebugkey`。仓库中的 `android/keystore.properties.example` 只是无秘密的字段模板；真实 properties、keystore 和口令不得进入 Git、日志、Issue、截图或聊天记录。根 `.gitignore` 对任意层的常见 keystore 与 `keystore.properties` 另有防御性忽略，但它不是替代仓库外存储的安全边界。
 
 ## 构建与主机验签
 
@@ -43,7 +43,7 @@ keyPassword=replace-with-secret
 .\scripts\build-android-release.ps1 -SigningProperties "D:\受控备份盘\HongTai-signing\keystore.properties"
 ```
 
-构建脚本依次执行 Web production build、Capacitor Android sync、`:app:testReleaseUnitTest`、`:app:lintRelease` 和 `:app:assembleRelease`。它只接受 `android/app/build/outputs/apk/release/app-release.apk`，并自动执行以下主机门禁：
+构建脚本每次都依次执行 Web production build、Capacitor Android sync、`:app:testReleaseUnitTest`、`:app:lintRelease` 和 `:app:assembleRelease`，不提供跳过构建并验收旧 APK 的参数。它只接受本次流程产生的 `android/app/build/outputs/apk/release/app-release.apk`，并自动执行以下主机门禁：
 
 - `zipalign -c -P 16 -v 4`；
 - `aapt2 dump badging`，要求包名 `com.hongtai.aiagent`、`versionCode=4`、`versionName=0.0.1`；
@@ -51,7 +51,7 @@ keyPassword=replace-with-secret
 - signer SHA-256 必须与 `android/release-certificate.sha256` 的公开证书锚点完全一致；
 - 计算并打印 APK SHA-256。
 
-release assemble、bundle、package、install 或 `validateSigning` 任务未提供有效外部配置时，Gradle 会 fail-closed。Debug 构建、JVM 测试和普通同步不依赖 release 私钥。
+当实际 Gradle task graph 包含 release assemble、bundle、package、install 或 `validateSigning` 时，未提供有效外部配置就会 fail-closed；因此聚合 `:app:assemble`、`:app:bundle` 和 `:app:build` 也不能产生 unsigned release。显式 Debug 构建、JVM 测试和普通同步不依赖 release 私钥。
 
 ## 身份备份责任
 
@@ -69,6 +69,6 @@ Android Debug 证书与本 release 证书不是同一身份。已有 Debug/QA �
 adb install -r android\app\build\outputs\apk\release\app-release.apk
 ```
 
-验收时不得使用 `-d`，也不得在升级前卸载；应核对安装前后证书指纹、版本、`firstInstallTime` 和受控私有样本哈希。当前主机签名链的 Android 安装/升级证据仍待独立端测补充，不能从构建成功推导。
+验收时不得使用 `-d`，也不得在升级前卸载；应核对安装前后证书指纹、版本、`firstInstallTime` 和受控本地数据。2026-08-10 已在 API 35 read-only 模拟器上以同一 release 证书完成 v3→v4 普通升级：`firstInstallTime` 保持、本地档案标记保留，升级后冷启动通过。该证据不是物理真机证据；物理真机与其他发布门禁仍未完成，整体仍不可正式分发。详细数值见[当日签名链验收](验收/2026-08-10-android-release-signing.md)。
 
 Play App Signing、CI 密钥库或远程签名服务只是未来可选的部署方案。启用前需单独设计权限、备份、审计和迁移流程；当前仓库未配置这些系统。

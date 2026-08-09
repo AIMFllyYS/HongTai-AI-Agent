@@ -1,4 +1,7 @@
+import java.io.File
 import java.util.Properties
+import org.gradle.api.Action
+import org.gradle.api.execution.TaskExecutionGraph
 
 plugins {
   id("com.android.application")
@@ -6,25 +9,29 @@ plugins {
 }
 
 val releaseSigningPath = providers.environmentVariable("HONGTAI_RELEASE_SIGNING_PROPERTIES").orNull
-val releaseTaskRequested = gradle.startParameter.taskNames.any { taskName ->
-  taskName.contains("Release", ignoreCase = true) &&
-    listOf("assemble", "bundle", "package", "install", "validateSigning").any { operation ->
-      taskName.contains(operation, ignoreCase = true)
-    }
-}
 val releaseSigningFile = releaseSigningPath?.let(::file)
+val repositoryRootDirectory = rootProject.projectDir.parentFile.canonicalFile
 
-if (
-  releaseTaskRequested &&
-  (releaseSigningFile == null || !releaseSigningFile.isAbsolute || !releaseSigningFile.isFile)
-) {
-  throw GradleException(
-    "Release signing configuration is required via HONGTAI_RELEASE_SIGNING_PROPERTIES",
-  )
+fun isInsideRepository(candidate: File): Boolean {
+  val repositoryPath = repositoryRootDirectory.path.trimEnd('\\', '/')
+  val candidatePath = candidate.canonicalFile.path.trimEnd('\\', '/')
+  return candidatePath.equals(repositoryPath, ignoreCase = true) ||
+    candidatePath.startsWith("$repositoryPath${File.separator}", ignoreCase = true)
+}
+
+if (releaseSigningFile != null) {
+  if (!releaseSigningFile.isAbsolute || !releaseSigningFile.isFile) {
+    throw GradleException(
+      "Release signing configuration must be an existing absolute file",
+    )
+  }
+  if (isInsideRepository(releaseSigningFile)) {
+    throw GradleException("Release signing configuration must be outside the repository")
+  }
 }
 
 val releaseSigning = Properties()
-if (releaseSigningFile?.isAbsolute == true && releaseSigningFile.isFile) {
+if (releaseSigningFile != null) {
   releaseSigningFile.inputStream().use(releaseSigning::load)
 }
 
@@ -47,11 +54,14 @@ android {
   }
 
   signingConfigs {
-    if (releaseSigning.isNotEmpty()) {
+    if (releaseSigningFile != null) {
       create("release") {
         val keyStore = file(requiredReleaseSigningValue("storeFile"))
         if (!keyStore.isAbsolute || !keyStore.isFile) {
           throw GradleException("Release signing keystore must be an existing absolute file")
+        }
+        if (isInsideRepository(keyStore)) {
+          throw GradleException("Release signing keystore must be outside the repository")
         }
         val alias = requiredReleaseSigningValue("keyAlias")
         if (alias.equals("androiddebugkey", ignoreCase = true)) {
@@ -71,11 +81,6 @@ android {
   buildTypes {
     release {
       signingConfig = signingConfigs.findByName("release")
-        ?: if (releaseTaskRequested) {
-          throw GradleException("Release signing configuration is required")
-        } else {
-          null
-        }
       isMinifyEnabled = false
       proguardFiles(
         getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -93,6 +98,23 @@ android {
     jvmTarget = "21"
   }
 }
+
+val releaseArtifactOperations = listOf("assemble", "bundle", "package", "install", "validateSigning")
+val appProjectPath = project.path
+gradle.taskGraph.whenReady(object : Action<TaskExecutionGraph> {
+  override fun execute(graph: TaskExecutionGraph) {
+    val releaseArtifactInGraph = graph.allTasks.any { task ->
+      task.project.path == appProjectPath &&
+        task.name.contains("Release", ignoreCase = true) &&
+        releaseArtifactOperations.any { operation ->
+          task.name.startsWith(operation, ignoreCase = true)
+        }
+    }
+    if (releaseArtifactInGraph && releaseSigningFile == null) {
+      throw GradleException("Release signing configuration is required via HONGTAI_RELEASE_SIGNING_PROPERTIES")
+    }
+  }
+})
 
 dependencies {
   // `cap sync` generates this project from the same @capacitor/android v8

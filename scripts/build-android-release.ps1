@@ -1,11 +1,61 @@
 [CmdletBinding()]
 param(
-  [string] $SigningProperties,
-  [switch] $VerifyExistingApk
+  [string] $SigningProperties
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version 2.0
+
+function Resolve-CanonicalPath {
+  param([Parameter(Mandatory = $true)][string] $Path)
+
+  $fullPath = [System.IO.Path]::GetFullPath($Path)
+  if (Test-Path -LiteralPath $fullPath) {
+    return (Resolve-Path -LiteralPath $fullPath).ProviderPath
+  }
+
+  $missingSegments = New-Object 'System.Collections.Generic.Stack[string]'
+  $existingAncestor = $fullPath
+  while (!(Test-Path -LiteralPath $existingAncestor)) {
+    $trimmed = $existingAncestor.TrimEnd(
+      [char[]] @([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    )
+    $leaf = [System.IO.Path]::GetFileName($trimmed)
+    $parent = [System.IO.Path]::GetDirectoryName($trimmed)
+    if ([string]::IsNullOrWhiteSpace($leaf) -or
+        [string]::IsNullOrWhiteSpace($parent) -or
+        $parent -eq $existingAncestor) {
+      return $fullPath
+    }
+    $missingSegments.Push($leaf)
+    $existingAncestor = $parent
+  }
+
+  $canonicalPath = (Resolve-Path -LiteralPath $existingAncestor).ProviderPath
+  while ($missingSegments.Count -gt 0) {
+    $canonicalPath = Join-Path $canonicalPath $missingSegments.Pop()
+  }
+  return [System.IO.Path]::GetFullPath($canonicalPath)
+}
+
+function Test-PathInsideRepository {
+  param(
+    [Parameter(Mandatory = $true)][string] $CandidatePath,
+    [Parameter(Mandatory = $true)][string] $RepositoryRoot
+  )
+
+  $pathSeparators = [char[]] @(
+    [System.IO.Path]::DirectorySeparatorChar,
+    [System.IO.Path]::AltDirectorySeparatorChar
+  )
+  $candidate = (Resolve-CanonicalPath -Path $CandidatePath).TrimEnd($pathSeparators)
+  $repository = (Resolve-CanonicalPath -Path $RepositoryRoot).TrimEnd($pathSeparators)
+  return $candidate.Equals($repository, [System.StringComparison]::OrdinalIgnoreCase) -or
+    $candidate.StartsWith(
+      $repository + [System.IO.Path]::DirectorySeparatorChar,
+      [System.StringComparison]::OrdinalIgnoreCase
+    )
+}
 
 function Get-Jdk21Home {
   $candidates = @(
@@ -86,7 +136,7 @@ function Invoke-CheckedCommand {
   }
 }
 
-$repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
+$repositoryRoot = Resolve-CanonicalPath -Path (Join-Path $PSScriptRoot "..")
 $apkPath = Join-Path $repositoryRoot "android\app\build\outputs\apk\release\app-release.apk"
 $anchorPath = Join-Path $repositoryRoot "android\release-certificate.sha256"
 $jdkHome = Get-Jdk21Home
@@ -105,56 +155,58 @@ $previousAndroidHome = $env:ANDROID_HOME
 $previousAndroidSdkRoot = $env:ANDROID_SDK_ROOT
 $previousSigningProperties = $env:HONGTAI_RELEASE_SIGNING_PROPERTIES
 
+if ([string]::IsNullOrWhiteSpace($SigningProperties)) {
+  if (![string]::IsNullOrWhiteSpace($previousSigningProperties)) {
+    $SigningProperties = $previousSigningProperties
+  } else {
+    $SigningProperties = Join-Path $env:APPDATA "HongTai-AI-Agent\signing\keystore.properties"
+  }
+}
+$SigningProperties = Resolve-CanonicalPath -Path $SigningProperties
+if (!(Test-Path -LiteralPath $SigningProperties -PathType Leaf)) {
+  throw "Release signing properties file is required"
+}
+if (Test-PathInsideRepository -CandidatePath $SigningProperties -RepositoryRoot $repositoryRoot) {
+  throw "Release signing properties must be outside the repository"
+}
+
 try {
   $env:JAVA_HOME = $jdkHome
   $env:ANDROID_HOME = $androidSdk
   $env:ANDROID_SDK_ROOT = $androidSdk
   Remove-Item Env:HONGTAI_RELEASE_SIGNING_PROPERTIES -ErrorAction SilentlyContinue
 
-  if (!$VerifyExistingApk) {
-    if ([string]::IsNullOrWhiteSpace($SigningProperties)) {
-      if (![string]::IsNullOrWhiteSpace($previousSigningProperties)) {
-        $SigningProperties = $previousSigningProperties
-      } else {
-        $SigningProperties = Join-Path $env:APPDATA "HongTai-AI-Agent\signing\keystore.properties"
-      }
-    }
-    $SigningProperties = [System.IO.Path]::GetFullPath($SigningProperties)
-    if (!(Test-Path -LiteralPath $SigningProperties -PathType Leaf)) {
-      throw "Release signing properties file is required"
-    }
-    Push-Location $repositoryRoot
-    try {
-      Invoke-CheckedCommand -Command "pnpm.cmd" -Arguments @(
-        "--filter", "@hongtai/web", "build"
-      ) -FailureMessage "Web production build failed"
-      Invoke-CheckedCommand -Command "pnpm.cmd" -Arguments @(
-        "exec", "cap", "sync", "android"
-      ) -FailureMessage "Capacitor Android sync failed"
-    } finally {
-      Pop-Location
-    }
+  Push-Location $repositoryRoot
+  try {
+    Invoke-CheckedCommand -Command "pnpm.cmd" -Arguments @(
+      "--filter", "@hongtai/web", "build"
+    ) -FailureMessage "Web production build failed"
+    Invoke-CheckedCommand -Command "pnpm.cmd" -Arguments @(
+      "exec", "cap", "sync", "android"
+    ) -FailureMessage "Capacitor Android sync failed"
+  } finally {
+    Pop-Location
+  }
 
-    Push-Location (Join-Path $repositoryRoot "android")
+  Push-Location (Join-Path $repositoryRoot "android")
+  try {
+    $env:HONGTAI_RELEASE_SIGNING_PROPERTIES = $SigningProperties
     try {
-      $env:HONGTAI_RELEASE_SIGNING_PROPERTIES = $SigningProperties
-      try {
-        Invoke-CheckedCommand -Command (Join-Path $repositoryRoot "android\gradlew.bat") -Arguments @(
-          ":app:testReleaseUnitTest",
-          ":app:lintRelease",
-          ":app:assembleRelease",
-          "--no-daemon"
-        ) -FailureMessage "Android release tests, lint, or build failed"
-      } finally {
-        if ($hadSigningProperties) {
-          $env:HONGTAI_RELEASE_SIGNING_PROPERTIES = $previousSigningProperties
-        } else {
-          Remove-Item Env:HONGTAI_RELEASE_SIGNING_PROPERTIES -ErrorAction SilentlyContinue
-        }
-      }
+      Invoke-CheckedCommand -Command (Join-Path $repositoryRoot "android\gradlew.bat") -Arguments @(
+        ":app:testReleaseUnitTest",
+        ":app:lintRelease",
+        ":app:assembleRelease",
+        "--no-daemon"
+      ) -FailureMessage "Android release tests, lint, or build failed"
     } finally {
-      Pop-Location
+      if ($hadSigningProperties) {
+        $env:HONGTAI_RELEASE_SIGNING_PROPERTIES = $previousSigningProperties
+      } else {
+        Remove-Item Env:HONGTAI_RELEASE_SIGNING_PROPERTIES -ErrorAction SilentlyContinue
+      }
     }
+  } finally {
+    Pop-Location
   }
 
   if (!(Test-Path -LiteralPath $apkPath -PathType Leaf)) {

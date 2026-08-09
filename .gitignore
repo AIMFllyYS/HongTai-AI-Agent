@@ -24,6 +24,12 @@ android/local.properties
 android/capacitor-cordova-android-plugins/src/main/java/
 android/capacitor-cordova-android-plugins/src/main/res/
 
+# Android release signing material is always repository-external.
+*.jks
+*.keystore
+*.p12
+keystore.properties
+
 # 编辑器与系统文件
 .idea/
 .vscode/

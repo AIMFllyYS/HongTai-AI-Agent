@@ -15,6 +15,15 @@
 - 无 `HONGTAI_RELEASE_SIGNING_PROPERTIES` 执行 `:app:assembleRelease --no-daemon`：配置阶段以 `Release signing configuration is required via HONGTAI_RELEASE_SIGNING_PROPERTIES` 安全失败，未输出字段值或私有路径。
 - `:app:testDebugUnitTest --no-daemon`：通过，说明缺少 release 配置不阻断 Debug/JVM 回归。
 
+### 规格审查后的安全补证
+
+- 在基线 `bf2173e` 上扩展聚焦测试，新增 task graph、仓库外路径、根忽略、无 stale APK bypass 与秘密生命周期守护；新增断言首次运行 2/2 按预期失败，实现后与既有 Android boundary 合计 14/14 通过。
+- 无 `HONGTAI_RELEASE_SIGNING_PROPERTIES` 分别执行 `:app:assemble --no-daemon` 与 `:app:build --no-daemon`，两者的实际 task graph 都包含 release 产物任务，并在任何 task 执行前以同一安全错误 fail-closed；显式 `:app:testDebugUnitTest` 仍通过。
+- 使用工作区内无秘密占位路径验证：初始化脚本拒绝仓库内 signing directory 且未创建目录；构建脚本拒绝仓库内 properties；Gradle 拒绝仓库内 properties，也拒绝仓库外 properties 指向仓库内 `storeFile`。错误均未输出字段值或 properties 内容；占位文件在验证后删除。
+- 根 `.gitignore` 已防御性忽略任意层 `*.jks`、`*.keystore`、`*.p12` 和 `keystore.properties`，不影响 `keystore.properties.example`。
+- `build-android-release.ps1` 已移除跳过 fresh build、直接验收固定旧 APK 的参数；每次调用均执行 Web build、Capacitor sync、release test/lint/assemble 后再验签。
+- 初始化脚本把两个随机口令的生成纳入受保护 `try/finally`，并在 `finally` 清除环境变量、口令和完整明文 properties 变量。对已有正式材料复跑仍拒绝覆盖，三个最终目标哈希保持不变。
+
 ## 初始化证据
 
 - 默认仓库外目录成功创建 alias `hongtai-release` 的 RSA 3072 / SHA256withRSA 身份。
@@ -34,6 +43,8 @@
 - APK Signature Scheme v2：`true`；v3：`true`；DN 不含 `Android Debug`。
 - signer SHA-256 与 `android/release-certificate.sha256` 一致。
 - APK SHA-256：`0dc5a2a9a1a8abe8cd1f98691c1aa5c99049461f9fbb7cfd8b9f4913a98f67d5`。
+
+规格修复后的完整构建脚本再次从 Web build 与 Capacitor sync 开始执行；Gradle 96 个 actionable task 中 8 个执行、88 个 up-to-date，release test/lint/assemble 与全部主机后验通过。新鲜 APK SHA-256 仍为上述 `0dc5a2a9a1a8abe8cd1f98691c1aa5c99049461f9fbb7cfd8b9f4913a98f67d5`，因此未改写既有 Android 端测候选 SHA 结论。
 
 构建中保留既有的 Vite 大 chunk 提示、Capacitor `flatDir` 提示和 Media3 deprecated 编译提示；本次没有新增对应实现，也没有把 warning 表述为 error 或顺手扩修。
 

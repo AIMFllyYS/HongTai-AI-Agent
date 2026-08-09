@@ -8,7 +8,8 @@ const read = (path: string) => readFileSync(join(root, path), "utf8");
 
 test("release builds require an external non-Debug signing identity", () => {
   const gradle = read("android/app/build.gradle.kts");
-  const ignore = read("android/.gitignore");
+  const androidIgnore = read("android/.gitignore");
+  const rootIgnore = read(".gitignore");
 
   assert.match(gradle, /HONGTAI_RELEASE_SIGNING_PROPERTIES/);
   assert.match(gradle, /signingConfigs\s*\{[\s\S]*create\("release"\)/);
@@ -18,21 +19,30 @@ test("release builds require an external non-Debug signing identity", () => {
   );
   assert.match(
     gradle,
-    /listOf\("assemble",\s*"bundle",\s*"package",\s*"install",\s*"validateSigning"\)/,
+    /gradle\.taskGraph\.whenReady\s*\(\s*object\s*:\s*Action<TaskExecutionGraph>/,
   );
+  assert.match(gradle, /graph\.allTasks\.any/);
+  assert.match(gradle, /task\.name\.contains\("Release",\s*ignoreCase\s*=\s*true\)/);
+  assert.doesNotMatch(gradle, /gradle\.startParameter\.taskNames/);
   assert.match(
     gradle,
     /GradleException\("Release signing configuration is required/,
   );
+  assert.match(gradle, /canonicalFile/);
+  assert.match(gradle, /isInsideRepository/);
   assert.match(gradle, /enableV1Signing\s*=\s*false/);
   assert.match(gradle, /enableV2Signing\s*=\s*true/);
   assert.match(gradle, /enableV3Signing\s*=\s*true/);
   assert.match(gradle, /alias\.equals\("androiddebugkey",\s*ignoreCase\s*=\s*true\)/);
   assert.doesNotMatch(gradle, /signingConfigs\.debug|debug\.keystore/i);
-  assert.match(ignore, /^\/keystore\.properties$/m);
-  assert.match(ignore, /^\/\*\.jks$/m);
-  assert.match(ignore, /^\/\*\.keystore$/m);
-  assert.match(ignore, /^\/\*\.p12$/m);
+  assert.match(androidIgnore, /^\/keystore\.properties$/m);
+  assert.match(androidIgnore, /^\/\*\.jks$/m);
+  assert.match(androidIgnore, /^\/\*\.keystore$/m);
+  assert.match(androidIgnore, /^\/\*\.p12$/m);
+  assert.match(rootIgnore, /^\*\.jks$/m);
+  assert.match(rootIgnore, /^\*\.keystore$/m);
+  assert.match(rootIgnore, /^\*\.p12$/m);
+  assert.match(rootIgnore, /^keystore\.properties$/m);
 });
 
 test("release tooling verifies the anchored certificate and signed APK", () => {
@@ -51,6 +61,19 @@ test("release tooling verifies the anchored certificate and signed APK", () => {
   assert.match(init, /-storepass:env/);
   assert.match(init, /-keypass:env/);
   assert.match(init, /already exists/);
+  assert.match(init, /Resolve-CanonicalPath/);
+  assert.match(init, /Test-PathInsideRepository/);
+  assert.match(build, /Resolve-CanonicalPath/);
+  assert.match(build, /Test-PathInsideRepository/);
+  assert.doesNotMatch(build, /VerifyExistingApk/);
+  assert.match(
+    init,
+    /try\s*\{\s*\$storePassword\s*=\s*New-RandomSecret\s*\$keyPassword\s*=\s*New-RandomSecret/,
+  );
+  assert.match(
+    init,
+    /finally\s*\{[\s\S]*\$properties\s*=\s*\$null[\s\S]*\$storePassword\s*=\s*\$null[\s\S]*\$keyPassword\s*=\s*\$null/,
+  );
   assert.doesNotMatch(init + build, /debug\.keystore/);
   assert.match(build, /zipalign/);
   assert.match(build, /aapt2/);

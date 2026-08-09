@@ -6,6 +6,57 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version 2.0
 
+function Resolve-CanonicalPath {
+  param([Parameter(Mandatory = $true)][string] $Path)
+
+  $fullPath = [System.IO.Path]::GetFullPath($Path)
+  if (Test-Path -LiteralPath $fullPath) {
+    return (Resolve-Path -LiteralPath $fullPath).ProviderPath
+  }
+
+  $missingSegments = New-Object 'System.Collections.Generic.Stack[string]'
+  $existingAncestor = $fullPath
+  while (!(Test-Path -LiteralPath $existingAncestor)) {
+    $trimmed = $existingAncestor.TrimEnd(
+      [char[]] @([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    )
+    $leaf = [System.IO.Path]::GetFileName($trimmed)
+    $parent = [System.IO.Path]::GetDirectoryName($trimmed)
+    if ([string]::IsNullOrWhiteSpace($leaf) -or
+        [string]::IsNullOrWhiteSpace($parent) -or
+        $parent -eq $existingAncestor) {
+      return $fullPath
+    }
+    $missingSegments.Push($leaf)
+    $existingAncestor = $parent
+  }
+
+  $canonicalPath = (Resolve-Path -LiteralPath $existingAncestor).ProviderPath
+  while ($missingSegments.Count -gt 0) {
+    $canonicalPath = Join-Path $canonicalPath $missingSegments.Pop()
+  }
+  return [System.IO.Path]::GetFullPath($canonicalPath)
+}
+
+function Test-PathInsideRepository {
+  param(
+    [Parameter(Mandatory = $true)][string] $CandidatePath,
+    [Parameter(Mandatory = $true)][string] $RepositoryRoot
+  )
+
+  $pathSeparators = [char[]] @(
+    [System.IO.Path]::DirectorySeparatorChar,
+    [System.IO.Path]::AltDirectorySeparatorChar
+  )
+  $candidate = (Resolve-CanonicalPath -Path $CandidatePath).TrimEnd($pathSeparators)
+  $repository = (Resolve-CanonicalPath -Path $RepositoryRoot).TrimEnd($pathSeparators)
+  return $candidate.Equals($repository, [System.StringComparison]::OrdinalIgnoreCase) -or
+    $candidate.StartsWith(
+      $repository + [System.IO.Path]::DirectorySeparatorChar,
+      [System.StringComparison]::OrdinalIgnoreCase
+    )
+}
+
 function Get-Jdk21Home {
   $candidates = @(
     $env:JAVA_HOME,
@@ -97,7 +148,11 @@ function Protect-SigningDirectory {
   }
 }
 
-$resolvedSigningDirectory = [System.IO.Path]::GetFullPath($SigningDirectory)
+$repositoryRoot = Resolve-CanonicalPath -Path (Join-Path $PSScriptRoot "..")
+$resolvedSigningDirectory = Resolve-CanonicalPath -Path $SigningDirectory
+if (Test-PathInsideRepository -CandidatePath $resolvedSigningDirectory -RepositoryRoot $repositoryRoot) {
+  throw "Release signing directory must be outside the repository"
+}
 $keystorePath = Join-Path $resolvedSigningDirectory "hongtai-release.jks"
 $propertiesPath = Join-Path $resolvedSigningDirectory "keystore.properties"
 $certificatePath = Join-Path $resolvedSigningDirectory "hongtai-release.cer"
@@ -113,15 +168,19 @@ Protect-SigningDirectory -Path $resolvedSigningDirectory
 
 $jdkHome = Get-Jdk21Home
 $keytool = Join-Path $jdkHome "bin\keytool.exe"
-$storePassword = New-RandomSecret
-$keyPassword = New-RandomSecret
 $storePasswordVariable = "HONGTAI_KEYTOOL_STORE_PASSWORD"
 $keyPasswordVariable = "HONGTAI_KEYTOOL_KEY_PASSWORD"
 $temporaryKeystore = Join-Path $resolvedSigningDirectory (".{0}.tmp" -f [Guid]::NewGuid().ToString("N"))
 $temporaryCertificate = Join-Path $resolvedSigningDirectory (".{0}.cer.tmp" -f [Guid]::NewGuid().ToString("N"))
 $temporaryProperties = Join-Path $resolvedSigningDirectory (".{0}.properties.tmp" -f [Guid]::NewGuid().ToString("N"))
+$storePassword = $null
+$keyPassword = $null
+$properties = $null
+$forwardSlashKeystore = $null
 
 try {
+  $storePassword = New-RandomSecret
+  $keyPassword = New-RandomSecret
   [Environment]::SetEnvironmentVariable($storePasswordVariable, $storePassword, "Process")
   [Environment]::SetEnvironmentVariable($keyPasswordVariable, $keyPassword, "Process")
 
@@ -170,6 +229,8 @@ try {
 } finally {
   [Environment]::SetEnvironmentVariable($storePasswordVariable, $null, "Process")
   [Environment]::SetEnvironmentVariable($keyPasswordVariable, $null, "Process")
+  $properties = $null
+  $forwardSlashKeystore = $null
   $storePassword = $null
   $keyPassword = $null
   foreach ($temporaryPath in @($temporaryKeystore, $temporaryCertificate, $temporaryProperties)) {
