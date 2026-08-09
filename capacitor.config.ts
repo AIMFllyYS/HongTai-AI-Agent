@@ -13,8 +13,10 @@ const config: CapacitorConfig = {
   loggingBehavior: "none",
   server: {
     androidScheme: "https",
+    errorPath: "unsupported-webview.html",
   },
   android: {
+    minWebViewVersion: 99,
     // Native plugins are explicitly registered from MainActivity.
     includePlugins: [],
   },

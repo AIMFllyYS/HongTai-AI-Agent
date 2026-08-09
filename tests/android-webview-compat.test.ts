@@ -1,0 +1,41 @@
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import test from "node:test";
+
+const root = resolve(import.meta.dirname, "..");
+const read = (path: string) => readFileSync(join(root, path), "utf8");
+
+test("Android rejects WebViews below the application capability floor", () => {
+  const config = read("capacitor.config.ts");
+
+  assert.match(config, /minWebViewVersion:\s*99\b/);
+  assert.match(config, /errorPath:\s*"unsupported-webview\.html"/);
+});
+
+test("the production web bundle targets the declared Chromium floor", () => {
+  const vite = read("apps/web/vite.config.ts");
+
+  assert.match(vite, /build:\s*\{[\s\S]*target:\s*"chrome99"[\s\S]*\}/);
+});
+
+test("the unsupported WebView page is local static Chinese HTML", () => {
+  const relativePath = "apps/web/public/unsupported-webview.html";
+  assert.equal(existsSync(join(root, relativePath)), true, "missing unsupported WebView page");
+  const page = read(relativePath);
+
+  assert.match(page, /<meta\s+charset="UTF-8"/i);
+  assert.match(page, /WebView/);
+  assert.match(page, /[\u3400-\u9fff]/);
+  assert.doesNotMatch(page, /<script\b|<link\b|<iframe\b|\son\w+\s*=|@import/i);
+  assert.doesNotMatch(page, /https?:\/\/|\/\/|location\s*[.=]|http-equiv\s*=\s*["']refresh/i);
+});
+
+test("release packaging verifies the new monotonic candidate version", () => {
+  const appBuild = read("android/app/build.gradle.kts");
+  const releaseBuilder = read("scripts/build-android-release.ps1");
+
+  assert.match(appBuild, /versionCode\s*=\s*5\b/);
+  assert.match(appBuild, /versionName\s*=\s*"0\.0\.1"/);
+  assert.match(releaseBuilder, /\$versionCode\s+-ne\s+"5"/);
+});
