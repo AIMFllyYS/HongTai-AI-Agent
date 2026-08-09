@@ -1,7 +1,36 @@
+import java.util.Properties
+
 plugins {
   id("com.android.application")
   id("org.jetbrains.kotlin.android")
 }
+
+val releaseSigningPath = providers.environmentVariable("HONGTAI_RELEASE_SIGNING_PROPERTIES").orNull
+val releaseTaskRequested = gradle.startParameter.taskNames.any { taskName ->
+  taskName.contains("Release", ignoreCase = true) &&
+    listOf("assemble", "bundle", "package", "install", "validateSigning").any { operation ->
+      taskName.contains(operation, ignoreCase = true)
+    }
+}
+val releaseSigningFile = releaseSigningPath?.let(::file)
+
+if (
+  releaseTaskRequested &&
+  (releaseSigningFile == null || !releaseSigningFile.isAbsolute || !releaseSigningFile.isFile)
+) {
+  throw GradleException(
+    "Release signing configuration is required via HONGTAI_RELEASE_SIGNING_PROPERTIES",
+  )
+}
+
+val releaseSigning = Properties()
+if (releaseSigningFile?.isAbsolute == true && releaseSigningFile.isFile) {
+  releaseSigningFile.inputStream().use(releaseSigning::load)
+}
+
+fun requiredReleaseSigningValue(name: String): String =
+  releaseSigning.getProperty(name)?.takeIf(String::isNotBlank)
+    ?: throw GradleException("Release signing configuration is missing required field: $name")
 
 android {
   namespace = "com.hongtai.aiagent"
@@ -11,14 +40,42 @@ android {
     applicationId = "com.hongtai.aiagent"
     minSdk = 24
     targetSdk = 36
-    versionCode = 3
+    versionCode = 4
     versionName = "0.0.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
+  signingConfigs {
+    if (releaseSigning.isNotEmpty()) {
+      create("release") {
+        val keyStore = file(requiredReleaseSigningValue("storeFile"))
+        if (!keyStore.isAbsolute || !keyStore.isFile) {
+          throw GradleException("Release signing keystore must be an existing absolute file")
+        }
+        val alias = requiredReleaseSigningValue("keyAlias")
+        if (alias.equals("androiddebugkey", ignoreCase = true)) {
+          throw GradleException("Release signing alias must not use the Android Debug identity")
+        }
+        storeFile = keyStore
+        storePassword = requiredReleaseSigningValue("storePassword")
+        keyAlias = alias
+        keyPassword = requiredReleaseSigningValue("keyPassword")
+        enableV1Signing = false
+        enableV2Signing = true
+        enableV3Signing = true
+      }
+    }
+  }
+
   buildTypes {
     release {
+      signingConfig = signingConfigs.findByName("release")
+        ?: if (releaseTaskRequested) {
+          throw GradleException("Release signing configuration is required")
+        } else {
+          null
+        }
       isMinifyEnabled = false
       proguardFiles(
         getDefaultProguardFile("proguard-android-optimize.txt"),

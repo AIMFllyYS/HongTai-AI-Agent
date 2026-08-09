@@ -2,7 +2,7 @@
 
 面向大健康门店老板的本地优先 Android AI 应用。交付形态是独立 APK：React 是**应用界面层**，共享 TypeScript 是**本地应用逻辑层**，Capacitor/Kotlin 是**平台运行时与原生能力层**；本项目没有传统远程 Web 后端。
 
-> 当前能力、发布边界和修复优先级见[当前能力与发布状态](docs/当前能力与发布状态.md)。当前 `v0.0.1` 是 QA 产物，不可作为正式 release 分发。
+> 当前能力、发布边界和修复优先级见[当前能力与发布状态](docs/当前能力与发布状态.md)。仓库已能构建受控非 Debug 签名的 `v0.0.1` release 候选，但整体发布门禁尚未完成，不可正式分发。
 
 ## 当前能力
 
@@ -75,7 +75,16 @@ Pop-Location
 
 输出为 `android/app/build/outputs/apk/debug/app-debug.apk`。它使用 Android debug 签名，仅用于开发和 QA。
 
-正式发布前不得跳过以下检查：团队 release keystore、递增 `versionCode`、APK SHA-256、不带降级参数的同签名正常升级，以及涉及相册/相机/网络/Media3 的物理真机证据。当前阻断项见[发布状态](docs/当前能力与发布状态.md)。
+## 构建正式候选 APK
+
+首次由签名材料保管人初始化仓库外签名身份，之后使用同一身份构建：
+
+```powershell
+.\scripts\init-android-release-signing.ps1
+.\scripts\build-android-release.ps1
+```
+
+初始化只允许执行一次且拒绝覆盖已有身份。字段说明、备份责任、验签和升级操作见[Android 发布签名与升级指南](docs/Android发布签名与升级指南.md)。签名构建成功只证明主机候选的构建与身份校验通过，不等于全部发布门禁或物理真机通过；同签名普通升级、相册/相机、网络、Media3 等剩余证据仍以[发布状态](docs/当前能力与发布状态.md)为准。
 
 ## 验证入口
 
@@ -98,3 +107,4 @@ Pop-Location
 - [错误码与应用界面通知约定](docs/错误码与前端通知约定.md)
 - [AI应用能力层架构](docs/AI应用能力层架构.md)
 - [任务执行模板](docs/任务执行模板.md)
+- [Android 发布签名与升级指南](docs/Android发布签名与升级指南.md)

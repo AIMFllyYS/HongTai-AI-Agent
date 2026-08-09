@@ -1,6 +1,10 @@
 /.gradle/
 /app/build/
 /local.properties
+/keystore.properties
+/*.jks
+/*.keystore
+/*.p12
 
 # Web assets are generated from apps/web by `cap sync android`; source assets
 # remain in the web package and must not be duplicated in the Android project.
