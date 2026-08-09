@@ -9,9 +9,10 @@ libvips `8.18.3`，`pnpm audit --prod` 退出码为 0，且真实 `diagnosis ser
 损坏和请求级超限场景均符合稳定 HTTP 契约。
 
 原 clean Git 工作树上的唯一一次权威 `pnpm check` 为 218/218 通过。fresh archive
-不带 `.git`，并按仓库导出规则缺少部分 docs 和 `android/.native-deps`；其 full check
-因此只作为“不完整导出副本不能运行仓库级验收测试”的透明诊断，不作为产品失败或权威
-full gate。独立 spec/code review 仍由本 Loop 的后续审查阶段完成，不能只凭本记录关闭 Issue。
+不带 `.git`；两份中文文档实际存在于 `head.tar`，但 Windows `tar` 展开时误解码其 UTF-8
+路径；被忽略的外部 `android/.native-deps` 源码缓存也不在副本中。其 full check
+因此只作为“该 Windows 展开副本不能运行仓库级验收测试”的透明诊断，不作为产品失败或权威
+full gate。独立 spec 与 quality review 均已批准，本 Loop 的代码、Windows x64 CLI 端测与审查已收口。
 
 本结论只覆盖 Windows x64 CLI。Linux、macOS 预构建二进制未验证；sharp/libvips 不进入
 Web、Capacitor 或 APK 路径，本轮没有重建 APK、运行 AVD 或声称 Android 端测。
@@ -54,9 +55,10 @@ Web、Capacitor 或 APK 路径，本轮没有重建 APK、运行 AVD 或声称 A
 `node_modules`，仅复用全局 pnpm store 的包缓存
 `C:\Users\AIMFl\AppData\Local\pnpm\store\v10`，没有复用另一副本的 `node_modules`。
 
-fresh archive 中误触发的一次 `pnpm check` 得到 216 tests、209 pass、7 fail。失败均来自
-仓库级测试所需前置不在 archive 中：`.git`、按 export-ignore 排除的中文架构/HEIF 文档、
-以及仓库外生成的 `android/.native-deps` 源码缓存；这不是有效 Git checkout 的 full gate。
+fresh archive 中误触发的一次 `pnpm check` 得到 216 tests、209 pass、7 fail。Python
+`tarfile` 复核证明中文架构/HEIF 文档都存在于 `head.tar`；失败前置来自 archive 无 `.git`、
+Windows `tar` 将两份中文路径误解码，以及被忽略的外部 `android/.native-deps` 源码缓存
+不在副本中。这不是有效 Git checkout 的 full gate。
 保留该日志是为了不隐藏验收环境失配。
 
 回到运行前仍为 clean 的原 Git 工作树后，仅运行一次权威 `pnpm check`：
@@ -112,7 +114,7 @@ sharp/libvips 引用；`LIBSHARPYUV` 是 libheif 的另一独立选项，不是 
   `C:\Users\AIMFl\AppData\Local\Temp\HongTai-Issue7-Acceptance-20260810-083353-8218318`；
 - 脱敏 manifest：`manifest.json`；
 - manifest SHA-256：
-  `d50a6c2c4b1f90c6380e886f6cd2b5d47a3994f740bc47c2a12f830688efc639`；
+  `826c4643c4364cafe8891c4a4a8be00bfe3ab18924372d6d4b3ae5765c4d4bfa`；
 - manifest 固定 16 项安装、审计、运行、HTTP、APK 和 full-check 证据文件哈希；fresh
   archive、副本 node_modules、运行产物、公有证书与非私密日志保留，便于复核；
 - CLI 与 mock 已通过各自会话精确停止，复核两个端口无监听残留；
