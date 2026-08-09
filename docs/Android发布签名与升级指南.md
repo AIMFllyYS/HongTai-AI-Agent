@@ -18,7 +18,7 @@
 
 脚本在规范化仓库根或执行任何外部工具前，先检查原始仓库路径；从指向仓库的 Windows junction、符号链接等 reparse point 启动时会立即拒绝。目标目录等于或位于仓库内部、目标路径链经过 reparse point 时也会保守拒绝，不能借外部别名把材料写回仓库。
 
-`SigningDirectory` 必须完全不存在；已有空目录或含其他文件的目录都会原样拒绝，脚本不会接管或修改其 ACL。初始化只对本次新建的同父级唯一 staging 目录设置当前用户、SYSTEM 和 Administrators ACL，在其中用 JDK 21 `keytool` 生成并验证 keystore、properties、公有证书三件套，再用一次目录 rename 发布为最终目录。发布前失败只精确清理本次 staging 中的三个预期文件和空目录，最终目录不会出现半套材料。控制台只显示 properties 路径与公有证书 SHA-256，不显示口令。
+`SigningDirectory` 必须完全不存在；已有空目录或含其他文件的目录都会原样拒绝，脚本不会接管或修改其 ACL。初始化只对本次新建的同父级唯一 staging 目录设置当前用户、SYSTEM 和 Administrators ACL，在其中用 JDK 21 `keytool` 生成并验证 keystore、properties、公有证书三件套，再用一次目录 rename 发布为最终目录。发布和清理 helper 都要求 staging 名严格符合脚本生成的 32 位小写 GUID 格式、父目录与预期父目录精确一致，并自行逐段拒绝 reparse point；清理还会在删除前验证全部目录项，任何三件套文件本身是 reparse point 时也会拒绝。发布前失败只精确清理通过上述验证的本次 staging 文件和空目录，普通目录或最终材料目录不能被当作 staging 清理，最终目录不会出现半套材料。控制台只显示 properties 路径与公有证书 SHA-256，不显示口令。
 
 外部 properties 文件只包含四个必要字段：
 
@@ -29,7 +29,7 @@ keyAlias=hongtai-release
 keyPassword=replace-with-secret
 ```
 
-properties 文件和 `storeFile` 的原始值都必须是绝对路径，Gradle 在任何项目路径解析前先拒绝相对值；两者还必须位于仓库外，`storeFile` 必须存在，alias 不得为 `androiddebugkey`。构建入口从 reparse point 指向的仓库别名启动时会在调用 pnpm 或 Gradle 前拒绝，也拒绝 properties 路径链中的 reparse point；Gradle 还比较 normalized path 与 `toRealPath()` 并逐段检查符号链接，外部 junction 指回仓库不能绕过边界。仓库中的 `android/keystore.properties.example` 只是无秘密的字段模板；真实 properties、keystore 和口令不得进入 Git、日志、Issue、截图或聊天记录。根 `.gitignore` 对任意层的常见 keystore 与 `keystore.properties` 另有防御性忽略，但它不是替代仓库外存储的安全边界。
+properties 文件由初始化脚本写成 UTF-8 无 BOM，Gradle 也显式按 UTF-8 Reader 读取，因此仓库外中文目录可以原样使用。properties 文件和 `storeFile` 的原始值都必须是绝对路径，Gradle 在任何项目路径解析前先拒绝相对值；两者还必须位于仓库外，`storeFile` 必须存在，alias 不得为 `androiddebugkey`。构建入口从 reparse point 指向的仓库别名启动时会在调用 pnpm 或 Gradle 前拒绝，也拒绝 properties 路径链中的 reparse point；Gradle 还比较 normalized path 与 `toRealPath()` 并逐段检查符号链接，外部 junction 指回仓库不能绕过边界。仓库中的 `android/keystore.properties.example` 只是无秘密的字段模板；真实 properties、keystore 和口令不得进入 Git、日志、Issue、截图或聊天记录。根 `.gitignore` 对任意层的常见 keystore 与 `keystore.properties` 另有防御性忽略，但它不是替代仓库外存储的安全边界。
 
 ## 构建与主机验签
 

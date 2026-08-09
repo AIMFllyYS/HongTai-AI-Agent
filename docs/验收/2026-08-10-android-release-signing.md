@@ -47,6 +47,14 @@
 - 三件套先在最终目录同父级的唯一 staging 目录内生成和验证，properties 写入最终 keystore 绝对路径，再通过一次 `[System.IO.Directory]::Move(staging, final)` 发布。独立 helper 的 final-conflict 行为测试确认发布失败后只精确清理本次 staging 三文件及空目录，既有 final sentinel 的 SHA-256 与 ACL 不变，最终目录没有混入任何签名目标。
 - 无签名配置的 `:app:assemble --no-daemon` 与 `:app:build --no-daemon` 仍在 task 执行前以 required 错误 fail-closed；配置 JDK 21 后 `:app:testDebugUnitTest --no-daemon` 通过。错误均未输出字段值、properties 内容或私有路径。
 
+#### 第五轮质量复审补证
+
+- 在基线 `9f3625e` 上新增 cleanup 身份边界和中文 UTF-8 路径测试；生产实现未修改时目标测试 6/6 按预期失败。中文路径明确落入 `Release signing keystore must be an existing file`，证明 `Properties.load(InputStream)` 的 ISO-8859-1 语义无法读取初始化脚本生成的 UTF-8 路径；helper 则缺少 expected parent 与严格 staging 身份参数。
+- Gradle 改为 `reader(Charsets.UTF_8)` 后，在系统临时目录创建 UTF-8 无 BOM、中文文件名的 properties 与中文 `storeFile` 占位文件，实际执行 `:app:testReleaseUnitTest --dry-run` 成功，不再落入 existing-file 错误。fixture 只含无秘密占位字段并已精确清理。
+- 发布和清理 helper 现在都要求 `ExpectedParentDirectory`，并在任何文件操作前验证 normalized/full parent 精确匹配、staging leaf 符合 `^\.signing\.[0-9a-f]{32}\.staging$`，且 expected parent 与 staging 路径逐段不含 reparse point；清理还先验证所有目录项，三件套文件自身为 reparse point 时会整体拒绝。
+- 真实误用回归把含三份占位材料的普通 final 目录传给 cleanup：helper 以 invalid-staging 错误拒绝，目录 ACL 和三个文件 SHA-256 均不变。合法 GUID staging 的独立回归则成功精确删除三文件及空目录；final-conflict 原子发布回归仍保持既有 final sentinel 的 SHA-256/ACL 不变并清理合法 staging。
+- 完整聚焦测试 10/10 通过，既有 release task graph、相对路径、仓库/候选 junction、仓库别名启动、existing-dir ACL 和原子冲突矩阵均未回归。
+
 ## 初始化证据
 
 - 默认仓库外目录成功创建 alias `hongtai-release` 的 RSA 3072 / SHA256withRSA 身份。
@@ -74,6 +82,8 @@
 第三轮补齐 bundle 产物入口与 Gradle `toRealPath()` 门禁后再次执行完整构建入口；同一组 Web、Capacitor、release 测试/lint/build 和主机验签全部通过，Gradle 仍为 96 个 actionable task 中 8 个执行、88 个 up-to-date，APK SHA-256 仍为 `0dc5a2a9a1a8abe8cd1f98691c1aa5c99049461f9fbb7cfd8b9f4913a98f67d5`。因此不改写既有 Android 端测候选身份，也不重复启动 AVD。
 
 第四轮补上原始仓库根 reparse 门禁、原始绝对路径检查与原子目录发布后再次执行完整构建入口；Web build、Capacitor sync、release test/lint/assemble、zipalign、`aapt2`、`apksigner` 与证书锚点全部通过，Gradle 仍为 96 个 actionable task 中 8 个执行、88 个 up-to-date。APK SHA-256 仍为 `0dc5a2a9a1a8abe8cd1f98691c1aa5c99049461f9fbb7cfd8b9f4913a98f67d5`，所以 Android 端测候选身份与已有升级数值不变；本轮没有启动 AVD。
+
+第五轮收紧 cleanup helper 并改用 UTF-8 Reader 后再次执行完整构建入口；Web build、Capacitor sync、release test/lint/assemble、zipalign、`aapt2`、`apksigner` 和公开证书锚点全部通过，Gradle 仍为 96 个 actionable task 中 8 个执行、88 个 up-to-date。APK SHA-256 仍为 `0dc5a2a9a1a8abe8cd1f98691c1aa5c99049461f9fbb7cfd8b9f4913a98f67d5`，没有改变既有 Android 端测候选身份；本轮未启动 AVD，也未修改仓库外正式签名材料。
 
 构建中保留既有的 Vite 大 chunk 提示、Capacitor `flatDir` 提示和 Media3 deprecated 编译提示；本次没有新增对应实现，也没有把 warning 表述为 error 或顺手扩修。
 

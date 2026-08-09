@@ -284,7 +284,8 @@ try {
 
   Publish-AndroidReleaseSigningDirectory `
     -StagingDirectory $stagingDirectory `
-    -FinalDirectory $resolvedSigningDirectory
+    -FinalDirectory $resolvedSigningDirectory `
+    -ExpectedParentDirectory $signingParentDirectory
   Write-Output "Signing properties: $propertiesPath"
   Write-Output "Certificate SHA-256: $fingerprint"
 } finally {
@@ -296,6 +297,7 @@ try {
   $keyPassword = $null
   if (Test-Path -LiteralPath $stagingDirectory) {
     Remove-AndroidReleaseSigningStagingDirectory `
-      -StagingDirectory $stagingDirectory
+      -StagingDirectory $stagingDirectory `
+      -ExpectedParentDirectory $signingParentDirectory
   }
 }

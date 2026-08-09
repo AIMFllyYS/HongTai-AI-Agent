@@ -62,7 +62,7 @@ if (releaseSigningFile != null) {
 
 val releaseSigning = Properties()
 if (releaseSigningFile != null) {
-  releaseSigningFile.inputStream().use(releaseSigning::load)
+  releaseSigningFile.reader(Charsets.UTF_8).use(releaseSigning::load)
 }
 
 fun requiredReleaseSigningValue(name: String): String =

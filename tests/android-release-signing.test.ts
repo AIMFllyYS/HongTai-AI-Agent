@@ -127,6 +127,14 @@ test("release builds require an external non-Debug signing identity", () => {
     /rawKeyStore\s*=\s*File\(requiredReleaseSigningValue\("storeFile"\)\)/,
   );
   assert.match(gradle, /if\s*\(!rawKeyStore\.isAbsolute\)/);
+  assert.match(
+    gradle,
+    /releaseSigningFile\.reader\(Charsets\.UTF_8\)\.use\(releaseSigning::load\)/,
+  );
+  assert.doesNotMatch(
+    gradle,
+    /releaseSigningFile\.inputStream\(\)\.use\(releaseSigning::load\)/,
+  );
   assert.match(gradle, /signingConfigs\s*\{[\s\S]*create\("release"\)/);
   assert.match(
     gradle,
@@ -222,8 +230,17 @@ test("release tooling verifies the anchored certificate and signed APK", () => {
   assert.match(init, /android-release-signing-transaction\.psm1/);
   assert.match(init, /Publish-AndroidReleaseSigningDirectory/);
   assert.match(init, /Remove-AndroidReleaseSigningStagingDirectory/);
+  assert.match(
+    init,
+    /-ExpectedParentDirectory\s+\$signingParentDirectory/g,
+  );
   assert.doesNotMatch(init, /Move-Item/);
   assert.match(transaction, /\[System\.IO\.Directory\]::Move/);
+  assert.match(transaction, /ExpectedParentDirectory/);
+  assert.match(transaction, /\^\\\.signing\\\.\[0-9a-f\]\{32\}\\\.staging\$/);
+  assert.match(transaction, /OrdinalIgnoreCase/);
+  assert.match(transaction, /Assert-NoReparsePoint/);
+  assert.match(transaction, /FileAttributes[\s\S]*ReparsePoint/);
   assert.match(transaction, /hongtai-release\.jks/);
   assert.match(transaction, /keystore\.properties/);
   assert.match(transaction, /hongtai-release\.cer/);
@@ -331,6 +348,61 @@ test(
     } finally {
       if (existsSync(externalProperties)) {
         unlinkSync(externalProperties);
+      }
+      rmdirSync(fixtureRoot);
+    }
+  },
+);
+
+test(
+  "Windows Gradle reads UTF-8 signing properties from Chinese paths",
+  { skip: windowsOnly },
+  () => {
+    const fixtureRoot = mkdtempSync(
+      join(tmpdir(), "hongtai-release-signing-utf8-"),
+    );
+    const signingDirectory = join(fixtureRoot, "发布签名材料");
+    const keyStore = join(signingDirectory, "宏泰发布密钥.jks");
+    const properties = join(signingDirectory, "发布签名.properties");
+    mkdirSync(signingDirectory);
+
+    try {
+      writeFileSync(keyStore, "placeholder-keystore", "utf8");
+      writeFileSync(
+        properties,
+        [
+          `storeFile=${keyStore.replaceAll("\\", "/")}`,
+          "storePassword=placeholder-only",
+          "keyAlias=hongtai-release",
+          "keyPassword=placeholder-only",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+      const propertiesBytes = readFileSync(properties);
+      assert.notDeepEqual(
+        [...propertiesBytes.subarray(0, 3)],
+        [0xef, 0xbb, 0xbf],
+      );
+
+      const environment = windowsAndroidEnvironment();
+      environment.HONGTAI_RELEASE_SIGNING_PROPERTIES = properties;
+      const gradle = runGradle([":app:testReleaseUnitTest"], environment);
+      assert.equal(gradle.error, undefined);
+      assert.equal(gradle.status, 0, commandOutput(gradle));
+      assert.doesNotMatch(
+        commandOutput(gradle),
+        /Release signing keystore must be an existing file/,
+      );
+    } finally {
+      if (existsSync(properties)) {
+        unlinkSync(properties);
+      }
+      if (existsSync(keyStore)) {
+        unlinkSync(keyStore);
+      }
+      if (existsSync(signingDirectory)) {
+        rmdirSync(signingDirectory);
       }
       rmdirSync(fixtureRoot);
     }
@@ -562,7 +634,10 @@ test(
     );
     const existingDirectory = join(fixtureRoot, "existing-signing");
     const existingSentinel = join(existingDirectory, "sentinel.txt");
-    const stagingDirectory = join(fixtureRoot, ".signing-staging");
+    const stagingDirectory = join(
+      fixtureRoot,
+      ".signing.0123456789abcdef0123456789abcdef.staging",
+    );
     const finalDirectory = join(fixtureRoot, "final-signing");
     const finalSentinel = join(finalDirectory, "sentinel.txt");
     const stagedNames = [
@@ -604,9 +679,11 @@ test(
         `Import-Module ${powershellQuote(modulePath)} -Force; ` +
           `try { Publish-AndroidReleaseSigningDirectory ` +
           `-StagingDirectory ${powershellQuote(stagingDirectory)} ` +
-          `-FinalDirectory ${powershellQuote(finalDirectory)} } ` +
+          `-FinalDirectory ${powershellQuote(finalDirectory)} ` +
+          `-ExpectedParentDirectory ${powershellQuote(fixtureRoot)} } ` +
           `finally { Remove-AndroidReleaseSigningStagingDirectory ` +
-          `-StagingDirectory ${powershellQuote(stagingDirectory)} }`,
+          `-StagingDirectory ${powershellQuote(stagingDirectory)} ` +
+          `-ExpectedParentDirectory ${powershellQuote(fixtureRoot)} }`,
       );
       assert.equal(publish.error, undefined);
       assert.notEqual(publish.status, 0);
@@ -638,6 +715,117 @@ test(
       }
       if (existsSync(finalDirectory)) {
         rmdirSync(finalDirectory);
+      }
+      rmdirSync(fixtureRoot);
+    }
+  },
+);
+
+test(
+  "Windows cleanup helper refuses an ordinary directory with signing files",
+  { skip: windowsOnly },
+  () => {
+    const fixtureRoot = mkdtempSync(
+      join(tmpdir(), "hongtai-release-cleanup-refusal-"),
+    );
+    const ordinaryDirectory = join(fixtureRoot, "final-signing");
+    const signingNames = [
+      "hongtai-release.jks",
+      "keystore.properties",
+      "hongtai-release.cer",
+    ];
+    mkdirSync(ordinaryDirectory);
+    for (const name of signingNames) {
+      writeFileSync(join(ordinaryDirectory, name), `preserve-${name}`, "utf8");
+    }
+    const hashesBefore = signingNames.map((name) =>
+      fileSha256(join(ordinaryDirectory, name)),
+    );
+    const aclBefore = aclSnapshot(ordinaryDirectory);
+
+    try {
+      const modulePath = join(
+        root,
+        "scripts",
+        "android-release-signing-transaction.psm1",
+      );
+      const cleanup = powershellCommand(
+        `Import-Module ${powershellQuote(modulePath)} -Force; ` +
+          `Remove-AndroidReleaseSigningStagingDirectory ` +
+          `-StagingDirectory ${powershellQuote(ordinaryDirectory)} ` +
+          `-ExpectedParentDirectory ${powershellQuote(fixtureRoot)}`,
+      );
+      assert.equal(cleanup.error, undefined);
+      assert.notEqual(cleanup.status, 0);
+      assert.match(commandOutput(cleanup), /not a valid release signing staging directory/);
+      assert.equal(existsSync(ordinaryDirectory), true);
+      assert.equal(aclSnapshot(ordinaryDirectory), aclBefore);
+      for (const [index, name] of signingNames.entries()) {
+        assert.equal(
+          fileSha256(join(ordinaryDirectory, name)),
+          hashesBefore[index],
+        );
+      }
+    } finally {
+      for (const name of signingNames) {
+        const material = join(ordinaryDirectory, name);
+        if (existsSync(material)) {
+          unlinkSync(material);
+        }
+      }
+      if (existsSync(ordinaryDirectory)) {
+        rmdirSync(ordinaryDirectory);
+      }
+      rmdirSync(fixtureRoot);
+    }
+  },
+);
+
+test(
+  "Windows cleanup helper deletes only a valid GUID staging directory",
+  { skip: windowsOnly },
+  () => {
+    const fixtureRoot = mkdtempSync(
+      join(tmpdir(), "hongtai-release-cleanup-valid-"),
+    );
+    const stagingDirectory = join(
+      fixtureRoot,
+      ".signing.fedcba9876543210fedcba9876543210.staging",
+    );
+    const signingNames = [
+      "hongtai-release.jks",
+      "keystore.properties",
+      "hongtai-release.cer",
+    ];
+    mkdirSync(stagingDirectory);
+    for (const name of signingNames) {
+      writeFileSync(join(stagingDirectory, name), `cleanup-${name}`, "utf8");
+    }
+
+    try {
+      const modulePath = join(
+        root,
+        "scripts",
+        "android-release-signing-transaction.psm1",
+      );
+      const cleanup = powershellCommand(
+        `Import-Module ${powershellQuote(modulePath)} -Force; ` +
+          `Remove-AndroidReleaseSigningStagingDirectory ` +
+          `-StagingDirectory ${powershellQuote(stagingDirectory)} ` +
+          `-ExpectedParentDirectory ${powershellQuote(fixtureRoot)}`,
+      );
+      assert.equal(cleanup.error, undefined);
+      assert.equal(cleanup.status, 0, commandOutput(cleanup));
+      assert.equal(existsSync(stagingDirectory), false);
+    } finally {
+      if (existsSync(stagingDirectory)) {
+        for (const name of signingNames) {
+          const material = join(stagingDirectory, name);
+          if (existsSync(material)) {
+            unlinkSync(material);
+          }
+        }
+        rmdirSync(stagingDirectory);
       }
       rmdirSync(fixtureRoot);
     }
