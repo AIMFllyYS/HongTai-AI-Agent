@@ -99,16 +99,19 @@ android {
   }
 }
 
-val releaseArtifactOperations = listOf("assemble", "bundle", "package", "install", "validateSigning")
+val releaseArtifactTaskNames = setOf(
+  "assembleRelease",
+  "bundleRelease",
+  "packageRelease",
+  "installRelease",
+  "validateSigningRelease",
+)
 val appProjectPath = project.path
 gradle.taskGraph.whenReady(object : Action<TaskExecutionGraph> {
   override fun execute(graph: TaskExecutionGraph) {
     val releaseArtifactInGraph = graph.allTasks.any { task ->
       task.project.path == appProjectPath &&
-        task.name.contains("Release", ignoreCase = true) &&
-        releaseArtifactOperations.any { operation ->
-          task.name.startsWith(operation, ignoreCase = true)
-        }
+        task.name in releaseArtifactTaskNames
     }
     if (releaseArtifactInGraph && releaseSigningFile == null) {
       throw GradleException("Release signing configuration is required via HONGTAI_RELEASE_SIGNING_PROPERTIES")

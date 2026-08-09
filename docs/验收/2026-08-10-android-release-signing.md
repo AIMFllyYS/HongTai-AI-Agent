@@ -24,6 +24,13 @@
 - `build-android-release.ps1` 已移除跳过 fresh build、直接验收固定旧 APK 的参数；每次调用均执行 Web build、Capacitor sync、release test/lint/assemble 后再验签。
 - 初始化脚本把两个随机口令的生成纳入受保护 `try/finally`，并在 `finally` 清除环境变量、口令和完整明文 properties 变量。对已有正式材料复跑仍拒绝覆盖，三个最终目标哈希保持不变。
 
+#### 第二轮规格审查补证
+
+- 在基线 `574de73` 上先扩展聚焦测试：要求 task graph 只匹配五个终端 release 产物任务，并要求两个 PowerShell 入口逐段拒绝 reparse point。生产实现未修改时测试 2/2 按预期失败；最小实现后同一测试 2/2 通过。
+- 无签名配置实际执行 `:app:testReleaseUnitTest --dry-run`、`:app:assembleUnitTest --dry-run`、`:app:lintRelease --dry-run` 与 `:app:packageReleaseResources --dry-run`，四者均成功且没有触发签名门禁；`testReleaseUnitTest`、lint 和资源 task 不再因名称中含 `Release` 而误伤。
+- 无签名配置实际执行 `:app:assemble --no-daemon` 与 `:app:build --no-daemon`，两者仍因 task graph 含 `assembleRelease` 而在执行前安全失败，聚合任务的 fail-closed 未被削弱。
+- 在仓库外创建精确临时 junction 指向仓库根，验证初始化目录和构建 properties 路径都会因路径链含 reparse point 而拒绝，初始化未创建目标；Gradle 也分别拒绝经 junction 访问的仓库内 properties，以及仓库外 properties 指向经 junction 访问的仓库内 `storeFile`。测试只使用无秘密占位字段，结束后已删除该 properties、junction 与空测试目录，仓库仍完整。
+
 ## 初始化证据
 
 - 默认仓库外目录成功创建 alias `hongtai-release` 的 RSA 3072 / SHA256withRSA 身份。
@@ -45,6 +52,8 @@
 - APK SHA-256：`0dc5a2a9a1a8abe8cd1f98691c1aa5c99049461f9fbb7cfd8b9f4913a98f67d5`。
 
 规格修复后的完整构建脚本再次从 Web build 与 Capacitor sync 开始执行；Gradle 96 个 actionable task 中 8 个执行、88 个 up-to-date，release test/lint/assemble 与全部主机后验通过。新鲜 APK SHA-256 仍为上述 `0dc5a2a9a1a8abe8cd1f98691c1aa5c99049461f9fbb7cfd8b9f4913a98f67d5`，因此未改写既有 Android 端测候选 SHA 结论。
+
+第二轮任务名与 reparse-point 门禁修复后又执行了一次完整构建入口；Web build、Capacitor sync、release test/lint/assemble、zipalign、`aapt2`、`apksigner` 与证书锚点全部通过，Gradle 仍为 96 个 actionable task 中 8 个执行、88 个 up-to-date。APK SHA-256 仍未变化，因此 Android 端测候选身份与既有升级数值保持原结论，不重复启动 AVD。
 
 构建中保留既有的 Vite 大 chunk 提示、Capacitor `flatDir` 提示和 Media3 deprecated 编译提示；本次没有新增对应实现，也没有把 warning 表述为 error 或顺手扩修。
 

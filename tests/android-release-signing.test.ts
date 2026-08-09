@@ -22,7 +22,18 @@ test("release builds require an external non-Debug signing identity", () => {
     /gradle\.taskGraph\.whenReady\s*\(\s*object\s*:\s*Action<TaskExecutionGraph>/,
   );
   assert.match(gradle, /graph\.allTasks\.any/);
-  assert.match(gradle, /task\.name\.contains\("Release",\s*ignoreCase\s*=\s*true\)/);
+  for (const taskName of [
+    "assembleRelease",
+    "bundleRelease",
+    "packageRelease",
+    "installRelease",
+    "validateSigningRelease",
+  ]) {
+    assert.match(gradle, new RegExp(`"${taskName}"`));
+  }
+  assert.match(gradle, /task\.name\s+in\s+releaseArtifactTaskNames/);
+  assert.doesNotMatch(gradle, /task\.name\.contains\("Release"/);
+  assert.doesNotMatch(gradle, /task\.name\.startsWith\(operation/);
   assert.doesNotMatch(gradle, /gradle\.startParameter\.taskNames/);
   assert.match(
     gradle,
@@ -63,8 +74,17 @@ test("release tooling verifies the anchored certificate and signed APK", () => {
   assert.match(init, /already exists/);
   assert.match(init, /Resolve-CanonicalPath/);
   assert.match(init, /Test-PathInsideRepository/);
+  assert.match(init, /Assert-NoReparsePoint/);
+  assert.match(init, /FileAttributes.*ReparsePoint/);
+  assert.match(
+    init,
+    /Assert-NoReparsePoint\s+-Path\s+\$SigningDirectory/,
+  );
   assert.match(build, /Resolve-CanonicalPath/);
   assert.match(build, /Test-PathInsideRepository/);
+  assert.match(build, /Assert-NoReparsePoint/);
+  assert.match(build, /FileAttributes.*ReparsePoint/);
+  assert.match(build, /Assert-NoReparsePoint\s+-Path\s+\$SigningProperties/);
   assert.doesNotMatch(build, /VerifyExistingApk/);
   assert.match(
     init,

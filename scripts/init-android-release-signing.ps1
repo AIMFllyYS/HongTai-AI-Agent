@@ -38,6 +38,36 @@ function Resolve-CanonicalPath {
   return [System.IO.Path]::GetFullPath($canonicalPath)
 }
 
+function Assert-NoReparsePoint {
+  param(
+    [Parameter(Mandatory = $true)][string] $Path,
+    [Parameter(Mandatory = $true)][string] $FailureMessage
+  )
+
+  $fullPath = [System.IO.Path]::GetFullPath($Path)
+  $pathRoot = [System.IO.Path]::GetPathRoot($fullPath)
+  $currentPath = $pathRoot
+  $relativePath = $fullPath.Substring($pathRoot.Length)
+  $pathSeparators = [char[]] @(
+    [System.IO.Path]::DirectorySeparatorChar,
+    [System.IO.Path]::AltDirectorySeparatorChar
+  )
+  $segments = $relativePath.Split(
+    $pathSeparators,
+    [System.StringSplitOptions]::RemoveEmptyEntries
+  )
+  foreach ($segment in $segments) {
+    $currentPath = Join-Path $currentPath $segment
+    if (!(Test-Path -LiteralPath $currentPath)) {
+      break
+    }
+    $item = Get-Item -Force -LiteralPath $currentPath
+    if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+      throw $FailureMessage
+    }
+  }
+}
+
 function Test-PathInsideRepository {
   param(
     [Parameter(Mandatory = $true)][string] $CandidatePath,
@@ -149,6 +179,8 @@ function Protect-SigningDirectory {
 }
 
 $repositoryRoot = Resolve-CanonicalPath -Path (Join-Path $PSScriptRoot "..")
+Assert-NoReparsePoint -Path $SigningDirectory `
+  -FailureMessage "Release signing directory must not traverse a reparse point"
 $resolvedSigningDirectory = Resolve-CanonicalPath -Path $SigningDirectory
 if (Test-PathInsideRepository -CandidatePath $resolvedSigningDirectory -RepositoryRoot $repositoryRoot) {
   throw "Release signing directory must be outside the repository"

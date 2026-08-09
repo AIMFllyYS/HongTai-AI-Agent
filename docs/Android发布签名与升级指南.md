@@ -16,7 +16,7 @@
 .\scripts\init-android-release-signing.ps1 -SigningDirectory "D:\受控备份盘\HongTai-signing"
 ```
 
-脚本会规范化仓库根与目标目录，目录等于或位于仓库内部时直接拒绝。它使用 JDK 21 `keytool` 创建长期非 Debug 身份，并把目录 ACL 限制为当前用户、SYSTEM 和 Administrators。keystore、properties 或公有证书任一目标已存在时都会失败，绝不覆盖。控制台只显示 properties 路径与公有证书 SHA-256，不显示口令。
+脚本会规范化仓库根与目标目录，目录等于或位于仓库内部时直接拒绝；目标路径链经过 Windows junction、符号链接等 reparse point 时也会保守拒绝，不能借外部别名把材料写回仓库。它使用 JDK 21 `keytool` 创建长期非 Debug 身份，并把目录 ACL 限制为当前用户、SYSTEM 和 Administrators。keystore、properties 或公有证书任一目标已存在时都会失败，绝不覆盖。控制台只显示 properties 路径与公有证书 SHA-256，不显示口令。
 
 外部 properties 文件只包含四个必要字段：
 
@@ -27,7 +27,7 @@ keyAlias=hongtai-release
 keyPassword=replace-with-secret
 ```
 
-properties 文件和 `storeFile` 都必须是仓库外的绝对路径，`storeFile` 必须存在，alias 不得为 `androiddebugkey`。仓库中的 `android/keystore.properties.example` 只是无秘密的字段模板；真实 properties、keystore 和口令不得进入 Git、日志、Issue、截图或聊天记录。根 `.gitignore` 对任意层的常见 keystore 与 `keystore.properties` 另有防御性忽略，但它不是替代仓库外存储的安全边界。
+properties 文件和 `storeFile` 都必须是仓库外的绝对路径，`storeFile` 必须存在，alias 不得为 `androiddebugkey`。构建入口拒绝 properties 路径链中的 reparse point，Gradle 还按 canonical path 核对 properties 与 `storeFile`，外部 junction 指回仓库不能绕过边界。仓库中的 `android/keystore.properties.example` 只是无秘密的字段模板；真实 properties、keystore 和口令不得进入 Git、日志、Issue、截图或聊天记录。根 `.gitignore` 对任意层的常见 keystore 与 `keystore.properties` 另有防御性忽略，但它不是替代仓库外存储的安全边界。
 
 ## 构建与主机验签
 
@@ -51,7 +51,7 @@ properties 文件和 `storeFile` 都必须是仓库外的绝对路径，`storeFi
 - signer SHA-256 必须与 `android/release-certificate.sha256` 的公开证书锚点完全一致；
 - 计算并打印 APK SHA-256。
 
-当实际 Gradle task graph 包含 release assemble、bundle、package、install 或 `validateSigning` 时，未提供有效外部配置就会 fail-closed；因此聚合 `:app:assemble`、`:app:bundle` 和 `:app:build` 也不能产生 unsigned release。显式 Debug 构建、JVM 测试和普通同步不依赖 release 私钥。
+当实际 Gradle task graph 包含 `assembleRelease`、`bundleRelease`、`packageRelease`、`installRelease` 或 `validateSigningRelease` 这些终端 release 产物任务时，未提供有效外部配置就会 fail-closed；因此聚合 `:app:assemble`、`:app:bundle` 和 `:app:build` 也不能产生 unsigned release。`testReleaseUnitTest`、`assembleUnitTest`、`lintRelease`、`packageReleaseResources` 等非终端检查/资源任务不会被签名门禁误伤；显式 Debug 构建、JVM 测试和普通同步同样不依赖 release 私钥。
 
 ## 身份备份责任
 
