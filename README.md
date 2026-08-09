@@ -108,3 +108,4 @@ Pop-Location
 - [AI应用能力层架构](docs/AI应用能力层架构.md)
 - [任务执行模板](docs/任务执行模板.md)
 - [Android 发布签名与升级指南](docs/Android发布签名与升级指南.md)
+- [Android 旧系统 HEIF 兼容与依赖指南](docs/Android旧系统HEIF兼容与依赖指南.md)

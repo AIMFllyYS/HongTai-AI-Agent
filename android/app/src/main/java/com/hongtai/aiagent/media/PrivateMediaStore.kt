@@ -1,22 +1,13 @@
 package com.hongtai.aiagent.media
 
 import android.content.Context
-import android.database.Cursor
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Matrix
-import android.media.ExifInterface
 import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.text.Normalizer
-import java.util.Locale
 import java.util.UUID
 
 data class PrivateMediaFile(
@@ -43,6 +34,7 @@ class PrivateMediaStore(context: Context) {
   private val importsDirectory = File(appContext.filesDir, "media/imports")
   private val captureDirectory = File(appContext.cacheDir, "media/capture")
 
+  @Suppress("UNUSED_PARAMETER")
   fun importFrom(uri: Uri, displayName: String? = null): PrivateMediaFile {
     require(PrivateMediaImportPolicy.acceptsSourceScheme(uri.scheme)) {
       "Only system content URIs may be imported into private media storage."
@@ -51,13 +43,11 @@ class PrivateMediaStore(context: Context) {
       throw IllegalStateException("Could not create the private media directory.")
     }
 
-    val sourceName = displayName?.takeIf { it.isNotBlank() } ?: displayNameFor(uri) ?: "media"
     val identifier = UUID.randomUUID().toString()
     val stagedSource = File(importsDirectory, ".$identifier.source")
     val stagedTemporary = File(importsDirectory, ".$identifier.source.part")
     val destination = File(importsDirectory, "$identifier.jpg")
     val destinationTemporary = File(importsDirectory, ".$identifier.jpg.part")
-    val providerMimeType = appContext.contentResolver.getType(uri)
     try {
       val source = try {
         appContext.contentResolver.openInputStream(uri)
@@ -83,12 +73,13 @@ class PrivateMediaStore(context: Context) {
         throw PrivateMediaReadException("The selected image permission is no longer available.", error)
       }
 
-      val header = stagedSource.inputStream().use(PrivateMediaImportPolicy::readHeader)
-      val sourceMimeType = PrivateMediaImportPolicy.imageMimeType(providerMimeType, sourceName, header)
-        ?: throw PrivateImageInvalidException("The selected file is not a supported JPEG, PNG, WebP, or HEIF image.")
+      val sourceFormat = ImageFormatProbe.probe(stagedSource)
+      if (sourceFormat == ImageFormat.UNSUPPORTED) {
+        throw PrivateImageInvalidException("The selected file is not a supported JPEG, PNG, WebP, or HEIF image.")
+      }
       PrivateObservationImageNormalizer.normalize(
         source = stagedSource,
-        sourceMimeType = sourceMimeType,
+        sourceFormat = sourceFormat,
         temporary = destinationTemporary,
         destination = destination,
       )
@@ -150,17 +141,6 @@ class PrivateMediaStore(context: Context) {
     capture.file.delete()
   }
 
-  private fun displayNameFor(uri: Uri): String? = appContext.contentResolver.query(
-    uri,
-    arrayOf(OpenableColumns.DISPLAY_NAME),
-    null,
-    null,
-    null,
-  )?.use { cursor: Cursor ->
-    val column = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-    if (column >= 0 && cursor.moveToFirst()) cursor.getString(column) else null
-  }
-
 }
 
 /** Pure policy so URI/file-name boundaries are unit-testable without a device. */
@@ -195,30 +175,16 @@ internal object PrivateMediaImportPolicy {
     return header.copyOf(offset)
   }
 
-  fun imageMimeType(providerMimeType: String?, displayName: String?, header: ByteArray): String? {
-    val provider = providerMimeType?.trim()?.lowercase(Locale.ROOT)
-    if (provider in SUPPORTED_IMAGE_MIME_TYPES) return provider
-
-    when (displayName?.substringAfterLast('.', "")?.lowercase(Locale.ROOT)) {
-      "jpg", "jpeg" -> return "image/jpeg"
-      "png" -> return "image/png"
-      "webp" -> return "image/webp"
-      "heic" -> return "image/heic"
-      "heif" -> return "image/heif"
+  /** Compatibility seam for byte-authority policy tests; production uses the full bounded probe. */
+  @Suppress("UNUSED_PARAMETER")
+  fun imageMimeType(providerMimeType: String?, displayName: String?, header: ByteArray): String? =
+    when (ImageFormatProbe.probe(header.inputStream(), header.size.toLong())) {
+      ImageFormat.JPEG -> "image/jpeg"
+      ImageFormat.PNG -> "image/png"
+      ImageFormat.WEBP -> "image/webp"
+      ImageFormat.HEIF_CANDIDATE -> "image/heif"
+      ImageFormat.UNSUPPORTED -> null
     }
-
-    if (header.size >= 3 && header[0] == 0xff.toByte() && header[1] == 0xd8.toByte() && header[2] == 0xff.toByte()) {
-      return "image/jpeg"
-    }
-    if (header.size >= 8 && header.copyOfRange(0, 8).contentEquals(byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a))) {
-      return "image/png"
-    }
-    if (header.size >= 12 && header.copyOfRange(0, 4).toString(Charsets.US_ASCII) == "RIFF" &&
-      header.copyOfRange(8, 12).toString(Charsets.US_ASCII) == "WEBP") {
-      return "image/webp"
-    }
-    return null
-  }
 
   /**
    * Streams an externally selected item into a same-directory temporary file.
@@ -262,121 +228,5 @@ internal object PrivateMediaImportPolicy {
     } finally {
       if (!published && temporary.exists()) temporary.delete()
     }
-  }
-
-  private val SUPPORTED_IMAGE_MIME_TYPES = setOf(
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/heic",
-    "image/heif",
-  )
-}
-
-/** Mirrors the CLI image contract before any bytes cross the AI transport boundary. */
-private object PrivateObservationImageNormalizer {
-  private const val MAX_EDGE_PIXELS = 2_048
-  private const val SAFE_DECODE_EDGE_PIXELS = 3_072
-  private const val JPEG_QUALITY = 90
-
-  fun normalize(
-    source: File,
-    sourceMimeType: String,
-    temporary: File,
-    destination: File,
-  ) {
-    require(sourceMimeType in setOf("image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"))
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(source.absolutePath, bounds)
-    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
-      throw PrivateImageInvalidException("The selected image could not be decoded.")
-    }
-
-    val options = BitmapFactory.Options().apply {
-      inPreferredConfig = Bitmap.Config.ARGB_8888
-      inSampleSize = decodeSample(bounds.outWidth, bounds.outHeight)
-    }
-    var decoded: Bitmap? = null
-    var oriented: Bitmap? = null
-    var scaled: Bitmap? = null
-    var flattened: Bitmap? = null
-    var published = false
-    try {
-      decoded = BitmapFactory.decodeFile(source.absolutePath, options)
-        ?: throw PrivateImageInvalidException("The selected image could not be decoded.")
-      oriented = applyExifOrientation(decoded, source)
-      scaled = scaleToFit(oriented, MAX_EDGE_PIXELS)
-      flattened = Bitmap.createBitmap(scaled.width, scaled.height, Bitmap.Config.ARGB_8888)
-      Canvas(flattened).apply {
-        drawColor(Color.WHITE)
-        drawBitmap(scaled, 0f, 0f, null)
-      }
-      FileOutputStream(temporary).use { output ->
-        if (!flattened.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, output)) {
-          throw PrivateImageInvalidException("The selected image could not be normalized.")
-        }
-        output.fd.sync()
-      }
-      if (temporary.length() <= 0L || temporary.length() > PrivateMediaImportPolicy.MAX_IMPORT_BYTES) {
-        throw PrivateMediaTooLargeException("The normalized image exceeds the private storage limit.")
-      }
-      if (!temporary.renameTo(destination)) {
-        throw IllegalStateException("Could not finalize the normalized private image.")
-      }
-      published = true
-    } catch (error: OutOfMemoryError) {
-      throw PrivateImageInvalidException("The selected image is too large to decode safely.", error)
-    } finally {
-      if (!published) temporary.delete()
-      listOf(flattened, scaled, oriented, decoded).distinct().forEach { bitmap ->
-        if (bitmap != null && !bitmap.isRecycled) bitmap.recycle()
-      }
-    }
-  }
-
-  private fun decodeSample(width: Int, height: Int): Int {
-    var sample = 1
-    while (maxOf(width, height) / sample > SAFE_DECODE_EDGE_PIXELS && sample <= Int.MAX_VALUE / 2) {
-      sample *= 2
-    }
-    return sample
-  }
-
-  private fun applyExifOrientation(bitmap: Bitmap, source: File): Bitmap {
-    val orientation = try {
-      ExifInterface(source.absolutePath).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
-    } catch (_: Exception) {
-      ExifInterface.ORIENTATION_NORMAL
-    }
-    val matrix = Matrix()
-    when (orientation) {
-      ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.setScale(-1f, 1f)
-      ExifInterface.ORIENTATION_ROTATE_180 -> matrix.setRotate(180f)
-      ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.setScale(1f, -1f)
-      ExifInterface.ORIENTATION_TRANSPOSE -> {
-        matrix.setRotate(90f)
-        matrix.postScale(-1f, 1f)
-      }
-      ExifInterface.ORIENTATION_ROTATE_90 -> matrix.setRotate(90f)
-      ExifInterface.ORIENTATION_TRANSVERSE -> {
-        matrix.setRotate(-90f)
-        matrix.postScale(-1f, 1f)
-      }
-      ExifInterface.ORIENTATION_ROTATE_270 -> matrix.setRotate(-90f)
-      else -> return bitmap
-    }
-    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-  }
-
-  private fun scaleToFit(bitmap: Bitmap, maxEdge: Int): Bitmap {
-    val edge = maxOf(bitmap.width, bitmap.height)
-    if (edge <= maxEdge) return bitmap
-    val scale = maxEdge.toFloat() / edge.toFloat()
-    return Bitmap.createScaledBitmap(
-      bitmap,
-      (bitmap.width * scale).toInt().coerceAtLeast(1),
-      (bitmap.height * scale).toInt().coerceAtLeast(1),
-      true,
-    )
   }
 }

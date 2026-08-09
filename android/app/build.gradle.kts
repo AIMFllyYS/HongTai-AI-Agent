@@ -72,6 +72,7 @@ fun requiredReleaseSigningValue(name: String): String =
 android {
   namespace = "com.hongtai.aiagent"
   compileSdk = 36
+  ndkVersion = "28.2.13676358"
 
   defaultConfig {
     applicationId = "com.hongtai.aiagent"
@@ -81,6 +82,14 @@ android {
     versionName = "0.0.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    ndk {
+      abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64"))
+    }
+    externalNativeBuild {
+      cmake {
+        arguments.add("-DANDROID_PLATFORM=android-24")
+      }
+    }
   }
 
   signingConfigs {
@@ -133,6 +142,13 @@ android {
 
   kotlinOptions {
     jvmTarget = "21"
+  }
+
+  externalNativeBuild {
+    cmake {
+      path = file("src/main/cpp/heif/CMakeLists.txt")
+      version = "3.22.1"
+    }
   }
 }
 

@@ -1,0 +1,38 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "HongTai-Android-Legacy-HEIF",
+  "documentNamespace": "https://hongtai.invalid/spdx/android-legacy-heif/2026-08-10",
+  "creationInfo": {
+    "created": "2026-08-10T00:00:00Z",
+    "creators": ["Tool: Codex"]
+  },
+  "packages": [
+    {
+      "name": "libheif",
+      "SPDXID": "SPDXRef-Package-libheif",
+      "versionInfo": "1.23.1+2c4bbb54c2738d4a5efbbe3e5fa1d5d76bb88eb0",
+      "downloadLocation": "https://github.com/strukturag/libheif/archive/2c4bbb54c2738d4a5efbbe3e5fa1d5d76bb88eb0.tar.gz",
+      "checksums": [{"algorithm": "SHA256", "checksumValue": "9fdb7410222a9fd12387f4332e3f93cf428c976ac16f1379fcd7f6415ebe03c0"}],
+      "licenseConcluded": "LGPL-3.0-or-later",
+      "licenseDeclared": "LGPL-3.0-or-later",
+      "filesAnalyzed": false
+    },
+    {
+      "name": "libde265",
+      "SPDXID": "SPDXRef-Package-libde265",
+      "versionInfo": "1.1.1+4dd701fffac01632ffd5cabc5ef10deb56accba1",
+      "downloadLocation": "https://github.com/strukturag/libde265/archive/4dd701fffac01632ffd5cabc5ef10deb56accba1.tar.gz",
+      "checksums": [{"algorithm": "SHA256", "checksumValue": "43b3629cfa11a6e12be4d1fe7b7857eeeb17c84ce113f87fa93b6ab7478db55b"}],
+      "licenseConcluded": "LGPL-3.0-or-later",
+      "licenseDeclared": "LGPL-3.0-or-later",
+      "filesAnalyzed": false
+    }
+  ],
+  "relationships": [
+    {"spdxElementId": "SPDXRef-DOCUMENT", "relationshipType": "DESCRIBES", "relatedSpdxElement": "SPDXRef-Package-libheif"},
+    {"spdxElementId": "SPDXRef-DOCUMENT", "relationshipType": "DESCRIBES", "relatedSpdxElement": "SPDXRef-Package-libde265"},
+    {"spdxElementId": "SPDXRef-Package-libheif", "relationshipType": "DYNAMIC_LINK", "relatedSpdxElement": "SPDXRef-Package-libde265"}
+  ]
+}

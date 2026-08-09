@@ -48,13 +48,13 @@ class PrivateMediaImportPolicyTest {
   }
 
   @Test
-  fun `resolves image MIME from provider then name then file signature`() {
+  fun `provider MIME and display name cannot override byte authority`() {
     assertEquals(
-      "image/png",
+      null,
       PrivateMediaImportPolicy.imageMimeType("image/png", "ignored.jpg", byteArrayOf()),
     )
     assertEquals(
-      "image/jpeg",
+      null,
       PrivateMediaImportPolicy.imageMimeType(null, "舌象照片.JPEG", byteArrayOf()),
     )
     assertEquals(
@@ -81,13 +81,13 @@ class PrivateMediaImportPolicyTest {
   }
 
   @Test
-  fun `accepts Android HEIF photos for normalization into the private JPEG contract`() {
+  fun `accepts HEIF only after its bytes are structurally confirmed`() {
     assertEquals(
-      "image/heic",
+      null,
       PrivateMediaImportPolicy.imageMimeType("image/heic", "IMG_20260808.HEIC", byteArrayOf()),
     )
     assertEquals(
-      "image/heif",
+      null,
       PrivateMediaImportPolicy.imageMimeType(null, "IMG_20260808.heif", byteArrayOf()),
     )
   }

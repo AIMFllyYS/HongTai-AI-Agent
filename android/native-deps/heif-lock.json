@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "android": {
+    "ndkVersion": "28.2.13676358",
+    "cmakeVersion": "3.22.1",
+    "minApi": 24,
+    "abis": ["arm64-v8a", "armeabi-v7a", "x86", "x86_64"],
+    "linkage": "dynamic-lgpl",
+    "maxPageSize": 16384
+  },
+  "dependencies": {
+    "libheif": {
+      "version": "1.23.1",
+      "tag": "v1.23.1",
+      "commit": "2c4bbb54c2738d4a5efbbe3e5fa1d5d76bb88eb0",
+      "url": "https://github.com/strukturag/libheif/archive/2c4bbb54c2738d4a5efbbe3e5fa1d5d76bb88eb0.tar.gz",
+      "archiveFileName": "libheif-2c4bbb54c2738d4a5efbbe3e5fa1d5d76bb88eb0.tar.gz",
+      "archiveSha256": "9fdb7410222a9fd12387f4332e3f93cf428c976ac16f1379fcd7f6415ebe03c0",
+      "sourceTreeSha256": "50612d8ee566b583e7ba8ad0b530bb04dae53b6569e4540b6e09cbabb6fa7fb2",
+      "archiveRoot": "libheif-2c4bbb54c2738d4a5efbbe3e5fa1d5d76bb88eb0",
+      "license": "LGPL-3.0-or-later"
+    },
+    "libde265": {
+      "version": "1.1.1",
+      "tag": "v1.1.1",
+      "commit": "4dd701fffac01632ffd5cabc5ef10deb56accba1",
+      "url": "https://github.com/strukturag/libde265/archive/4dd701fffac01632ffd5cabc5ef10deb56accba1.tar.gz",
+      "archiveFileName": "libde265-4dd701fffac01632ffd5cabc5ef10deb56accba1.tar.gz",
+      "archiveSha256": "43b3629cfa11a6e12be4d1fe7b7857eeeb17c84ce113f87fa93b6ab7478db55b",
+      "sourceTreeSha256": "d26f9aef9c84b30370c8addaa50bfdbe7f847f5ce5cc5334aaf6e08d15bf506b",
+      "archiveRoot": "libde265-4dd701fffac01632ffd5cabc5ef10deb56accba1",
+      "license": "LGPL-3.0-or-later"
+    }
+  },
+  "features": {
+    "decoders": ["libde265-hevc"],
+    "encoders": [],
+    "avif": false,
+    "plugins": false,
+    "lto": false
+  },
+  "patches": [],
+  "patchSetSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
