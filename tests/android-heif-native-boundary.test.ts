@@ -84,3 +84,11 @@ test("native build and LGPL delivery boundaries are checked in without binaries"
   assert.match(native, /std::unique_ptr/);
   assert.doesNotMatch(native, /ByteArray|GetByteArrayElements|NewGlobalRef|abort\s*\(/);
 });
+
+test("HEIF instrumentation reads fixtures from the test APK asset context", () => {
+  const harness = read(
+    "android/app/src/androidTest/java/com/hongtai/aiagent/media/PrivateMediaStoreInstrumentationTest.kt",
+  );
+  assert.match(harness, /InstrumentationRegistry\.getInstrumentation\(\)\.context\.assets/);
+  assert.doesNotMatch(harness, /^\s*context\.assets\.open\("heif\/\$assetName"\)/m);
+});

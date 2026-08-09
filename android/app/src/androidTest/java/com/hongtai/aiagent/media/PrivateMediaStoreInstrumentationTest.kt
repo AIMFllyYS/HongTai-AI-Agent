@@ -8,6 +8,7 @@ import android.os.Build
 import androidx.core.content.FileProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
@@ -202,7 +203,7 @@ class PrivateMediaStoreInstrumentationTest {
   private fun copyHeifAsset(context: Context, assetName: String): File {
     val captureDirectory = File(context.cacheDir, "media/capture").apply { mkdirs() }
     return File(captureDirectory, "heif-$assetName").also { destination ->
-      context.assets.open("heif/$assetName").use { input ->
+      InstrumentationRegistry.getInstrumentation().context.assets.open("heif/$assetName").use { input ->
         destination.outputStream().use(input::copyTo)
       }
     }
