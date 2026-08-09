@@ -219,6 +219,8 @@ try {
     Invoke-CheckedCommand -Command "pnpm.cmd" -Arguments @(
       "exec", "cap", "sync", "android"
     ) -FailureMessage "Capacitor Android sync failed"
+    & (Join-Path $PSScriptRoot "normalize-capacitor-config.ps1") `
+      -ConfigPath (Join-Path $repositoryRoot "android\app\src\main\res\xml\config.xml")
   } finally {
     Pop-Location
   }

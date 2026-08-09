@@ -55,6 +55,13 @@
 - 真实误用回归把含三份占位材料的普通 final 目录传给 cleanup：helper 以 invalid-staging 错误拒绝，目录 ACL 和三个文件 SHA-256 均不变。合法 GUID staging 的独立回归则成功精确删除三文件及空目录；final-conflict 原子发布回归仍保持既有 final sentinel 的 SHA-256/ACL 不变并清理合法 staging。
 - 完整聚焦测试 10/10 通过，既有 release task graph、相对路径、仓库/候选 junction、仓库别名启动、existing-dir ACL 和原子冲突矩阵均未回归。
 
+#### 第六轮工程收口补证
+
+- 原 833 行聚焦测试按职责拆为 contract 163 行、Gradle Windows 163 行、PowerShell Windows 245 行、transaction cleanup 249 行；共用的 Windows/Gradle/ACL 命令实现集中在 98 行的 `tests/support/android-release-signing.ts`，没有 re-export 壳。原 10 项覆盖全部保留，并新增 normalizer contract/unit、独立 ACL/atomic 职责及两项 transaction 预验证回归；四组 focused 在默认多文件并行模式下 15/15 通过，所有可写 fixture 都使用系统临时目录中的唯一目录，不读取或修改正式签名材料。
+- transaction 新回归确认：合法 GUID staging 中存在 unexpected entry 时，cleanup 在删除任何 known file 前整体拒绝，三个 known SHA-256、unexpected SHA-256 与 staging ACL 均不变；known-name 目录 junction 作为 reparse entry 时同样先拒绝，外部 target、另外两个 known file 与 ACL 均不变，`finally` 先以非递归目录删除解除 junction，再精确清理空 fixture。现有 hardened helper 已满足这两项，新增测试作为真实 characterization 直接通过，没有为制造 RED 人为放宽生产门禁。
+- `config.xml` 规范化 contract 与临时 fixture unit 在生产脚本不存在时 2/2 按预期 RED。最小实现新增 PS5.1 兼容 normalizer，并在 Capacitor sync 成功后立即调用；unit 确认 CRLF、行尾空白、空白行和 BOM 被规范为 UTF-8 无 BOM、LF、单个 EOF newline，同时自定义 widget/plugin 元素内容保持不变。
+- 独立真实集成 gate 在当前工作树先记录完整 pre-status 与 `config.xml` SHA-256，再运行 `pnpm exec cap sync android` 和 normalizer；结果 `CONFIG_HASH_UNCHANGED=True`、`WORKTREE_STATUS_UNCHANGED=True`、`CONFIG_TRACKED_DIFF_COUNT=0`，`git diff --check` 通过。该 gate 不进入并发 `pnpm test`，避免真实 cap sync 与其他 repo 测试互扰。
+
 ## 初始化证据
 
 - 默认仓库外目录成功创建 alias `hongtai-release` 的 RSA 3072 / SHA256withRSA 身份。
@@ -84,6 +91,8 @@
 第四轮补上原始仓库根 reparse 门禁、原始绝对路径检查与原子目录发布后再次执行完整构建入口；Web build、Capacitor sync、release test/lint/assemble、zipalign、`aapt2`、`apksigner` 与证书锚点全部通过，Gradle 仍为 96 个 actionable task 中 8 个执行、88 个 up-to-date。APK SHA-256 仍为 `0dc5a2a9a1a8abe8cd1f98691c1aa5c99049461f9fbb7cfd8b9f4913a98f67d5`，所以 Android 端测候选身份与已有升级数值不变；本轮没有启动 AVD。
 
 第五轮收紧 cleanup helper 并改用 UTF-8 Reader 后再次执行完整构建入口；Web build、Capacitor sync、release test/lint/assemble、zipalign、`aapt2`、`apksigner` 和公开证书锚点全部通过，Gradle 仍为 96 个 actionable task 中 8 个执行、88 个 up-to-date。APK SHA-256 仍为 `0dc5a2a9a1a8abe8cd1f98691c1aa5c99049461f9fbb7cfd8b9f4913a98f67d5`，没有改变既有 Android 端测候选身份；本轮未启动 AVD，也未修改仓库外正式签名材料。
+
+第六轮把 normalizer 接入真实 release 入口后再次 fresh 执行完整构建；Web build、Capacitor sync、规范化、release test/lint/assemble、zipalign、`aapt2`、`apksigner` 与证书锚点全部通过，Gradle 96 个 actionable task 中 12 个执行、84 个 up-to-date。APK SHA-256 仍为 `0dc5a2a9a1a8abe8cd1f98691c1aa5c99049461f9fbb7cfd8b9f4913a98f67d5`，`config.xml` 在构建后仍无 tracked diff；未启动 AVD，既有 Android 端测候选身份不变。
 
 构建中保留既有的 Vite 大 chunk 提示、Capacitor `flatDir` 提示和 Media3 deprecated 编译提示；本次没有新增对应实现，也没有把 warning 表述为 error 或顺手扩修。
 

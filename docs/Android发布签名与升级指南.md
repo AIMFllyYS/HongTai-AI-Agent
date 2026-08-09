@@ -45,7 +45,7 @@ properties 文件由初始化脚本写成 UTF-8 无 BOM，Gradle 也显式按 UT
 .\scripts\build-android-release.ps1 -SigningProperties "D:\受控备份盘\HongTai-signing\keystore.properties"
 ```
 
-构建脚本每次都依次执行 Web production build、Capacitor Android sync、`:app:testReleaseUnitTest`、`:app:lintRelease` 和 `:app:assembleRelease`，不提供跳过构建并验收旧 APK 的参数。它只接受本次流程产生的 `android/app/build/outputs/apk/release/app-release.apk`，并自动执行以下主机门禁：
+构建脚本每次都依次执行 Web production build、Capacitor Android sync、`:app:testReleaseUnitTest`、`:app:lintRelease` 和 `:app:assembleRelease`，不提供跳过构建并验收旧 APK 的参数。Capacitor sync 后会立即对已知生成文件 `android/app/src/main/res/xml/config.xml` 做窄范围确定性格式规范化：保留所有非空语义行，只移除空白行和行尾空白，写回 UTF-8 无 BOM、LF 与单个 EOF newline；不会恢复整个文件或隐藏 Capacitor 的内容变化。它只接受本次流程产生的 `android/app/build/outputs/apk/release/app-release.apk`，并自动执行以下主机门禁：
 
 - `zipalign -c -P 16 -v 4`；
 - `aapt2 dump badging`，要求包名 `com.hongtai.aiagent`、`versionCode=4`、`versionName=0.0.1`；
