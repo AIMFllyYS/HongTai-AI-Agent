@@ -27,7 +27,7 @@ keyAlias=hongtai-release
 keyPassword=replace-with-secret
 ```
 
-properties 文件和 `storeFile` 都必须是仓库外的绝对路径，`storeFile` 必须存在，alias 不得为 `androiddebugkey`。构建入口拒绝 properties 路径链中的 reparse point，Gradle 还按 canonical path 核对 properties 与 `storeFile`，外部 junction 指回仓库不能绕过边界。仓库中的 `android/keystore.properties.example` 只是无秘密的字段模板；真实 properties、keystore 和口令不得进入 Git、日志、Issue、截图或聊天记录。根 `.gitignore` 对任意层的常见 keystore 与 `keystore.properties` 另有防御性忽略，但它不是替代仓库外存储的安全边界。
+properties 文件和 `storeFile` 都必须是仓库外的绝对路径，`storeFile` 必须存在，alias 不得为 `androiddebugkey`。构建入口拒绝 properties 路径链中的 reparse point，Gradle 还比较 normalized path 与 `toRealPath()` 并逐段检查符号链接，外部 junction 指回仓库不能绕过边界。仓库中的 `android/keystore.properties.example` 只是无秘密的字段模板；真实 properties、keystore 和口令不得进入 Git、日志、Issue、截图或聊天记录。根 `.gitignore` 对任意层的常见 keystore 与 `keystore.properties` 另有防御性忽略，但它不是替代仓库外存储的安全边界。
 
 ## 构建与主机验签
 
@@ -51,7 +51,7 @@ properties 文件和 `storeFile` 都必须是仓库外的绝对路径，`storeFi
 - signer SHA-256 必须与 `android/release-certificate.sha256` 的公开证书锚点完全一致；
 - 计算并打印 APK SHA-256。
 
-当实际 Gradle task graph 包含 `assembleRelease`、`bundleRelease`、`packageRelease`、`installRelease` 或 `validateSigningRelease` 这些终端 release 产物任务时，未提供有效外部配置就会 fail-closed；因此聚合 `:app:assemble`、`:app:bundle` 和 `:app:build` 也不能产生 unsigned release。`testReleaseUnitTest`、`assembleUnitTest`、`lintRelease`、`packageReleaseResources` 等非终端检查/资源任务不会被签名门禁误伤；显式 Debug 构建、JVM 测试和普通同步同样不依赖 release 私钥。
+当前 AGP 实际 task inventory 中，`assembleRelease`、`bundleRelease`、`packageRelease`、`packageReleaseBundle`、`packageReleaseUniversalApk`、`signReleaseBundle`、`installRelease` 与 `validateSigningRelease` 都属于受控 release 产物/签名入口；实际 task graph 包含其中任一项而未提供有效外部配置时就会 fail-closed。因此聚合 `:app:assemble`、`:app:bundle` 和 `:app:build` 也不能产生 unsigned release。`testReleaseUnitTest`、`assembleUnitTest`、`lintRelease`、`packageReleaseResources` 等非终端检查/资源任务不会被签名门禁误伤；显式 Debug 构建、JVM 测试和普通同步同样不依赖 release 私钥。升级 AGP 后必须重新运行 `:app:tasks --all` 与本仓库 Windows 行为测试，核对新增产物入口。
 
 ## 身份备份责任
 

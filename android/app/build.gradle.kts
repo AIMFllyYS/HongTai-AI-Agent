@@ -1,4 +1,6 @@
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.util.Properties
 import org.gradle.api.Action
 import org.gradle.api.execution.TaskExecutionGraph
@@ -19,6 +21,29 @@ fun isInsideRepository(candidate: File): Boolean {
     candidatePath.startsWith("$repositoryPath${File.separator}", ignoreCase = true)
 }
 
+fun pathTraversesReparsePoint(candidate: File): Boolean {
+  val normalizedPath = candidate.toPath().toAbsolutePath().normalize()
+  if (
+    Files.exists(normalizedPath, LinkOption.NOFOLLOW_LINKS) &&
+    !normalizedPath.toRealPath().toString()
+      .equals(normalizedPath.toString(), ignoreCase = true)
+  ) {
+    return true
+  }
+
+  var current = normalizedPath
+  while (current != null) {
+    if (
+      Files.exists(current, LinkOption.NOFOLLOW_LINKS) &&
+      Files.isSymbolicLink(current)
+    ) {
+      return true
+    }
+    current = current.parent
+  }
+  return false
+}
+
 if (releaseSigningFile != null) {
   if (!releaseSigningFile.isAbsolute || !releaseSigningFile.isFile) {
     throw GradleException(
@@ -27,6 +52,9 @@ if (releaseSigningFile != null) {
   }
   if (isInsideRepository(releaseSigningFile)) {
     throw GradleException("Release signing configuration must be outside the repository")
+  }
+  if (pathTraversesReparsePoint(releaseSigningFile)) {
+    throw GradleException("Release signing configuration must not traverse a reparse point")
   }
 }
 
@@ -62,6 +90,9 @@ android {
         }
         if (isInsideRepository(keyStore)) {
           throw GradleException("Release signing keystore must be outside the repository")
+        }
+        if (pathTraversesReparsePoint(keyStore)) {
+          throw GradleException("Release signing keystore must not traverse a reparse point")
         }
         val alias = requiredReleaseSigningValue("keyAlias")
         if (alias.equals("androiddebugkey", ignoreCase = true)) {
@@ -103,6 +134,9 @@ val releaseArtifactTaskNames = setOf(
   "assembleRelease",
   "bundleRelease",
   "packageRelease",
+  "packageReleaseBundle",
+  "packageReleaseUniversalApk",
+  "signReleaseBundle",
   "installRelease",
   "validateSigningRelease",
 )

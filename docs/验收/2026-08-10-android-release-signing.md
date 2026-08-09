@@ -31,6 +31,13 @@
 - 无签名配置实际执行 `:app:assemble --no-daemon` 与 `:app:build --no-daemon`，两者仍因 task graph 含 `assembleRelease` 而在执行前安全失败，聚合任务的 fail-closed 未被削弱。
 - 在仓库外创建精确临时 junction 指向仓库根，验证初始化目录和构建 properties 路径都会因路径链含 reparse point 而拒绝，初始化未创建目标；Gradle 也分别拒绝经 junction 访问的仓库内 properties，以及仓库外 properties 指向经 junction 访问的仓库内 `storeFile`。测试只使用无秘密占位字段，结束后已删除该 properties、junction 与空测试目录，仓库仍完整。
 
+#### 第三轮规格审查补证
+
+- 使用真实外部签名配置运行 `:app:tasks --all`，当前 AGP 列出的受控 release 产物/签名入口为：`installRelease`、`assembleRelease`、`bundleRelease`、`packageRelease`、`packageReleaseBundle`、`packageReleaseUniversalApk`、`signReleaseBundle`、`validateSigningRelease`。`packageReleaseResources`、`bundleReleaseResources` 与 `assembleReleaseUnitTest` 是非终端资源/测试任务，不纳入签名门禁。
+- 新测试首次执行时 4 项中 3 项按预期失败：静态契约缺三个实际 bundle 终端任务；无签名配置同时请求 `packageReleaseBundle`、`packageReleaseUniversalApk`、`signReleaseBundle` 时错误地成功；真实 Windows junction 下 Gradle 仅靠 `File.canonicalFile` 也错误地接受了仓库内 `storeFile`。两个 PowerShell 入口的真实 junction 拒绝在该 RED 中已通过。
+- 最小实现把三个 AGP 实际入口加入精确集合，并让 Gradle 比较 normalized path 与 `toRealPath()`、同时逐段检查符号链接。随后聚焦测试 4/4 通过：三个终端任务分别执行 dry-run 均安全失败，四个非产物任务的组合 dry-run 成功。
+- Windows-only 自动行为测试在系统临时目录创建“仓库外 junction → 仓库根”和无秘密外部 properties，分别执行初始化脚本、构建脚本与 Gradle；三者均拒绝，初始化目标未生成。`finally` 先以非递归目录删除解除 junction，再删除占位 properties 与空临时目录，不递归遍历 junction，也不修改仓库内容；非 Windows 主机会明确 skip。
+
 ## 初始化证据
 
 - 默认仓库外目录成功创建 alias `hongtai-release` 的 RSA 3072 / SHA256withRSA 身份。
@@ -54,6 +61,8 @@
 规格修复后的完整构建脚本再次从 Web build 与 Capacitor sync 开始执行；Gradle 96 个 actionable task 中 8 个执行、88 个 up-to-date，release test/lint/assemble 与全部主机后验通过。新鲜 APK SHA-256 仍为上述 `0dc5a2a9a1a8abe8cd1f98691c1aa5c99049461f9fbb7cfd8b9f4913a98f67d5`，因此未改写既有 Android 端测候选 SHA 结论。
 
 第二轮任务名与 reparse-point 门禁修复后又执行了一次完整构建入口；Web build、Capacitor sync、release test/lint/assemble、zipalign、`aapt2`、`apksigner` 与证书锚点全部通过，Gradle 仍为 96 个 actionable task 中 8 个执行、88 个 up-to-date。APK SHA-256 仍未变化，因此 Android 端测候选身份与既有升级数值保持原结论，不重复启动 AVD。
+
+第三轮补齐 bundle 产物入口与 Gradle `toRealPath()` 门禁后再次执行完整构建入口；同一组 Web、Capacitor、release 测试/lint/build 和主机验签全部通过，Gradle 仍为 96 个 actionable task 中 8 个执行、88 个 up-to-date，APK SHA-256 仍为 `0dc5a2a9a1a8abe8cd1f98691c1aa5c99049461f9fbb7cfd8b9f4913a98f67d5`。因此不改写既有 Android 端测候选身份，也不重复启动 AVD。
 
 构建中保留既有的 Vite 大 chunk 提示、Capacitor `flatDir` 提示和 Media3 deprecated 编译提示；本次没有新增对应实现，也没有把 warning 表述为 error 或顺手扩修。
 
