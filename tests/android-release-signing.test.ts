@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   existsSync,
   lstatSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
@@ -63,12 +65,68 @@ function commandOutput(result: ReturnType<typeof spawnSync>): string {
   return `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
 }
 
+function powershellFile(script: string, args: string[] = [], env = process.env) {
+  return spawnSync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      script,
+      ...args,
+    ],
+    { cwd: root, encoding: "utf8", env },
+  );
+}
+
+function powershellCommand(command: string) {
+  return spawnSync(
+    "powershell.exe",
+    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
+    { cwd: root, encoding: "utf8", env: process.env },
+  );
+}
+
+function powershellQuote(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+function aclSnapshot(path: string): string {
+  const result = powershellCommand(
+    `$acl=Get-Acl -LiteralPath ${powershellQuote(path)}; ` +
+      "$sddl=$acl.GetSecurityDescriptorSddlForm(" +
+      "[System.Security.AccessControl.AccessControlSections]::All); " +
+      'Write-Output ($sddl + "|" + $acl.AreAccessRulesProtected)',
+  );
+  assert.equal(result.error, undefined);
+  assert.equal(result.status, 0, commandOutput(result));
+  return String(result.stdout).trim();
+}
+
+function fileSha256(path: string): string {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
 test("release builds require an external non-Debug signing identity", () => {
   const gradle = read("android/app/build.gradle.kts");
   const androidIgnore = read("android/.gitignore");
   const rootIgnore = read(".gitignore");
 
   assert.match(gradle, /HONGTAI_RELEASE_SIGNING_PROPERTIES/);
+  assert.match(
+    gradle,
+    /rawReleaseSigningFile\s*=\s*releaseSigningPath\?\.let\(::File\)/,
+  );
+  assert.match(
+    gradle,
+    /rawReleaseSigningFile\s*!=\s*null\s*&&\s*!rawReleaseSigningFile\.isAbsolute/,
+  );
+  assert.match(
+    gradle,
+    /rawKeyStore\s*=\s*File\(requiredReleaseSigningValue\("storeFile"\)\)/,
+  );
+  assert.match(gradle, /if\s*\(!rawKeyStore\.isAbsolute\)/);
   assert.match(gradle, /signingConfigs\s*\{[\s\S]*create\("release"\)/);
   assert.match(
     gradle,
@@ -126,16 +184,18 @@ test("release tooling verifies the anchored certificate and signed APK", () => {
     "android/release-certificate.sha256",
     "scripts/init-android-release-signing.ps1",
     "scripts/build-android-release.ps1",
+    "scripts/android-release-signing-transaction.psm1",
   ]) {
     assert.equal(existsSync(join(root, path)), true, `${path} must exist`);
   }
 
   const init = read("scripts/init-android-release-signing.ps1");
   const build = read("scripts/build-android-release.ps1");
+  const transaction = read("scripts/android-release-signing-transaction.psm1");
   assert.match(init, /RandomNumberGenerator/);
   assert.match(init, /-storepass:env/);
   assert.match(init, /-keypass:env/);
-  assert.match(init, /already exists/);
+  assert.match(init, /already exist/);
   assert.match(init, /Resolve-CanonicalPath/);
   assert.match(init, /Test-PathInsideRepository/);
   assert.match(init, /Assert-NoReparsePoint/);
@@ -149,10 +209,29 @@ test("release tooling verifies the anchored certificate and signed APK", () => {
   assert.match(build, /Assert-NoReparsePoint/);
   assert.match(build, /FileAttributes.*ReparsePoint/);
   assert.match(build, /Assert-NoReparsePoint\s+-Path\s+\$SigningProperties/);
+  for (const script of [init, build]) {
+    assert.match(
+      script,
+      /\$rawRepositoryRoot\s*=\s*Join-Path\s+\$PSScriptRoot\s+"\.\."[\s\S]*Assert-NoReparsePoint\s+-Path\s+\$rawRepositoryRoot[\s\S]*\$repositoryRoot\s*=\s*Resolve-CanonicalPath\s+-Path\s+\$rawRepositoryRoot/,
+    );
+  }
+  assert.match(
+    init,
+    /if\s*\(Test-Path\s+-LiteralPath\s+\$resolvedSigningDirectory\)[\s\S]*must not already exist/,
+  );
+  assert.match(init, /android-release-signing-transaction\.psm1/);
+  assert.match(init, /Publish-AndroidReleaseSigningDirectory/);
+  assert.match(init, /Remove-AndroidReleaseSigningStagingDirectory/);
+  assert.doesNotMatch(init, /Move-Item/);
+  assert.match(transaction, /\[System\.IO\.Directory\]::Move/);
+  assert.match(transaction, /hongtai-release\.jks/);
+  assert.match(transaction, /keystore\.properties/);
+  assert.match(transaction, /hongtai-release\.cer/);
+  assert.doesNotMatch(transaction, /Remove-Item\s+[^\r\n]*-Recurse/);
   assert.doesNotMatch(build, /VerifyExistingApk/);
   assert.match(
     init,
-    /try\s*\{\s*\$storePassword\s*=\s*New-RandomSecret\s*\$keyPassword\s*=\s*New-RandomSecret/,
+    /try\s*\{[\s\S]*\$storePassword\s*=\s*New-RandomSecret\s*\$keyPassword\s*=\s*New-RandomSecret/,
   );
   assert.match(
     init,
@@ -199,6 +278,62 @@ test(
       commandOutput(nonArtifacts),
       /Release signing configuration is required/,
     );
+  },
+);
+
+test(
+  "Windows Gradle rejects raw relative signing paths",
+  { skip: windowsOnly },
+  () => {
+    const relativePropertiesEnvironment = windowsAndroidEnvironment();
+    relativePropertiesEnvironment.HONGTAI_RELEASE_SIGNING_PROPERTIES =
+      "relative-keystore.properties";
+    const relativeProperties = runGradle(
+      [":app:assembleRelease"],
+      relativePropertiesEnvironment,
+    );
+    assert.equal(relativeProperties.error, undefined);
+    assert.notEqual(relativeProperties.status, 0);
+    assert.match(
+      commandOutput(relativeProperties),
+      /Release signing configuration must use an absolute path/,
+    );
+
+    const fixtureRoot = mkdtempSync(
+      join(tmpdir(), "hongtai-release-signing-relative-"),
+    );
+    const externalProperties = join(fixtureRoot, "external.properties");
+    try {
+      writeFileSync(
+        externalProperties,
+        [
+          "storeFile=relative-release.jks",
+          "storePassword=placeholder-only",
+          "keyAlias=placeholder-only",
+          "keyPassword=placeholder-only",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+      const relativeStoreEnvironment = windowsAndroidEnvironment();
+      relativeStoreEnvironment.HONGTAI_RELEASE_SIGNING_PROPERTIES =
+        externalProperties;
+      const relativeStore = runGradle(
+        [":app:assembleRelease"],
+        relativeStoreEnvironment,
+      );
+      assert.equal(relativeStore.error, undefined);
+      assert.notEqual(relativeStore.status, 0);
+      assert.match(
+        commandOutput(relativeStore),
+        /Release signing keystore must use an absolute path/,
+      );
+    } finally {
+      if (existsSync(externalProperties)) {
+        unlinkSync(externalProperties);
+      }
+      rmdirSync(fixtureRoot);
+    }
   },
 );
 
@@ -302,5 +437,209 @@ test(
     assert.equal(existsSync(fixtureRoot), false);
     assert.equal(existsSync(repositoryInitTarget), false);
     assert.equal(existsSync(join(root, ".git")), true);
+  },
+);
+
+test(
+  "Windows scripts reject startup through a repository junction",
+  { skip: windowsOnly },
+  () => {
+    const initSource = read("scripts/init-android-release-signing.ps1");
+    const buildSource = read("scripts/build-android-release.ps1");
+    for (const source of [initSource, buildSource]) {
+      assert.match(
+        source,
+        /Assert-NoReparsePoint\s+-Path\s+\$rawRepositoryRoot/,
+      );
+    }
+
+    const repositoryPath = realpathSync(root);
+    const fixtureRoot = mkdtempSync(
+      join(tmpdir(), "hongtai-release-repository-junction-"),
+    );
+    const repositoryJunction = join(fixtureRoot, "repo-link");
+    const fakeBin = join(fixtureRoot, "fake-bin");
+    const pnpmMarker = join(fixtureRoot, "pnpm-invoked.marker");
+    const fakePnpm = join(fakeBin, "pnpm.cmd");
+    const internalSigningDirectory = join(root, "android");
+    const signingTargetNames = [
+      "hongtai-release.jks",
+      "keystore.properties",
+      "hongtai-release.cer",
+    ];
+    for (const name of signingTargetNames) {
+      assert.equal(existsSync(join(internalSigningDirectory, name)), false);
+    }
+    const aclBefore = aclSnapshot(internalSigningDirectory);
+
+    try {
+      symlinkSync(repositoryPath, repositoryJunction, "junction");
+      mkdirSync(fakeBin);
+      writeFileSync(
+        fakePnpm,
+        `@echo off\r\ntype nul > "${pnpmMarker}"\r\nexit /b 99\r\n`,
+        "utf8",
+      );
+      const guardedEnvironment = {
+        ...process.env,
+        PATH: `${fakeBin};${process.env.PATH ?? ""}`,
+      };
+
+      const init = powershellFile(
+        join(
+          repositoryJunction,
+          "scripts",
+          "init-android-release-signing.ps1",
+        ),
+        ["-SigningDirectory", internalSigningDirectory],
+        guardedEnvironment,
+      );
+      assert.equal(init.error, undefined);
+      assert.notEqual(init.status, 0);
+      assert.match(
+        commandOutput(init),
+        /Repository path must not traverse a reparse point/,
+      );
+
+      const build = powershellFile(
+        join(
+          repositoryJunction,
+          "scripts",
+          "build-android-release.ps1",
+        ),
+        [
+          "-SigningProperties",
+          join(root, "android", "keystore.properties.example"),
+        ],
+        guardedEnvironment,
+      );
+      assert.equal(build.error, undefined);
+      assert.notEqual(build.status, 0);
+      assert.match(
+        commandOutput(build),
+        /Repository path must not traverse a reparse point/,
+      );
+
+      assert.equal(existsSync(pnpmMarker), false);
+      assert.equal(aclSnapshot(internalSigningDirectory), aclBefore);
+      for (const name of signingTargetNames) {
+        assert.equal(existsSync(join(internalSigningDirectory, name)), false);
+      }
+    } finally {
+      if (existsSync(repositoryJunction)) {
+        assert.equal(lstatSync(repositoryJunction).isSymbolicLink(), true);
+        rmdirSync(repositoryJunction);
+      }
+      if (existsSync(pnpmMarker)) {
+        unlinkSync(pnpmMarker);
+      }
+      if (existsSync(fakePnpm)) {
+        unlinkSync(fakePnpm);
+      }
+      if (existsSync(fakeBin)) {
+        rmdirSync(fakeBin);
+      }
+      rmdirSync(fixtureRoot);
+    }
+  },
+);
+
+test(
+  "Windows signing initialization preserves existing ACLs and publishes atomically",
+  { skip: windowsOnly },
+  () => {
+    const initSource = read("scripts/init-android-release-signing.ps1");
+    assert.match(initSource, /must not already exist/);
+    assert.match(initSource, /Publish-AndroidReleaseSigningDirectory/);
+    assert.match(initSource, /Remove-AndroidReleaseSigningStagingDirectory/);
+    assert.equal(
+      existsSync(join(root, "scripts", "android-release-signing-transaction.psm1")),
+      true,
+    );
+
+    const fixtureRoot = mkdtempSync(
+      join(tmpdir(), "hongtai-release-signing-transaction-"),
+    );
+    const existingDirectory = join(fixtureRoot, "existing-signing");
+    const existingSentinel = join(existingDirectory, "sentinel.txt");
+    const stagingDirectory = join(fixtureRoot, ".signing-staging");
+    const finalDirectory = join(fixtureRoot, "final-signing");
+    const finalSentinel = join(finalDirectory, "sentinel.txt");
+    const stagedNames = [
+      "hongtai-release.jks",
+      "keystore.properties",
+      "hongtai-release.cer",
+    ];
+
+    mkdirSync(existingDirectory);
+    writeFileSync(existingSentinel, "preserve-existing-directory", "utf8");
+    const existingHashBefore = fileSha256(existingSentinel);
+    const existingAclBefore = aclSnapshot(existingDirectory);
+
+    try {
+      const init = powershellFile(
+        join(root, "scripts", "init-android-release-signing.ps1"),
+        ["-SigningDirectory", existingDirectory],
+      );
+      assert.equal(init.error, undefined);
+      assert.notEqual(init.status, 0);
+      assert.match(commandOutput(init), /must not already exist/);
+      assert.equal(fileSha256(existingSentinel), existingHashBefore);
+      assert.equal(aclSnapshot(existingDirectory), existingAclBefore);
+
+      mkdirSync(stagingDirectory);
+      mkdirSync(finalDirectory);
+      for (const name of stagedNames) {
+        writeFileSync(join(stagingDirectory, name), `placeholder-${name}`, "utf8");
+      }
+      writeFileSync(finalSentinel, "preserve-final-directory", "utf8");
+      const finalHashBefore = fileSha256(finalSentinel);
+      const finalAclBefore = aclSnapshot(finalDirectory);
+      const modulePath = join(
+        root,
+        "scripts",
+        "android-release-signing-transaction.psm1",
+      );
+      const publish = powershellCommand(
+        `Import-Module ${powershellQuote(modulePath)} -Force; ` +
+          `try { Publish-AndroidReleaseSigningDirectory ` +
+          `-StagingDirectory ${powershellQuote(stagingDirectory)} ` +
+          `-FinalDirectory ${powershellQuote(finalDirectory)} } ` +
+          `finally { Remove-AndroidReleaseSigningStagingDirectory ` +
+          `-StagingDirectory ${powershellQuote(stagingDirectory)} }`,
+      );
+      assert.equal(publish.error, undefined);
+      assert.notEqual(publish.status, 0);
+      assert.match(commandOutput(publish), /already exists/);
+      assert.equal(existsSync(stagingDirectory), false);
+      assert.equal(fileSha256(finalSentinel), finalHashBefore);
+      assert.equal(aclSnapshot(finalDirectory), finalAclBefore);
+      for (const name of stagedNames) {
+        assert.equal(existsSync(join(finalDirectory, name)), false);
+      }
+    } finally {
+      if (existsSync(existingSentinel)) {
+        unlinkSync(existingSentinel);
+      }
+      if (existsSync(existingDirectory)) {
+        rmdirSync(existingDirectory);
+      }
+      if (existsSync(stagingDirectory)) {
+        for (const name of stagedNames) {
+          const stagedFile = join(stagingDirectory, name);
+          if (existsSync(stagedFile)) {
+            unlinkSync(stagedFile);
+          }
+        }
+        rmdirSync(stagingDirectory);
+      }
+      if (existsSync(finalSentinel)) {
+        unlinkSync(finalSentinel);
+      }
+      if (existsSync(finalDirectory)) {
+        rmdirSync(finalDirectory);
+      }
+      rmdirSync(fixtureRoot);
+    }
   },
 );

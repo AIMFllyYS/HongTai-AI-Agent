@@ -11,7 +11,11 @@ plugins {
 }
 
 val releaseSigningPath = providers.environmentVariable("HONGTAI_RELEASE_SIGNING_PROPERTIES").orNull
-val releaseSigningFile = releaseSigningPath?.let(::file)
+val rawReleaseSigningFile = releaseSigningPath?.let(::File)
+if (rawReleaseSigningFile != null && !rawReleaseSigningFile.isAbsolute) {
+  throw GradleException("Release signing configuration must use an absolute path")
+}
+val releaseSigningFile = rawReleaseSigningFile?.let(::file)
 val repositoryRootDirectory = rootProject.projectDir.parentFile.canonicalFile
 
 fun isInsideRepository(candidate: File): Boolean {
@@ -45,10 +49,8 @@ fun pathTraversesReparsePoint(candidate: File): Boolean {
 }
 
 if (releaseSigningFile != null) {
-  if (!releaseSigningFile.isAbsolute || !releaseSigningFile.isFile) {
-    throw GradleException(
-      "Release signing configuration must be an existing absolute file",
-    )
+  if (!releaseSigningFile.isFile) {
+    throw GradleException("Release signing configuration must be an existing file")
   }
   if (isInsideRepository(releaseSigningFile)) {
     throw GradleException("Release signing configuration must be outside the repository")
@@ -84,9 +86,13 @@ android {
   signingConfigs {
     if (releaseSigningFile != null) {
       create("release") {
-        val keyStore = file(requiredReleaseSigningValue("storeFile"))
-        if (!keyStore.isAbsolute || !keyStore.isFile) {
-          throw GradleException("Release signing keystore must be an existing absolute file")
+        val rawKeyStore = File(requiredReleaseSigningValue("storeFile"))
+        if (!rawKeyStore.isAbsolute) {
+          throw GradleException("Release signing keystore must use an absolute path")
+        }
+        val keyStore = file(rawKeyStore)
+        if (!keyStore.isFile) {
+          throw GradleException("Release signing keystore must be an existing file")
         }
         if (isInsideRepository(keyStore)) {
           throw GradleException("Release signing keystore must be outside the repository")

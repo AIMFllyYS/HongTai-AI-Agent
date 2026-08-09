@@ -178,39 +178,57 @@ function Protect-SigningDirectory {
   }
 }
 
-$repositoryRoot = Resolve-CanonicalPath -Path (Join-Path $PSScriptRoot "..")
+$rawRepositoryRoot = Join-Path $PSScriptRoot ".."
+Assert-NoReparsePoint -Path $rawRepositoryRoot `
+  -FailureMessage "Repository path must not traverse a reparse point"
+$repositoryRoot = Resolve-CanonicalPath -Path $rawRepositoryRoot
+Import-Module (Join-Path $PSScriptRoot "android-release-signing-transaction.psm1") -Force
+
 Assert-NoReparsePoint -Path $SigningDirectory `
   -FailureMessage "Release signing directory must not traverse a reparse point"
 $resolvedSigningDirectory = Resolve-CanonicalPath -Path $SigningDirectory
 if (Test-PathInsideRepository -CandidatePath $resolvedSigningDirectory -RepositoryRoot $repositoryRoot) {
   throw "Release signing directory must be outside the repository"
 }
+if (Test-Path -LiteralPath $resolvedSigningDirectory) {
+  throw "Release signing directory must not already exist"
+}
+
+$signingParentDirectory = [System.IO.Path]::GetDirectoryName($resolvedSigningDirectory)
+if ([string]::IsNullOrWhiteSpace($signingParentDirectory)) {
+  throw "Release signing directory must have a filesystem parent"
+}
+Assert-NoReparsePoint -Path $signingParentDirectory `
+  -FailureMessage "Release signing directory must not traverse a reparse point"
+[void] [System.IO.Directory]::CreateDirectory($signingParentDirectory)
+Assert-NoReparsePoint -Path $signingParentDirectory `
+  -FailureMessage "Release signing directory must not traverse a reparse point"
+if (Test-Path -LiteralPath $resolvedSigningDirectory) {
+  throw "Release signing directory must not already exist"
+}
+
 $keystorePath = Join-Path $resolvedSigningDirectory "hongtai-release.jks"
 $propertiesPath = Join-Path $resolvedSigningDirectory "keystore.properties"
 $certificatePath = Join-Path $resolvedSigningDirectory "hongtai-release.cer"
-
-if ((Test-Path -LiteralPath $keystorePath) -or
-    (Test-Path -LiteralPath $propertiesPath) -or
-    (Test-Path -LiteralPath $certificatePath)) {
-  throw "Release signing material already exists; refusing to overwrite"
-}
-
-[void] (New-Item -ItemType Directory -Path $resolvedSigningDirectory -Force)
-Protect-SigningDirectory -Path $resolvedSigningDirectory
-
-$jdkHome = Get-Jdk21Home
-$keytool = Join-Path $jdkHome "bin\keytool.exe"
+$stagingDirectory = Join-Path $signingParentDirectory (
+  ".signing.{0}.staging" -f [Guid]::NewGuid().ToString("N")
+)
+$stagedKeystore = Join-Path $stagingDirectory "hongtai-release.jks"
+$stagedProperties = Join-Path $stagingDirectory "keystore.properties"
+$stagedCertificate = Join-Path $stagingDirectory "hongtai-release.cer"
 $storePasswordVariable = "HONGTAI_KEYTOOL_STORE_PASSWORD"
 $keyPasswordVariable = "HONGTAI_KEYTOOL_KEY_PASSWORD"
-$temporaryKeystore = Join-Path $resolvedSigningDirectory (".{0}.tmp" -f [Guid]::NewGuid().ToString("N"))
-$temporaryCertificate = Join-Path $resolvedSigningDirectory (".{0}.cer.tmp" -f [Guid]::NewGuid().ToString("N"))
-$temporaryProperties = Join-Path $resolvedSigningDirectory (".{0}.properties.tmp" -f [Guid]::NewGuid().ToString("N"))
 $storePassword = $null
 $keyPassword = $null
 $properties = $null
 $forwardSlashKeystore = $null
 
 try {
+  [void] [System.IO.Directory]::CreateDirectory($stagingDirectory)
+  Protect-SigningDirectory -Path $stagingDirectory
+
+  $jdkHome = Get-Jdk21Home
+  $keytool = Join-Path $jdkHome "bin\keytool.exe"
   $storePassword = New-RandomSecret
   $keyPassword = New-RandomSecret
   [Environment]::SetEnvironmentVariable($storePasswordVariable, $storePassword, "Process")
@@ -218,7 +236,7 @@ try {
 
   Invoke-KeytoolSilently -Command $keytool -Arguments @(
     "-genkeypair",
-    "-keystore", $temporaryKeystore,
+    "-keystore", $stagedKeystore,
     "-storetype", "JKS",
     "-alias", "hongtai-release",
     "-keyalg", "RSA",
@@ -233,11 +251,11 @@ try {
 
   Invoke-KeytoolSilently -Command $keytool -Arguments @(
     "-exportcert",
-    "-keystore", $temporaryKeystore,
+    "-keystore", $stagedKeystore,
     "-storetype", "JKS",
     "-alias", "hongtai-release",
     "-storepass:env", $storePasswordVariable,
-    "-file", $temporaryCertificate
+    "-file", $stagedCertificate
   ) -FailureMessage "keytool failed to export the public release certificate"
 
   $forwardSlashKeystore = $keystorePath.Replace('\', '/')
@@ -249,13 +267,24 @@ try {
     ""
   ) -join "`n"
   $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
-  [System.IO.File]::WriteAllText($temporaryProperties, $properties, $utf8WithoutBom)
+  [System.IO.File]::WriteAllText($stagedProperties, $properties, $utf8WithoutBom)
 
-  Move-Item -LiteralPath $temporaryKeystore -Destination $keystorePath
-  Move-Item -LiteralPath $temporaryCertificate -Destination $certificatePath
-  Move-Item -LiteralPath $temporaryProperties -Destination $propertiesPath
+  foreach ($stagedFile in @($stagedKeystore, $stagedProperties, $stagedCertificate)) {
+    if (!(Test-Path -LiteralPath $stagedFile -PathType Leaf) -or
+        (Get-Item -Force -LiteralPath $stagedFile).Length -eq 0) {
+      throw "Release signing staging directory is incomplete"
+    }
+  }
+  $fingerprint = (
+    Get-FileHash -LiteralPath $stagedCertificate -Algorithm SHA256
+  ).Hash.ToLowerInvariant()
+  if ($fingerprint -notmatch '^[0-9a-f]{64}$') {
+    throw "Release signing certificate fingerprint is invalid"
+  }
 
-  $fingerprint = (Get-FileHash -LiteralPath $certificatePath -Algorithm SHA256).Hash.ToLowerInvariant()
+  Publish-AndroidReleaseSigningDirectory `
+    -StagingDirectory $stagingDirectory `
+    -FinalDirectory $resolvedSigningDirectory
   Write-Output "Signing properties: $propertiesPath"
   Write-Output "Certificate SHA-256: $fingerprint"
 } finally {
@@ -265,9 +294,8 @@ try {
   $forwardSlashKeystore = $null
   $storePassword = $null
   $keyPassword = $null
-  foreach ($temporaryPath in @($temporaryKeystore, $temporaryCertificate, $temporaryProperties)) {
-    if (Test-Path -LiteralPath $temporaryPath -PathType Leaf) {
-      Remove-Item -LiteralPath $temporaryPath -Force
-    }
+  if (Test-Path -LiteralPath $stagingDirectory) {
+    Remove-AndroidReleaseSigningStagingDirectory `
+      -StagingDirectory $stagingDirectory
   }
 }

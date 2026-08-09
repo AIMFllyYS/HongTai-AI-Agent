@@ -38,6 +38,15 @@
 - 最小实现把三个 AGP 实际入口加入精确集合，并让 Gradle 比较 normalized path 与 `toRealPath()`、同时逐段检查符号链接。随后聚焦测试 4/4 通过：三个终端任务分别执行 dry-run 均安全失败，四个非产物任务的组合 dry-run 成功。
 - Windows-only 自动行为测试在系统临时目录创建“仓库外 junction → 仓库根”和无秘密外部 properties，分别执行初始化脚本、构建脚本与 Gradle；三者均拒绝，初始化目标未生成。`finally` 先以非递归目录删除解除 junction，再删除占位 properties 与空临时目录，不递归遍历 junction，也不修改仓库内容；非 Windows 主机会明确 skip。
 
+#### 第四轮代码质量补证
+
+- 新增 5 项聚焦断言后首次运行 5/5 按预期失败：Gradle 尚未先拒绝原始相对 properties/`storeFile`，两个脚本尚未在规范化前拒绝仓库根 reparse point，初始化仍会接管既有目录并顺序移动三个最终文件，也没有独立的原子发布 helper。
+- 最小实现后完整聚焦测试 7/7 通过。Gradle 实际执行分别确认相对 properties 与外部 properties 中的相对 `storeFile` 都以 absolute-path 错误拒绝，没有退化为仓库边界或文件存在错误。
+- Windows-only 自动行为测试从系统临时目录建立“外部仓库 junction → 当前仓库”，再从 junction 路径启动初始化和构建脚本并传入真实仓库内部 candidate；两者均在 pnpm、keytool、ACL 或目标创建前以 repository reparse 错误拒绝，伪造的 pnpm marker 未生成，仓库目录 ACL 与三个签名目标均未变化。
+- 初始化现在要求最终 `SigningDirectory` 完全不存在。以含 sentinel 的既有目录调用时安全失败，sentinel SHA-256、目录 SDDL 和 `AreAccessRulesProtected` 均保持不变。
+- 三件套先在最终目录同父级的唯一 staging 目录内生成和验证，properties 写入最终 keystore 绝对路径，再通过一次 `[System.IO.Directory]::Move(staging, final)` 发布。独立 helper 的 final-conflict 行为测试确认发布失败后只精确清理本次 staging 三文件及空目录，既有 final sentinel 的 SHA-256 与 ACL 不变，最终目录没有混入任何签名目标。
+- 无签名配置的 `:app:assemble --no-daemon` 与 `:app:build --no-daemon` 仍在 task 执行前以 required 错误 fail-closed；配置 JDK 21 后 `:app:testDebugUnitTest --no-daemon` 通过。错误均未输出字段值、properties 内容或私有路径。
+
 ## 初始化证据
 
 - 默认仓库外目录成功创建 alias `hongtai-release` 的 RSA 3072 / SHA256withRSA 身份。
@@ -63,6 +72,8 @@
 第二轮任务名与 reparse-point 门禁修复后又执行了一次完整构建入口；Web build、Capacitor sync、release test/lint/assemble、zipalign、`aapt2`、`apksigner` 与证书锚点全部通过，Gradle 仍为 96 个 actionable task 中 8 个执行、88 个 up-to-date。APK SHA-256 仍未变化，因此 Android 端测候选身份与既有升级数值保持原结论，不重复启动 AVD。
 
 第三轮补齐 bundle 产物入口与 Gradle `toRealPath()` 门禁后再次执行完整构建入口；同一组 Web、Capacitor、release 测试/lint/build 和主机验签全部通过，Gradle 仍为 96 个 actionable task 中 8 个执行、88 个 up-to-date，APK SHA-256 仍为 `0dc5a2a9a1a8abe8cd1f98691c1aa5c99049461f9fbb7cfd8b9f4913a98f67d5`。因此不改写既有 Android 端测候选身份，也不重复启动 AVD。
+
+第四轮补上原始仓库根 reparse 门禁、原始绝对路径检查与原子目录发布后再次执行完整构建入口；Web build、Capacitor sync、release test/lint/assemble、zipalign、`aapt2`、`apksigner` 与证书锚点全部通过，Gradle 仍为 96 个 actionable task 中 8 个执行、88 个 up-to-date。APK SHA-256 仍为 `0dc5a2a9a1a8abe8cd1f98691c1aa5c99049461f9fbb7cfd8b9f4913a98f67d5`，所以 Android 端测候选身份与已有升级数值不变；本轮没有启动 AVD。
 
 构建中保留既有的 Vite 大 chunk 提示、Capacitor `flatDir` 提示和 Media3 deprecated 编译提示；本次没有新增对应实现，也没有把 warning 表述为 error 或顺手扩修。
 

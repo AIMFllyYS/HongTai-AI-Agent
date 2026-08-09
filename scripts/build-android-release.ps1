@@ -166,7 +166,10 @@ function Invoke-CheckedCommand {
   }
 }
 
-$repositoryRoot = Resolve-CanonicalPath -Path (Join-Path $PSScriptRoot "..")
+$rawRepositoryRoot = Join-Path $PSScriptRoot ".."
+Assert-NoReparsePoint -Path $rawRepositoryRoot `
+  -FailureMessage "Repository path must not traverse a reparse point"
+$repositoryRoot = Resolve-CanonicalPath -Path $rawRepositoryRoot
 $apkPath = Join-Path $repositoryRoot "android\app\build\outputs\apk\release\app-release.apk"
 $anchorPath = Join-Path $repositoryRoot "android\release-certificate.sha256"
 $jdkHome = Get-Jdk21Home
