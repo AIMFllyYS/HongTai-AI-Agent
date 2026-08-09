@@ -36,7 +36,7 @@ Keystore、私有文件、Photo Picker、受控网络、Media3
 
 ## 环境与安装
 
-- Node.js 24；
+- Node.js 22 或更高版本，推荐使用 Node.js 24；
 - pnpm 10；
 - CLI 媒体回归需要 `ffmpeg` 与 `ffprobe`；
 - Android 构建需要 Android SDK 与 JDK 21。
@@ -61,6 +61,8 @@ pnpm cli diagnosis serve
 ```
 
 CLI 的 `.env` 只用于开发机回归，不能进入 APK、Git、日志或 ADB 参数。安装后的 APK 必须从设置页写入自身安全存储。完整配置、产物格式与人工回归边界见[CLI运行与产物说明](docs/CLI运行与产物说明.md)。
+
+CLI 图片回归由 `packages/node-runtime` 中精确锁定的 sharp 负责解码；该 Node 原生依赖不会进入 Web、Capacitor Runtime 或 Android APK。
 
 ## 构建 Debug APK
 
