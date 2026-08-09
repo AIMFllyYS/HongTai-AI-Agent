@@ -34,65 +34,6 @@ class PrivateMediaImportPolicyTest {
   }
 
   @Test
-  fun `reads a bounded signature across partial input reads`() {
-    val bytes = "RIFF1234WEBPextra".toByteArray(Charsets.US_ASCII)
-    val partialInput = object : ByteArrayInputStream(bytes) {
-      override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
-        super.read(buffer, offset, minOf(length, 2))
-    }
-
-    assertTrue(
-      PrivateMediaImportPolicy.readHeader(partialInput)
-        .contentEquals("RIFF1234WEBP".toByteArray(Charsets.US_ASCII)),
-    )
-  }
-
-  @Test
-  fun `provider MIME and display name cannot override byte authority`() {
-    assertEquals(
-      null,
-      PrivateMediaImportPolicy.imageMimeType("image/png", "ignored.jpg", byteArrayOf()),
-    )
-    assertEquals(
-      null,
-      PrivateMediaImportPolicy.imageMimeType(null, "舌象照片.JPEG", byteArrayOf()),
-    )
-    assertEquals(
-      "image/png",
-      PrivateMediaImportPolicy.imageMimeType(
-        null,
-        "没有扩展名",
-        byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a),
-      ),
-    )
-    assertEquals(
-      "image/webp",
-      PrivateMediaImportPolicy.imageMimeType(
-        "application/octet-stream",
-        "unknown.bin",
-        "RIFF1234WEBP".toByteArray(Charsets.US_ASCII),
-      ),
-    )
-    assertEquals(null, PrivateMediaImportPolicy.imageMimeType(null, "unknown.bin", byteArrayOf(1, 2, 3)))
-    assertEquals(
-      null,
-      PrivateMediaImportPolicy.imageMimeType("image/gif", "animation.gif", "GIF89a".toByteArray()),
-    )
-  }
-
-  @Test
-  fun `accepts HEIF only after its bytes are structurally confirmed`() {
-    assertEquals(
-      null,
-      PrivateMediaImportPolicy.imageMimeType("image/heic", "IMG_20260808.HEIC", byteArrayOf()),
-    )
-    assertEquals(
-      null,
-      PrivateMediaImportPolicy.imageMimeType(null, "IMG_20260808.heif", byteArrayOf()),
-    )
-  }
-
-  @Test
   fun `publishes an imported file only after its bounded stream completes`() {
     val directory = Files.createTempDirectory("hongtai-private-media").toFile()
     val temporary = File(directory, ".photo.jpg.part")

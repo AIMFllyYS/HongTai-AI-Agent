@@ -17,6 +17,15 @@ if (rawReleaseSigningFile != null && !rawReleaseSigningFile.isAbsolute) {
 }
 val releaseSigningFile = rawReleaseSigningFile?.let(::file)
 val repositoryRootDirectory = rootProject.projectDir.parentFile.canonicalFile
+val heifSourceCacheOverride = providers.environmentVariable("HONGTAI_HEIF_SOURCE_CACHE").orNull
+val rawHeifSourceCacheDirectory = heifSourceCacheOverride?.let(::File)
+if (rawHeifSourceCacheDirectory != null && !rawHeifSourceCacheDirectory.isAbsolute) {
+  throw GradleException("HEIF native source cache override must use an absolute path")
+}
+val heifSourceCacheDirectory = (
+  rawHeifSourceCacheDirectory ?: rootProject.projectDir.resolve(".native-deps/heif-sources")
+).toPath().toAbsolutePath().normalize().toFile()
+val heifSourceCacheCmakePath = heifSourceCacheDirectory.path.replace('\\', '/')
 
 fun isInsideRepository(candidate: File): Boolean {
   val repositoryPath = repositoryRootDirectory.path.trimEnd('\\', '/')
@@ -78,7 +87,7 @@ android {
     applicationId = "com.hongtai.aiagent"
     minSdk = 24
     targetSdk = 36
-    versionCode = 5
+    versionCode = 6
     versionName = "0.0.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -88,6 +97,7 @@ android {
     externalNativeBuild {
       cmake {
         arguments.add("-DANDROID_PLATFORM=android-24")
+        arguments.add("-DHONGTAI_HEIF_SOURCE_CACHE=$heifSourceCacheCmakePath")
       }
     }
   }
@@ -149,6 +159,34 @@ android {
       path = file("src/main/cpp/heif/CMakeLists.txt")
       version = "3.22.1"
     }
+  }
+}
+
+val verifyHeifNativeSources = tasks.register<Exec>("verifyHeifNativeSources") {
+  group = "verification"
+  description = "Verifies the pinned HEIF native source trees without network access"
+  val fetchScript = repositoryRootDirectory.resolve("scripts/fetch-android-heif-sources.ps1")
+  commandLine(
+    "powershell.exe",
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    fetchScript.absolutePath,
+    "-SourceCache",
+    heifSourceCacheDirectory.absolutePath,
+    "-VerifyOnly",
+  )
+  outputs.upToDateWhen { false }
+}
+
+tasks.configureEach {
+  if (
+    name.startsWith("configureCMake") ||
+    name.startsWith("buildCMake") ||
+    name.startsWith("externalNativeBuild")
+  ) {
+    dependsOn(verifyHeifNativeSources)
   }
 }
 

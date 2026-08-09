@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
   [string]$SourceCache,
-  [string]$ArchiveDirectory
+  [string]$ArchiveDirectory,
+  [switch]$VerifyOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -14,18 +15,60 @@ if ([string]::IsNullOrWhiteSpace($SourceCache)) {
   $SourceCache = Join-Path $repositoryRoot 'android\.native-deps\heif-sources'
 }
 $SourceCache = [IO.Path]::GetFullPath($SourceCache)
+
+if ($VerifyOnly -and ![string]::IsNullOrWhiteSpace($ArchiveDirectory)) {
+  throw 'VerifyOnly cannot be combined with ArchiveDirectory.'
+}
+
 $archiveRoot = if ([string]::IsNullOrWhiteSpace($ArchiveDirectory)) {
   $null
 } else {
   (Resolve-Path -LiteralPath $ArchiveDirectory).ProviderPath
 }
-$tar = (Get-Command 'tar.exe' -ErrorAction Stop).Source
-New-Item -ItemType Directory -Force -Path $SourceCache | Out-Null
 
-function Get-SourceTreeHash {
-  param([string]$Root)
+function Test-ReparsePoint {
+  param([IO.FileSystemInfo]$Item)
+  return ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0
+}
+
+function Assert-NoReparseSourceTree {
+  param(
+    [string]$Root,
+    [string]$DependencyName
+  )
+
+  if (!(Test-Path -LiteralPath $Root -PathType Container)) {
+    throw "Native source verification failed for ${DependencyName}: source directory is missing."
+  }
+  $rootItem = Get-Item -Force -LiteralPath $Root
+  if (Test-ReparsePoint -Item $rootItem) {
+    throw "Native source verification failed for ${DependencyName}: source tree contains a reparse point."
+  }
+
+  $directories = [Collections.Generic.Stack[IO.DirectoryInfo]]::new()
+  $directories.Push($rootItem)
+  while ($directories.Count -gt 0) {
+    $directory = $directories.Pop()
+    foreach ($item in Get-ChildItem -Force -LiteralPath $directory.FullName) {
+      if (Test-ReparsePoint -Item $item) {
+        throw "Native source verification failed for ${DependencyName}: source tree contains a reparse point."
+      }
+      if ($item.PSIsContainer) {
+        $directories.Push($item)
+      }
+    }
+  }
+}
+
+function Get-SafeSourceFiles {
+  param(
+    [string]$Root,
+    [string]$DependencyName
+  )
+
+  Assert-NoReparseSourceTree -Root $Root -DependencyName $DependencyName
   $rootPrefix = [IO.Path]::GetFullPath($Root).TrimEnd([char[]]@('\', '/')) + [IO.Path]::DirectorySeparatorChar
-  $files = @(Get-ChildItem -LiteralPath $Root -Recurse -File | Where-Object {
+  return @(Get-ChildItem -Force -LiteralPath $Root -Recurse -File | Where-Object {
     $_.Name -cne '.hongtai-source-lock.json'
   } | ForEach-Object {
     [pscustomobject]@{
@@ -33,10 +76,22 @@ function Get-SourceTreeHash {
       Relative = $_.FullName.Substring($rootPrefix.Length).Replace('\', '/')
     }
   })
+}
+
+function Get-SourceTreeHash {
+  param(
+    [string]$Root,
+    [string]$DependencyName
+  )
+  $files = @(Get-SafeSourceFiles -Root $Root -DependencyName $DependencyName)
   $records = [Collections.Generic.List[string]]::new()
   foreach ($entry in $files) {
-    $fileHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $entry.File.FullName).Hash.ToLowerInvariant()
-    $fileLength = $entry.File.Length.ToString([Globalization.CultureInfo]::InvariantCulture)
+    $currentFile = Get-Item -Force -LiteralPath $entry.File.FullName
+    if (Test-ReparsePoint -Item $currentFile) {
+      throw "Native source verification failed for ${DependencyName}: source tree contains a reparse point."
+    }
+    $fileHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $currentFile.FullName).Hash.ToLowerInvariant()
+    $fileLength = $currentFile.Length.ToString([Globalization.CultureInfo]::InvariantCulture)
     [void]$records.Add($entry.Relative + '|' + $fileLength + '|' + $fileHash)
   }
   $records.Sort([StringComparer]::Ordinal)
@@ -53,16 +108,57 @@ function Get-SourceTreeHash {
   }
 }
 
-function Test-PublishedSource {
-  param([string]$Target, [object]$Dependency)
+function Assert-PublishedSource {
+  param(
+    [string]$Target,
+    [object]$Dependency,
+    [string]$DependencyName
+  )
+  if (!(Test-Path -LiteralPath $Target -PathType Container)) {
+    throw "Native source verification failed for ${DependencyName}: source directory is missing."
+  }
   $markerPath = Join-Path $Target '.hongtai-source-lock.json'
-  if (!(Test-Path -LiteralPath $markerPath -PathType Leaf)) { return $false }
-  $marker = Get-Content -Raw -Encoding UTF8 -LiteralPath $markerPath | ConvertFrom-Json
-  return $marker.commit -ceq $Dependency.commit -and
-    $marker.archiveSha256 -ceq $Dependency.archiveSha256 -and
-    $marker.sourceTreeSha256 -ceq $Dependency.sourceTreeSha256 -and
-    $marker.patchSetSha256 -ceq $lock.patchSetSha256 -and
-    (Get-SourceTreeHash -Root $Target) -ceq $Dependency.sourceTreeSha256
+  if (!(Test-Path -LiteralPath $markerPath -PathType Leaf)) {
+    throw "Native source verification failed for ${DependencyName}: source marker is missing."
+  }
+  $markerItem = Get-Item -Force -LiteralPath $markerPath
+  if (Test-ReparsePoint -Item $markerItem) {
+    throw "Native source verification failed for ${DependencyName}: source tree contains a reparse point."
+  }
+  try {
+    $marker = Get-Content -Raw -Encoding UTF8 -LiteralPath $markerPath | ConvertFrom-Json
+  } catch {
+    throw "Native source verification failed for ${DependencyName}: source marker is invalid."
+  }
+  $requiredMarkerFields = @('commit', 'archiveSha256', 'sourceTreeSha256', 'patchSetSha256')
+  foreach ($field in $requiredMarkerFields) {
+    if ($null -eq $marker.PSObject.Properties[$field]) {
+      throw "Native source verification failed for ${DependencyName}: source marker mismatch."
+    }
+  }
+  if ($marker.commit -cne $Dependency.commit -or
+    $marker.archiveSha256 -cne $Dependency.archiveSha256 -or
+    $marker.sourceTreeSha256 -cne $Dependency.sourceTreeSha256 -or
+    $marker.patchSetSha256 -cne $lock.patchSetSha256) {
+    throw "Native source verification failed for ${DependencyName}: source marker mismatch."
+  }
+  if ((Get-SourceTreeHash -Root $Target -DependencyName $DependencyName) -cne $Dependency.sourceTreeSha256) {
+    throw "Native source verification failed for ${DependencyName}: source tree hash mismatch."
+  }
+}
+
+function Test-PublishedSource {
+  param(
+    [string]$Target,
+    [object]$Dependency,
+    [string]$DependencyName
+  )
+  try {
+    Assert-PublishedSource -Target $Target -Dependency $Dependency -DependencyName $DependencyName
+    return $true
+  } catch {
+    return $false
+  }
 }
 
 function Assert-SafeArchive {
@@ -88,6 +184,26 @@ function Assert-SafeArchive {
   }
 }
 
+if ($VerifyOnly) {
+  foreach ($property in $lock.dependencies.PSObject.Properties) {
+    $name = $property.Name
+    $dependency = $property.Value
+    if (Test-Path -LiteralPath $SourceCache -PathType Container) {
+      $cacheRoot = Get-Item -Force -LiteralPath $SourceCache
+      if (Test-ReparsePoint -Item $cacheRoot) {
+        throw "Native source verification failed for ${name}: source tree contains a reparse point."
+      }
+    }
+    $target = Join-Path $SourceCache $dependency.archiveRoot
+    Assert-PublishedSource -Target $target -Dependency $dependency -DependencyName $name
+    Write-Output "$name source verified: $($dependency.commit)"
+  }
+  return
+}
+
+$tar = (Get-Command 'tar.exe' -ErrorAction Stop).Source
+New-Item -ItemType Directory -Force -Path $SourceCache | Out-Null
+
 foreach ($property in $lock.dependencies.PSObject.Properties) {
   $name = $property.Name
   $dependency = $property.Value
@@ -101,7 +217,7 @@ foreach ($property in $lock.dependencies.PSObject.Properties) {
       if (!(Test-Path -LiteralPath $archive -PathType Leaf)) {
         throw "Offline archive is missing for $name."
       }
-    } elseif (Test-PublishedSource -Target $target -Dependency $dependency) {
+    } elseif (Test-PublishedSource -Target $target -Dependency $dependency -DependencyName $name) {
       Write-Output "$name source already verified: $($dependency.commit)"
       continue
     } else {
@@ -116,7 +232,7 @@ foreach ($property in $lock.dependencies.PSObject.Properties) {
     }
     Assert-SafeArchive -Archive $archive -ExpectedRoot $dependency.archiveRoot
 
-    if (Test-PublishedSource -Target $target -Dependency $dependency) {
+    if (Test-PublishedSource -Target $target -Dependency $dependency -DependencyName $name) {
       Write-Output "$name archive and source already verified: $($dependency.commit)"
       continue
     }
@@ -132,7 +248,7 @@ foreach ($property in $lock.dependencies.PSObject.Properties) {
     if (!(Test-Path -LiteralPath (Join-Path $extracted 'CMakeLists.txt') -PathType Leaf)) {
       throw "Native source revision marker is missing for $name."
     }
-    $sourceTreeHash = Get-SourceTreeHash -Root $extracted
+    $sourceTreeHash = Get-SourceTreeHash -Root $extracted -DependencyName $name
     if ($sourceTreeHash -cne $dependency.sourceTreeSha256) {
       throw "Extracted native source tree hash mismatch for $name (expected $($dependency.sourceTreeSha256), got $sourceTreeHash)."
     }

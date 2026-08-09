@@ -50,11 +50,17 @@ test("native build and LGPL delivery boundaries are checked in without binaries"
   required.forEach((path) => assert.ok(existsSync(join(root, path)), `missing ${path}`));
 
   const gradle = read("android/app/build.gradle.kts");
+  const fetch = read("scripts/fetch-android-heif-sources.ps1");
   const cmake = read("android/app/src/main/cpp/heif/CMakeLists.txt");
   const notice = read("android/third_party/heif/NOTICE.md");
   const ignore = read(".gitignore");
   assert.match(gradle, /ndkVersion\s*=\s*"28\.2\.13676358"/);
   assert.match(gradle, /abiFilters\.addAll\(listOf\("arm64-v8a", "armeabi-v7a", "x86", "x86_64"\)\)/);
+  assert.match(gradle, /HONGTAI_HEIF_SOURCE_CACHE/);
+  assert.match(gradle, /verifyHeifNativeSources/);
+  assert.match(gradle, /dependsOn\(verifyHeifNativeSources\)/);
+  assert.match(fetch, /\[switch\]\$VerifyOnly/);
+  assert.match(fetch, /FileAttributes\]::ReparsePoint/);
   assert.match(cmake, /BUILD_SHARED_LIBS\s+ON/);
   assert.match(cmake, /WITH_LIBDE265\s+ON/);
   assert.match(cmake, /ENABLE_PLUGIN_LOADING\s+OFF/);
@@ -76,6 +82,10 @@ test("native build and LGPL delivery boundaries are checked in without binaries"
   }
 
   const native = read("android/app/src/main/cpp/heif/legacy_heif_jni.cpp");
+  const mediaStore = read("android/app/src/main/java/com/hongtai/aiagent/media/PrivateMediaStore.kt");
+  const instrumentation = read(
+    "android/app/src/androidTest/java/com/hongtai/aiagent/media/PrivateMediaStoreInstrumentationTest.kt",
+  );
   assert.match(native, /heif_context_has_sequence/);
   assert.match(native, /data_reference_index\s*!=\s*0/);
   assert.match(native, /max_image_size_pixels/);
@@ -83,6 +93,8 @@ test("native build and LGPL delivery boundaries are checked in without binaries"
   assert.match(native, /strict_decoding\s*=\s*1/);
   assert.match(native, /std::unique_ptr/);
   assert.doesNotMatch(native, /ByteArray|GetByteArrayElements|NewGlobalRef|abort\s*\(/);
+  assert.doesNotMatch(mediaStore, /fun\s+(?:readHeader|imageMimeType)\s*\(/);
+  assert.doesNotMatch(instrumentation, /PrivateMediaImportPolicy::readHeader/);
 });
 
 test("HEIF instrumentation reads fixtures from the test APK asset context", () => {

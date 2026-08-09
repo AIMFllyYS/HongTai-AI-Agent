@@ -2,9 +2,16 @@
 
 ## 结论
 
-Issue #6 的 Android 7.x 原生 HEIF fallback 已在独立 API 24、API 25 x86_64 AVD 上分别通过 6/6 instrumentation：真实 HEVC HEIF 解码、`irot`、尺寸与四角像素、损坏输入、8193 超限、外部引用、PNG 回归、JPEG 归一化与临时文件清理均由设备侧断言。当前候选是 `versionCode=5`、`versionName=0.0.1`；低于 Chromium 99 的 WebView 会进入可读中文终态页，不再表现为白屏。
+Issue #6 的 Android 7.x 原生 HEIF fallback 已在独立 API 24、API 25 x86_64 AVD 上分别通过 6/6 instrumentation：真实 HEVC HEIF 解码、`irot`、尺寸与四角像素、损坏输入、8193 超限、外部引用、PNG 回归、JPEG 归一化与临时文件清理均由设备侧断言。上述端测使用 v5；当前源码候选已递增为 `versionCode=6`、`versionName=0.0.1`，v6 完成主机回归与签名后验但尚未做设备端复验。
 
 这仍不是“Android 7.x 完整 UI 已通过”的声明。官方 SDK 镜像没有同时满足 API 24/25、x86_64 与 WebView ≥99 的可安全组合；API 24/25 原生 fallback 与 API 35 现代 WebView 的真实 UI/bridge/system picker 证据来自两组环境，不能拼接成同一设备的完整通过。物理 Android 7.x、ARM、OEM HEIC 和低内存压力也未验证。
+
+## 审查回修后的 v6 主机证据
+
+- 原生源码门禁：fetch 脚本新增纯离线 `-VerifyOnly`，逐依赖核对 marker 四字段、实时 source-tree SHA-256，并在读取普通文件前拒绝源码树或 marker 中的 reparse point。所有 Gradle native configure/build 任务依赖独立验证任务；绝对路径 `HONGTAI_HEIF_SOURCE_CACHE` 同步传给验证脚本与 CMake，相对路径被拒绝。TEMP 缓存副本脏改后，直接 `configureCMakeDebug[arm64-v8a]` 在验证任务失败且没有进入 CMake；恢复后同一任务通过，仓库内 canonical 缓存的源码与 marker hash 前后不变。
+- WebView 边界：标准 Android provider 继续要求 Chromium 99；Huawei provider 没有可信的 product-major → Chromium 映射，因此 `minHuaweiWebViewVersion=2147483647` fail-closed，不声明受支持并进入本地静态中文页。错误页文案只泛指系统 WebView 或浏览器组件，不包含脚本、外链、网络或自动跳转。
+- v6 release builder 唯一一次正式运行通过：release APK 为 25,890,603 字节，版本 `0.0.1 (6)`，证书 SHA-256 为 `54df122cd4f99720c613737815385e771bfaeb17715c160aed178062ab5b2fde`，精确包含 12 个目标 `.so`，四 ABI 的 `LOAD` alignment 均为 `0x4000`，`zipalign -c -P 16 4` 通过，APK SHA-256 为 `666465ccfa291d3df70adafb9e139f03d5c144dd7f324c2cd14333f5b2e6a3ec`。
+- 本节只记录 v6 主机证据；没有启动或改动 endpoint AVD，不把下方 v5 设备事实改写为 v6 通过。
 
 ## 已观察证据
 

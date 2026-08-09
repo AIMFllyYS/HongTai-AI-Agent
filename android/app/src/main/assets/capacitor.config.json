@@ -9,6 +9,7 @@
 	},
 	"android": {
 		"minWebViewVersion": 99,
+		"minHuaweiWebViewVersion": 2147483647,
 		"includePlugins": []
 	}
 }

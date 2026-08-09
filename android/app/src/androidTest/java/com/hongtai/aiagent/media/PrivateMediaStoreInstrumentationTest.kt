@@ -97,10 +97,11 @@ class PrivateMediaStoreInstrumentationTest {
     try {
       assertEquals("image/jpeg", imported.mimeType)
       assertTrue(importedFile.canonicalPath.startsWith(File(context.filesDir, "media/imports").canonicalPath))
+      val jpegMagic = ByteArray(3)
+      val jpegMagicBytesRead = importedFile.inputStream().use { input -> input.read(jpegMagic) }
+      assertEquals(3, jpegMagicBytesRead)
       assertTrue(
-        importedFile.inputStream().use(PrivateMediaImportPolicy::readHeader)
-          .copyOfRange(0, 3)
-          .contentEquals(byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte())),
+        jpegMagic.contentEquals(byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte())),
       )
       assertTrue(maxOf(bounds.outWidth, bounds.outHeight) <= 2_048)
       assertTrue(imported.sizeBytes in 1..(15L * 1024L * 1024L))

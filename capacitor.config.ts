@@ -17,6 +17,9 @@ const config: CapacitorConfig = {
   },
   android: {
     minWebViewVersion: 99,
+    // Huawei's provider version is not a Chromium major. Until a tested
+    // capability mapping exists, fail closed into the static error page.
+    minHuaweiWebViewVersion: 2147483647,
     // Native plugins are explicitly registered from MainActivity.
     includePlugins: [],
   },

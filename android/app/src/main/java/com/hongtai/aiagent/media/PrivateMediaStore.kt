@@ -164,28 +164,6 @@ internal object PrivateMediaImportPolicy {
     return normalized.ifBlank { "media" }
   }
 
-  fun readHeader(input: InputStream): ByteArray {
-    val header = ByteArray(12)
-    var offset = 0
-    while (offset < header.size) {
-      val count = input.read(header, offset, header.size - offset)
-      if (count <= 0) break
-      offset += count
-    }
-    return header.copyOf(offset)
-  }
-
-  /** Compatibility seam for byte-authority policy tests; production uses the full bounded probe. */
-  @Suppress("UNUSED_PARAMETER")
-  fun imageMimeType(providerMimeType: String?, displayName: String?, header: ByteArray): String? =
-    when (ImageFormatProbe.probe(header.inputStream(), header.size.toLong())) {
-      ImageFormat.JPEG -> "image/jpeg"
-      ImageFormat.PNG -> "image/png"
-      ImageFormat.WEBP -> "image/webp"
-      ImageFormat.HEIF_CANDIDATE -> "image/heif"
-      ImageFormat.UNSUPPORTED -> null
-    }
-
   /**
    * Streams an externally selected item into a same-directory temporary file.
    * The final path becomes visible only after the complete bounded write has

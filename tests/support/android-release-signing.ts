@@ -35,6 +35,7 @@ export function windowsAndroidEnvironment(): NodeJS.ProcessEnv {
     ANDROID_SDK_ROOT: androidSdk,
   };
   delete environment.HONGTAI_RELEASE_SIGNING_PROPERTIES;
+  delete environment.HONGTAI_HEIF_SOURCE_CACHE;
   return environment;
 }
 
