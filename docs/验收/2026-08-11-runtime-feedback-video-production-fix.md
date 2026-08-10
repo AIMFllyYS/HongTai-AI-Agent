@@ -54,4 +54,6 @@
 - Android：在 Android Studio JBR 21、Android SDK 环境下执行 `:app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest --rerun-tasks` 成功；四 ABI HEIF native 构建、Debug JVM 测试、lint、主 APK 与 androidTest APK 均生成。
 - 新 Debug APK：`com.hongtai.aiagent`，`versionCode=7`，`versionName=0.0.1`，39,043,786 bytes，SHA-256 `370C628A4AAF8E6CEB9D3AB877DE58AFE6AF8B9D920FF0E01367E72D34144714`。`apksigner verify --verbose` 显示 Debug APK 使用 v2 签名；这不是 release 签名验收。
 - 配套 androidTest APK SHA-256：`0746CCD5F98FBA5D2DF903280FBFC4ED09EABD6BB42C86003689B59A5FEF3442`。
-- 物理设备：构建时 `adb devices -l` 未发现已连接设备。因此本记录没有声称冷启动、系统选择器、TTS、Media3 导出或 Android 7.x fallback 已在物理机通过。
+- Android 7.x 模拟器：`HongTaiApi24AospWebView99`（API 24 / x86_64）普通 Debug 覆盖安装后冷启动进入受控的低版本 WebView 中文终态页，未见 `AndroidRuntime` 崩溃；`PrivateMediaStoreInstrumentationTest` 为 `OK (6 tests)`。该镜像没有可用中文 TTS；另一台 API 24 Google 镜像虽有 Google TTS，但无窗口软件 GPU 在 Media3 图像处理阶段报 `eglChooseConfig failed`，因此这两种环境都不被写成视频合成成功。
+- Android 15 模拟器：`SciChatApi35`（API 35 / x86_64，Google WebView 124）普通 Debug 覆盖安装后真实首页冷启动成功。截图确认状态栏仅使用系统保留区，页面没有额外顶部白条；未见 `AndroidRuntime` 崩溃。`ProductionRendererInstrumentationTest` 为 `OK (1 test)`：实际生成 15.000 秒成片，包含 AAC 与 H.264，显示方向为 720×1280；从成片抽帧核对到白色粗体、薄荷色标识与深色投影的下三分之一字幕样式。
+- 物理设备：本机未连接物理设备。上述均为模拟器证据；系统选择器、OEM TTS、真实素材、数字人口播源视频和 Android 7.x ARM fallback 仍需在物理设备上复验。
