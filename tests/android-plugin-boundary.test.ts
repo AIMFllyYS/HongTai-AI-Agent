@@ -172,6 +172,29 @@ test("the foreground APK keeps the screen awake while its in-process tasks are a
   assert.match(mainActivity, /window\.addFlags\(/);
 });
 
+test("video production returns stable safe errors and exports an AAC audio track", () => {
+  const plugin = read("android/app/src/main/java/com/hongtai/aiagent/bridge/ProductionRuntimePlugin.kt");
+  const renderer = read("android/app/src/main/java/com/hongtai/aiagent/production/ProductionRenderer.kt");
+  const issueCodes = read("android/app/src/main/java/com/hongtai/aiagent/bridge/NativeIssueCode.kt");
+
+  for (const code of [
+    "MEDIA_SELECTION_CANCELLED",
+    "MEDIA_SOURCE_INVALID",
+    "TTS_UNAVAILABLE",
+    "TTS_SYNTHESIS_FAILED",
+    "MEDIA_RENDER_TIMEOUT",
+    "MEDIA_EXPORT_FAILED",
+    "OUTPUT_FINALIZATION_FAILED",
+  ]) assert.match(issueCodes, new RegExp(code));
+  assert.match(plugin, /call\.reject\("Production asset selection was cancelled\."\s*,\s*NativeIssueCode\.MEDIA_SELECTION_CANCELLED\)/);
+  assert.doesNotMatch(plugin, /call\.reject\([^\n]*,\s*error\)/);
+  assert.match(renderer, /setAudioMimeType\(MimeTypes\.AUDIO_AAC\)/);
+  const verification = renderer.indexOf("val durationSeconds = verifyOutput(temporary)");
+  const finalization = renderer.indexOf("finalizeOutput(temporary, output)");
+  assert.ok(verification >= 0 && verification < finalization, "the temporary MP4 must pass H.264/AAC verification before an existing output is replaced");
+  assert.match(renderer, /MEDIA_RENDER_TIMEOUT/);
+});
+
 test("client APK builds are identifiable and never log bridge payloads", () => {
   const config = read("capacitor.config.ts");
   const appBuild = read("android/app/build.gradle.kts");

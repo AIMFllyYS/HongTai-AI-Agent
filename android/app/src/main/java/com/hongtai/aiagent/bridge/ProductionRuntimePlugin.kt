@@ -13,8 +13,12 @@ import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.hongtai.aiagent.production.ImportedProductionAsset
 import com.hongtai.aiagent.production.ProductionAssetKind
+import com.hongtai.aiagent.production.ProductionException
+import com.hongtai.aiagent.production.ProductionFailureKind
+import com.hongtai.aiagent.production.ProductionImportSelection
 import com.hongtai.aiagent.production.ProductionMediaStore
 import com.hongtai.aiagent.production.ProductionPlanParser
+import com.hongtai.aiagent.production.ProductionRenderMode
 import com.hongtai.aiagent.production.ProductionRenderer
 import java.util.concurrent.Executors
 
@@ -28,15 +32,16 @@ class ProductionRuntimePlugin : Plugin() {
   fun pickAssets(call: PluginCall) {
     val projectId = call.getString("projectId")
     val maxItems = call.getInt("maxItems", 12) ?: 12
-    if (projectId.isNullOrBlank() || maxItems !in 1..12) {
+    val selection = importSelection(call.getString("selection"))
+    if (projectId.isNullOrBlank() || maxItems !in 1..12 || selection == null || selection == ProductionImportSelection.AVATAR && maxItems != 1) {
       call.reject("projectId or maxItems is invalid.", NativeIssueCode.INVALID_ARGUMENT)
       return
     }
     val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
       .addCategory(Intent.CATEGORY_OPENABLE)
-      .setType("*/*")
-      .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-      .putExtra(Intent.EXTRA_MIME_TYPES, SUPPORTED_MIME_TYPES)
+      .setType(if (selection == ProductionImportSelection.AVATAR) "video/mp4" else "*/*")
+      .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, selection == ProductionImportSelection.VISUAL)
+      .putExtra(Intent.EXTRA_MIME_TYPES, if (selection == ProductionImportSelection.AVATAR) AVATAR_MIME_TYPES else SUPPORTED_MIME_TYPES)
     startActivityForResult(call, intent, "onAssetsPicked")
   }
 
@@ -44,7 +49,7 @@ class ProductionRuntimePlugin : Plugin() {
   private fun onAssetsPicked(call: PluginCall?, result: ActivityResult) {
     if (call == null) return
     if (result.resultCode != Activity.RESULT_OK) {
-      call.reject("No production assets were selected.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED)
+      call.reject("Production asset selection was cancelled.", NativeIssueCode.MEDIA_SELECTION_CANCELLED)
       return
     }
     val uris = buildList {
@@ -53,18 +58,21 @@ class ProductionRuntimePlugin : Plugin() {
     }.distinct()
     val projectId = requireNotNull(call.getString("projectId"))
     val maxItems = call.getInt("maxItems", 12) ?: 12
-    if (uris.isEmpty() || uris.size > maxItems) {
+    val selection = importSelection(call.getString("selection"))
+    if (selection == null || uris.isEmpty() || uris.size > maxItems || selection == ProductionImportSelection.AVATAR && uris.size != 1) {
       call.reject("The selected production asset count is invalid.", NativeIssueCode.INVALID_ARGUMENT)
       return
     }
     PRODUCTION_EXECUTOR.execute {
       try {
-        val assets = store.importAll(projectId, uris)
+        val assets = store.importAll(projectId, uris, selection)
         call.resolve(JSObject().put("assets", JSArray(assets.map(::assetJson))))
+      } catch (error: ProductionException) {
+        call.reject(error.message ?: "The selected production asset is invalid.", nativeIssueCode(error.kind))
       } catch (error: IllegalArgumentException) {
-        call.reject(error.message ?: "The selected production asset is invalid.", NativeIssueCode.INVALID_ARGUMENT, error)
+        call.reject(error.message ?: "The selected production asset is invalid.", NativeIssueCode.INVALID_ARGUMENT)
       } catch (error: Exception) {
-        call.reject("Could not import the selected production assets.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
+        call.reject("Could not import the selected production assets.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED)
       }
     }
   }
@@ -73,13 +81,14 @@ class ProductionRuntimePlugin : Plugin() {
   fun render(call: PluginCall) {
     val projectId = call.getString("projectId")
     val planJson = call.getString("planJson")
-    if (projectId.isNullOrBlank() || planJson.isNullOrBlank()) {
+    val mode = renderMode(call.getString("mode"))
+    if (projectId.isNullOrBlank() || planJson.isNullOrBlank() || mode == null) {
       call.reject("projectId and planJson are required.", NativeIssueCode.INVALID_ARGUMENT)
       return
     }
     PRODUCTION_EXECUTOR.execute {
       try {
-        val plan = ProductionPlanParser.parse(planJson, store.inputs(projectId))
+        val plan = ProductionPlanParser.parse(planJson, store.inputs(projectId), mode)
         val output = renderer.render(projectId, plan) { progress, message ->
           notifyListeners("productionProgress", JSObject().put("projectId", projectId).put("progress", progress).put("message", message))
         }
@@ -87,21 +96,46 @@ class ProductionRuntimePlugin : Plugin() {
           JSObject().put("uri", output.uri).put("mimeType", "video/mp4")
             .put("sizeBytes", output.sizeBytes).put("durationSeconds", output.durationSeconds),
         )
+      } catch (error: ProductionException) {
+        call.reject(error.message ?: "The local production render failed.", nativeIssueCode(error.kind))
       } catch (error: IllegalArgumentException) {
-        call.reject(error.message ?: "The production plan is invalid.", NativeIssueCode.INVALID_ARGUMENT, error)
+        call.reject(error.message ?: "The production plan is invalid.", NativeIssueCode.INVALID_ARGUMENT)
       } catch (error: Exception) {
-        call.reject("The local production render failed.", NativeIssueCode.MEDIA_MERGE_FAILED, error)
+        call.reject("The local production render failed.", NativeIssueCode.MEDIA_MERGE_FAILED)
       }
     }
   }
 
   private fun assetJson(asset: ImportedProductionAsset): JSObject = JSObject()
     .put("id", asset.id).put("uri", asset.uri).put("kind", asset.kind.name.lowercase())
+    .put("role", asset.role.name.lowercase())
     .put("mimeType", asset.mimeType).put("displayName", asset.displayName).put("sizeBytes", asset.sizeBytes)
     .also { if (asset.durationSeconds != null) it.put("durationSeconds", asset.durationSeconds) }
 
+  private fun importSelection(value: String?): ProductionImportSelection? = when (value ?: "visual") {
+    "visual" -> ProductionImportSelection.VISUAL
+    "avatar" -> ProductionImportSelection.AVATAR
+    else -> null
+  }
+
+  private fun renderMode(value: String?): ProductionRenderMode? = when (value ?: "montage") {
+    "montage" -> ProductionRenderMode.MONTAGE
+    "avatar" -> ProductionRenderMode.AVATAR
+    else -> null
+  }
+
+  private fun nativeIssueCode(kind: ProductionFailureKind): String = when (kind) {
+    ProductionFailureKind.MEDIA_SOURCE_INVALID -> NativeIssueCode.MEDIA_SOURCE_INVALID
+    ProductionFailureKind.TTS_UNAVAILABLE -> NativeIssueCode.TTS_UNAVAILABLE
+    ProductionFailureKind.TTS_SYNTHESIS_FAILED -> NativeIssueCode.TTS_SYNTHESIS_FAILED
+    ProductionFailureKind.MEDIA_RENDER_TIMEOUT -> NativeIssueCode.MEDIA_RENDER_TIMEOUT
+    ProductionFailureKind.MEDIA_EXPORT_FAILED -> NativeIssueCode.MEDIA_EXPORT_FAILED
+    ProductionFailureKind.OUTPUT_FINALIZATION_FAILED -> NativeIssueCode.OUTPUT_FINALIZATION_FAILED
+  }
+
   private companion object {
     val SUPPORTED_MIME_TYPES = arrayOf("image/jpeg", "image/png", "image/webp", "video/mp4", "audio/mpeg", "audio/mp4", "audio/wav")
+    val AVATAR_MIME_TYPES = arrayOf("video/mp4")
     val PRODUCTION_EXECUTOR = Executors.newSingleThreadExecutor { runnable ->
       Thread(runnable, "hongtai-video-production").apply { isDaemon = true }
     }

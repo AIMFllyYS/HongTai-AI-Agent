@@ -88,7 +88,7 @@
 }
 
 .vitality-shell .scan-actions .button--primary {
-  color: #fff;
+  color: var(--color-text-on-secondary);
   background: var(--vitality-accent);
 }
 
@@ -255,5 +255,6 @@
 }
 
 .vitality-result__actions .button--primary {
+  color: var(--color-text-on-secondary);
   background: var(--vitality-accent);
 }

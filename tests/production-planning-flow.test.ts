@@ -12,6 +12,7 @@ import {
 const input: ProductionPlanInput = {
   analysisTaskId: "task-1",
   brief: "为社区门店制作一条可信、克制的到店介绍视频",
+  mode: "montage",
   targetDurationSeconds: 20,
   analysis: {
     schemaVersion: "content-analysis.v1",
@@ -27,9 +28,9 @@ const input: ProductionPlanInput = {
     risks: [],
   },
   assets: [
-    { id: "asset-image", kind: "image", mimeType: "image/jpeg", displayName: "门店.jpg" },
-    { id: "asset-detail", kind: "image", mimeType: "image/png", displayName: "服务细节.png" },
-    { id: "asset-video", kind: "video", mimeType: "video/mp4", displayName: "服务过程.mp4", durationSeconds: 12 },
+    { id: "asset-image", role: "visual", kind: "image", mimeType: "image/jpeg", displayName: "门店.jpg" },
+    { id: "asset-detail", role: "visual", kind: "image", mimeType: "image/png", displayName: "服务细节.png" },
+    { id: "asset-video", role: "visual", kind: "video", mimeType: "video/mp4", displayName: "服务过程.mp4", durationSeconds: 12 },
   ],
 };
 
@@ -93,6 +94,24 @@ test("制作规划拒绝不受支持的时长和素材数量", async () => {
   );
   await assert.rejects(
     () => new ProductionPlanningFlow({ provider: new SequenceProvider([]) }).run({ ...input, assets: input.assets.slice(0, 1) }),
-    /3.*12/u,
+    /至少需要3/u,
   );
+});
+
+test("数字人口播模式只允许一个上传数字人视频，并保留原始口播的字幕计划", async () => {
+  const avatarInput: ProductionPlanInput = {
+    ...input,
+    mode: "avatar",
+    avatarScript: "欢迎来到我们的门店。今天带你看看真实服务过程。",
+    assets: [{ id: "avatar-video", role: "avatar", kind: "video", mimeType: "video/mp4", displayName: "数字人口播.mp4", durationSeconds: 20 }],
+  };
+  const avatarPlan = plan("avatar-video");
+  avatarPlan.shots[1]!.assetId = "avatar-video";
+  const provider = new SequenceProvider([JSON.stringify(avatarPlan)]);
+
+  const result = await new ProductionPlanningFlow({ provider }).run(avatarInput);
+
+  assert.equal(result.shots.every((shot) => shot.assetId === "avatar-video"), true);
+  assert.equal(result.audio.backgroundMusicAssetId, null);
+  assert.match(String(provider.calls[0]?.messages[0]?.content), /数字人口播模式/u);
 });

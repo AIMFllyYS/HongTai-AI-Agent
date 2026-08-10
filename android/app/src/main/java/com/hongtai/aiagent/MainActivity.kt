@@ -4,9 +4,7 @@ import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
-import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.media3.common.util.UnstableApi
 import com.getcapacitor.BridgeActivity
 import com.hongtai.aiagent.bridge.FileMediaPlugin
@@ -33,21 +31,17 @@ class MainActivity : BridgeActivity() {
     // WebView process. Avoid moving it into the background merely because the
     // user waited for the screen timeout; Android clears this when hidden.
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    // Android 15+ enforces edge-to-edge for this target SDK. The Web document
+    // already declares viewport-fit=cover and owns its safe-area spacing, so
+    // padding the native content view here would apply the status-bar inset a
+    // second time and leave a blank row above every page.
     WindowCompat.enableEdgeToEdge(window)
+    window.statusBarColor = Color.TRANSPARENT
+    window.navigationBarColor = Color.TRANSPARENT
     WindowCompat.getInsetsController(window, window.decorView).apply {
       isAppearanceLightStatusBars = true
       isAppearanceLightNavigationBars = true
     }
-    val contentView = findViewById<View>(android.R.id.content)
-    contentView.setBackgroundColor(Color.rgb(248, 250, 247))
-    ViewCompat.setOnApplyWindowInsetsListener(contentView) { view, insets ->
-      val safeInsets = insets.getInsets(
-        WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
-      )
-      view.setPadding(safeInsets.left, safeInsets.top, safeInsets.right, safeInsets.bottom)
-      insets
-    }
-    ViewCompat.requestApplyInsets(contentView)
     bridge.webView.overScrollMode = View.OVER_SCROLL_ALWAYS
   }
 }

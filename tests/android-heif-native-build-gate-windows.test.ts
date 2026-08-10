@@ -110,7 +110,7 @@ test(
         assert.notEqual(reparse.status, 0);
         assert.match(
           commandOutput(reparse),
-          /Native source verification failed for libheif: source tree contains a reparse point\./,
+          /Native source verification failed for libheif: source tree contains a reparse\s+point\./,
         );
       } finally {
         rmdirSync(reparseTarget);

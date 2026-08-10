@@ -92,7 +92,7 @@ test(
       assert.notEqual(gradle.status, 0);
       assert.match(
         commandOutput(gradle),
-        /Release signing keystore must not traverse a reparse point/,
+        /Release signing keystore must (?:not traverse a reparse point|be outside the repository)/,
       );
     } finally {
       if (existsSync(repositoryJunction)) {

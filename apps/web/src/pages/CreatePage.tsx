@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { issueFromAppError, TaskError } from "@hongtai/core";
-import type { AppRuntime, AppTaskRecord, ProductionProjectRecord, TaskIssue } from "@hongtai/core";
+import type { AppRuntime, AppTaskRecord, ProductionMode, ProductionProjectRecord, TaskIssue } from "@hongtai/core";
 
 import type { CreateViewModel } from "../data/visual-types";
 import { AppShell } from "../components/AppShell";
@@ -52,6 +52,8 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
   const [project, setProject] = useState<ProductionProjectRecord>();
   const [sourceId, setSourceId] = useState("");
   const [brief, setBrief] = useState("");
+  const [mode, setMode] = useState<ProductionMode>("montage");
+  const [avatarScript, setAvatarScript] = useState("");
   const [duration, setDuration] = useState(30);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState("");
@@ -104,11 +106,18 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
   };
 
   const createProject = async () => {
-    if (!sourceId || !brief.trim()) {
-      setIssue(issueFromAppError(new TaskError({ code: "INPUT_EMPTY", message: "请选择拆解来源并填写制作需求", action: "edit_input" }), { code: "INPUT_EMPTY", message: "制作输入不完整", action: "edit_input" }));
+    if (!sourceId || !brief.trim() || mode === "avatar" && !avatarScript.trim()) {
+      const message = mode === "avatar" ? "请选择拆解来源，填写制作需求和数字人口播稿" : "请选择拆解来源并填写制作需求";
+      setIssue(issueFromAppError(new TaskError({ code: "INPUT_EMPTY", message, action: "edit_input" }), { code: "INPUT_EMPTY", message: "制作输入不完整", action: "edit_input" }));
       return;
     }
-    await perform(() => runtime.production.create({ analysisTaskId: sourceId, brief, targetDurationSeconds: duration }));
+    await perform(() => runtime.production.create({
+      analysisTaskId: sourceId,
+      brief,
+      targetDurationSeconds: duration,
+      mode,
+      ...(mode === "avatar" ? { avatarScript } : {}),
+    }));
   };
 
   if (loading) return <AppShell activeNav="create" navigate={navigate} title="制作"><LoadingState description="正在读取正式拆解与本地制作项目" title="打开制作工作台" /></AppShell>;
@@ -132,8 +141,14 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
               <select id="production-source" onChange={(event) => setSourceId(event.target.value)} value={sourceId}>
                 {sources.map(({ task, label }) => <option key={task.id} value={task.id}>{label}</option>)}
               </select>
-              <label className="field-label" htmlFor="production-brief">你的经营需求</label>
-              <textarea id="production-brief" onChange={(event) => setBrief(event.target.value)} placeholder="例如：面向附近上班族，突出真实环境、服务过程和到店体验，不夸大承诺。" rows={4} value={brief} />
+              <span className="field-label">制作方式</span>
+              <div aria-label="制作方式" className="production-mode-grid" role="group">
+                <button aria-pressed={mode === "montage"} className={mode === "montage" ? "is-selected" : ""} onClick={() => setMode("montage")} type="button"><Icon name="movie_edit" size={19} /><span><strong>素材剪辑 + TTS</strong><small>上传图片或视频，生成系统中文旁白与字幕</small></span></button>
+                <button aria-pressed={mode === "avatar"} className={mode === "avatar" ? "is-selected" : ""} onClick={() => setMode("avatar")} type="button"><Icon name="record_voice_over" size={19} /><span><strong>数字人口播</strong><small>上传带原声的数字人 MP4，本地按口播稿生成字幕</small></span></button>
+              </div>
+              <label className="field-label" htmlFor="production-brief">{mode === "avatar" ? "视频标题与制作需求" : "你的经营需求"}</label>
+              <textarea id="production-brief" onChange={(event) => setBrief(event.target.value)} placeholder={mode === "avatar" ? "例如：介绍门店的新服务，语气自然可信，不夸大承诺。" : "例如：面向附近上班族，突出真实环境、服务过程和到店体验，不夸大承诺。"} rows={4} value={brief} />
+              {mode === "avatar" ? <><label className="field-label" htmlFor="production-avatar-script">数字人口播稿</label><textarea id="production-avatar-script" maxLength={360} onChange={(event) => setAvatarScript(event.target.value)} placeholder="请粘贴与上传数字人视频原声一致的口播稿。它会在本地切分为短字幕，不会替换原视频声音。" rows={5} value={avatarScript} /></> : null}
               <label className="field-label" htmlFor="production-duration">目标时长</label>
               <select id="production-duration" onChange={(event) => setDuration(Number(event.target.value))} value={duration}>
                 {[15, 30, 45, 60].map((seconds) => <option key={seconds} value={seconds}>{seconds} 秒</option>)}

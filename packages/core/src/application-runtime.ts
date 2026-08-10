@@ -242,21 +242,51 @@ export interface ContentAnalysisRecord {
   readonly updatedAt: string;
 }
 
+/**
+ * An ephemeral, safe projection of an actual structured-model stream. It
+ * intentionally carries no raw JSON, provider reasoning, or private request
+ * data. It exists only while the caller owns the running request.
+ */
+export interface StructuredStreamProgress {
+  readonly phase: "receiving" | "validating" | "repairing";
+  readonly receivedCharacters: number;
+  readonly sections: readonly string[];
+  /** Whitelisted, short text fields for content-analysis only; never raw JSON. */
+  readonly highlights: readonly StructuredStreamHighlight[];
+}
+
+export interface StructuredStreamHighlight {
+  readonly label: string;
+  readonly value: string;
+}
+
+export type ContentAnalysisStreamEvent =
+  | { readonly type: "progress"; readonly progress: StructuredStreamProgress }
+  | { readonly type: "completed"; readonly record: ContentAnalysisRecord }
+  | { readonly type: "failed"; readonly issue: TaskIssue };
+
 export interface AnalysisService {
   get(taskId: string): Promise<ContentAnalysisRecord | undefined>;
-  run(taskId: string): Promise<ContentAnalysisRecord>;
+  /** Emits only a safe live structure projection; raw provider output is never persisted or exposed. */
+  run(taskId: string, onEvent?: (event: ContentAnalysisStreamEvent) => void | Promise<void>): Promise<ContentAnalysisRecord>;
 }
 
 export type ProductionStatus = "draft" | "planning" | "ready" | "rendering" | "succeeded" | "failed";
+export type ProductionMode = "montage" | "avatar";
+export type ProductionAssetRole = "visual" | "avatar" | "music";
 
 export interface ProductionAsset extends MediaReference {
   readonly id: string;
+  readonly role: ProductionAssetRole;
 }
 
 export interface ProductionProjectRecord {
   readonly projectId: string;
   readonly analysisTaskId: string;
   readonly brief: string;
+  readonly mode: ProductionMode;
+  /** Required only for avatar mode and used as the caption source. */
+  readonly avatarScript?: string;
   readonly targetDurationSeconds: number;
   readonly status: ProductionStatus;
   readonly assets: readonly ProductionAsset[];
@@ -272,7 +302,13 @@ export type ProductionEvent =
   | { readonly type: "render-progress"; readonly projectId: string; readonly progress: number; readonly message: string };
 
 export interface ProductionService {
-  create(input: { readonly analysisTaskId: string; readonly brief: string; readonly targetDurationSeconds: number }): Promise<ProductionProjectRecord>;
+  create(input: {
+    readonly analysisTaskId: string;
+    readonly brief: string;
+    readonly targetDurationSeconds: number;
+    readonly mode?: ProductionMode;
+    readonly avatarScript?: string;
+  }): Promise<ProductionProjectRecord>;
   get(projectId: string): Promise<ProductionProjectRecord | undefined>;
   list(): Promise<readonly ProductionProjectRecord[]>;
   /** Opens the system picker and copies selected items into this project's private directory. */
@@ -319,6 +355,11 @@ export type DiagnosisStreamEvent =
   | { readonly type: "completed"; readonly message: DiagnosisMessage }
   | { readonly type: "failed"; readonly issue: TaskIssue };
 
+export type DiagnosisReportStreamEvent =
+  | { readonly type: "progress"; readonly progress: StructuredStreamProgress }
+  | { readonly type: "completed"; readonly record: DiagnosisReportRecord }
+  | { readonly type: "failed"; readonly issue: TaskIssue };
+
 export type DiagnosisImageRecovery =
   | { readonly status: "none" }
   | { readonly status: "succeeded"; readonly image: MediaReference }
@@ -333,7 +374,7 @@ export interface DiagnosisService {
   consumeImageRecovery(): Promise<DiagnosisImageRecovery>;
   createSession(input: { readonly mode: ObservationMode; readonly image: MediaReference }): Promise<DiagnosisSessionRecord>;
   /** Starts the initial report for a pending session; it never fabricates a completed report. */
-  runReport(sessionId: string): Promise<DiagnosisReportRecord>;
+  runReport(sessionId: string, onEvent?: (event: DiagnosisReportStreamEvent) => void | Promise<void>): Promise<DiagnosisReportRecord>;
   getSession(sessionId: string): Promise<DiagnosisSessionRecord | undefined>;
   /** Ordered by most recent change, with no image bytes or API reasoning exposed. */
   listSessions(): Promise<readonly DiagnosisSessionRecord[]>;

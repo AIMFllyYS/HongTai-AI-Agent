@@ -17,24 +17,31 @@ export interface ProductionProjectCardProps {
 export function ProductionProjectCard({ project, progress, progressMessage, busy, onImport, onGeneratePlan, onRender }: ProductionProjectCardProps) {
   const shots = planShots(project.plan?.document);
   const rendering = project.status === "rendering";
+  const avatarMode = project.mode === "avatar";
+  const requiredVisualAssets = avatarMode ? 1 : 3;
+  const usableVisualAssets = project.assets.filter((asset) => avatarMode ? asset.role === "avatar" : asset.role === "visual").length;
+  const avatarAsset = avatarMode ? project.assets.find((asset) => asset.role === "avatar") : undefined;
+  const avatarDurationFits = !avatarMode || (avatarAsset?.durationSeconds !== undefined && avatarAsset.durationSeconds + 0.001 >= project.targetDurationSeconds);
+  const canGeneratePlan = usableVisualAssets >= requiredVisualAssets && avatarDurationFits && (!avatarMode || Boolean(project.avatarScript));
   return (
     <GlassCard className="production-project-card">
-      <div className="production-section-title"><span>02</span><div><strong>素材与本地成片</strong><small>{project.brief}</small></div></div>
+      <div className="production-section-title"><span>02</span><div><strong>{avatarMode ? "数字人口播与本地成片" : "素材与本地成片"}</strong><small>{project.brief}</small></div></div>
+      <p className="production-mode-note"><Icon name={avatarMode ? "record_voice_over" : "voice"} size={16} />{avatarMode ? "保留上传数字人视频的原始口播声音；口播稿只用于生成同步字幕，不再叠加 TTS。" : "本地渲染会为制作计划中的每个镜头生成中文系统 TTS 旁白和字幕。"}</p>
 
       <div className="production-assets">
         {project.assets.map((asset) => (
           <article key={asset.id}>
             <div>{asset.kind === "image" ? <img alt={asset.displayName ?? "制作素材"} src={asset.uri} /> : <Icon name={asset.kind === "video" ? "movie" : "voice"} size={25} />}</div>
             <span>{asset.displayName ?? "本地素材"}</span>
-            <small>{asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : "音乐"}</small>
+            <small>{asset.role === "avatar" ? "数字人口播视频" : asset.role === "music" ? "音乐" : asset.kind === "image" ? "图片" : "视频"}</small>
           </article>
         ))}
-        <button className="production-add-asset" disabled={busy || project.assets.length >= 12} onClick={onImport} type="button"><Icon name="upload_file" size={24} /><span>上传素材</span><small>{project.assets.length}/12</small></button>
+        <button className="production-add-asset" disabled={busy || project.assets.length >= 12 || avatarMode && usableVisualAssets >= 1} onClick={onImport} type="button"><Icon name="upload_file" size={24} /><span>{avatarMode ? "上传数字人视频" : "上传素材"}</span><small>{avatarMode ? `${usableVisualAssets}/1` : `${project.assets.length}/12`}</small></button>
       </div>
 
-      {project.assets.length < 3 ? <p className="production-hint"><Icon name="info" size={16} />至少上传 3 个图片或视频素材，才能生成 production-plan.v1。</p> : null}
+      {!canGeneratePlan ? <p className="production-hint"><Icon name="info" size={16} />{avatarMode ? !avatarDurationFits && avatarAsset ? `该数字人视频不足 ${project.targetDurationSeconds} 秒，请上传更长视频或新建较短时长项目。` : "请上传一个带原声的 MP4 数字人口播视频，并确认已填写与它一致的口播稿。" : "至少上传 3 个图片或视频素材，才能生成 production-plan.v1。"}</p> : null}
       <div className="production-actions">
-        <Button disabled={busy || project.assets.length < 3 || rendering} onClick={onGeneratePlan} variant="secondary"><Icon name="auto_awesome" size={18} />AI 生成制作计划</Button>
+        <Button disabled={busy || !canGeneratePlan || rendering} onClick={onGeneratePlan} variant="secondary"><Icon name="auto_awesome" size={18} />AI 生成制作计划</Button>
         <Button disabled={busy || !project.plan || rendering} onClick={onRender}><Icon name="movie_edit" size={18} />本地合成视频</Button>
       </div>
 

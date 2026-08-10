@@ -36,7 +36,9 @@ test("assets and publishing remain planned while creation uses the real producti
   assert.match(create, /content-analysis\.v1/);
   assert.match(create, /production-plan\.v1/);
   assert.doesNotMatch(create, /viewModel\.(templates|profileTags|materialFilters|generationEta|actionLabel)/);
-  assert.doesNotMatch(create, /is-selected|template-tile__selected/);
+  assert.doesNotMatch(create, /template-tile__selected/);
+  assert.match(create, /mode === "montage"\s*\?\s*"is-selected"/);
+  assert.match(create, /mode === "avatar"\s*\?\s*"is-selected"/);
 
   const assets = read("pages/AssetsPage.tsx");
   assert.doesNotMatch(assets, /viewModel\.(assets|assetCount|templates|folders|filters|tabs|activeTab)/);

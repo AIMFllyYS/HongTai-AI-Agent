@@ -160,6 +160,7 @@ export interface NativeProductionAsset {
   readonly id: string;
   readonly uri: NativeUri;
   readonly kind: "image" | "video" | "audio";
+  readonly role?: "visual" | "avatar" | "music";
   readonly mimeType: string;
   readonly displayName: string;
   readonly sizeBytes: number;
@@ -180,8 +181,8 @@ export interface NativeProductionProgressEvent {
 }
 
 export interface StandaloneProductionRuntimePlugin {
-  pickAssets(options: { readonly projectId: string; readonly maxItems: number }): Promise<{ readonly assets: readonly NativeProductionAsset[] }>;
-  render(options: { readonly projectId: string; readonly planJson: string }): Promise<NativeProductionResult>;
+  pickAssets(options: { readonly projectId: string; readonly maxItems: number; readonly selection?: "visual" | "avatar" }): Promise<{ readonly assets: readonly NativeProductionAsset[] }>;
+  render(options: { readonly projectId: string; readonly planJson: string; readonly mode?: "montage" | "avatar" }): Promise<NativeProductionResult>;
   addListener?(
     eventName: "productionProgress",
     listener: (event: NativeProductionProgressEvent) => void,

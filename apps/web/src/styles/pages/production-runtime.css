@@ -18,6 +18,17 @@
 .production-setup select { min-height: 2.8rem; padding: 0 var(--space-3); }
 .production-setup textarea { min-height: 6.5rem; padding: var(--space-3); resize: vertical; line-height: 1.55; }
 
+.production-mode-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.production-mode-grid button { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-2); align-items: start; min-width: 0; padding: var(--space-3); color: var(--color-text-subtle); text-align: left; background: var(--color-surface-low); border: 1px solid var(--color-outline-soft); border-radius: var(--radius-control); }
+.production-mode-grid button > svg { margin-top: 0.1rem; color: var(--color-primary-strong); }
+.production-mode-grid button > span { display: grid; min-width: 0; gap: 0.18rem; }
+.production-mode-grid strong { color: var(--color-primary); font-size: var(--text-meta); }
+.production-mode-grid small { color: var(--color-text-muted); font-size: 0.68rem; line-height: 1.35; }
+.production-mode-grid button.is-selected { background: var(--color-accent-soft); border-color: var(--color-primary-soft); box-shadow: 0 0 0 2px rgba(0, 77, 64, 0.07); }
+
+.production-mode-note { display: flex; gap: var(--space-2); align-items: flex-start; color: var(--color-text-muted); font-size: var(--text-meta); line-height: 1.5; }
+.production-mode-note svg { flex: 0 0 auto; margin-top: 0.08rem; color: var(--color-primary-strong); }
+
 .production-assets { display: grid; grid-auto-columns: minmax(6.4rem, 30%); grid-auto-flow: column; gap: var(--space-2); overflow-x: auto; padding-bottom: var(--space-1); }
 .production-assets article,
 .production-add-asset { display: grid; grid-template-rows: 5.6rem auto auto; gap: 0.25rem; min-width: 0; padding: var(--space-2); text-align: left; background: var(--color-surface-low); border: 1px solid var(--color-outline-soft); border-radius: var(--radius-control); }
@@ -61,6 +72,7 @@
 
 @media (max-width: 23.5rem) {
   .production-actions { grid-template-columns: 1fr; }
+  .production-mode-grid { grid-template-columns: 1fr; }
   .production-assets { grid-auto-columns: minmax(6rem, 42%); }
   .production-output > div { align-items: flex-start; flex-direction: column; }
 }

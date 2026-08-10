@@ -12,6 +12,7 @@ import { issueFromAppError, TaskError } from "@hongtai/core";
 import type {
   DiagnosisMessage,
   DiagnosisImageRecovery,
+  DiagnosisReportStreamEvent,
   DiagnosisReportRecord,
   DiagnosisService,
   DiagnosisSessionRecord,
@@ -20,6 +21,8 @@ import type {
   ObservationMode,
   TaskIssue,
 } from "@hongtai/core";
+
+import { StructuredStreamPreview } from "./structured-stream-preview.js";
 
 const SESSION_PATH = "session.json";
 const REPORT_PATH = "report.json";
@@ -245,21 +248,40 @@ export class StandaloneDiagnosisService implements DiagnosisService {
     return this.#toUiSession(state, copied.uri);
   }
 
-  async runReport(sessionId: string): Promise<DiagnosisReportRecord> {
+  async runReport(sessionId: string, onEvent?: (event: DiagnosisReportStreamEvent) => void | Promise<void>): Promise<DiagnosisReportRecord> {
     const state = await this.#readSession(sessionId);
     if (!state) throw taskError("AI_SESSION_NOT_FOUND", "未找到本地观察会话", "select_media");
     const started = await this.#setStatus(state, "running");
+    const preview = new StructuredStreamPreview("diagnosis-report");
+    const notify = async (event: DiagnosisReportStreamEvent): Promise<void> => {
+      try {
+        await onEvent?.(event);
+      } catch {
+        // Page lifecycle changes cannot invalidate an already-running report.
+      }
+    };
     try {
-      const flow = new DiagnosisFlow({ provider: await this.#getProvider(), repository: this.#repository(), contextWindowTokens: 32_000 });
+      const flow = new DiagnosisFlow({
+        provider: await this.#getProvider(),
+        repository: this.#repository(),
+        contextWindowTokens: 32_000,
+        onEvent: async (event) => {
+          if (event.type === "content_delta") await notify({ type: "progress", progress: preview.append(event.delta) });
+          if (event.type === "completed") await notify({ type: "progress", progress: preview.completeProviderResponse() });
+        },
+      });
       await flow.runReport(sessionId);
       const saved = await this.getReport(sessionId);
       if (!saved?.report || saved.status !== "succeeded") throw taskError("STORAGE_WRITE_FAILED", "观察报告没有保存为正式本地文档", "free_storage");
+      await notify({ type: "completed", record: saved });
       return saved;
     } catch (error) {
+      const failure = issue(error, "观察报告未能完成");
       const current = await this.getReport(sessionId).catch(() => undefined);
       if (current?.status !== "succeeded") {
-        await this.#setStatus(started, "failed", issue(error, "观察报告未能完成")).catch(() => undefined);
+        await this.#setStatus(started, "failed", failure).catch(() => undefined);
       }
+      await notify({ type: "failed", issue: current?.issue ?? failure });
       throw error;
     }
   }
