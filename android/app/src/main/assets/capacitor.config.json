@@ -8,8 +8,8 @@
 		"errorPath": "unsupported-webview.html"
 	},
 	"android": {
-		"minWebViewVersion": 99,
-		"minHuaweiWebViewVersion": 2147483647,
+		"minWebViewVersion": 89,
+		"minHuaweiWebViewVersion": 10,
 		"includePlugins": []
 	}
 }

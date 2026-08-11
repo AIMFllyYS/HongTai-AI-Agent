@@ -89,7 +89,7 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
   const task = detail.task;
   const platform = platformLabel(task.platform);
   const contentType = contentTypeLabel(task.contentType);
-  const activeIssue = issue ?? task.issues.at(-1);
+  const activeIssue = issue ?? task.issues[task.issues.length - 1];
   const needsNewSubmission = task.status === "failed" || task.status === "interrupted" || task.status === "cancelled";
   const hasEvidence = detail.evidenceUnits.length > 0;
   const terminalWithOutput = task.status === "succeeded" || task.status === "degraded";

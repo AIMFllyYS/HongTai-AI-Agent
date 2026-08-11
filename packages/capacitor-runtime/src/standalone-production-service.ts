@@ -1,5 +1,5 @@
 import { contentAnalysisResultSchema, createAvatarCaptionPlan, ProductionPlanningFlow, productionPlanResultSchema, type AiProvider, type ProductionPlanResultV1 } from "@hongtai/ai";
-import { issueFromAppError, TaskError } from "@hongtai/core";
+import { createRuntimeId, issueFromAppError, TaskError } from "@hongtai/core";
 import type {
   AnalysisService,
   JsonObject,
@@ -142,7 +142,7 @@ export class StandaloneProductionService implements ProductionService {
     const avatarScript = input.avatarScript?.trim();
     if (mode !== "montage" && mode !== "avatar") throw taskError("制作模式无效");
     if (mode === "avatar" && !avatarScript) throw taskError("请填写与数字人口播视频一致的口播稿");
-    const projectId = this.#options.createProjectId?.() ?? crypto.randomUUID();
+    const projectId = this.#options.createProjectId?.() ?? createRuntimeId();
     const timestamp = (this.#options.now ?? (() => new Date()))().toISOString();
     const project: PersistedProject = {
       projectId,

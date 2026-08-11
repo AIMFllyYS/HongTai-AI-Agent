@@ -4,4 +4,5 @@ export * from "./errors";
 export * from "./input";
 export * from "./models";
 export * from "./pipeline";
+export * from "./runtime-id";
 export * from "./transcription";

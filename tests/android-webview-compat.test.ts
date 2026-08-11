@@ -6,27 +6,41 @@ import test from "node:test";
 const root = resolve(import.meta.dirname, "..");
 const read = (path: string) => readFileSync(join(root, path), "utf8");
 
-test("Android rejects WebViews below the application capability floor", () => {
+test("Android uses a reachable OEM-specific WebView compatibility floor", () => {
   const config = read("capacitor.config.ts");
   const packagedConfig = JSON.parse(
     read("android/app/src/main/assets/capacitor.config.json"),
   ) as { android?: Record<string, unknown>; server?: Record<string, unknown> };
   const guide = read("docs/Android旧系统HEIF兼容与依赖指南.md");
 
-  assert.match(config, /minWebViewVersion:\s*99\b/);
-  assert.match(config, /minHuaweiWebViewVersion:\s*2147483647\b/);
+  assert.match(config, /minWebViewVersion:\s*89\b/);
+  assert.match(config, /minHuaweiWebViewVersion:\s*10\b/);
+  assert.doesNotMatch(config, /2147483647/);
   assert.match(config, /errorPath:\s*"unsupported-webview\.html"/);
-  assert.equal(packagedConfig.android?.minWebViewVersion, 99);
-  assert.equal(packagedConfig.android?.minHuaweiWebViewVersion, 2147483647);
+  assert.equal(packagedConfig.android?.minWebViewVersion, 89);
+  assert.equal(packagedConfig.android?.minHuaweiWebViewVersion, 10);
   assert.equal(packagedConfig.server?.errorPath, "unsupported-webview.html");
-  assert.match(guide, /Huawei provider[^\n]*fail-closed/);
-  assert.match(guide, /不声明支持 Huawei provider/);
+  assert.match(guide, /Huawei provider[^\n]*独立基线/);
+  assert.match(guide, /Chromium 89/);
 });
 
 test("the production web bundle targets the declared Chromium floor", () => {
   const vite = read("apps/web/vite.config.ts");
 
-  assert.match(vite, /build:\s*\{[\s\S]*target:\s*"chrome99"[\s\S]*\}/);
+  assert.match(vite, /build:\s*\{[\s\S]*target:\s*"chrome89"[\s\S]*\}/);
+});
+
+test("WebView 89 runtime paths avoid newer browser-only helpers", () => {
+  const browserRuntime = [
+    read("packages/ai/src/flows/content-analysis/content-analysis-flow.ts"),
+    read("packages/ai/src/flows/diagnosis/diagnosis-flow.ts"),
+    read("packages/capacitor-runtime/src/standalone-production-service.ts"),
+    read("apps/web/src/pages/TaskDetailPage.tsx"),
+    read("apps/web/src/pages/TaskProcessingPage.tsx"),
+  ].join("\n");
+
+  assert.doesNotMatch(browserRuntime, /crypto\.randomUUID\(/);
+  assert.doesNotMatch(browserRuntime, /\.at\(/);
 });
 
 test("the unsupported WebView page is local static Chinese HTML", () => {
@@ -44,11 +58,11 @@ test("the unsupported WebView page is local static Chinese HTML", () => {
   assert.doesNotMatch(page, /https?:\/\/|\/\/|location\s*[.=]|http-equiv\s*=\s*["']refresh/i);
 });
 
-test("release packaging verifies the v0.1.2 monotonic candidate version", () => {
+test("release packaging verifies the v0.1.3 monotonic candidate version", () => {
   const appBuild = read("android/app/build.gradle.kts");
   const releaseBuilder = read("scripts/build-android-release.ps1");
 
-  assert.match(appBuild, /versionCode\s*=\s*9\b/);
-  assert.match(appBuild, /versionName\s*=\s*"0\.1\.2"/);
-  assert.match(releaseBuilder, /\$versionCode\s+-ne\s+"9"/);
+  assert.match(appBuild, /versionCode\s*=\s*10\b/);
+  assert.match(appBuild, /versionName\s*=\s*"0\.1\.3"/);
+  assert.match(releaseBuilder, /\$versionCode\s+-ne\s+"10"/);
 });

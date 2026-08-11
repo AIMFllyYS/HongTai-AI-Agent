@@ -1,4 +1,4 @@
-import { TaskError } from "@hongtai/core";
+import { createRuntimeId, TaskError } from "@hongtai/core";
 import type { ContentAnalysisFlowDependencies, ContentAnalysisInput, ContentAnalysisRunRecord } from "../../contracts/content-analysis";
 import type { AiStreamEvent } from "../../contracts/provider";
 import { contentAnalysisPrompt, contentAnalysisRepairPrompt } from "../../prompts/content-analysis";
@@ -33,7 +33,7 @@ export class ContentAnalysisFlow {
   async run(taskId: string): Promise<ContentAnalysisResultV1> {
     const input = await this.#dependencies.store.loadInput(taskId);
     if (input.evidenceUnits.length === 0) throw new TaskError({ code: "TASK_ARTIFACT_MISSING", message: "任务没有可供拆解的正文或转写证据", action: "view_partial_result" });
-    const runId = crypto.randomUUID();
+    const runId = createRuntimeId();
     const startedAt = new Date().toISOString();
     let reasoning = "";
     let rawResponse = "";
