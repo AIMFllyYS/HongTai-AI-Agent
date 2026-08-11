@@ -184,6 +184,7 @@
       font-weight: 800;
       letter-spacing: -0.045em;
       line-height: 1.03;
+      white-space: nowrap;
     }
 
     .hero__accent {
@@ -465,6 +466,11 @@
       gap: 18px;
     }
 
+    .release-list {
+      display: grid;
+      gap: 14px;
+    }
+
     .release-card {
       position: relative;
       display: flex;
@@ -491,6 +497,58 @@
         radial-gradient(circle at 100% 0%, rgba(195,233,210,0.62), transparent 44%),
         linear-gradient(145deg, #f4fbf7, #e6f7ed);
       box-shadow: 0 22px 54px rgba(54,112,91,0.09);
+    }
+
+    .release-card--latest {
+      min-height: 238px;
+    }
+
+    .release-archive {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: rgba(255,255,255,0.56);
+      overflow: hidden;
+    }
+
+    .release-archive__summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      min-height: 62px;
+      padding: 0 22px;
+      color: var(--green-deep);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 800;
+      list-style: none;
+    }
+
+    .release-archive__summary::-webkit-details-marker { display: none; }
+
+    .release-archive__summary::after {
+      width: 8px;
+      height: 8px;
+      border-right: 1.5px solid currentColor;
+      border-bottom: 1.5px solid currentColor;
+      content: "";
+      transform: rotate(45deg) translate(-2px, 2px);
+      transition: transform 180ms ease;
+    }
+
+    .release-archive[open] .release-archive__summary::after {
+      transform: rotate(225deg) translate(-2px, 2px);
+    }
+
+    .release-archive__count {
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .release-archive__content {
+      padding: 0 14px 14px;
     }
 
     .release-card__top {
@@ -597,6 +655,8 @@
       gap: 30px;
       margin-bottom: 46px;
     }
+
+    .changelog-head h2 { white-space: nowrap; }
 
     .count-label {
       color: var(--muted);
@@ -719,6 +779,34 @@
       text-align: center;
     }
 
+    .changelog-loader {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      min-height: 54px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .changelog-loader[hidden],
+    .timeline-sentinel[hidden] { display: none; }
+
+    .loader-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--mint);
+      animation: loader-pulse 800ms ease-in-out infinite alternate;
+    }
+
+    .timeline-sentinel { height: 1px; }
+
+    @keyframes loader-pulse {
+      to { opacity: 0.3; transform: scale(0.7); }
+    }
+
     footer {
       padding: 42px 0 max(42px, env(safe-area-inset-bottom));
       border-top: 1px solid var(--line);
@@ -787,7 +875,7 @@
       .brand__en { font-size: 9px; }
       .nav-link { font-size: 12px; }
       .hero { gap: 38px; padding: 50px 0 72px; }
-      h1 { font-size: clamp(33px, 9vw, 36px); }
+      h1 { font-size: clamp(29px, 8.6vw, 34px); }
       .hero__lead { margin-bottom: 28px; font-size: 15px; line-height: 1.72; }
       .hero__actions { align-items: stretch; flex-direction: column; }
       .button { width: 100%; }
@@ -801,7 +889,7 @@
       .release-object__meta { margin-top: 18px; }
       .section { padding: 72px 0; }
       .section-head, .changelog-head { margin-bottom: 30px; }
-      h2 { font-size: clamp(25px, 7.3vw, 28px); letter-spacing: -0.035em; }
+      h2 { font-size: clamp(22px, 6.4vw, 26px); letter-spacing: -0.03em; }
       .release-grid { grid-template-columns: 1fr; }
       .release-card { min-height: 244px; border-radius: 21px; }
       .changelog-head { align-items: flex-start; flex-direction: column; gap: 12px; }
@@ -847,7 +935,7 @@
     <section class="shell hero" aria-labelledby="hero-title">
       <div class="hero__copy">
         <p class="eyebrow">Android Download Center</p>
-        <h1 id="hero-title">让内容，<br>开始<span class="hero__accent">流动。</span></h1>
+        <h1 id="hero-title">让内容开始<span class="hero__accent">流动。</span></h1>
         <p class="hero__lead">宏泰 AI 智能体把公开内容采集、AI 拆解、图片观察与本地视频制作，收进一台 Android 设备。这里提供测试版本下载与真实更新记录。</p>
         <div class="hero__actions">
           <a class="button button--primary" href="https://husteread.com/storage/public/HongTai-AI-Agent-debug-v0.1.2-E8FE0BF5A3AE.apk" aria-label="下载宏泰 AI 智能体 v0.1.2 Android 测试版">
@@ -889,20 +977,25 @@
           <p class="section-intro">新版本优先呈现，旧版本继续保留。以后新增或删除版本，只需维护页面脚本顶部的数据列表。</p>
         </div>
 
-        <div class="release-grid" id="release-list" aria-live="polite"></div>
+        <div class="release-list" id="release-list" aria-live="polite"></div>
 
         <noscript>
-          <div class="release-grid">
+          <div class="release-list">
             <article class="release-card release-card--recommended">
               <div class="release-card__top"><strong class="release-card__version">v0.1.2</strong><span class="badge">推荐</span></div>
               <p class="release-card__summary">新增一键 AI 配置与云端语音旁白，进一步减少初次配置步骤。</p>
               <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-debug-v0.1.2-E8FE0BF5A3AE.apk">下载 Android APK <span aria-hidden="true">↓</span></a>
             </article>
-            <article class="release-card">
-              <div class="release-card__top"><strong class="release-card__version">v0.1.1</strong><span class="badge">历史版本</span></div>
-              <p class="release-card__summary">优化移动端界面，开放系统 TTS 设置，改善本地视频制作体验。</p>
-              <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-debug-v0.1.1-15093BD71637.apk">下载 Android APK <span aria-hidden="true">↓</span></a>
-            </article>
+            <details class="release-archive">
+              <summary class="release-archive__summary">历史版本 <span class="release-archive__count">1 个可下载版本</span></summary>
+              <div class="release-archive__content">
+                <article class="release-card">
+                  <div class="release-card__top"><strong class="release-card__version">v0.1.1</strong><span class="badge">历史版本</span></div>
+                  <p class="release-card__summary">优化移动端界面，开放系统 TTS 设置，改善本地视频制作体验。</p>
+                  <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-debug-v0.1.1-15093BD71637.apk">下载 Android APK <span aria-hidden="true">↓</span></a>
+                </article>
+              </div>
+            </details>
           </div>
         </noscript>
 
@@ -918,11 +1011,13 @@
         <div class="changelog-head reveal">
           <div>
             <p class="kicker">Product Pulse</p>
-            <h2 id="changelog-title">每一次修复，<br>都有迹可循。</h2>
+            <h2 id="changelog-title">每一次修复，都有迹可循。</h2>
           </div>
           <span class="count-label" id="changelog-count">最近更新</span>
         </div>
         <ol class="timeline" id="changelog-list" aria-live="polite"></ol>
+        <div class="changelog-loader" id="changelog-loader" role="status" hidden><span class="loader-dot" aria-hidden="true"></span>加载更多更新…</div>
+        <div class="timeline-sentinel" id="changelog-sentinel" aria-hidden="true"></div>
       </div>
     </section>
   </main>
@@ -1018,6 +1113,38 @@
       return element;
     }
 
+    function compareVersions(left, right) {
+      const leftParts = left.version.replace(/^v/i, "").split(".").map(Number);
+      const rightParts = right.version.replace(/^v/i, "").split(".").map(Number);
+      const length = Math.max(leftParts.length, rightParts.length);
+      for (let index = 0; index < length; index += 1) {
+        const difference = (rightParts[index] || 0) - (leftParts[index] || 0);
+        if (difference !== 0) return difference;
+      }
+      return 0;
+    }
+
+    function createReleaseCard(release, latest = false) {
+      const classNames = ["release-card", "reveal"];
+      if (latest) classNames.push("release-card--recommended", "release-card--latest");
+      const card = createElement("article", classNames.join(" "));
+      const top = createElement("div", "release-card__top");
+      top.append(createElement("strong", "release-card__version", release.version));
+      top.append(createElement("span", "badge", latest ? "最新版本" : release.status));
+
+      const summary = createElement("p", "release-card__summary", release.summary);
+      const link = createElement("a", "release-card__link");
+      link.href = release.url;
+      link.setAttribute("aria-label", `下载宏泰 AI 智能体 ${release.version} Android 测试版`);
+      link.append(createElement("span", "", `定向下载 ${release.version} Android APK`));
+      const arrow = createElement("span", "release-card__link-arrow", "↓");
+      arrow.setAttribute("aria-hidden", "true");
+      link.append(arrow);
+
+      card.append(top, summary, link);
+      return card;
+    }
+
     function renderReleases() {
       const list = document.querySelector("#release-list");
       if (!list) return;
@@ -1028,24 +1155,63 @@
         return;
       }
 
-      RELEASES.forEach((release) => {
-        const card = createElement("article", `release-card reveal${release.recommended ? " release-card--recommended" : ""}`);
-        const top = createElement("div", "release-card__top");
-        top.append(createElement("strong", "release-card__version", release.version));
-        top.append(createElement("span", "badge", release.status));
+      const sortedReleases = [...RELEASES].sort(compareVersions);
+      list.append(createReleaseCard(sortedReleases[0], true));
 
-        const summary = createElement("p", "release-card__summary", release.summary);
-        const link = createElement("a", "release-card__link");
-        link.href = release.url;
-        link.setAttribute("aria-label", `下载宏泰 AI 智能体 ${release.version} Android 测试版`);
-        link.append(createElement("span", "", "下载 Android APK"));
-        const arrow = createElement("span", "release-card__link-arrow", "↓");
-        arrow.setAttribute("aria-hidden", "true");
-        link.append(arrow);
+      const olderReleases = sortedReleases.slice(1);
+      if (olderReleases.length === 0) return;
 
-        card.append(top, summary, link);
-        list.append(card);
-      });
+      const archive = createElement("details", "release-archive reveal");
+      const archiveSummary = createElement("summary", "release-archive__summary", "历史版本");
+      archiveSummary.append(createElement("span", "release-archive__count", `${olderReleases.length} 个可下载版本`));
+      const archiveContent = createElement("div", "release-archive__content release-grid");
+      olderReleases.forEach((release) => archiveContent.append(createReleaseCard(release)));
+      archive.append(archiveSummary, archiveContent);
+      list.append(archive);
+    }
+
+    const CHANGELOG_BATCH_SIZE = 10;
+    let changelogCursor = 0;
+    let changelogLoading = false;
+
+    function createChangelogItem(entry) {
+      const item = createElement("li", "timeline-item reveal");
+      const time = createElement("time", "timeline-time");
+      time.dateTime = entry.iso;
+      time.append(createElement("strong", "", entry.date));
+      time.append(document.createTextNode(entry.time));
+
+      const content = createElement("div", "timeline-content");
+      content.append(createElement("span", "timeline-category", entry.category));
+      content.append(createElement("h3", "timeline-title", entry.title));
+      content.append(createElement("p", "timeline-description", entry.description));
+      content.append(createElement("span", "commit-ref", `代码提交 ${entry.commit}`));
+
+      item.append(time, content);
+      return item;
+    }
+
+    function appendChangelogBatch(delayed = false) {
+      const list = document.querySelector("#changelog-list");
+      const loader = document.querySelector("#changelog-loader");
+      const sentinel = document.querySelector("#changelog-sentinel");
+      if (!list || changelogLoading || changelogCursor >= CHANGELOG.length) return;
+
+      changelogLoading = true;
+      if (delayed && loader) loader.hidden = false;
+
+      const append = () => {
+        const batch = CHANGELOG.slice(changelogCursor, changelogCursor + CHANGELOG_BATCH_SIZE);
+        batch.forEach((entry) => list.append(createChangelogItem(entry)));
+        changelogCursor += batch.length;
+        changelogLoading = false;
+        if (loader) loader.hidden = true;
+        if (sentinel) sentinel.hidden = changelogCursor >= CHANGELOG.length;
+        activateReveals();
+      };
+
+      if (delayed) window.setTimeout(append, 520);
+      else append();
     }
 
     function renderChangelog() {
@@ -1054,28 +1220,23 @@
       if (!list) return;
       list.replaceChildren();
 
-      if (count) count.textContent = `${CHANGELOG.length} 项已核实更新`;
+      if (count) count.textContent = `共 ${CHANGELOG.length} 项更新`;
       if (CHANGELOG.length === 0) {
         list.append(createElement("li", "empty-state", "暂时没有更新记录。"));
         return;
       }
+      changelogCursor = 0;
+      appendChangelogBatch();
+    }
 
-      CHANGELOG.forEach((entry) => {
-        const item = createElement("li", "timeline-item reveal");
-        const time = createElement("time", "timeline-time");
-        time.dateTime = entry.iso;
-        time.append(createElement("strong", "", entry.date));
-        time.append(document.createTextNode(entry.time));
-
-        const content = createElement("div", "timeline-content");
-        content.append(createElement("span", "timeline-category", entry.category));
-        content.append(createElement("h3", "timeline-title", entry.title));
-        content.append(createElement("p", "timeline-description", entry.description));
-        content.append(createElement("span", "commit-ref", `代码提交 ${entry.commit}`));
-
-        item.append(time, content);
-        list.append(item);
-      });
+    function setupChangelogLoading() {
+      const sentinel = document.querySelector("#changelog-sentinel");
+      if (!sentinel || sentinel.hidden || !("IntersectionObserver" in window)) return;
+      const observer = new IntersectionObserver((entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) appendChangelogBatch(true);
+        if (changelogCursor >= CHANGELOG.length) observer.disconnect();
+      }, { rootMargin: "180px 0px" });
+      observer.observe(sentinel);
     }
 
     function activateReveals() {
@@ -1099,6 +1260,7 @@
     renderReleases();
     renderChangelog();
     activateReveals();
+    setupChangelogLoading();
   </script>
 </body>
 </html>
