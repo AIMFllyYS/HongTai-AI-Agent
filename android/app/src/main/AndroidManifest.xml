@@ -6,9 +6,6 @@
     <intent>
       <action android:name="android.media.action.IMAGE_CAPTURE" />
     </intent>
-    <intent>
-      <action android:name="android.speech.tts.engine.INSTALL_TTS_DATA" />
-    </intent>
   </queries>
 
   <application

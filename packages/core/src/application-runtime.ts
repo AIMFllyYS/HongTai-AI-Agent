@@ -57,15 +57,72 @@ export interface AppBuildInfo {
   readonly versionCode: number;
 }
 
-/** Explicit, narrow access to Android's own application and TTS settings. */
+/** Explicit, narrow access to Android's own application metadata. */
 export interface DeviceSettingsService {
   getAppInfo(): Promise<AppBuildInfo>;
-  /** Opens Android's system text-to-speech settings; it does not select a cloud voice. */
-  openTextToSpeechSettings(): Promise<void>;
 }
 
-export type AiCapability = "text" | "vision" | "asr";
-export type AiAsrTransport = "audio-transcriptions" | "chat-input-audio";
+export type AiCapability = "text" | "vision" | "asr" | "tts";
+export type AiAsrTransport = "audio-transcriptions" | "chat-input-audio" | "stepaudio-sse";
+/** The native video renderer owns these provider-specific audio protocols. */
+export type AiTtsTransport = "mimo-chat-audio" | "stepfun-audio-speech";
+
+/**
+ * A verified, provider-owned connection profile. Selecting one never exposes
+ * the API key and does not create another credentials store.
+ */
+export interface AiProviderPreset {
+  readonly id: "xiaomi-mimo" | "stepfun";
+  readonly label: string;
+  readonly baseUrl: string;
+  readonly textModel: string;
+  readonly visionModel: string;
+  readonly asrModel: string;
+  readonly asrTransport: AiAsrTransport;
+  readonly ttsModel: string;
+  readonly ttsTransport: AiTtsTransport;
+  readonly ttsVoice: string;
+  readonly supportsJsonObject: boolean;
+  readonly supportsJsonSchema: boolean;
+}
+
+/**
+ * The app deliberately stores exact model IDs rather than asking users to
+ * reconstruct vendor-specific audio protocols by hand. StepFun's image
+ * endpoint uses a different visual model than its text endpoint, and its
+ * preset leaves structured-output flags off so the shared schema parser stays
+ * valid for both paths.
+ */
+export const AI_PROVIDER_PRESETS: readonly AiProviderPreset[] = Object.freeze([
+  {
+    id: "xiaomi-mimo",
+    label: "小米 MiMo",
+    baseUrl: "https://api.xiaomimimo.com/v1",
+    textModel: "mimo-v2.5",
+    visionModel: "mimo-v2.5",
+    asrModel: "mimo-v2.5-asr",
+    asrTransport: "chat-input-audio",
+    ttsModel: "mimo-v2.5-tts",
+    ttsTransport: "mimo-chat-audio",
+    ttsVoice: "冰糖",
+    supportsJsonObject: true,
+    supportsJsonSchema: true,
+  },
+  {
+    id: "stepfun",
+    label: "阶跃星辰",
+    baseUrl: "https://api.stepfun.com/v1",
+    textModel: "step-3.5-flash",
+    visionModel: "step-1o-turbo-vision",
+    asrModel: "stepaudio-2.5-asr",
+    asrTransport: "stepaudio-sse",
+    ttsModel: "stepaudio-2.5-tts",
+    ttsTransport: "stepfun-audio-speech",
+    ttsVoice: "cixingnansheng",
+    supportsJsonObject: false,
+    supportsJsonSchema: false,
+  },
+]);
 export type AiProbeStatus = "succeeded" | "failed";
 
 /**
@@ -79,6 +136,9 @@ export interface PublicAiConnectionConfig {
   readonly visionModel: string | null;
   readonly asrModel: string | null;
   readonly asrTransport: AiAsrTransport;
+  readonly ttsModel: string | null;
+  readonly ttsTransport: AiTtsTransport | null;
+  readonly ttsVoice: string | null;
   readonly supportsJsonObject: boolean;
   readonly supportsJsonSchema: boolean;
   readonly hasApiKey: boolean;
@@ -92,6 +152,9 @@ export interface AiConnectionPublicInput {
   readonly visionModel?: string | null;
   readonly asrModel?: string | null;
   readonly asrTransport: AiAsrTransport;
+  readonly ttsModel?: string | null;
+  readonly ttsTransport?: AiTtsTransport | null;
+  readonly ttsVoice?: string | null;
   readonly supportsJsonObject: boolean;
   readonly supportsJsonSchema: boolean;
 }

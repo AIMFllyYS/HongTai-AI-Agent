@@ -175,6 +175,7 @@ test("the foreground APK keeps the screen awake while its in-process tasks are a
 test("video production returns stable safe errors and exports an AAC audio track", () => {
   const plugin = read("android/app/src/main/java/com/hongtai/aiagent/bridge/ProductionRuntimePlugin.kt");
   const renderer = read("android/app/src/main/java/com/hongtai/aiagent/production/ProductionRenderer.kt");
+  const cloudTts = read("android/app/src/main/java/com/hongtai/aiagent/production/CloudNarrationSynthesizer.kt");
   const issueCodes = read("android/app/src/main/java/com/hongtai/aiagent/bridge/NativeIssueCode.kt");
 
   for (const code of [
@@ -193,6 +194,15 @@ test("video production returns stable safe errors and exports an AAC audio track
   const finalization = renderer.indexOf("finalizeOutput(temporary, output)");
   assert.ok(verification >= 0 && verification < finalization, "the temporary MP4 must pass H.264/AAC verification before an existing output is replaced");
   assert.match(renderer, /MEDIA_RENDER_TIMEOUT/);
+  assert.match(plugin, /fun probeTts\(call: PluginCall\)/);
+  assert.match(plugin, /CloudNarrationSynthesizer/);
+  assert.match(cloudTts, /AndroidKeystoreSecretStore/);
+  assert.match(cloudTts, /NativeNetworkPolicy/);
+  assert.match(cloudTts, /temporary\.delete\(\)/);
+  const cloudSegment = cloudTts.slice(cloudTts.indexOf("private fun synthesizeShot"), cloudTts.indexOf("private fun writeAudio"));
+  assert.match(cloudSegment, /finalizeNarrationSegment\(temporary, output\)/);
+  assert.doesNotMatch(cloudSegment, /output\.exists\(\) && !output\.delete\(\)/);
+  assert.doesNotMatch(cloudTts, /Log\.|notifyListeners\(/);
 });
 
 test("client APK builds are identifiable and never log bridge payloads", () => {
@@ -204,14 +214,14 @@ test("client APK builds are identifiable and never log bridge payloads", () => {
   assert.doesNotMatch(appBuild, /versionName\s*=\s*"0\.1\.0"/);
 });
 
-test("release candidate v0.1.1 advances to versionCode 8 and uses the supplied Pulse Flow design icon", () => {
+test("release candidate v0.1.2 advances to versionCode 9 and uses the supplied Pulse Flow design icon", () => {
   const appBuild = read("android/app/build.gradle.kts");
   const manifest = read("android/app/src/main/AndroidManifest.xml");
   const sourcePath = join(root, "apps/web/public/brand/pulse-flow-source.png");
   const iconPath = join(root, "android/app/src/main/res/drawable-nodpi/pulse_flow_launcher.png");
 
-  assert.match(appBuild, /versionCode\s*=\s*8\b/);
-  assert.match(appBuild, /versionName\s*=\s*"0\.1\.1"/);
+  assert.match(appBuild, /versionCode\s*=\s*9\b/);
+  assert.match(appBuild, /versionName\s*=\s*"0\.1\.2"/);
   assert.match(manifest, /android:icon="@drawable\/pulse_flow_launcher"/);
   assert.equal(existsSync(iconPath), true, "the Android launcher icon must be packaged from the design asset");
   assert.deepEqual(readFileSync(iconPath), readFileSync(sourcePath), "the launcher icon must remain the supplied design asset");

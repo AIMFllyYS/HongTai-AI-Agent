@@ -45,6 +45,8 @@ export interface StandaloneProductionServiceOptions {
   readonly native: StandaloneProductionRuntimePlugin;
   readonly analysis: AnalysisService;
   readonly getProvider: () => Promise<AiProvider>;
+  /** App logic decides whether a saved connection has an executable cloud narration path. */
+  readonly getNarrationMode: () => Promise<"system" | "provider">;
   readonly toDisplayUri: (uri: string) => string;
   readonly createProjectId?: () => string;
   readonly now?: () => Date;
@@ -110,8 +112,8 @@ function productionTaskError(error: unknown, fallbackMessage: string): TaskError
     ERR_MEDIA_SOURCE_INVALID: { code: "MEDIA_SOURCE_INVALID", message: "素材不含可用于本地合成的媒体轨，请重新选择完整文件。", action: "select_media", retryable: false },
     ERR_MEDIA_PROBE_FAILED: { code: "MEDIA_PROBE_FAILED", message: "无法读取素材的媒体轨或时长，请重新选择完整文件。", action: "select_media", retryable: false },
     ERR_PRIVATE_FILE_IMPORT_FAILED: { code: "MEDIA_IMPORT_FAILED", message: "素材无法安全导入应用私有目录，请重新选择。", action: "select_media", retryable: false },
-    ERR_TTS_UNAVAILABLE: { code: "TTS_UNAVAILABLE", message: "未检测到可用的中文系统语音。请在系统设置启用或下载中文语音后重试。", action: "retry", retryable: true },
-    ERR_TTS_SYNTHESIS_FAILED: { code: "TTS_SYNTHESIS_FAILED", message: "系统中文旁白没有生成成功，请检查系统语音服务后重试。", action: "retry", retryable: true },
+    ERR_TTS_UNAVAILABLE: { code: "TTS_UNAVAILABLE", message: "视频配音暂不可用。请检查 AI 连接中的 TTS 配置；未配置云端配音时，请确认手机已启用中文系统语音。", action: "retry", retryable: true },
+    ERR_TTS_SYNTHESIS_FAILED: { code: "TTS_SYNTHESIS_FAILED", message: "视频旁白没有生成成功。请检查 AI 连接、网络或手机语音服务后重试。", action: "retry", retryable: true },
     ERR_MEDIA_RENDER_TIMEOUT: { code: "MEDIA_RENDER_TIMEOUT", message: "本地合成超时，已保留之前成功的成片。请减少时长或更换较小的素材后重试。", action: "retry", retryable: true },
     ERR_MEDIA_EXPORT_FAILED: { code: "MEDIA_EXPORT_FAILED", message: "手机未能完成 H.264/AAC 视频导出。请更换兼容的 MP4 素材后重试。", action: "retry", retryable: true },
     ERR_OUTPUT_FINALIZATION_FAILED: { code: "OUTPUT_FINALIZATION_FAILED", message: "新成片无法安全写入本地目录，之前成功的成片已保留。", action: "free_storage", retryable: true },
@@ -256,7 +258,8 @@ export class StandaloneProductionService implements ProductionService {
       if (event.projectId === projectId) void this.#emit(projectId, { type: "render-progress", ...event });
     });
     try {
-      const output = await this.#options.native.render({ projectId, planJson: JSON.stringify(project.plan), mode: project.mode });
+      const narration = project.mode === "montage" ? await this.#options.getNarrationMode() : "system";
+      const output = await this.#options.native.render({ projectId, planJson: JSON.stringify(project.plan), mode: project.mode, narration });
       return this.#project(await this.#persist({ ...project, status: "succeeded", output }));
     } catch (error) {
       const failure = productionTaskError(error, "本地视频合成没有完成");

@@ -26,7 +26,6 @@ import { AiSettingsPage } from "./pages/AiSettingsPage";
 import { ApplicationInfoPage } from "./pages/ApplicationInfoPage";
 import { ProfileSettingsPage } from "./pages/ProfileSettingsPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import { TtsSettingsPage } from "./pages/TtsSettingsPage";
 
 export interface AppProps {
   /** Real application runtime supplied only by the application composition root. */
@@ -63,11 +62,6 @@ export function App({ runtime, visualData }: AppProps = {}) {
       return runtime
         ? <AiSettingsPage navigate={navigate} runtime={runtime} />
         : <RuntimePendingPage description="AI 设置需要通过应用运行时读取。" navigate={navigate} title="本地运行时未初始化" />;
-    }
-    if (renderedRoute.key === "settings-tts") {
-      return runtime
-        ? <TtsSettingsPage navigate={navigate} runtime={runtime} />
-        : <RuntimePendingPage description="系统 TTS 设置需要通过应用运行时打开。" navigate={navigate} title="本地运行时未初始化" />;
     }
     if (renderedRoute.key === "settings-app-info") {
       return runtime

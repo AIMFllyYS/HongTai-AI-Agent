@@ -6,7 +6,10 @@
 
 @media (min-width: 48rem) {
   .app-content {
-    padding-top: var(--space-8);
+    /* The header remains fixed at every viewport size.  Preserve its full
+       occupied height here; replacing this with a bare desktop gutter makes
+       the first card slide underneath the header. */
+    padding-top: calc(var(--header-height) + max(env(safe-area-inset-top), var(--native-status-bar-inset)) + var(--space-8));
   }
 
   .page-stack {

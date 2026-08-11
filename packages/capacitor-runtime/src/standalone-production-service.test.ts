@@ -37,11 +37,11 @@ const analysis: ContentAnalysisRecord = {
   updatedAt: "2026-08-08T00:00:00.000Z",
 };
 
-function harness() {
+function harness(narration: "system" | "provider" = "system") {
   const values = new Map<string, string>();
   const ids = new Set<string>();
   const pickCalls: Array<{ readonly projectId: string; readonly maxItems: number; readonly selection?: "visual" | "avatar" }> = [];
-  const renderCalls: Array<{ readonly projectId: string; readonly planJson: string; readonly mode?: "montage" | "avatar" }> = [];
+  const renderCalls: Array<{ readonly projectId: string; readonly planJson: string; readonly mode?: "montage" | "avatar"; readonly narration?: "system" | "provider" }> = [];
   const files = {
     ensureProduction: async ({ projectId }: { readonly projectId: string }) => { ids.add(projectId); },
     writeProductionText: async ({ projectId, relativePath, value }: { readonly projectId: string; readonly relativePath: string; readonly value: string; readonly replace: boolean }) => { values.set(`${projectId}/${relativePath}`, value); },
@@ -63,16 +63,18 @@ function harness() {
       { id: "asset-3", uri: "file:///private/productions/project-1/inputs/asset-3.png", kind: "image" as const, mimeType: "image/png", displayName: "细节.png", sizeBytes: 50 },
       ] };
     },
-    render: async (options: { readonly projectId: string; readonly planJson: string; readonly mode?: "montage" | "avatar" }) => {
+    render: async (options: { readonly projectId: string; readonly planJson: string; readonly mode?: "montage" | "avatar"; readonly narration?: "system" | "provider" }) => {
       renderCalls.push(options);
       return { uri: "file:///private/productions/project-1/output.mp4", mimeType: "video/mp4" as const, sizeBytes: 1_024, durationSeconds: 20 };
     },
+    probeTts: async () => undefined,
   };
   const create = () => new StandaloneProductionService({
     files,
     native,
     analysis: { get: async () => analysis, run: async () => analysis },
     getProvider: async () => provider,
+    getNarrationMode: async () => narration,
     toDisplayUri: (uri: string) => uri.replace("file:///private/", "capacitor://localhost/private/"),
     createProjectId: () => "project-1",
     now: () => new Date("2026-08-08T00:00:00.000Z"),
@@ -81,7 +83,7 @@ function harness() {
 }
 
 test("制作项目导入素材、生成计划和渲染结果后可在重启后恢复", async () => {
-  const { create } = harness();
+  const { create, renderCalls } = harness();
   const service = create();
   await service.create({ analysisTaskId: "task-1", brief: "突出真实服务", targetDurationSeconds: 20 });
   const imported = await service.importAssets("project-1");
@@ -94,11 +96,23 @@ test("制作项目导入素材、生成计划和渲染结果后可在重启后�
   const completed = await service.render("project-1");
   assert.equal(completed.status, "succeeded");
   assert.match(completed.output?.uri ?? "", /^capacitor:\/\//u);
+  assert.equal(renderCalls[0]?.narration, "system");
 
   const restored = await create().get("project-1");
   assert.equal(restored?.status, "succeeded");
   assert.equal(restored?.assets[0]?.uri.includes("file://"), false);
   assert.equal((await create().list()).length, 1);
+});
+
+test("已配置的云端 TTS 会明确交给原生渲染器合成旁白", async () => {
+  const { create, renderCalls } = harness("provider");
+  const service = create();
+  await service.create({ analysisTaskId: "task-1", brief: "突出真实服务", targetDurationSeconds: 20 });
+  await service.importAssets("project-1");
+  await service.generatePlan("project-1");
+  await service.render("project-1");
+
+  assert.equal(renderCalls[0]?.narration, "provider");
 });
 
 test("制作计划失败时保留项目和已导入素材", async () => {
@@ -115,9 +129,10 @@ test("制作计划失败时保留项目和已导入素材", async () => {
       readProductionText: async ({ projectId, relativePath }) => ({ value: values.get(`${projectId}/${relativePath}`) }),
       listProductionIds: async () => ({ projectIds: ["project-1"] }),
     },
-    native: { pickAssets: async () => ({ assets: [] }), render: async () => { throw new Error("unused"); } },
+    native: { pickAssets: async () => ({ assets: [] }), render: async () => { throw new Error("unused"); }, probeTts: async () => undefined },
     analysis: { get: async () => analysis, run: async () => analysis },
     getProvider: async () => ({ generate: async () => { throw new Error("provider down"); }, transcribe: async () => "" }),
+    getNarrationMode: async () => "system",
     toDisplayUri: (uri) => uri,
   });
 
@@ -168,9 +183,11 @@ test("制作服务将原生媒体和 TTS 失败转换为可行动的稳定错误
     native: {
       pickAssets: async () => { throw { code: "ERR_MEDIA_SOURCE_INVALID" }; },
       render: async () => { throw { code: "ERR_TTS_UNAVAILABLE" }; },
+      probeTts: async () => undefined,
     },
     analysis: { get: async () => analysis, run: async () => analysis },
     getProvider: async () => ({ generate: async () => ({ content: JSON.stringify(plan), reasoning: "" }), transcribe: async () => "" }),
+    getNarrationMode: async () => "system",
     toDisplayUri: (uri) => uri,
     createProjectId: () => "project-1",
   });

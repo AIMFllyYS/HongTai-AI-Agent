@@ -7,11 +7,8 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.net.Uri
-import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.AbsoluteSizeSpan
@@ -36,7 +33,6 @@ import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
 import java.io.File
-import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -45,9 +41,14 @@ internal data class ProductionRenderResult(val uri: String, val sizeBytes: Long,
 
 @UnstableApi
 internal class ProductionRenderer(private val context: Context, private val store: ProductionMediaStore) {
-  fun render(projectId: String, plan: NativeProductionPlan, onProgress: (Int, String) -> Unit): ProductionRenderResult {
+  fun render(
+    projectId: String,
+    plan: NativeProductionPlan,
+    narrationSynthesizer: NarrationSynthesizer = SystemNarrationSynthesizer(context, store),
+    onProgress: (Int, String) -> Unit,
+  ): ProductionRenderResult {
     onProgress(5, if (plan.renderMode == ProductionRenderMode.AVATAR) "正在校验数字人口播原声" else "正在生成旁白")
-    val narration = if (plan.renderMode == ProductionRenderMode.MONTAGE) synthesize(projectId, plan) else emptyList()
+    val narration = if (plan.renderMode == ProductionRenderMode.MONTAGE) narrationSynthesizer.synthesize(projectId, plan) else emptyList()
     onProgress(25, "正在编排镜头")
     val composition = compile(plan, narration)
     val (temporary, output) = store.outputTarget(projectId)
@@ -99,86 +100,6 @@ internal class ProductionRenderer(private val context: Context, private val stor
     finalizeOutput(temporary, output)
     onProgress(100, "成片已保存")
     return ProductionRenderResult(Uri.fromFile(output).toString(), output.length(), durationSeconds)
-  }
-
-  private fun synthesize(projectId: String, plan: NativeProductionPlan): List<Pair<File, Long>> {
-    val initialized = CountDownLatch(1)
-    val status = AtomicReference(TextToSpeech.ERROR)
-    val engine = TextToSpeech(context) { value -> status.set(value); initialized.countDown() }
-    try {
-      if (!initialized.await(15, TimeUnit.SECONDS) || status.get() != TextToSpeech.SUCCESS) {
-        throw ProductionException(ProductionFailureKind.TTS_UNAVAILABLE, "System TTS is unavailable.")
-      }
-      val requestedLocale = Locale.forLanguageTag(plan.voiceLocale)
-      if (engine.setLanguage(requestedLocale) < TextToSpeech.LANG_AVAILABLE) {
-        throw ProductionException(ProductionFailureKind.TTS_UNAVAILABLE, "The requested system TTS language is unavailable.")
-      }
-      if (!selectSystemVoice(engine, requestedLocale)) {
-        throw ProductionException(ProductionFailureKind.TTS_UNAVAILABLE, "No compatible Chinese system TTS voice is available.")
-      }
-      if (engine.setSpeechRate(plan.speechRate) != TextToSpeech.SUCCESS) {
-        throw ProductionException(ProductionFailureKind.TTS_UNAVAILABLE, "The system TTS speech rate is unavailable.")
-      }
-      return plan.shots.map { shot -> synthesizeShot(engine, requestedLocale, projectId, shot) to shot.durationMs }
-    } finally {
-      engine.shutdown()
-    }
-  }
-
-  /**
-   * Prefer an installed/offline voice, but do not reject a functioning system
-   * TTS engine solely because its provider performs its own network retrieval.
-   * The latter is still a real Android system TTS operation and is substantially
-   * more compatible with devices that ship no downloadable offline Chinese pack.
-   */
-  private fun selectSystemVoice(engine: TextToSpeech, locale: Locale): Boolean {
-    val compatible = engine.voices?.filter { candidate -> candidate.locale.language == locale.language }
-    if (compatible.isNullOrEmpty()) return engine.voice?.locale?.language == locale.language
-    val voice = compatible.firstOrNull { !it.isNetworkConnectionRequired } ?: compatible.first()
-    return try {
-      engine.voice = voice
-      true
-    } catch (_: Exception) {
-      false
-    }
-  }
-
-  private fun synthesizeShot(engine: TextToSpeech, locale: Locale, projectId: String, shot: ProductionShot): File {
-    var firstFailure: ProductionException? = null
-    repeat(2) { attempt ->
-      try {
-        return synthesizeShotAttempt(engine, projectId, shot)
-      } catch (error: ProductionException) {
-        if (error.kind == ProductionFailureKind.TTS_UNAVAILABLE) throw error
-        if (attempt == 1) throw error
-        firstFailure = error
-        Thread.sleep(750)
-        selectSystemVoice(engine, locale)
-      }
-    }
-    throw checkNotNull(firstFailure)
-  }
-
-  private fun synthesizeShotAttempt(engine: TextToSpeech, projectId: String, shot: ProductionShot): File {
-    val output = File(store.audioDirectory(projectId), "narration-${shot.order}.wav")
-    if (output.exists() && !output.delete()) throw ProductionException(ProductionFailureKind.TTS_SYNTHESIS_FAILED, "Could not replace a previous TTS segment.")
-    val finished = CountDownLatch(1)
-    val failure = AtomicReference<String?>()
-    val utteranceId = "production-$projectId-${shot.order}"
-    engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-      override fun onStart(id: String?) = Unit
-      override fun onDone(id: String?) { if (id == utteranceId) finished.countDown() }
-      @Deprecated("Deprecated in Java") override fun onError(id: String?) { if (id == utteranceId) { failure.set("TTS synthesis failed."); finished.countDown() } }
-      override fun onError(id: String?, errorCode: Int) { if (id == utteranceId) { failure.set("TTS synthesis failed with code $errorCode."); finished.countDown() } }
-    })
-    if (engine.synthesizeToFile(shot.narration, Bundle(), output, utteranceId) != TextToSpeech.SUCCESS) {
-      throw ProductionException(ProductionFailureKind.TTS_SYNTHESIS_FAILED, "Could not start system TTS synthesis.")
-    }
-    if (!finished.await(30, TimeUnit.SECONDS)) throw ProductionException(ProductionFailureKind.TTS_SYNTHESIS_FAILED, "System TTS synthesis timed out.")
-    if (failure.get() != null || !output.isFile || output.length() <= 0L) {
-      throw ProductionException(ProductionFailureKind.TTS_SYNTHESIS_FAILED, failure.get() ?: "System TTS produced no audio.")
-    }
-    return output
   }
 
   private fun compile(plan: NativeProductionPlan, narration: List<Pair<File, Long>>): Composition {

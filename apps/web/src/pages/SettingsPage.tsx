@@ -10,7 +10,7 @@ import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { LoadingState } from "../components/StatePanels";
 import { SectionHeading } from "../components/Headings";
-import { aiSettingsPath, appInfoSettingsPath, profileSettingsPath, ttsSettingsPath } from "../router";
+import { aiSettingsPath, appInfoSettingsPath, profileSettingsPath } from "../router";
 
 export interface SettingsPageProps {
   readonly runtime: AppRuntime;
@@ -104,11 +104,6 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
             <button className="settings-row" onClick={() => navigate(aiSettingsPath())} type="button">
               <span className="settings-row__icon settings-row__icon--key"><Icon name="key" size={19} /></span>
               <span className="settings-row__body"><strong>{modelName}</strong><small>{aiConnection?.hasApiKey ? "API Key 已保存在设备安全存储" : "尚未写入 API Key"}</small></span>
-              <Icon className="settings-row__chevron" name="chevron_right" size={17} />
-            </button>
-            <button className="settings-row" onClick={() => navigate(ttsSettingsPath())} type="button">
-              <span className="settings-row__icon"><Icon name="record_voice_over" size={19} /></span>
-              <span className="settings-row__body"><strong>TTS 语音合成</strong><small>配置 Android 系统中文语音与语音包</small></span>
               <Icon className="settings-row__chevron" name="chevron_right" size={17} />
             </button>
           </GlassCard>

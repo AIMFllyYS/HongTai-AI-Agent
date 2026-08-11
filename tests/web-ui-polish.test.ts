@@ -18,11 +18,13 @@ test("observation image choice centers each placeholder item and keeps the repor
 test("Android edge-to-edge keeps header content below status icons without reintroducing a separate page spacer", () => {
   const main = read("apps/web/src/main.tsx");
   const shell = read("apps/web/src/styles/shell.css");
+  const responsive = read("apps/web/src/styles/responsive.css");
 
   assert.match(main, /document\.documentElement\.dataset\.platform\s*=\s*Capacitor\.getPlatform\(\)/);
   assert.match(shell, /:root\[data-platform="android"\]\s*\{[^}]*--native-status-bar-inset:\s*24px/s);
   assert.match(shell, /\.app-header\s*\{[^}]*max\(env\(safe-area-inset-top\),\s*var\(--native-status-bar-inset\)\)/s);
   assert.match(shell, /\.app-content\s*\{[^}]*max\(env\(safe-area-inset-top\),\s*var\(--native-status-bar-inset\)\)/s);
+  assert.match(responsive, /@media\s*\(min-width:\s*48rem\)\s*\{[\s\S]*?\.app-content\s*\{[^}]*--header-height[^}]*max\(env\(safe-area-inset-top\),\s*var\(--native-status-bar-inset\)\)/);
 });
 
 test("runtime video frames adopt real media dimensions instead of retaining a landscape placeholder", () => {
@@ -39,7 +41,7 @@ test("runtime video frames adopt real media dimensions instead of retaining a la
   assert.doesNotMatch(css, /\.runtime-video-frame\s*\{\s*aspect-ratio:\s*16\s*\/\s*9\s*;/s);
 });
 
-test("Android device settings bridge exposes build identity and only opens the explicit system TTS settings", () => {
+test("Android device settings bridge exposes build identity without creating a separate TTS settings surface", () => {
   const pluginPath = "android/app/src/main/java/com/hongtai/aiagent/bridge/DeviceSettingsPlugin.kt";
   assert.equal(existsSync(join(root, pluginPath)), true, "missing DeviceSettings bridge");
   const plugin = read(pluginPath);
@@ -50,8 +52,9 @@ test("Android device settings bridge exposes build identity and only opens the e
   assert.match(plugin, /packageManager\.getPackageInfo/);
   assert.match(plugin, /versionName/);
   assert.match(plugin, /longVersionCode/);
-  assert.match(plugin, /TextToSpeech\.Engine\.ACTION_INSTALL_TTS_DATA/);
+  assert.doesNotMatch(plugin, /TextToSpeech|ACTION_INSTALL_TTS_DATA/);
   assert.match(mainActivity, /registerPlugin\(DeviceSettingsPlugin::class\.java\)/);
   assert.match(bridge, /StandaloneDeviceSettingsPlugin/);
   assert.match(bridge, /registerPlugin<StandaloneDeviceSettingsPlugin>\("DeviceSettings"\)/);
+  assert.doesNotMatch(bridge, /openTextToSpeechSettings/);
 });

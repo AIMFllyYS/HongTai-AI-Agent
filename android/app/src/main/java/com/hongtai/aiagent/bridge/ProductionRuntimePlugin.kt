@@ -12,6 +12,8 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.hongtai.aiagent.production.ImportedProductionAsset
+import com.hongtai.aiagent.production.CloudNarrationConfiguration
+import com.hongtai.aiagent.production.CloudNarrationSynthesizer
 import com.hongtai.aiagent.production.ProductionAssetKind
 import com.hongtai.aiagent.production.ProductionException
 import com.hongtai.aiagent.production.ProductionFailureKind
@@ -20,6 +22,9 @@ import com.hongtai.aiagent.production.ProductionMediaStore
 import com.hongtai.aiagent.production.ProductionPlanParser
 import com.hongtai.aiagent.production.ProductionRenderMode
 import com.hongtai.aiagent.production.ProductionRenderer
+import com.hongtai.aiagent.production.SystemNarrationSynthesizer
+import com.hongtai.aiagent.storage.AndroidKeystoreSecretStore
+import com.hongtai.aiagent.storage.LocalPreferences
 import java.util.concurrent.Executors
 
 @UnstableApi
@@ -27,6 +32,8 @@ import java.util.concurrent.Executors
 class ProductionRuntimePlugin : Plugin() {
   private val store by lazy { ProductionMediaStore(context) }
   private val renderer by lazy { ProductionRenderer(context, store) }
+  private val preferences by lazy { LocalPreferences(context) }
+  private val secrets by lazy { AndroidKeystoreSecretStore(context) }
 
   @PluginMethod
   fun pickAssets(call: PluginCall) {
@@ -82,14 +89,24 @@ class ProductionRuntimePlugin : Plugin() {
     val projectId = call.getString("projectId")
     val planJson = call.getString("planJson")
     val mode = renderMode(call.getString("mode"))
-    if (projectId.isNullOrBlank() || planJson.isNullOrBlank() || mode == null) {
+    val narration = narrationMode(call.getString("narration"))
+    if (projectId.isNullOrBlank() || planJson.isNullOrBlank() || mode == null || narration == null) {
       call.reject("projectId and planJson are required.", NativeIssueCode.INVALID_ARGUMENT)
       return
     }
     PRODUCTION_EXECUTOR.execute {
       try {
         val plan = ProductionPlanParser.parse(planJson, store.inputs(projectId), mode)
-        val output = renderer.render(projectId, plan) { progress, message ->
+        val synthesizer = when {
+          mode == ProductionRenderMode.MONTAGE && narration == ProductionNarrationMode.PROVIDER -> CloudNarrationSynthesizer(
+            context,
+            store,
+            CloudNarrationConfiguration.from(preferences.readAiConnection()),
+            secrets,
+          )
+          else -> SystemNarrationSynthesizer(context, store)
+        }
+        val output = renderer.render(projectId, plan, synthesizer) { progress, message ->
           notifyListeners("productionProgress", JSObject().put("projectId", projectId).put("progress", progress).put("message", message))
         }
         call.resolve(
@@ -102,6 +119,27 @@ class ProductionRuntimePlugin : Plugin() {
         call.reject(error.message ?: "The production plan is invalid.", NativeIssueCode.INVALID_ARGUMENT)
       } catch (error: Exception) {
         call.reject("The local production render failed.", NativeIssueCode.MEDIA_MERGE_FAILED)
+      }
+    }
+  }
+
+  @PluginMethod
+  fun probeTts(call: PluginCall) {
+    PRODUCTION_EXECUTOR.execute {
+      try {
+        CloudNarrationSynthesizer(
+          context,
+          store,
+          CloudNarrationConfiguration.from(preferences.readAiConnection()),
+          secrets,
+        ).probe()
+        call.resolve()
+      } catch (error: ProductionException) {
+        call.reject(error.message ?: "Cloud TTS is unavailable.", nativeIssueCode(error.kind))
+      } catch (error: IllegalArgumentException) {
+        call.reject("Cloud TTS is unavailable.", NativeIssueCode.TTS_UNAVAILABLE)
+      } catch (error: Exception) {
+        call.reject("Cloud TTS probe failed.", NativeIssueCode.TTS_SYNTHESIS_FAILED)
       }
     }
   }
@@ -124,6 +162,12 @@ class ProductionRuntimePlugin : Plugin() {
     else -> null
   }
 
+  private fun narrationMode(value: String?): ProductionNarrationMode? = when (value ?: "system") {
+    "system" -> ProductionNarrationMode.SYSTEM
+    "provider" -> ProductionNarrationMode.PROVIDER
+    else -> null
+  }
+
   private fun nativeIssueCode(kind: ProductionFailureKind): String = when (kind) {
     ProductionFailureKind.MEDIA_SOURCE_INVALID -> NativeIssueCode.MEDIA_SOURCE_INVALID
     ProductionFailureKind.TTS_UNAVAILABLE -> NativeIssueCode.TTS_UNAVAILABLE
@@ -139,5 +183,10 @@ class ProductionRuntimePlugin : Plugin() {
     val PRODUCTION_EXECUTOR = Executors.newSingleThreadExecutor { runnable ->
       Thread(runnable, "hongtai-video-production").apply { isDaemon = true }
     }
+  }
+
+  private enum class ProductionNarrationMode {
+    SYSTEM,
+    PROVIDER,
   }
 }

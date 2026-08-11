@@ -5,6 +5,7 @@ import type {
   AiCapability,
   AiCapabilityProbeResult,
   AiConnectionPublicInput,
+  AiTtsTransport,
   AppBuildInfo,
   AppRuntime,
   FeatureCapabilityRegistry,
@@ -37,7 +38,7 @@ const FEATURES: FeatureCapabilityRegistry = Object.freeze({
   assets: "planned",
   publish: "planned",
 });
-const PROBE_ORDER: readonly AiCapability[] = ["text", "vision", "asr"];
+const PROBE_ORDER: readonly AiCapability[] = ["text", "vision", "asr", "tts"];
 /** 512px synthetic JPEG with no personal data; accepted by the configured vision provider. */
 const PROBE_IMAGE =
   "data:image/jpeg;base64,/9j/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAIAAgADASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCJAU1NQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH/2Q==";
@@ -83,8 +84,14 @@ function validBaseUrl(value: string): string {
 
 function validAsrTransport(value: string | null): AiAsrTransport {
   if (value === null || value === "" || value === "audio-transcriptions") return "audio-transcriptions";
-  if (value === "chat-input-audio") return value;
+  if (value === "chat-input-audio" || value === "stepaudio-sse") return value;
   throw taskError("AI_SETTINGS_INVALID", "ASR 传输方式无效", "configure_ai");
+}
+
+function validTtsTransport(value: string | null | undefined): AiTtsTransport | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (value === "mimo-chat-audio" || value === "stepfun-audio-speech") return value;
+  throw taskError("AI_SETTINGS_INVALID", "TTS 传输方式无效", "configure_ai");
 }
 
 function parseTags(value: string): readonly string[] {
@@ -118,6 +125,9 @@ function publicConnection(value: StandaloneAiConnection, hasApiKey: boolean): Pu
     visionModel: optional(value.visionModel),
     asrModel: optional(value.asrModel),
     asrTransport: validAsrTransport(value.asrTransport),
+    ttsModel: optional(value.ttsModel),
+    ttsTransport: validTtsTransport(value.ttsTransport),
+    ttsVoice: optional(value.ttsVoice),
     supportsJsonObject: value.jsonObjectEnabled,
     supportsJsonSchema: value.jsonSchemaEnabled,
     hasApiKey,
@@ -207,6 +217,10 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
       reasoningMode: "provider-default",
     });
   };
+  const narrationMode = async (): Promise<"system" | "provider"> => {
+    const connection = await getConnection();
+    return connection?.ttsModel && connection.ttsTransport && connection.ttsVoice ? "provider" : "system";
+  };
 
   const ingestPorts = new NativeIngestPorts({
     network: options.plugins.nativeNetwork,
@@ -277,12 +291,14 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
   const unavailableProduction = {
     pickAssets: async () => { throw taskError("APP_RUNTIME_UNAVAILABLE", "本地制作插件尚未加载", "retry"); },
     render: async () => { throw taskError("APP_RUNTIME_UNAVAILABLE", "本地制作插件尚未加载", "retry"); },
+    probeTts: async () => { throw taskError("APP_RUNTIME_UNAVAILABLE", "本地配音插件尚未加载", "retry"); },
   };
   const production = new StandaloneProductionService({
     files: options.plugins.localFiles,
     native: options.plugins.productionRuntime ?? unavailableProduction,
     analysis,
     getProvider: requireProvider,
+    getNarrationMode: narrationMode,
     toDisplayUri: display,
     now,
   });
@@ -336,15 +352,6 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
           throw taskError("APP_RUNTIME_UNAVAILABLE", "应用信息暂时不可读取", "none");
         }
       },
-      openTextToSpeechSettings: async () => {
-        const native = options.plugins.deviceSettings;
-        if (!native) throw taskError("APP_RUNTIME_UNAVAILABLE", "系统 TTS 设置暂时不可打开", "none");
-        try {
-          await native.openTextToSpeechSettings();
-        } catch {
-          throw taskError("APP_RUNTIME_UNAVAILABLE", "系统 TTS 设置暂时不可打开", "none");
-        }
-      },
     },
     aiSettings: {
       getPublic: getConnection,
@@ -352,6 +359,13 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
         const baseUrl = validBaseUrl(input.baseUrl);
         const textModel = optional(input.textModel);
         if (!textModel) throw taskError("AI_SETTINGS_INVALID", "请填写文本模型", "configure_ai");
+        const ttsModel = optional(input.ttsModel);
+        const ttsTransport = validTtsTransport(input.ttsTransport);
+        const ttsVoice = optional(input.ttsVoice);
+        if (Boolean(ttsModel) !== Boolean(ttsTransport)) {
+          throw taskError("AI_SETTINGS_INVALID", "TTS 模型与传输方式必须同时配置", "configure_ai");
+        }
+        if (ttsTransport && !ttsVoice) throw taskError("AI_SETTINGS_INVALID", "请填写 TTS 音色", "configure_ai");
         const existing = await readConnection();
         const timestamp = now().getTime();
         const native: StandaloneAiConnection = {
@@ -361,6 +375,9 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
           visionModel: optional(input.visionModel),
           asrModel: optional(input.asrModel),
           asrTransport: input.asrTransport,
+          ttsModel,
+          ttsTransport,
+          ttsVoice,
           jsonObjectEnabled: input.supportsJsonObject,
           jsonSchemaEnabled: input.supportsJsonSchema,
           probeResultsJson: "[]",
@@ -380,18 +397,25 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
         const startedAt = nowIso(now);
         const config = await getConnection();
         if (!config) throw taskError("AI_NOT_CONFIGURED", "请先保存 AI 连接", "configure_ai");
-        const model = capability === "text" ? config.textModel : capability === "vision" ? config.visionModel : config.asrModel;
+        const model = capability === "text" ? config.textModel : capability === "vision" ? config.visionModel : capability === "asr" ? config.asrModel : config.ttsModel;
         let result: AiCapabilityProbeResult;
         try {
-          const provider = await requireProvider();
           if (capability === "text") {
+            const provider = await requireProvider();
             await provider.generate({ model: "text", output: "text", messages: [{ role: "user", content: "Reply with OK." }] });
           } else if (capability === "vision") {
             if (!config.visionModel) throw taskError("AI_SETTINGS_INVALID", "未配置视觉模型", "configure_ai");
+            const provider = await requireProvider();
             await provider.generate({ model: "vision", output: "text", messages: [{ role: "user", content: [{ type: "text", text: "Reply with OK." }, { type: "image_url", imageUrl: PROBE_IMAGE }] }] });
-          } else {
+          } else if (capability === "asr") {
             if (!config.asrModel) throw taskError("AI_SETTINGS_INVALID", "未配置 ASR 模型", "configure_ai");
+            const provider = await requireProvider();
             await provider.transcribe({ data: PROBE_WAV, filename: "probe.wav", mimeType: "audio/wav" });
+          } else {
+            if (!config.ttsModel || !config.ttsTransport || !config.ttsVoice) throw taskError("AI_SETTINGS_INVALID", "未配置云端 TTS", "configure_ai");
+            const native = options.plugins.productionRuntime;
+            if (!native) throw taskError("APP_RUNTIME_UNAVAILABLE", "本地配音插件尚未加载", "retry");
+            await native.probeTts();
           }
           result = { capability, status: "succeeded", checkedAt: startedAt, model: model ?? null };
         } catch (error) {

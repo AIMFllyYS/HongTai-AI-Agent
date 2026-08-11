@@ -67,10 +67,9 @@ export interface StandaloneSecureSettingsPlugin {
   removeSecret(options: { readonly slot: "active-ai-connection" }): Promise<void>;
 }
 
-/** Narrow Android-only bridge: no preference state or TTS provider details cross this boundary. */
+/** Narrow Android-only bridge for compiled application metadata. */
 export interface StandaloneDeviceSettingsPlugin {
   getAppInfo(): Promise<{ readonly versionName: string; readonly versionCode: number }>;
-  openTextToSpeechSettings(): Promise<void>;
 }
 
 /** Public app-preferences projection. It never contains an API Key. */
@@ -94,6 +93,9 @@ export interface StandaloneAiConnection {
   readonly visionModel: string | null;
   readonly asrModel: string | null;
   readonly asrTransport: string | null;
+  readonly ttsModel: string | null;
+  readonly ttsTransport: string | null;
+  readonly ttsVoice: string | null;
   readonly jsonObjectEnabled: boolean;
   readonly jsonSchemaEnabled: boolean;
   readonly probeResultsJson: string;
@@ -188,7 +190,9 @@ export interface NativeProductionProgressEvent {
 
 export interface StandaloneProductionRuntimePlugin {
   pickAssets(options: { readonly projectId: string; readonly maxItems: number; readonly selection?: "visual" | "avatar" }): Promise<{ readonly assets: readonly NativeProductionAsset[] }>;
-  render(options: { readonly projectId: string; readonly planJson: string; readonly mode?: "montage" | "avatar" }): Promise<NativeProductionResult>;
+  render(options: { readonly projectId: string; readonly planJson: string; readonly mode?: "montage" | "avatar"; readonly narration?: "system" | "provider" }): Promise<NativeProductionResult>;
+  /** Runs a short non-personal synthesis request using the saved protected key. */
+  probeTts(): Promise<void>;
   addListener?(
     eventName: "productionProgress",
     listener: (event: NativeProductionProgressEvent) => void,

@@ -11,7 +11,7 @@ import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { ProductionProjectCard } from "../components/ProductionProjectCard";
 import { EmptyState, LoadingState } from "../components/StatePanels";
-import { aiSettingsPath, ttsSettingsPath } from "../router";
+import { aiSettingsPath } from "../router";
 
 type CreateShellViewModel = Pick<CreateViewModel, "title">;
 
@@ -130,7 +130,7 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
         <section className="production-hero">
           <span className="eyebrow">LOCAL VIDEO STUDIO</span>
           <h2>从爆款结构到你的本地成片</h2>
-          <p>复用 content-analysis.v1 的结构方法，生成 production-plan.v1；只使用你主动上传的素材，并在手机本地合成。素材剪辑模式会使用 Android 系统 TTS 配音与字幕，<button className="text-action" onClick={() => navigate(ttsSettingsPath())} type="button">前往配置 TTS</button>。</p>
+          <p>复用 content-analysis.v1 的结构方法，生成 production-plan.v1；只使用你主动上传的素材，并在手机本地合成。素材剪辑模式会使用 AI 连接页配置的 TTS 配音与字幕；数字人口播保留原视频声音。</p>
         </section>
 
         <GlassCard className="production-setup">
@@ -143,7 +143,7 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
               </select>
               <span className="field-label">制作方式</span>
               <div aria-label="制作方式" className="production-mode-grid" role="group">
-                <button aria-pressed={mode === "montage"} className={mode === "montage" ? "is-selected" : ""} onClick={() => setMode("montage")} type="button"><Icon name="movie_edit" size={19} /><span><strong>素材剪辑 + TTS</strong><small>上传图片或视频，使用 Android 系统 TTS 配音并生成字幕</small></span></button>
+                <button aria-pressed={mode === "montage"} className={mode === "montage" ? "is-selected" : ""} onClick={() => setMode("montage")} type="button"><Icon name="movie_edit" size={19} /><span><strong>素材剪辑 + TTS</strong><small>上传图片或视频，使用 AI 连接页配置的 TTS 配音并生成字幕</small></span></button>
                 <button aria-pressed={mode === "avatar"} className={mode === "avatar" ? "is-selected" : ""} onClick={() => setMode("avatar")} type="button"><Icon name="record_voice_over" size={19} /><span><strong>数字人口播</strong><small>上传带原声的数字人 MP4，本地按口播稿生成字幕</small></span></button>
               </div>
               <label className="field-label" htmlFor="production-brief">{mode === "avatar" ? "视频标题与制作需求" : "你的经营需求"}</label>

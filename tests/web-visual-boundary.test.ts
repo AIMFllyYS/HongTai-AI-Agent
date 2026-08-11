@@ -12,7 +12,6 @@ type DynamicRouteBuilders = {
   readonly taskAnalysisPath: (taskId: string) => string;
   readonly profileSettingsPath: () => string;
   readonly aiSettingsPath: () => string;
-  readonly ttsSettingsPath: () => string;
   readonly appInfoSettingsPath: () => string;
   readonly observationNewPath: () => string;
   readonly observationReportPath: (sessionId: string) => string;
@@ -32,7 +31,6 @@ test("web application routes expose canonical runtime paths", () => {
     "/settings",
     "/settings/profile",
     "/settings/ai",
-    "/settings/tts",
     "/settings/app-info",
     "/observation/new",
     "/observation/:sessionId",
@@ -75,7 +73,6 @@ test("route builders encode opaque task and observation identifiers", () => {
   assert.equal(dynamicRouteBuilders.taskAnalysisPath(taskId), "/tasks/retry%2F%E4%BB%BB%E5%8A%A1%2042/analysis");
   assert.equal(dynamicRouteBuilders.profileSettingsPath(), "/settings/profile");
   assert.equal(dynamicRouteBuilders.aiSettingsPath(), "/settings/ai");
-  assert.equal(dynamicRouteBuilders.ttsSettingsPath(), "/settings/tts");
   assert.equal(dynamicRouteBuilders.appInfoSettingsPath(), "/settings/app-info");
   assert.equal(dynamicRouteBuilders.observationNewPath(), "/observation/new");
   assert.equal(dynamicRouteBuilders.observationReportPath(sessionId), "/observation/face%2F%E4%BC%9A%E8%AF%9D%207");

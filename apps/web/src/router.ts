@@ -12,7 +12,6 @@ export type ActiveRouteKey =
   | "settings"
   | "settings-profile"
   | "settings-ai"
-  | "settings-tts"
   | "settings-app-info"
   | "observation-new"
   | "observation-report";
@@ -78,7 +77,6 @@ export const appRoutes: readonly AppRoute[] = [
   { path: "/settings", key: "settings", navKey: "settings" },
   { path: "/settings/profile", key: "settings-profile", navKey: "settings" },
   { path: "/settings/ai", key: "settings-ai", navKey: "settings" },
-  { path: "/settings/tts", key: "settings-tts", navKey: "settings" },
   { path: "/settings/app-info", key: "settings-app-info", navKey: "settings" },
   { path: "/observation/new", key: "observation-new", navKey: "ai" },
   { path: "/observation/:sessionId", key: "observation-report", navKey: "ai" },
@@ -212,10 +210,6 @@ export function profileSettingsPath(): string {
 
 export function aiSettingsPath(): string {
   return "/settings/ai";
-}
-
-export function ttsSettingsPath(): string {
-  return "/settings/tts";
 }
 
 export function appInfoSettingsPath(): string {
