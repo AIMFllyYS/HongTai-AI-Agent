@@ -8,6 +8,7 @@ import androidx.core.view.WindowCompat
 import androidx.media3.common.util.UnstableApi
 import com.getcapacitor.BridgeActivity
 import com.hongtai.aiagent.bridge.FileMediaPlugin
+import com.hongtai.aiagent.bridge.DeviceSettingsPlugin
 import com.hongtai.aiagent.bridge.LocalDataPlugin
 import com.hongtai.aiagent.bridge.LocalFilesPlugin
 import com.hongtai.aiagent.bridge.MediaRuntimePlugin
@@ -19,6 +20,7 @@ class MainActivity : BridgeActivity() {
   @UnstableApi
   override fun onCreate(savedInstanceState: Bundle?) {
     registerPlugin(SecureSettingsPlugin::class.java)
+    registerPlugin(DeviceSettingsPlugin::class.java)
     registerPlugin(LocalDataPlugin::class.java)
     registerPlugin(LocalFilesPlugin::class.java)
     registerPlugin(NativeNetworkPlugin::class.java)

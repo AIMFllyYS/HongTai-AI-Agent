@@ -86,15 +86,19 @@ test("AI capability probes cannot run against a saved connection while the visib
   assert.match(ai, /请先保存当前 AI 设置后再测试/);
 });
 
-test("settings preserve a planned TTS slot without inventing runtime support", () => {
+test("settings expose Android system TTS and app information through AppRuntime", () => {
+  const app = read("App.tsx");
   const settings = read("pages/SettingsPage.tsx");
-  const profile = read("pages/ProfileSettingsPage.tsx");
-  const ai = read("pages/AiSettingsPage.tsx");
+  const router = read("router.ts");
 
-  assert.match(settings, /data-settings-capability="tts"/);
+  assert.match(settings, /ttsSettingsPath/);
+  assert.match(settings, /appInfoSettingsPath/);
   assert.match(settings, /TTS 语音合成/);
-  assert.match(settings, /尚未接入/);
-  assert.doesNotMatch(settings, /runtime\.tts|OpenAI TTS|温润男声/);
-  assert.match(profile, /avatar-editor__actions mobile-action-group/);
-  assert.match(ai, /probe-row__action mobile-action-group/);
+  assert.match(settings, /应用信息/);
+  assert.doesNotMatch(settings, /data-settings-capability="tts"/);
+  assert.doesNotMatch(settings, /当前版本尚未接入/);
+  assert.match(router, /settings-tts/);
+  assert.match(router, /settings-app-info/);
+  assert.match(app, /TtsSettingsPage/);
+  assert.match(app, /ApplicationInfoPage/);
 });

@@ -10,7 +10,7 @@ import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { LoadingState } from "../components/StatePanels";
 import { SectionHeading } from "../components/Headings";
-import { aiSettingsPath, profileSettingsPath } from "../router";
+import { aiSettingsPath, appInfoSettingsPath, profileSettingsPath, ttsSettingsPath } from "../router";
 
 export interface SettingsPageProps {
   readonly runtime: AppRuntime;
@@ -106,11 +106,22 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
               <span className="settings-row__body"><strong>{modelName}</strong><small>{aiConnection?.hasApiKey ? "API Key 已保存在设备安全存储" : "尚未写入 API Key"}</small></span>
               <Icon className="settings-row__chevron" name="chevron_right" size={17} />
             </button>
-            <div aria-disabled="true" className="settings-row settings-row--planned" data-settings-capability="tts">
+            <button className="settings-row" onClick={() => navigate(ttsSettingsPath())} type="button">
               <span className="settings-row__icon"><Icon name="record_voice_over" size={19} /></span>
-              <span className="settings-row__body"><strong>TTS 语音合成</strong><small>保留产品配置入口，当前版本尚未接入</small></span>
-              <span className="settings-planned-badge">尚未接入</span>
-            </div>
+              <span className="settings-row__body"><strong>TTS 语音合成</strong><small>配置 Android 系统中文语音与语音包</small></span>
+              <Icon className="settings-row__chevron" name="chevron_right" size={17} />
+            </button>
+          </GlassCard>
+        </section>
+
+        <section className="settings-section">
+          <SectionHeading title="关于应用" />
+          <GlassCard className="settings-card">
+            <button className="settings-row" onClick={() => navigate(appInfoSettingsPath())} type="button">
+              <span className="settings-row__icon"><Icon name="info" size={19} /></span>
+              <span className="settings-row__body"><strong>应用信息</strong><small>查看当前版本号与最近更新</small></span>
+              <Icon className="settings-row__chevron" name="chevron_right" size={17} />
+            </button>
           </GlassCard>
         </section>
 

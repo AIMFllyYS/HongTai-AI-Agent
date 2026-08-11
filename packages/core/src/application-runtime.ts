@@ -51,6 +51,19 @@ export interface ProfileService {
   pickAvatar(): Promise<MediaReference>;
 }
 
+/** Native build identity that is safe to display inside the local application. */
+export interface AppBuildInfo {
+  readonly versionName: string;
+  readonly versionCode: number;
+}
+
+/** Explicit, narrow access to Android's own application and TTS settings. */
+export interface DeviceSettingsService {
+  getAppInfo(): Promise<AppBuildInfo>;
+  /** Opens Android's system text-to-speech settings; it does not select a cloud voice. */
+  openTextToSpeechSettings(): Promise<void>;
+}
+
 export type AiCapability = "text" | "vision" | "asr";
 export type AiAsrTransport = "audio-transcriptions" | "chat-input-audio";
 export type AiProbeStatus = "succeeded" | "failed";
@@ -402,6 +415,7 @@ export type FeatureCapabilityRegistry = Readonly<Record<AppFeature, FeatureCapab
 
 export interface AppRuntime {
   readonly profile: ProfileService;
+  readonly deviceSettings: DeviceSettingsService;
   readonly aiSettings: AiSettingsService;
   readonly tasks: TaskService;
   readonly analysis: AnalysisService;

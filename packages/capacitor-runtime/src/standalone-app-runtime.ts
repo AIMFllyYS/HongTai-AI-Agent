@@ -5,6 +5,7 @@ import type {
   AiCapability,
   AiCapabilityProbeResult,
   AiConnectionPublicInput,
+  AppBuildInfo,
   AppRuntime,
   FeatureCapabilityRegistry,
   LocalProfile,
@@ -123,6 +124,14 @@ function publicConnection(value: StandaloneAiConnection, hasApiKey: boolean): Pu
     createdAt: new Date(value.createdAtEpochMs).toISOString(),
     updatedAt: new Date(value.updatedAtEpochMs).toISOString(),
   };
+}
+
+function appBuildInfo(value: { readonly versionName: string; readonly versionCode: number }): AppBuildInfo {
+  const versionName = optional(value.versionName);
+  if (!versionName || !Number.isSafeInteger(value.versionCode) || value.versionCode < 1) {
+    throw taskError("APP_RUNTIME_UNAVAILABLE", "应用版本信息无效", "none");
+  }
+  return { versionName, versionCode: value.versionCode };
 }
 
 function parseProbeResults(value: string): readonly AiCapabilityProbeResult[] {
@@ -314,6 +323,27 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
           throw taskError("MEDIA_IMPORT_FAILED", "头像导入没有返回有效图片", "select_media");
         }
         return { uri: displayAvatar(image.uri), kind: "image", origin: "imported", mimeType: image.mimeType, byteLength: image.sizeBytes, displayName: "本地头像" };
+      },
+    },
+    deviceSettings: {
+      getAppInfo: async () => {
+        const native = options.plugins.deviceSettings;
+        if (!native) throw taskError("APP_RUNTIME_UNAVAILABLE", "应用信息暂时不可读取", "none");
+        try {
+          return appBuildInfo(await native.getAppInfo());
+        } catch (error) {
+          if (error instanceof TaskError) throw error;
+          throw taskError("APP_RUNTIME_UNAVAILABLE", "应用信息暂时不可读取", "none");
+        }
+      },
+      openTextToSpeechSettings: async () => {
+        const native = options.plugins.deviceSettings;
+        if (!native) throw taskError("APP_RUNTIME_UNAVAILABLE", "系统 TTS 设置暂时不可打开", "none");
+        try {
+          await native.openTextToSpeechSettings();
+        } catch {
+          throw taskError("APP_RUNTIME_UNAVAILABLE", "系统 TTS 设置暂时不可打开", "none");
+        }
       },
     },
     aiSettings: {

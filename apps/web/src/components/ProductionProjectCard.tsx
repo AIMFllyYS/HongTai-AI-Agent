@@ -26,7 +26,7 @@ export function ProductionProjectCard({ project, progress, progressMessage, busy
   return (
     <GlassCard className="production-project-card">
       <div className="production-section-title"><span>02</span><div><strong>{avatarMode ? "数字人口播与本地成片" : "素材与本地成片"}</strong><small>{project.brief}</small></div></div>
-      <p className="production-mode-note"><Icon name={avatarMode ? "record_voice_over" : "voice"} size={16} />{avatarMode ? "保留上传数字人视频的原始口播声音；口播稿只用于生成同步字幕，不再叠加 TTS。" : "本地渲染会为制作计划中的每个镜头生成中文系统 TTS 旁白和字幕。"}</p>
+      <p className="production-mode-note"><Icon name={avatarMode ? "record_voice_over" : "voice"} size={16} />{avatarMode ? "保留上传数字人视频的原始口播声音；口播稿只用于生成同步字幕，不再叠加 TTS。" : "本地渲染会为制作计划中的每个镜头生成 Android 系统中文 TTS 旁白和字幕；系统语音包在设置页配置，旁白语速由制作计划确定。"}</p>
 
       <div className="production-assets">
         {project.assets.map((asset) => (

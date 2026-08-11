@@ -67,6 +67,12 @@ export interface StandaloneSecureSettingsPlugin {
   removeSecret(options: { readonly slot: "active-ai-connection" }): Promise<void>;
 }
 
+/** Narrow Android-only bridge: no preference state or TTS provider details cross this boundary. */
+export interface StandaloneDeviceSettingsPlugin {
+  getAppInfo(): Promise<{ readonly versionName: string; readonly versionCode: number }>;
+  openTextToSpeechSettings(): Promise<void>;
+}
+
 /** Public app-preferences projection. It never contains an API Key. */
 export interface StandaloneLocalProfile {
   readonly localProfileId: string;
@@ -227,6 +233,7 @@ export type StandaloneMediaRuntimePlugin = NativeMediaPort;
 
 export interface StandaloneNativePlugins {
   readonly secureSettings: StandaloneSecureSettingsPlugin;
+  readonly deviceSettings?: StandaloneDeviceSettingsPlugin;
   readonly localData: StandaloneLocalDataPlugin;
   readonly localFiles: StandaloneLocalFilesPlugin;
   readonly nativeNetwork: StandaloneNativeNetworkPlugin;
@@ -238,6 +245,7 @@ export interface StandaloneNativePlugins {
 export function registerStandaloneNativePlugins(registerPlugin: NativePluginRegistrar): StandaloneNativePlugins {
   return {
     secureSettings: registerPlugin<StandaloneSecureSettingsPlugin>("SecureSettings"),
+    deviceSettings: registerPlugin<StandaloneDeviceSettingsPlugin>("DeviceSettings"),
     localData: registerPlugin<StandaloneLocalDataPlugin>("LocalData"),
     localFiles: registerPlugin<StandaloneLocalFilesPlugin>("LocalFiles"),
     nativeNetwork: registerPlugin<StandaloneNativeNetworkPlugin>("NativeNetwork"),
