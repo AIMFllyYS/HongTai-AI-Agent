@@ -27,7 +27,7 @@
 
 1. `core`、`ai`、`platforms` 不得导入 Node、浏览器、Capacitor 或 Android API。
 2. 不在 Capacitor 或 Kotlin 复制 Pipeline、状态机、平台解析、Prompt 或 Schema。
-3. UI 不得读取私有路径、原始平台响应、Cookie、请求头、API Key 或供应商 reasoning。
+3. UI 不得读取私有路径、原始平台响应、Cookie、请求头或 API Key；供应商推理文本只能通过版本化、运行期内存 DTO 做有界展示，不得绕过 AI Flow 直接读取响应对象。
 4. Kotlin 不得决定业务流程、UI 文案或医疗/平台业务规则。
 5. 不新增未获授权的云端后端、登录、同步、数据库、后台服务或泛化框架。
 
@@ -50,7 +50,7 @@
 ## 安全与真实性
 
 - 禁止假上传、假进度、假诊察、假生成、假发布或把 fixture 当真实结果。
-- 不在代码、日志、Issue、测试快照、截图或 Git 写入 API Key、Cookie、Token、Authorization、签名 URL、完整敏感查询参数、base64 媒体或供应商 reasoning。
+- 不在代码、日志、Issue、测试快照、Git 或持久化文件中写入 API Key、Cookie、Token、Authorization、签名 URL、完整敏感查询参数、base64 媒体或供应商推理文本；产品界面可显示当前运行的推理文本，但截图与验收材料应使用无敏感信息的合成样例。
 - 继续使用最小系统权限。不要以新增宽泛相册/相机权限、放宽 TLS 校验或关闭安全检查来掩盖问题。
 - 图片观察只提供日常观察参考；不得输出疾病诊断、处方、概率或整体健康评分。
 

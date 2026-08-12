@@ -31,11 +31,11 @@ test("任务目录存储读取视频时间证据且不持久化模型原文或�
     const store = new FileContentAnalysisStore(workspace);
     const input = await store.loadInput("video-task");
     assert.deepEqual(input.evidenceUnits, [{ id: "segment-0", text: "第一段文字", startSeconds: 1, endSeconds: 3 }]);
-    await store.saveResult("video-task", minimalResult, { id: "run-1", status: "succeeded", startedAt: "a", completedAt: "b", rawResponse: "data:image/png;base64,AAAA", reasoning: "拆解思考", promptVersions: ["content-analysis.overview.v1"] });
+    await store.saveResult("video-task", minimalResult, { id: "run-1", status: "succeeded", startedAt: "a", completedAt: "b", rawResponse: "data:image/png;base64,AAAA", reasoning: "拆解思考", promptVersions: ["content-analysis-single-stream.v1"] });
     assert.equal(JSON.parse(await readFile(join(root, "analysis", "content-analysis.json"), "utf8")).schemaVersion, "content-analysis.v1");
     assert.deepEqual(JSON.parse(await readFile(join(root, "analysis", "raw-response.json"), "utf8")), { content: "" });
     assert.equal(await readFile(join(root, "analysis", "reasoning.jsonl"), "utf8"), "");
-    assert.deepEqual(JSON.parse(await readFile(join(root, "analysis", "run.json"), "utf8")).promptVersions, ["content-analysis.overview.v1"]);
+    assert.deepEqual(JSON.parse(await readFile(join(root, "analysis", "run.json"), "utf8")).promptVersions, ["content-analysis-single-stream.v1"]);
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }

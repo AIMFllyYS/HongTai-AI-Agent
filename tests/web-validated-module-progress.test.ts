@@ -99,7 +99,7 @@ test("validated module progress models repair and failure states without raw JSO
     }, issue);
 
   assert.match(JSON.stringify(repairing), /颜色较均匀/);
-  assert.match(JSON.stringify(repairing), /正在校正本板块结构/);
+  assert.match(JSON.stringify(repairing), /正在校正完整结构/);
   assert.match(JSON.stringify(repairing), /等待生成/);
   assert.doesNotMatch(JSON.stringify(repairing), /must not render|已接收\s*\d+\s*个字符/);
   assert.match(JSON.stringify(failed), /AI_FORMAT_REPAIR_FAILED/);

@@ -90,7 +90,7 @@ function statusLabel(
 ): string {
   if (status === "succeeded") return "已完成并通过校验";
   if (status === "failed") return "本板块未完成";
-  if (status === "repairing") return "正在校正本板块结构";
+  if (status === "repairing") return "正在校正完整结构";
   if (status === "running") return phase === "validating" ? definition.validatingLabel : definition.runningLabel;
   if (afterFailure) return "未开始";
   if (preparing) return "正在准备生成资料";

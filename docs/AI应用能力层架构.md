@@ -26,15 +26,16 @@ packages/capacitor-runtime  APK AppRuntime、私有仓储与端口组合
 android/app                 Keystore、私有文件、媒体选择、HTTP、Media3
 ```
 
-AI 与平台业务逻辑只在共享 TypeScript 层存在一次。Capacitor/Kotlin 通过端口提供私有图片读取、文件保存、受控网络和媒体执行，不能复制 Prompt、Zod Schema、平台解析或制作计划规则。页面只调用 `AppRuntime.analysis`、`diagnosis`、`production`，不读取原始供应商响应。
+AI 与平台业务逻辑只在共享 TypeScript 层存在一次。Capacitor/Kotlin 通过端口提供私有图片读取、文件保存、受控网络和媒体执行，不能复制 Prompt、Zod Schema、平台解析或制作计划规则。页面只调用 `AppRuntime.analysis`、`diagnosis`、`production`，不读取原始供应商响应对象；运行期推理文本也只能来自版本化进度 DTO。
 
 ## OpenAI 兼容与结构化输出
 
-- 连接显式配置 Base URL、API Key、文本/视觉/ASR 模型与必要格式开关；不内置供应商。
+- 连接显式配置 Base URL、API Key、文本/视觉/ASR 模型与必要格式开关。设置页提供小米 MiMo 与阶跃星辰固定预设，供应商差异只在 Provider 边界映射；高级自定义连接继续使用通用 OpenAI 兼容路径。
 - 文本、视觉、ASR 独立探测和调用；一项成功不表示其他能力可用。
 - Zod 是正式结果的唯一业务契约。Provider JSON Schema、JSON Object 和 Prompt-only 是传输降级策略，不能替代运行时校验。
-- 结构化输出解析失败时最多进行一次受控格式修复；仍失败则返回稳定错误，不臆造字段。
-- 供应商 reasoning 只允许进入受控开发调试材料，不进入正式报告、UI、后续对话或 Git。
+- 内容拆解与首次图片观察在正常路径各进行一次结构化流式调用；一份紧凑响应按五个顶层字段或字段组形成五个页面展示板块，不把展示板块变成五次网络请求。
+- 顶层字段组完整闭合并通过板块 Zod 与语义校验后才能进入公共进度；完整文档解析失败时最多进行一次受控格式修复，仍失败则返回稳定错误，不臆造字段。
+- 小米 MiMo 使用 `reasoning_content`，阶跃星辰使用 `reasoning`；Provider 将增量统一投影为运行期 `thinking` DTO。推理文本可以在当前页面的“深度思考”中展示，但不进入正式报告、后续对话、本地运行审计、日志或 Git。
 
 ## 证据与安全边界
 

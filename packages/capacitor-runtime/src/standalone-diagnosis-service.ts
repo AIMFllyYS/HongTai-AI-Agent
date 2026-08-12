@@ -568,8 +568,8 @@ export class StandaloneDiagnosisService implements DiagnosisService {
       saveContextSummary: async (sessionId, summary) => {
         await this.#files.writeObservationText({ sessionId, relativePath: CONTEXT_PATH, value: summary, replace: true });
       },
-      // Audit prompt/reasoning is not necessary for the demo's presentation
-      // contract, so it is intentionally not persisted in app files.
+      // Prompt and provider reasoning are deliberately runtime-only and never
+      // persisted in application files or the formal observation report.
       saveRun: async (_sessionId: string, _run: AiRunRecord) => {
         void _sessionId;
         void _run;
