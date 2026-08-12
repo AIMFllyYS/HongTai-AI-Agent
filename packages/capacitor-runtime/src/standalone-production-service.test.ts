@@ -43,9 +43,11 @@ function deferred(): { readonly promise: Promise<void>; resolve(): void } {
   return { promise: new Promise<void>((done) => { resolve = done; }), resolve };
 }
 
-function harness() {
+function harness(narration: "system" | "provider" = "system") {
   const values = new Map<string, string>();
   const ids = new Set<string>();
+  const pickCalls: Array<{ readonly projectId: string; readonly maxItems: number; readonly selection?: "visual" | "avatar" }> = [];
+  const renderCalls: Array<{ readonly projectId: string; readonly planJson: string; readonly mode?: "montage" | "avatar"; readonly narration?: "system" | "provider" }> = [];
   const files = {
     ensureProduction: async ({ projectId }: { readonly projectId: string }) => { ids.add(projectId); },
     writeProductionText: async ({ projectId, relativePath, value }: { readonly projectId: string; readonly relativePath: string; readonly value: string; readonly replace: boolean }) => { values.set(`${projectId}/${relativePath}`, value); },
@@ -57,27 +59,37 @@ function harness() {
     transcribe: async () => "",
   };
   const native = {
-    pickAssets: async () => ({ assets: [
+    pickAssets: async (options: { readonly projectId: string; readonly maxItems: number; readonly selection?: "visual" | "avatar" }) => {
+      pickCalls.push(options);
+      return { assets: options.selection === "avatar" ? [
+        { id: "avatar-1", uri: "file:///private/productions/project-1/inputs/avatar-1.mp4", role: "avatar" as const, kind: "video" as const, mimeType: "video/mp4", displayName: "数字人口播.mp4", sizeBytes: 200, durationSeconds: 20 },
+      ] : [
       { id: "asset-1", uri: "file:///private/productions/project-1/inputs/asset-1.jpg", kind: "image" as const, mimeType: "image/jpeg", displayName: "门店.jpg", sizeBytes: 100 },
       { id: "asset-2", uri: "file:///private/productions/project-1/inputs/asset-2.mp4", kind: "video" as const, mimeType: "video/mp4", displayName: "服务.mp4", sizeBytes: 200, durationSeconds: 12 },
       { id: "asset-3", uri: "file:///private/productions/project-1/inputs/asset-3.png", kind: "image" as const, mimeType: "image/png", displayName: "细节.png", sizeBytes: 50 },
-    ] }),
-    render: async () => ({ uri: "file:///private/productions/project-1/output.mp4", mimeType: "video/mp4" as const, sizeBytes: 1_024, durationSeconds: 20 }),
+      ] };
+    },
+    render: async (options: { readonly projectId: string; readonly planJson: string; readonly mode?: "montage" | "avatar"; readonly narration?: "system" | "provider" }) => {
+      renderCalls.push(options);
+      return { uri: "file:///private/productions/project-1/output.mp4", mimeType: "video/mp4" as const, sizeBytes: 1_024, durationSeconds: 20 };
+    },
+    probeTts: async () => undefined,
   };
   const create = () => new StandaloneProductionService({
     files,
     native,
     analysis: { get: async () => analysis, run: async () => analysis },
     getProvider: async () => provider,
+    getNarrationMode: async () => narration,
     toDisplayUri: (uri: string) => uri.replace("file:///private/", "capacitor://localhost/private/"),
     createProjectId: () => "project-1",
     now: () => new Date("2026-08-08T00:00:00.000Z"),
   });
-  return { create, values };
+  return { create, values, pickCalls, renderCalls };
 }
 
 test("制作项目导入素材、生成计划和渲染结果后可在重启后恢复", async () => {
-  const { create } = harness();
+  const { create, renderCalls } = harness();
   const service = create();
   await service.create({ analysisTaskId: "task-1", brief: "突出真实服务", targetDurationSeconds: 20 });
   const imported = await service.importAssets("project-1");
@@ -90,11 +102,23 @@ test("制作项目导入素材、生成计划和渲染结果后可在重启后�
   const completed = await service.render("project-1");
   assert.equal(completed.status, "succeeded");
   assert.match(completed.output?.uri ?? "", /^capacitor:\/\//u);
+  assert.equal(renderCalls[0]?.narration, "system");
 
   const restored = await create().get("project-1");
   assert.equal(restored?.status, "succeeded");
   assert.equal(restored?.assets[0]?.uri.includes("file://"), false);
   assert.equal((await create().list()).length, 1);
+});
+
+test("已配置的云端 TTS 会明确交给原生渲染器合成旁白", async () => {
+  const { create, renderCalls } = harness("provider");
+  const service = create();
+  await service.create({ analysisTaskId: "task-1", brief: "突出真实服务", targetDurationSeconds: 20 });
+  await service.importAssets("project-1");
+  await service.generatePlan("project-1");
+  await service.render("project-1");
+
+  assert.equal(renderCalls[0]?.narration, "provider");
 });
 
 test("制作计划失败时保留项目和已导入素材", async () => {
@@ -111,9 +135,10 @@ test("制作计划失败时保留项目和已导入素材", async () => {
       readProductionText: async ({ projectId, relativePath }) => ({ value: values.get(`${projectId}/${relativePath}`) }),
       listProductionIds: async () => ({ projectIds: ["project-1"] }),
     },
-    native: { pickAssets: async () => ({ assets: [] }), render: async () => { throw new Error("unused"); } },
+    native: { pickAssets: async () => ({ assets: [] }), render: async () => { throw new Error("unused"); }, probeTts: async () => undefined },
     analysis: { get: async () => analysis, run: async () => analysis },
     getProvider: async () => ({ generate: async () => { throw new Error("provider down"); }, transcribe: async () => "" }),
+    getNarrationMode: async () => "system",
     toDisplayUri: (uri) => uri,
   });
 
@@ -204,6 +229,7 @@ test("制作服务按真实 Promise 区分系统素材选择、计划与渲染",
         await renderRelease.promise;
         return { uri: "file:///private/output.mp4", mimeType: "video/mp4", sizeBytes: 1_024, durationSeconds: 20 };
       },
+      probeTts: async () => undefined,
     },
     analysis: { get: async () => analysis, run: async () => analysis },
     getProvider: async () => ({
@@ -215,6 +241,7 @@ test("制作服务按真实 Promise 区分系统素材选择、计划与渲染",
       transcribe: async () => "",
     }),
     toDisplayUri: (uri) => uri,
+    getNarrationMode: async () => "system",
     createProjectId: () => "project-ops",
     operations,
   });
@@ -240,4 +267,76 @@ test("制作服务按真实 Promise 区分系统素材选择、计划与渲染",
   renderRelease.resolve();
   await rendering;
   assert.deepEqual(operations.list(), []);
+});
+
+test("数字人口播项目要求口播稿、只导入一个视频，并在本地生成原声字幕计划", async () => {
+  const { create, pickCalls } = harness();
+  const service = create();
+
+  await assert.rejects(
+    () => service.create({ analysisTaskId: "task-1", brief: "自然介绍门店", targetDurationSeconds: 20, mode: "avatar" }),
+    /口播稿/u,
+  );
+
+  const project = await service.create({
+    analysisTaskId: "task-1",
+    brief: "自然介绍门店",
+    targetDurationSeconds: 20,
+    mode: "avatar",
+    avatarScript: "欢迎来到我们的门店。今天带你看看真实服务过程。",
+  });
+  const imported = await service.importAssets(project.projectId);
+
+  assert.equal(imported.mode, "avatar");
+  assert.equal(imported.assets[0]?.role, "avatar");
+  assert.deepEqual(pickCalls, [{ projectId: "project-1", maxItems: 1, selection: "avatar" }]);
+
+  const ready = await service.generatePlan(project.projectId);
+  const shots = ready.plan?.document.shots;
+  assert.equal(Array.isArray(shots), true);
+  assert.equal((shots as readonly { readonly assetId: string }[]).every((shot) => shot.assetId === "avatar-1"), true);
+  assert.equal((shots as readonly { readonly caption: string }[]).map((shot) => shot.caption).join(""), "欢迎来到我们的门店。今天带你看看真实服务过程。");
+});
+
+test("制作服务将原生媒体和 TTS 失败转换为可行动的稳定错误", async () => {
+  const { values } = harness();
+  const service = new StandaloneProductionService({
+    files: {
+      ensureProduction: async () => undefined,
+      writeProductionText: async ({ projectId, relativePath, value }) => { values.set(`${projectId}/${relativePath}`, value); },
+      readProductionText: async ({ projectId, relativePath }) => ({ value: values.get(`${projectId}/${relativePath}`) }),
+      listProductionIds: async () => ({ projectIds: ["project-1"] }),
+    },
+    native: {
+      pickAssets: async () => { throw { code: "ERR_MEDIA_SOURCE_INVALID" }; },
+      render: async () => { throw { code: "ERR_TTS_UNAVAILABLE" }; },
+      probeTts: async () => undefined,
+    },
+    analysis: { get: async () => analysis, run: async () => analysis },
+    getProvider: async () => ({ generate: async () => ({ content: JSON.stringify(plan), reasoning: "" }), transcribe: async () => "" }),
+    getNarrationMode: async () => "system",
+    toDisplayUri: (uri) => uri,
+    createProjectId: () => "project-1",
+  });
+  await service.create({ analysisTaskId: "task-1", brief: "真实门店", targetDurationSeconds: 20 });
+
+  await assert.rejects(
+    () => service.importAssets("project-1"),
+    (error) => error instanceof Error && "code" in error && error.code === "MEDIA_SOURCE_INVALID",
+  );
+
+  const draft = JSON.parse(values.get("project-1/project.json") ?? "{}") as Record<string, unknown>;
+  values.set("project-1/project.json", JSON.stringify({
+    ...draft,
+    status: "ready",
+    plan,
+    output: { uri: "file:///private/productions/project-1/output.mp4", mimeType: "video/mp4", sizeBytes: 512, durationSeconds: 20 },
+  }));
+  await assert.rejects(
+    () => service.render("project-1"),
+    (error) => error instanceof Error && "code" in error && error.code === "TTS_UNAVAILABLE",
+  );
+  const persisted = await service.get("project-1");
+  assert.equal(persisted?.issue?.code, "TTS_UNAVAILABLE");
+  assert.equal(persisted?.output?.uri, "file:///private/productions/project-1/output.mp4");
 });

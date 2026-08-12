@@ -4,6 +4,7 @@ import { issueFromAppError, TaskError } from "@hongtai/core";
 import type {
   AnalysisService,
   AppTaskRecord,
+  ContentAnalysisStreamEvent,
   ContentAnalysisRecord,
   JsonObject,
   RuntimeUnfinishedWork,
@@ -14,6 +15,7 @@ import type {
 import type { StandaloneTaskFilesPlugin } from "./standalone-task-service.js";
 import { persistedRuntimeWork, runtimeInterruptedIssue } from "./runtime-interruption.js";
 import type { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
+import { StructuredStreamPreview } from "./structured-stream-preview.js";
 
 const ANALYSIS_PATH = "analysis.json";
 
@@ -131,15 +133,24 @@ export class StandaloneAnalysisService implements AnalysisService {
     }
   }
 
-  async run(taskId: string): Promise<ContentAnalysisRecord> {
-    const execute = () => this.#run(taskId);
+  async run(taskId: string, onEvent?: (event: ContentAnalysisStreamEvent) => void | Promise<void>): Promise<ContentAnalysisRecord> {
+    const execute = () => this.#run(taskId, onEvent);
     return this.#operations
       ? this.#operations.track({ kind: "content-analysis", id: taskId, execution: "in-process" }, execute)
       : execute();
   }
 
-  async #run(taskId: string): Promise<ContentAnalysisRecord> {
+  async #run(taskId: string, onEvent?: (event: ContentAnalysisStreamEvent) => void | Promise<void>): Promise<ContentAnalysisRecord> {
     const startedAt = iso(this.#now);
+    const preview = new StructuredStreamPreview("content-analysis");
+    const notify = async (event: ContentAnalysisStreamEvent): Promise<void> => {
+      try {
+        await onEvent?.(event);
+      } catch {
+        // A view can disappear while a foreground request is still being
+        // finalized. That must not change the persisted task outcome.
+      }
+    };
     await this.#tasks.setAnalysisStatus(taskId, "running");
     await this.#write({ taskId, status: "running", createdAt: startedAt, updatedAt: startedAt });
     const store: ContentAnalysisStore = {
@@ -163,20 +174,31 @@ export class StandaloneAnalysisService implements AnalysisService {
       },
     };
     try {
-      const flow = new ContentAnalysisFlow({ provider: await this.#getProvider(), store });
+      const flow = new ContentAnalysisFlow({
+        provider: await this.#getProvider(),
+        store,
+        onEvent: async (event) => {
+          if (event.type === "content_delta") await notify({ type: "progress", progress: preview.append(event.delta) });
+          if (event.type === "completed") await notify({ type: "progress", progress: preview.completeProviderResponse() });
+        },
+      });
       await flow.run(taskId);
       const record = await this.get(taskId);
       if (!record || record.status !== "succeeded" || !record.result) {
         throw taskError("STORAGE_WRITE_FAILED", "内容拆解完成后没有保存正式本地文档", "free_storage");
       }
+      await notify({ type: "completed", record });
       return record;
     } catch (error) {
       const current = await this.get(taskId).catch(() => undefined);
+      let failure = current?.issue;
       if (current?.status !== "failed") {
         const issue = issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "内容拆解没有完成", action: "retry" });
+        failure = issue;
         await this.#tasks.setAnalysisStatus(taskId, "failed").catch(() => undefined);
         await this.#write({ taskId, status: "failed", issue, createdAt: startedAt, updatedAt: iso(this.#now) }).catch(() => undefined);
       }
+      await notify({ type: "failed", issue: failure ?? issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "内容拆解没有完成", action: "retry" }) });
       throw error;
     }
   }

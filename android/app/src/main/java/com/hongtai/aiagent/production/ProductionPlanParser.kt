@@ -3,12 +3,14 @@ package com.hongtai.aiagent.production
 import org.json.JSONObject
 
 internal enum class ProductionAssetKind { IMAGE, VIDEO, AUDIO }
+internal enum class ProductionRenderMode { MONTAGE, AVATAR }
 
 internal data class ProductionInput(
   val id: String,
   val path: String,
   val kind: ProductionAssetKind,
   val durationMs: Long? = null,
+  val hasAudio: Boolean = false,
 )
 
 internal data class ProductionShot(
@@ -30,11 +32,16 @@ internal data class NativeProductionPlan(
   val backgroundMusic: ProductionInput?,
   val backgroundMusicVolume: Float,
   val shots: List<ProductionShot>,
+  val renderMode: ProductionRenderMode = ProductionRenderMode.MONTAGE,
 )
 
 /** Strict parser for the small, versioned TypeScript-to-Kotlin render contract. */
 internal object ProductionPlanParser {
-  fun parse(json: String, assets: Map<String, ProductionInput>): NativeProductionPlan {
+  fun parse(
+    json: String,
+    assets: Map<String, ProductionInput>,
+    renderMode: ProductionRenderMode = ProductionRenderMode.MONTAGE,
+  ): NativeProductionPlan {
     require(json.toByteArray(Charsets.UTF_8).size <= MAX_PLAN_BYTES) { "The production plan is too large." }
     val root = JSONObject(json)
     require(root.getString("schemaVersion") == "production-plan.v1") { "Unsupported production plan version." }
@@ -57,7 +64,7 @@ internal object ProductionPlanParser {
     require(musicVolume in 0f..0.35f && (music != null || musicVolume == 0f)) { "The background music volume is invalid." }
 
     val jsonShots = root.getJSONArray("shots")
-    require(jsonShots.length() in 2..12) { "The production shot count is outside the supported range." }
+    require(jsonShots.length() in 1..12) { "The production shot count is outside the supported range." }
     val shots = (0 until jsonShots.length()).map { index ->
       val value = jsonShots.getJSONObject(index)
       val order = value.getInt("order")
@@ -75,7 +82,20 @@ internal object ProductionPlanParser {
       ProductionShot(order, input, shotDurationMs, narration, caption, fit)
     }
     require(shots.sumOf(ProductionShot::durationMs) == durationMs) { "Production shot durations do not match the total duration." }
-    return NativeProductionPlan(width, height, fps, durationMs, locale, speechRate, music, musicVolume, shots)
+    if (renderMode == ProductionRenderMode.AVATAR) {
+      if (music != null || musicVolume != 0f) throw ProductionException(ProductionFailureKind.MEDIA_SOURCE_INVALID, "Avatar production cannot mix background music.")
+      if (shots.any { it.input.kind != ProductionAssetKind.VIDEO || !it.input.hasAudio }) {
+        throw ProductionException(ProductionFailureKind.MEDIA_SOURCE_INVALID, "Avatar production needs a video with an audible source track.")
+      }
+      val source = shots.first().input
+      if (shots.any { it.input.id != source.id }) {
+        throw ProductionException(ProductionFailureKind.MEDIA_SOURCE_INVALID, "Avatar production must use one continuous source video.")
+      }
+      if (source.durationMs == null || durationMs > source.durationMs) {
+        throw ProductionException(ProductionFailureKind.MEDIA_SOURCE_INVALID, "Avatar production duration exceeds the selected source video.")
+      }
+    }
+    return NativeProductionPlan(width, height, fps, durationMs, locale, speechRate, music, musicVolume, shots, renderMode)
   }
 
   private fun secondsToMs(value: Double): Long {

@@ -123,7 +123,7 @@ export interface OpenAiCompatibleProviderConfig {
   };
   readonly supportsJsonObject: boolean;
   readonly supportsJsonSchema?: boolean;
-  readonly asrTransport: "audio-transcriptions" | "chat-input-audio";
+  readonly asrTransport: "audio-transcriptions" | "chat-input-audio" | "stepaudio-sse";
   readonly contextWindowTokens: number;
   readonly reasoningMode: "provider-default";
   readonly retryDelaysMs?: readonly number[];

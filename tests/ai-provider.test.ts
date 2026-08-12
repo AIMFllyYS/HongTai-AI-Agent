@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TaskError } from "../packages/core/src/index";
+import { AI_PROVIDER_PRESETS, TaskError } from "../packages/core/src/index";
 import {
   OpenAiCompatibleProvider,
   type AiStreamEvent,
@@ -13,6 +13,46 @@ import { createNodeAiTransport, createNodeOpenAiCompatibleProvider } from "../pa
 async function* rawChunks(chunks: readonly string[]): AsyncIterable<string> {
   for (const chunk of chunks) yield chunk;
 }
+
+test("one-click provider presets retain the live-verified four-model protocols", () => {
+  const mimo = AI_PROVIDER_PRESETS.find((item) => item.id === "xiaomi-mimo");
+  const stepfun = AI_PROVIDER_PRESETS.find((item) => item.id === "stepfun");
+
+  assert.deepEqual(mimo && {
+    baseUrl: mimo.baseUrl,
+    text: mimo.textModel,
+    vision: mimo.visionModel,
+    asr: mimo.asrModel,
+    asrTransport: mimo.asrTransport,
+    tts: mimo.ttsModel,
+    ttsTransport: mimo.ttsTransport,
+  }, {
+    baseUrl: "https://api.xiaomimimo.com/v1",
+    text: "mimo-v2.5",
+    vision: "mimo-v2.5",
+    asr: "mimo-v2.5-asr",
+    asrTransport: "chat-input-audio",
+    tts: "mimo-v2.5-tts",
+    ttsTransport: "mimo-chat-audio",
+  });
+  assert.deepEqual(stepfun && {
+    baseUrl: stepfun.baseUrl,
+    text: stepfun.textModel,
+    vision: stepfun.visionModel,
+    asr: stepfun.asrModel,
+    asrTransport: stepfun.asrTransport,
+    tts: stepfun.ttsModel,
+    ttsTransport: stepfun.ttsTransport,
+  }, {
+    baseUrl: "https://api.stepfun.com/v1",
+    text: "step-3.5-flash",
+    vision: "step-1o-turbo-vision",
+    asr: "stepaudio-2.5-asr",
+    asrTransport: "stepaudio-sse",
+    tts: "stepaudio-2.5-tts",
+    ttsTransport: "stepfun-audio-speech",
+  });
+});
 
 test("Node-only factory restores Fetch credentials while the root AI entry exports no Fetch transport", async () => {
   const originalFetch = globalThis.fetch;
@@ -313,6 +353,62 @@ test("OpenAI-compatible Provider uses raw-base64 materialization for chat audio 
   assert.deepEqual(received?.body.kind === "json" ? received.body.attachments : undefined, [{
     pointer: "/messages/0/content/0/input_audio/data",
     source: { kind: "uri", uri: "content://media/external/audio/42" },
+    mimeType: "audio/wav",
+    materialization: "raw-base64",
+  }]);
+});
+
+test("OpenAI-compatible Provider sends StepFun ASR SSE and returns only its completed transcript", async () => {
+  let received: AiTransportRequest | undefined;
+  const transport: AiTransport = {
+    async request(request) {
+      received = request;
+      return {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+        body: {
+          kind: "stream",
+          chunks: rawChunks([
+            'data: {"type":"transcript.text.delta","delta":"配音检测"}\n\n',
+            'data: {"type":"transcript.text.done","text":"配音检测完成。"}\n\n',
+          ]),
+        },
+      };
+    },
+  };
+  const provider = new OpenAiCompatibleProvider({
+    transport,
+    models: { asr: "stepaudio-2.5-asr" },
+    supportsJsonObject: false,
+    asrTransport: "stepaudio-sse",
+    contextWindowTokens: 32_000,
+    reasoningMode: "provider-default",
+    retryDelaysMs: [0],
+  });
+
+  const transcript = await provider.transcribe({
+    data: new Uint8Array([1, 2, 3]),
+    filename: "probe.wav",
+    mimeType: "audio/wav",
+  });
+
+  assert.equal(transcript, "配音检测完成。");
+  assert.equal(received?.path, "audio/asr/sse");
+  assert.equal(received?.responseMode, "stream");
+  assert.equal(received?.body.kind, "json");
+  const payload = received?.body.kind === "json" ? JSON.parse(received.body.json) : undefined;
+  assert.deepEqual(payload, {
+    audio: {
+      data: "transport://attachment/0",
+      input: {
+        transcription: { model: "stepaudio-2.5-asr", language: "zh", enable_itn: true },
+        format: { type: "wav" },
+      },
+    },
+  });
+  assert.deepEqual(received?.body.kind === "json" ? received.body.attachments : undefined, [{
+    pointer: "/audio/data",
+    source: { kind: "base64", base64: "AQID" },
     mimeType: "audio/wav",
     materialization: "raw-base64",
   }]);

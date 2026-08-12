@@ -61,12 +61,17 @@ test("StandaloneAnalysisService persists only the formal content-analysis docume
     now: () => new Date("2026-08-07T00:00:00.000Z"),
   });
 
-  const record = await service.run("task-1");
+  const events: unknown[] = [];
+  const record = await service.run("task-1", async (event) => { events.push(event); });
 
   assert.equal(record.status, "succeeded");
   assert.equal(record.result?.schemaVersion, "content-analysis.v1");
   assert.deepEqual(statuses, ["running", "succeeded"]);
   assert.doesNotMatch(values.get("task-1/analysis.json") ?? "", /internal reasoning|rawResponse/);
+  assert.equal(events.some((event) => (event as { readonly type?: string }).type === "progress"), true);
+  assert.equal(events.some((event) => (event as { readonly type?: string }).type === "completed"), true);
+  assert.match(JSON.stringify(events), /内容概览/);
+  assert.doesNotMatch(JSON.stringify(events), /internal reasoning|真实转写证据/);
 });
 
 test("StandaloneAnalysisService recovers a running analysis and synchronizes its task projection", async () => {

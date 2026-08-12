@@ -81,7 +81,7 @@ export function TaskAnalysisPage({ runtime, taskId, navigate }: TaskAnalysisPage
         {!record || record.status === "not_started" ? (
           <EmptyState action={<Button icon={<Icon name="arrow_back" size={17} />} onClick={() => navigate(taskDetailPath(taskId))} variant="secondary">返回任务详情确认拆解</Button>} description="内容拆解不会自动开始。请在任务详情确认后，才会基于真实证据运行 AI 自动拆解。" icon="analytics" title="尚未开始拆解" />
         ) : null}
-        {record?.status === "running" ? <LoadingState description="拆解正在独立于采集七阶段运行；本页不会展示虚构的模型进度。" title="AI 正在拆解真实证据" /> : null}
+        {record?.status === "running" ? <LoadingState description="拆解正在独立于采集七阶段运行。若本次由任务详情启动，实时结构区块会显示在那里；正式结果仍须通过 Schema 和证据校验后才会保存。" title="AI 正在拆解真实证据" /> : null}
         {record?.status === "failed" ? <ErrorState action={<Button icon={<Icon name="arrow_back" size={17} />} onClick={() => navigate(taskDetailPath(taskId))} variant="secondary">返回任务详情</Button>} description="上一次拆解没有生成可展示的正式结果。请查看上方稳定错误代码后，由你确认是否再次运行。" title="内容拆解未完成" /> : null}
         {record?.status === "succeeded" && !analysis?.available ? <ErrorState description="已保存的结果不符合 content-analysis.v1 展示契约，应用不会猜测或补写字段。" title="无法安全展示拆解结果" /> : null}
         {record?.status === "succeeded" && analysis?.available ? <ContentAnalysisDocument analysis={analysis} evidenceUnits={detail.evidenceUnits} /> : null}

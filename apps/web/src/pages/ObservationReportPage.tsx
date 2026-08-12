@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { issueFromAppError } from "@hongtai/core";
-import type { AppRuntime, DiagnosisMessage, DiagnosisReportRecord, DiagnosisSessionRecord, TaskIssue } from "@hongtai/core";
+import type { AppRuntime, DiagnosisMessage, DiagnosisReportRecord, DiagnosisSessionRecord, StructuredStreamProgress as StructuredStreamProgressValue, TaskIssue } from "@hongtai/core";
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
@@ -9,6 +9,7 @@ import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { RuntimeMediaFrame } from "../components/RuntimeMediaFrame";
 import { EmptyState, ErrorState, LoadingState } from "../components/StatePanels";
+import { StructuredStreamProgress } from "../components/StructuredStreamProgress";
 import {
   imageQualityLabel,
   observationModeLabel,
@@ -50,6 +51,7 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
   const [loading, setLoading] = useState(true);
   const [issue, setIssue] = useState<TaskIssue>();
   const [reportPending, setReportPending] = useState(false);
+  const [reportProgress, setReportProgress] = useState<StructuredStreamProgressValue>();
   const [question, setQuestion] = useState("");
   const [pendingQuestion, setPendingQuestion] = useState<string>();
   const [streamedAnswer, setStreamedAnswer] = useState("");
@@ -86,8 +88,12 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
     if (!diagnosisAvailable || reportPending) return;
     setReportPending(true);
     setIssue(undefined);
+    setReportProgress(undefined);
     try {
-      const next = await runtime.diagnosis.runReport(sessionId);
+      const next = await runtime.diagnosis.runReport(sessionId, async (event) => {
+        if (event.type === "progress") setReportProgress(event.progress);
+        if (event.type === "failed") setIssue(event.issue);
+      });
       setRecord(next);
       await load();
     } catch (error) {
@@ -169,7 +175,10 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
         </GlassCard>
 
         {!diagnosisAvailable && record?.status !== "succeeded" ? <GlassCard className="observation-capability-notice" data-feature-capability="planned" tone="soft"><Icon name="pending" size={22} /><div><span>尚未接入</span><strong>本地 AI 报告能力尚未可用</strong><p>应用不会用示例结论替代真实报告。</p></div></GlassCard> : null}
-        {record?.status === "pending" || record?.status === "running" || reportPending ? <LoadingState description="正在运行正式报告；不会展示虚构的模型进度。" title={reportPending ? "正在重新生成报告" : "正在生成观察报告"} /> : null}
+        {record?.status === "pending" || record?.status === "running" || reportPending ? <>
+          <LoadingState description="正在运行正式报告；正式文档仍须通过 Schema 与安全约束校验后才会保存。" title={reportPending ? "正在重新生成报告" : "正在生成观察报告"} />
+          {reportPending ? <StructuredStreamProgress progress={reportProgress} title="正在接收真实观察报告结构" /> : null}
+        </> : null}
         {record?.status === "failed" ? <ErrorState action={reportRetryAllowed ? <Button disabled={reportPending} icon={<Icon name="sync" size={17} />} onClick={() => void runReport()} variant="secondary">{reportPending ? "正在重试" : "重新生成报告"}</Button> : undefined} description="上一次报告没有生成可展示的正式文档。请查看上方稳定错误代码后，再由你决定下一步。" title="观察报告未完成" /> : null}
         {record?.status === "succeeded" && !canShowReport ? <ErrorState description="已保存的报告不符合 diagnosis-report.v1 展示契约，应用不会猜测或补写字段。" title="无法安全展示报告" /> : null}
 

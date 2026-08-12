@@ -22,7 +22,10 @@ const report = {
 } as const;
 
 class HarnessProvider implements AiProvider {
+  calls = 0;
+
   async generate(request: AiGenerateRequest) {
+    this.calls += 1;
     const content = request.output === "json" ? JSON.stringify(report) : "对话回复";
     await request.onEvent?.({ type: "reasoning_delta", delta: "测试reasoning" });
     await request.onEvent?.({ type: "content_delta", delta: content });
@@ -35,7 +38,8 @@ class HarnessProvider implements AiProvider {
 test("本地测试入口只绑定回环地址并保存标准图片、报告与reasoning", async () => {
   const directory = await mkdtemp(join(tmpdir(), "hongtai-diagnosis-harness-"));
   const repository = new FileDiagnosisRepository(directory);
-  const flow = new DiagnosisFlow({ provider: new HarnessProvider(), repository, contextWindowTokens: 32_000 });
+  const provider = new HarnessProvider();
+  const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
   const server = createDiagnosisHarnessServer({ flow, preprocessor: new SharpImagePreprocessor() });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   try {
@@ -51,6 +55,7 @@ test("本地测试入口只绑定回环地址并保存标准图片、报告与re
     assert.equal(response.status, 201);
     const body = await response.json() as { sessionId: string; report: { summary: { headline: string } } };
     assert.equal(body.report.summary.headline, "测试报告");
+    assert.equal(provider.calls, 1);
     const root = join(directory, body.sessionId);
     const session = JSON.parse(await readFile(join(root, "session.json"), "utf8")) as { image?: unknown; imagePath?: unknown };
     assert.deepEqual(session.image, { mimeType: "image/jpeg" });
@@ -60,6 +65,42 @@ test("本地测试入口只绑定回环地址并保存标准图片、报告与re
     const runIds = await readdir(join(root, "runs"));
     const reasoning = await readFile(join(root, "runs", runIds[0]!, "reasoning.jsonl"), "utf8");
     assert.match(reasoning, /测试reasoning/);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("损坏与超限图片返回稳定HTTP错误且不创建会话或调用Provider", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "hongtai-diagnosis-harness-errors-"));
+  const repository = new FileDiagnosisRepository(directory);
+  const provider = new HarnessProvider();
+  const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
+  const server = createDiagnosisHarnessServer({ flow, preprocessor: new SharpImagePreprocessor() });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    const endpoint = `http://127.0.0.1:${address.port}/api/sessions`;
+    const postImage = (imageDataUrl: string) => fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "tongue", imageDataUrl }),
+    });
+
+    const before = await readdir(directory);
+    const malformed = await postImage("data:image/jpeg;base64,/9j/");
+    assert.equal(malformed.status, 400);
+    assert.equal((await malformed.json() as { code: string }).code, "IMAGE_INVALID");
+    assert.deepEqual(await readdir(directory), before);
+    assert.equal(provider.calls, 0);
+
+    const oversized = Buffer.alloc(15 * 1024 * 1024 + 1).toString("base64");
+    const tooLarge = await postImage(`data:image/jpeg;base64,${oversized}`);
+    assert.equal(tooLarge.status, 413);
+    assert.equal((await tooLarge.json() as { code: string }).code, "IMAGE_TOO_LARGE");
+    assert.deepEqual(await readdir(directory), before);
+    assert.equal(provider.calls, 0);
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     await rm(directory, { recursive: true, force: true });

@@ -54,13 +54,13 @@ git commit -m "docs(plan): stage v0.1.5 lineage recovery"
 - Test: `tests/android-webview-compat.test.ts`
 - Test: `tests/android-heif-native-boundary.test.ts`
 
-- [ ] 以非快进、停止在提交前的方式合入修复分支：
+- [x] 以非快进、停止在提交前的方式合入修复分支：
 
 ```powershell
 git merge --no-ff --no-commit fix/issue05-issue07
 ```
 
-- [ ] 逐个审计冲突，保留以下语义并集：
+- [x] 逐个审计冲突，保留以下语义并集：
 
 ```ts
 android: {
@@ -70,11 +70,11 @@ android: {
 }
 ```
 
-- [ ] 分析与诊察服务同时保留结构化流事件回调、`RuntimeOperationRegistry` 跟踪和未完成工作恢复。
-- [ ] 生产服务测试同时保留恢复验证与现有生产流程验证，不删除任一侧覆盖面。
-- [ ] 运行 Android Release/插件/WebView/HEIF 定向契约测试及 `@hongtai/capacitor-runtime` 测试。
-- [ ] 运行 `pnpm check`，确认类型与架构边界通过。
-- [ ] 精确暂存冲突文件并提交合并：
+- [x] 分析与诊察服务同时保留结构化流事件回调、`RuntimeOperationRegistry` 跟踪和未完成工作恢复。
+- [x] 生产服务测试同时保留恢复验证与现有生产流程验证，不删除任一侧覆盖面。
+- [x] 运行 Android Release/插件/WebView/HEIF 定向契约测试及 `@hongtai/capacitor-runtime` 测试。
+- [x] 运行 `pnpm check`，确认类型与架构边界通过。
+- [x] 精确暂存冲突文件并提交合并：
 
 ```powershell
 git commit -m "merge: restore release and compatibility baseline"

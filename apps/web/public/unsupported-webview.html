@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>网页运行组件不可用</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+        margin: 0;
+      }
+
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: #f6f1e8;
+        color: #332c26;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+        line-height: 1.65;
+      }
+
+      main {
+        width: 100%;
+        max-width: 440px;
+        padding: 28px 24px;
+        border: 1px solid #dfd3c4;
+        border-radius: 18px;
+        background: #fffdf9;
+        box-shadow: 0 12px 32px rgba(76, 57, 39, 0.12);
+      }
+
+      h1 {
+        margin: 0 0 14px;
+        font-size: 24px;
+        line-height: 1.35;
+      }
+
+      p {
+        margin: 10px 0 0;
+        font-size: 16px;
+      }
+
+      .hint {
+        color: #705f50;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>网页运行组件不可用</h1>
+      <p>当前设备的网页运行组件版本过低，或当前提供程序尚未验证支持，无法安全打开宏泰 AI 智能体。</p>
+      <p>请先在系统设置或应用商店更新系统 WebView 或浏览器组件；若更新后仍显示此页，当前版本暂不支持该网页运行组件。</p>
+      <p class="hint">应用不会在此页面联网或自动跳转。</p>
+    </main>
+  </body>
+</html>

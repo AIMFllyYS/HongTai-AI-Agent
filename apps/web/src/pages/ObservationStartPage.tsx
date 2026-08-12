@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { issueFromAppError } from "@hongtai/core";
-import type { AppRuntime, DiagnosisSessionRecord, MediaReference, ObservationMode, TaskIssue } from "@hongtai/core";
+import type { AppRuntime, DiagnosisSessionRecord, MediaReference, ObservationMode, StructuredStreamProgress as StructuredStreamProgressValue, TaskIssue } from "@hongtai/core";
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
@@ -9,6 +9,7 @@ import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { RuntimeMediaFrame } from "../components/RuntimeMediaFrame";
 import { EmptyState, LoadingState } from "../components/StatePanels";
+import { StructuredStreamProgress } from "../components/StructuredStreamProgress";
 import { observationModeLabel } from "../features/diagnosis/diagnosis-presenters";
 import { useAppResume } from "../hooks/useAppResume";
 import { observationReportPath, type Navigate } from "../router";
@@ -51,6 +52,7 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
   const [issue, setIssue] = useState<TaskIssue>();
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(true);
+  const [reportProgress, setReportProgress] = useState<StructuredStreamProgressValue>();
 
   const loadSessions = useCallback(async () => {
     try {
@@ -122,10 +124,14 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
     if (!diagnosisAvailable || !image || loading || importing) return;
     setLoading(true);
     setIssue(undefined);
+    setReportProgress(undefined);
     try {
       const session = await runtime.diagnosis.createSession({ mode, image });
       try {
-        await runtime.diagnosis.runReport(session.sessionId);
+        await runtime.diagnosis.runReport(session.sessionId, async (event) => {
+          if (event.type === "progress") setReportProgress(event.progress);
+          if (event.type === "failed") setIssue(event.issue);
+        });
         navigate(observationReportPath(session.sessionId));
       } catch (error) {
         // Navigate only when native storage has a terminal projection. If a
@@ -174,6 +180,7 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
           <div className="observation-capture-card__copy"><span className="eyebrow">STEP 2</span><h3>{observationModeLabel(mode)}图片</h3><p>{mode === "tongue" ? "尽量保持舌面清晰、避免滤镜和强色光。" : "尽量保持正面、自然光和无遮挡。"}</p></div>
           {importing ? <div aria-live="polite" className="observation-capture-card__empty" role="status"><Icon name="sync" size={30} /><span>正在导入图片</span></div> : image ? <RuntimeMediaFrame className="observation-capture-card__image" label={`${observationModeLabel(mode)}图片`} media={image} /> : <div className="observation-capture-card__empty"><Icon name="camera" size={30} /><span>尚未选择图片</span></div>}
           <div className="observation-capture-card__actions mobile-action-group"><Button disabled={!diagnosisAvailable || loading || importing} icon={<Icon name="camera" size={18} />} onClick={() => void captureImage()} variant="secondary">拍摄图片</Button><Button disabled={!diagnosisAvailable || loading || importing} icon={<Icon name="upload_file" size={18} />} onClick={() => void pickImage()} variant="secondary">选择图片</Button><Button disabled={!diagnosisAvailable || !image || loading || importing} icon={<Icon name="auto_awesome" size={18} />} onClick={() => void createReport()}>{loading ? "正在创建报告" : "生成观察报告"}</Button></div>
+          {loading ? <StructuredStreamProgress progress={reportProgress} title="正在生成真实观察报告" /> : null}
           <small className="observation-privacy-note"><Icon name="folder_special" size={15} />图片会复制到应用私有目录；不会作为公开素材或自动发布内容。</small>
         </GlassCard>
 

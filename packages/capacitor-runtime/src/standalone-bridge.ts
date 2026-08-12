@@ -67,6 +67,11 @@ export interface StandaloneSecureSettingsPlugin {
   removeSecret(options: { readonly slot: "active-ai-connection" }): Promise<void>;
 }
 
+/** Narrow Android-only bridge for compiled application metadata. */
+export interface StandaloneDeviceSettingsPlugin {
+  getAppInfo(): Promise<{ readonly versionName: string; readonly versionCode: number }>;
+}
+
 /** Public app-preferences projection. It never contains an API Key. */
 export interface StandaloneLocalProfile {
   readonly localProfileId: string;
@@ -88,6 +93,9 @@ export interface StandaloneAiConnection {
   readonly visionModel: string | null;
   readonly asrModel: string | null;
   readonly asrTransport: string | null;
+  readonly ttsModel: string | null;
+  readonly ttsTransport: string | null;
+  readonly ttsVoice: string | null;
   readonly jsonObjectEnabled: boolean;
   readonly jsonSchemaEnabled: boolean;
   readonly probeResultsJson: string;
@@ -160,6 +168,7 @@ export interface NativeProductionAsset {
   readonly id: string;
   readonly uri: NativeUri;
   readonly kind: "image" | "video" | "audio";
+  readonly role?: "visual" | "avatar" | "music";
   readonly mimeType: string;
   readonly displayName: string;
   readonly sizeBytes: number;
@@ -180,8 +189,10 @@ export interface NativeProductionProgressEvent {
 }
 
 export interface StandaloneProductionRuntimePlugin {
-  pickAssets(options: { readonly projectId: string; readonly maxItems: number }): Promise<{ readonly assets: readonly NativeProductionAsset[] }>;
-  render(options: { readonly projectId: string; readonly planJson: string }): Promise<NativeProductionResult>;
+  pickAssets(options: { readonly projectId: string; readonly maxItems: number; readonly selection?: "visual" | "avatar" }): Promise<{ readonly assets: readonly NativeProductionAsset[] }>;
+  render(options: { readonly projectId: string; readonly planJson: string; readonly mode?: "montage" | "avatar"; readonly narration?: "system" | "provider" }): Promise<NativeProductionResult>;
+  /** Runs a short non-personal synthesis request using the saved protected key. */
+  probeTts(): Promise<void>;
   addListener?(
     eventName: "productionProgress",
     listener: (event: NativeProductionProgressEvent) => void,
@@ -226,6 +237,7 @@ export type StandaloneMediaRuntimePlugin = NativeMediaPort;
 
 export interface StandaloneNativePlugins {
   readonly secureSettings: StandaloneSecureSettingsPlugin;
+  readonly deviceSettings?: StandaloneDeviceSettingsPlugin;
   readonly localData: StandaloneLocalDataPlugin;
   readonly localFiles: StandaloneLocalFilesPlugin;
   readonly nativeNetwork: StandaloneNativeNetworkPlugin;
@@ -237,6 +249,7 @@ export interface StandaloneNativePlugins {
 export function registerStandaloneNativePlugins(registerPlugin: NativePluginRegistrar): StandaloneNativePlugins {
   return {
     secureSettings: registerPlugin<StandaloneSecureSettingsPlugin>("SecureSettings"),
+    deviceSettings: registerPlugin<StandaloneDeviceSettingsPlugin>("DeviceSettings"),
     localData: registerPlugin<StandaloneLocalDataPlugin>("LocalData"),
     localFiles: registerPlugin<StandaloneLocalFilesPlugin>("LocalFiles"),
     nativeNetwork: registerPlugin<StandaloneNativeNetworkPlugin>("NativeNetwork"),

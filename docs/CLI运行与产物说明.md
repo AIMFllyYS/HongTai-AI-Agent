@@ -2,6 +2,8 @@
 
 ## 1. 首次准备
 
+CLI 要求 Node.js `>=22.0.0` 与 pnpm 10，推荐使用仓库当前验证的 Node.js 24。Node 22 是最低运行契约，不代表本轮已在 Node 22 做过端测。
+
 ```powershell
 cd D:\projects\Dev-Tools\HongTai-AI-Agent
 pnpm install
@@ -54,6 +56,8 @@ pnpm cli diagnosis serve --port 5001
 ```
 
 服务只监听`127.0.0.1`。上传页接受JPEG、PNG和WebP，图片经方向修正和尺寸限制后只保存一份标准JPEG。页面显示报告摘要和最简对话；CLI显示正文、供应商独立reasoning、用量和产物路径。
+
+这条开发机图片路径由 `packages/node-runtime` 中精确固定的 `sharp 0.35.3` 解码，最长边限制为 2048 像素。sharp 与其随包提供的 libvips 只服务 CLI 本地回归；APK 没有 Node 运行时，也不导入 `@hongtai/node-runtime`，Android 图片导入走独立的原生实现。
 
 正式报告为`diagnosis-report.v1` JSON，定位是图片可见状态观察和日常调理参考，不是疾病诊断。后续对话达到配置上下文窗口约80%时压缩较早消息，保留首次报告和最近六条原始消息。
 

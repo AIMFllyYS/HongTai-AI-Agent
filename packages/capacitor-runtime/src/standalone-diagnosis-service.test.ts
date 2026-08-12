@@ -77,7 +77,8 @@ test("StandaloneDiagnosisService saves a formal report and real follow-up histor
 
   const image = await service.pickImage();
   const session = await service.createSession({ mode: "tongue", image });
-  const savedReport = await service.runReport(session.sessionId);
+  const reportEvents: unknown[] = [];
+  const savedReport = await service.runReport(session.sessionId, async (event) => { reportEvents.push(event); });
   const streamed: string[] = [];
   const answer = await service.followUp(session.sessionId, "怎样继续记录？", async (event) => {
     if (event.type === "content_delta") streamed.push(event.delta);
@@ -89,6 +90,9 @@ test("StandaloneDiagnosisService saves a formal report and real follow-up histor
   assert.deepEqual(streamed, ["建议保持相近光线，持续记录变化。"]);
   assert.doesNotMatch(JSON.stringify(session), /file:\/\//);
   assert.doesNotMatch(JSON.stringify(savedReport), /private reasoning|file:\/\//);
+  const progressEvents = reportEvents.filter((event) => (event as { readonly type?: string }).type === "progress");
+  assert.match(JSON.stringify(progressEvents), /图片质量/);
+  assert.doesNotMatch(JSON.stringify(progressEvents), /private reasoning|颜色较均匀/);
   assert.equal((await service.listMessages(session.sessionId)).length, 2);
 });
 

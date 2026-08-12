@@ -10,9 +10,15 @@ const RULES = `你是手机端短视频制作规划助手。根据正式内容�
 const CONTRACT = `输出逐字段匹配以下JSON Schema，不得增加包装层：\n${JSON.stringify(productionPlanResultJsonSchema)}`;
 
 export function productionPlanningPrompt(input: ProductionPlanInput): string {
-  return `${RULES}\n${CONTRACT}\n真实来源和需求：${JSON.stringify({ analysisTaskId: input.analysisTaskId, brief: input.brief, targetDurationSeconds: input.targetDurationSeconds })}\n正式拆解：${JSON.stringify(input.analysis)}\n可用素材：${JSON.stringify(input.assets)}`;
+  const modeRules = input.mode === "avatar"
+    ? "当前是数字人口播模式：只使用role为avatar的单个视频；保留其原始口播声音，不生成TTS或背景音乐。目标时长不得超过该视频时长；必须按用户提供的口播稿顺序切分镜头，caption与narration均不得偏离这份口播稿。"
+    : "当前是素材剪辑模式：使用图片/视频作为视觉素材，为每个镜头写可由zh-CN系统TTS朗读的旁白；字幕应与旁白一致或忠实概括。";
+  return `${RULES}\n${modeRules}\n${CONTRACT}\n真实来源和需求：${JSON.stringify({ analysisTaskId: input.analysisTaskId, brief: input.brief, targetDurationSeconds: input.targetDurationSeconds, mode: input.mode, ...(input.avatarScript ? { avatarScript: input.avatarScript } : {}) })}\n正式拆解：${JSON.stringify(input.analysis)}\n可用素材：${JSON.stringify(input.assets)}`;
 }
 
 export function productionPlanningRepairPrompt(raw: string, input: ProductionPlanInput): string {
-  return `${RULES}\n${CONTRACT}\n下面结果不符合Schema或执行约束。只修复计划，不新增素材。\n真实任务ID：${input.analysisTaskId}\n目标时长：${input.targetDurationSeconds}\n合法素材：${JSON.stringify(input.assets)}\n原始响应：${raw.slice(0, 32_000)}`;
+  const modeRules = input.mode === "avatar"
+    ? `数字人口播模式：只能引用role为avatar的单个视频，保留原声，backgroundMusicAssetId必须为null且backgroundMusicVolume必须为0。口播稿：${input.avatarScript ?? ""}`
+    : "素材剪辑模式：每条narration都会由zh-CN系统TTS朗读。";
+  return `${RULES}\n${modeRules}\n${CONTRACT}\n下面结果不符合Schema或执行约束。只修复计划，不新增素材。\n真实任务ID：${input.analysisTaskId}\n目标时长：${input.targetDurationSeconds}\n合法素材：${JSON.stringify(input.assets)}\n原始响应：${raw.slice(0, 32_000)}`;
 }

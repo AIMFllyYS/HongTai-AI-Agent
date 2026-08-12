@@ -2,7 +2,7 @@
 
 面向大健康门店老板的本地优先 Android AI 应用。交付形态是独立 APK：React 是**应用界面层**，共享 TypeScript 是**本地应用逻辑层**，Capacitor/Kotlin 是**平台运行时与原生能力层**；本项目没有传统远程 Web 后端。
 
-> 当前能力、发布边界和修复优先级见[当前能力与发布状态](docs/当前能力与发布状态.md)。当前 `v0.0.1` 是 QA 产物，不可作为正式 release 分发。
+> 当前能力、发布边界和修复优先级见[当前能力与发布状态](docs/当前能力与发布状态.md)。历史 `v0.0.1` 已建立受控非 Debug release 候选证据；当前源码包版本为 `v0.1.3`（`versionCode=10`），整体发布门禁尚未完成，不可正式分发。
 
 ## 当前能力
 
@@ -36,7 +36,7 @@ Keystore、私有文件、Photo Picker、受控网络、Media3
 
 ## 环境与安装
 
-- Node.js 24；
+- Node.js 22 或更高版本，推荐使用 Node.js 24；
 - pnpm 10；
 - CLI 媒体回归需要 `ffmpeg` 与 `ffprobe`；
 - Android 构建需要 Android SDK 与 JDK 21。
@@ -62,6 +62,8 @@ pnpm cli diagnosis serve
 
 CLI 的 `.env` 只用于开发机回归，不能进入 APK、Git、日志或 ADB 参数。安装后的 APK 必须从设置页写入自身安全存储。完整配置、产物格式与人工回归边界见[CLI运行与产物说明](docs/CLI运行与产物说明.md)。
 
+CLI 图片回归由 `packages/node-runtime` 中精确锁定的 sharp 负责解码；该 Node 原生依赖不会进入 Web、Capacitor Runtime 或 Android APK。
+
 ## 构建 Debug APK
 
 ```powershell
@@ -75,7 +77,16 @@ Pop-Location
 
 输出为 `android/app/build/outputs/apk/debug/app-debug.apk`。它使用 Android debug 签名，仅用于开发和 QA。
 
-正式发布前不得跳过以下检查：团队 release keystore、递增 `versionCode`、APK SHA-256、不带降级参数的同签名正常升级，以及涉及相册/相机/网络/Media3 的物理真机证据。当前阻断项见[发布状态](docs/当前能力与发布状态.md)。
+## 构建正式候选 APK
+
+首次由签名材料保管人初始化仓库外签名身份，之后使用同一身份构建：
+
+```powershell
+.\scripts\init-android-release-signing.ps1
+.\scripts\build-android-release.ps1
+```
+
+初始化只允许执行一次且拒绝覆盖已有身份。字段说明、备份责任、验签和升级操作见[Android 发布签名与升级指南](docs/Android发布签名与升级指南.md)。签名构建成功只证明主机候选的构建与身份校验通过，不等于全部发布门禁或物理真机通过；API 35 模拟器升级证据与相册/相机、网络、Media3 等剩余边界仍以[发布状态](docs/当前能力与发布状态.md)为准。
 
 ## 验证入口
 
@@ -98,3 +109,5 @@ Pop-Location
 - [错误码与应用界面通知约定](docs/错误码与前端通知约定.md)
 - [AI应用能力层架构](docs/AI应用能力层架构.md)
 - [任务执行模板](docs/任务执行模板.md)
+- [Android 发布签名与升级指南](docs/Android发布签名与升级指南.md)
+- [Android 旧系统 HEIF 兼容与依赖指南](docs/Android旧系统HEIF兼容与依赖指南.md)

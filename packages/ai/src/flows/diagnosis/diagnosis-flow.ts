@@ -1,4 +1,4 @@
-import { TaskError } from "@hongtai/core";
+import { createRuntimeId, TaskError } from "@hongtai/core";
 import type { AiGenerateResult, AiRequestMessage, AiStreamEvent } from "../../contracts/provider";
 import type {
   AiMessage,
@@ -22,7 +22,7 @@ function base64(data: Uint8Array): string {
 }
 
 function messageId(): string {
-  return crypto.randomUUID();
+  return createRuntimeId();
 }
 
 function normalizedImageMimeType(value: unknown): string {
@@ -108,7 +108,7 @@ export class DiagnosisFlow {
     if (!storedSession) {
       throw new TaskError({ code: "AI_SESSION_NOT_FOUND", message: "没有找到可生成报告的观察会话", action: "none" });
     }
-    const runId = crypto.randomUUID();
+    const runId = createRuntimeId();
     const startedAt = new Date().toISOString();
     let reasoning = "";
     let rawResponse = "";
@@ -178,7 +178,7 @@ export class DiagnosisFlow {
     const report = await this.#dependencies.repository.getReport(sessionId);
     if (!session || !report) throw new TaskError({ code: "AI_SESSION_NOT_FOUND", message: "没有找到可继续对话的观察会话", action: "none" });
     if (!question.trim()) throw new TaskError({ code: "INPUT_EMPTY", message: "对话内容不能为空", action: "edit_input" });
-    const runId = crypto.randomUUID();
+    const runId = createRuntimeId();
     const startedAt = new Date().toISOString();
     let reasoning = "";
     let rawResponse = "";

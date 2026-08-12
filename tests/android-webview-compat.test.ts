@@ -1,0 +1,68 @@
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import test from "node:test";
+
+const root = resolve(import.meta.dirname, "..");
+const read = (path: string) => readFileSync(join(root, path), "utf8");
+
+test("Android uses a reachable OEM-specific WebView compatibility floor", () => {
+  const config = read("capacitor.config.ts");
+  const packagedConfig = JSON.parse(
+    read("android/app/src/main/assets/capacitor.config.json"),
+  ) as { android?: Record<string, unknown>; server?: Record<string, unknown> };
+  const guide = read("docs/Android旧系统HEIF兼容与依赖指南.md");
+
+  assert.match(config, /minWebViewVersion:\s*89\b/);
+  assert.match(config, /minHuaweiWebViewVersion:\s*10\b/);
+  assert.doesNotMatch(config, /2147483647/);
+  assert.match(config, /errorPath:\s*"unsupported-webview\.html"/);
+  assert.equal(packagedConfig.android?.minWebViewVersion, 89);
+  assert.equal(packagedConfig.android?.minHuaweiWebViewVersion, 10);
+  assert.equal(packagedConfig.server?.errorPath, "unsupported-webview.html");
+  assert.match(guide, /Huawei provider[^\n]*独立基线/);
+  assert.match(guide, /Chromium 89/);
+});
+
+test("the production web bundle targets the declared Chromium floor", () => {
+  const vite = read("apps/web/vite.config.ts");
+
+  assert.match(vite, /build:\s*\{[\s\S]*target:\s*"chrome89"[\s\S]*\}/);
+});
+
+test("WebView 89 runtime paths avoid newer browser-only helpers", () => {
+  const browserRuntime = [
+    read("packages/ai/src/flows/content-analysis/content-analysis-flow.ts"),
+    read("packages/ai/src/flows/diagnosis/diagnosis-flow.ts"),
+    read("packages/capacitor-runtime/src/standalone-production-service.ts"),
+    read("apps/web/src/pages/TaskDetailPage.tsx"),
+    read("apps/web/src/pages/TaskProcessingPage.tsx"),
+  ].join("\n");
+
+  assert.doesNotMatch(browserRuntime, /crypto\.randomUUID\(/);
+  assert.doesNotMatch(browserRuntime, /\.at\(/);
+});
+
+test("the unsupported WebView page is local static Chinese HTML", () => {
+  const relativePath = "apps/web/public/unsupported-webview.html";
+  assert.equal(existsSync(join(root, relativePath)), true, "missing unsupported WebView page");
+  const page = read(relativePath);
+
+  assert.match(page, /<meta\s+charset="UTF-8"/i);
+  assert.match(page, /WebView/);
+  assert.match(page, /[\u3400-\u9fff]/);
+  assert.match(page, /网页运行组件版本过低，或当前提供程序尚未验证支持/);
+  assert.match(page, /若更新后仍显示此页，当前版本暂不支持该网页运行组件/);
+  assert.doesNotMatch(page, /当前设备的网页运行组件版本过低，无法安全打开/);
+  assert.doesNotMatch(page, /<script\b|<link\b|<iframe\b|\son\w+\s*=|@import/i);
+  assert.doesNotMatch(page, /https?:\/\/|\/\/|location\s*[.=]|http-equiv\s*=\s*["']refresh/i);
+});
+
+test("release packaging verifies the v0.1.3 monotonic candidate version", () => {
+  const appBuild = read("android/app/build.gradle.kts");
+  const releaseBuilder = read("scripts/build-android-release.ps1");
+
+  assert.match(appBuild, /versionCode\s*=\s*10\b/);
+  assert.match(appBuild, /versionName\s*=\s*"0\.1\.3"/);
+  assert.match(releaseBuilder, /\$versionCode\s+-ne\s+"10"/);
+});

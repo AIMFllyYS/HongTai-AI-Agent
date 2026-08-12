@@ -30,7 +30,8 @@ function mergeEvents(existing: readonly TaskEventRecord[], incoming: TaskEventRe
 function newestIssue(task: AppTaskRecord | undefined, events: readonly TaskEventRecord[], localIssue: TaskIssue | undefined): TaskIssue | undefined {
   if (localIssue) return localIssue;
   const eventIssue = events.slice().sort((left, right) => right.sequence - left.sequence).find((event) => event.issue)?.issue;
-  return eventIssue ?? task?.issues.at(-1);
+  const taskIssues = task?.issues;
+  return eventIssue ?? (taskIssues && taskIssues.length > 0 ? taskIssues[taskIssues.length - 1] : undefined);
 }
 
 export function TaskProcessingPage({ runtime, taskId, navigate }: TaskProcessingPageProps) {

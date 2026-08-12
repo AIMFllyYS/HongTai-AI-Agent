@@ -13,8 +13,15 @@ const config: CapacitorConfig = {
   loggingBehavior: "none",
   server: {
     androidScheme: "https",
+    errorPath: "unsupported-webview.html",
   },
   android: {
+    // Chrome 89 is the oldest OEM baseline we support; lower providers were
+    // previously observed to leave the bundled app at a white screen.
+    minWebViewVersion: 89,
+    // Huawei's product version uses a separate series. Keep Capacitor's
+    // documented independent baseline instead of treating it as Chromium.
+    minHuaweiWebViewVersion: 10,
     // Custom native plugins stay explicitly registered from MainActivity;
     // package discovery is restricted to the official lifecycle bridge.
     includePlugins: ["@capacitor/app"],

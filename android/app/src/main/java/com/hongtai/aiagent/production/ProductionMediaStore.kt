@@ -2,6 +2,9 @@ package com.hongtai.aiagent.production
 
 import android.content.Context
 import android.database.Cursor
+import android.graphics.BitmapFactory
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -11,27 +14,38 @@ import java.io.FileOutputStream
 import java.util.Locale
 import java.util.UUID
 
+internal enum class ProductionImportSelection { VISUAL, AVATAR }
+internal enum class ProductionAssetRole { VISUAL, AVATAR, MUSIC }
+
 internal data class ImportedProductionAsset(
   val id: String,
   val uri: String,
   val kind: ProductionAssetKind,
+  val role: ProductionAssetRole,
   val mimeType: String,
   val displayName: String,
   val sizeBytes: Long,
   val durationSeconds: Double?,
 )
 
+private data class MediaProbe(val durationMs: Long, val hasVideo: Boolean, val hasAudio: Boolean)
+
 /** Owns bounded imports beneath one production project; no arbitrary path crosses the bridge. */
 internal class ProductionMediaStore(context: Context) {
   private val appContext = context.applicationContext
   private val root = File(appContext.filesDir, "productions")
 
-  fun importAll(projectId: String, uris: List<Uri>): List<ImportedProductionAsset> {
-    require(uris.isNotEmpty() && uris.size <= MAX_ITEMS) { "Select between one and twelve production assets." }
+  fun importAll(
+    projectId: String,
+    uris: List<Uri>,
+    selection: ProductionImportSelection = ProductionImportSelection.VISUAL,
+  ): List<ImportedProductionAsset> {
+    val maximum = if (selection == ProductionImportSelection.AVATAR) 1 else MAX_ITEMS
+    require(uris.isNotEmpty() && uris.size <= maximum) { "The selected production asset count is invalid." }
     val inputs = inputsDirectory(projectId)
     val created = mutableListOf<File>()
     return try {
-      uris.map { uri -> importOne(uri, inputs).also { created += File(requireNotNull(Uri.parse(it.uri).path)) } }
+      uris.map { uri -> importOne(uri, inputs, selection).also { created += File(requireNotNull(Uri.parse(it.uri).path)) } }
     } catch (error: Exception) {
       created.forEach(File::delete)
       throw error
@@ -40,11 +54,12 @@ internal class ProductionMediaStore(context: Context) {
 
   fun inputs(projectId: String): Map<String, ProductionInput> {
     val directory = inputsDirectory(projectId)
-    return directory.listFiles()?.filter(File::isFile)?.associate { file ->
+    return directory.listFiles()?.filter { file -> file.isFile && !file.name.startsWith(".") }?.associate { file ->
       val id = file.name.substringBeforeLast('.')
       require(ID_PATTERN.matches(id)) { "A production asset identifier is invalid." }
       val kind = kindFor(mimeForExtension(file.extension))
-      id to ProductionInput(id, file.absolutePath, kind, if (kind == ProductionAssetKind.IMAGE) null else (durationSeconds(file) * 1_000).toLong())
+      val probe = inspectInput(file, kind)
+      id to ProductionInput(id, file.absolutePath, kind, probe?.durationMs, probe?.hasAudio ?: false)
     } ?: emptyMap()
   }
 
@@ -57,11 +72,12 @@ internal class ProductionMediaStore(context: Context) {
     if (!it.exists() && !it.mkdirs()) throw IllegalStateException("Could not create production audio storage.")
   }
 
-  private fun importOne(uri: Uri, inputs: File): ImportedProductionAsset {
+  private fun importOne(uri: Uri, inputs: File, selection: ProductionImportSelection): ImportedProductionAsset {
     require(uri.scheme == "content") { "Only system content URIs may be imported." }
     val displayName = safeName(displayNameFor(uri) ?: "素材")
     val mimeType = normalizedMime(uri, displayName)
     val kind = kindFor(mimeType)
+    val role = roleFor(kind, selection)
     val id = UUID.randomUUID().toString()
     val destination = File(inputs, "$id.${extensionFor(mimeType)}")
     val temporary = File(inputs, ".$id.part")
@@ -82,10 +98,82 @@ internal class ProductionMediaStore(context: Context) {
       } ?: throw IllegalArgumentException("The selected production asset could not be opened.")
       require(written > 0L) { "The selected production asset is empty." }
       if (!temporary.renameTo(destination)) throw IllegalStateException("Could not finalize the production asset.")
-      val duration = if (kind == ProductionAssetKind.IMAGE) null else durationSeconds(destination)
-      return ImportedProductionAsset(id, Uri.fromFile(destination).toString(), kind, mimeType, displayName, written, duration)
+      val probe = inspectInput(destination, kind)
+      return ImportedProductionAsset(
+        id,
+        Uri.fromFile(destination).toString(),
+        kind,
+        role,
+        mimeType,
+        displayName,
+        written,
+        probe?.durationMs?.div(1_000.0),
+      )
+    } catch (error: Exception) {
+      destination.delete()
+      throw error
     } finally {
       temporary.delete()
+    }
+  }
+
+  private fun roleFor(kind: ProductionAssetKind, selection: ProductionImportSelection): ProductionAssetRole = when (selection) {
+    ProductionImportSelection.AVATAR -> {
+      if (kind != ProductionAssetKind.VIDEO) {
+        throw ProductionException(ProductionFailureKind.MEDIA_SOURCE_INVALID, "Avatar production requires an MP4 video source.")
+      }
+      ProductionAssetRole.AVATAR
+    }
+    ProductionImportSelection.VISUAL -> if (kind == ProductionAssetKind.AUDIO) ProductionAssetRole.MUSIC else ProductionAssetRole.VISUAL
+  }
+
+  private fun inspectInput(file: File, kind: ProductionAssetKind): MediaProbe? = when (kind) {
+    ProductionAssetKind.IMAGE -> {
+      validateImage(file)
+      null
+    }
+    ProductionAssetKind.VIDEO, ProductionAssetKind.AUDIO -> {
+      val probe = probeMedia(file)
+      if (kind == ProductionAssetKind.VIDEO && !probe.hasVideo) {
+        throw ProductionException(ProductionFailureKind.MEDIA_SOURCE_INVALID, "The selected MP4 has no video track.")
+      }
+      if (kind == ProductionAssetKind.AUDIO && !probe.hasAudio) {
+        throw ProductionException(ProductionFailureKind.MEDIA_SOURCE_INVALID, "The selected audio file has no audio track.")
+      }
+      probe
+    }
+  }
+
+  private fun validateImage(file: File) {
+    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(file.absolutePath, options)
+    val width = options.outWidth
+    val height = options.outHeight
+    if (width <= 0 || height <= 0 || width > MAX_IMAGE_EDGE || height > MAX_IMAGE_EDGE || width.toLong() * height.toLong() > MAX_IMAGE_PIXELS) {
+      throw ProductionException(ProductionFailureKind.MEDIA_SOURCE_INVALID, "The selected image dimensions are unsupported.")
+    }
+  }
+
+  private fun probeMedia(file: File): MediaProbe {
+    val extractor = MediaExtractor()
+    return try {
+      extractor.setDataSource(file.absolutePath)
+      var hasVideo = false
+      var hasAudio = false
+      for (index in 0 until extractor.trackCount) {
+        when {
+          extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true -> hasVideo = true
+          extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true -> hasAudio = true
+        }
+      }
+      val durationMs = (durationSeconds(file) * 1_000).toLong()
+      MediaProbe(durationMs, hasVideo, hasAudio)
+    } catch (error: ProductionException) {
+      throw error
+    } catch (error: Exception) {
+      throw ProductionException(ProductionFailureKind.MEDIA_SOURCE_INVALID, "The selected media could not be probed.", error)
+    } finally {
+      extractor.release()
     }
   }
 
@@ -122,9 +210,13 @@ internal class ProductionMediaStore(context: Context) {
     return try {
       retriever.setDataSource(file.absolutePath)
       val milliseconds = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
-        ?: throw IllegalArgumentException("The selected media duration is unavailable.")
-      require(milliseconds > 0L) { "The selected media duration is invalid." }
+        ?: throw ProductionException(ProductionFailureKind.MEDIA_SOURCE_INVALID, "The selected media duration is unavailable.")
+      if (milliseconds <= 0L) throw ProductionException(ProductionFailureKind.MEDIA_SOURCE_INVALID, "The selected media duration is invalid.")
       milliseconds / 1_000.0
+    } catch (error: ProductionException) {
+      throw error
+    } catch (error: Exception) {
+      throw ProductionException(ProductionFailureKind.MEDIA_SOURCE_INVALID, "The selected media duration could not be read.", error)
     } finally {
       retriever.release()
     }
@@ -154,6 +246,8 @@ internal class ProductionMediaStore(context: Context) {
     val ID_PATTERN = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,119}")
     const val MAX_ITEMS = 12
     const val MAX_ITEM_BYTES = 250L * 1024L * 1024L
+    const val MAX_IMAGE_EDGE = 8_192
+    const val MAX_IMAGE_PIXELS = 16_777_216L
     val SUPPORTED_MIME_TYPES = setOf("image/jpeg", "image/png", "image/webp", "video/mp4", "audio/mpeg", "audio/mp4", "audio/wav")
   }
 }

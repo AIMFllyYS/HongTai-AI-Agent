@@ -80,8 +80,78 @@ export interface ProfileService {
   pickAvatar(): Promise<MediaReference>;
 }
 
-export type AiCapability = "text" | "vision" | "asr";
-export type AiAsrTransport = "audio-transcriptions" | "chat-input-audio";
+/** Native build identity that is safe to display inside the local application. */
+export interface AppBuildInfo {
+  readonly versionName: string;
+  readonly versionCode: number;
+}
+
+/** Explicit, narrow access to Android's own application metadata. */
+export interface DeviceSettingsService {
+  getAppInfo(): Promise<AppBuildInfo>;
+}
+
+export type AiCapability = "text" | "vision" | "asr" | "tts";
+export type AiAsrTransport = "audio-transcriptions" | "chat-input-audio" | "stepaudio-sse";
+/** The native video renderer owns these provider-specific audio protocols. */
+export type AiTtsTransport = "mimo-chat-audio" | "stepfun-audio-speech";
+
+/**
+ * A verified, provider-owned connection profile. Selecting one never exposes
+ * the API key and does not create another credentials store.
+ */
+export interface AiProviderPreset {
+  readonly id: "xiaomi-mimo" | "stepfun";
+  readonly label: string;
+  readonly baseUrl: string;
+  readonly textModel: string;
+  readonly visionModel: string;
+  readonly asrModel: string;
+  readonly asrTransport: AiAsrTransport;
+  readonly ttsModel: string;
+  readonly ttsTransport: AiTtsTransport;
+  readonly ttsVoice: string;
+  readonly supportsJsonObject: boolean;
+  readonly supportsJsonSchema: boolean;
+}
+
+/**
+ * The app deliberately stores exact model IDs rather than asking users to
+ * reconstruct vendor-specific audio protocols by hand. StepFun's image
+ * endpoint uses a different visual model than its text endpoint, and its
+ * preset leaves structured-output flags off so the shared schema parser stays
+ * valid for both paths.
+ */
+export const AI_PROVIDER_PRESETS: readonly AiProviderPreset[] = Object.freeze([
+  {
+    id: "xiaomi-mimo",
+    label: "小米 MiMo",
+    baseUrl: "https://api.xiaomimimo.com/v1",
+    textModel: "mimo-v2.5",
+    visionModel: "mimo-v2.5",
+    asrModel: "mimo-v2.5-asr",
+    asrTransport: "chat-input-audio",
+    ttsModel: "mimo-v2.5-tts",
+    ttsTransport: "mimo-chat-audio",
+    ttsVoice: "冰糖",
+    supportsJsonObject: true,
+    supportsJsonSchema: true,
+  },
+  {
+    id: "stepfun",
+    label: "阶跃星辰",
+    baseUrl: "https://api.stepfun.com/v1",
+    textModel: "step-3.5-flash",
+    visionModel: "step-1o-turbo-vision",
+    asrModel: "stepaudio-2.5-asr",
+    asrTransport: "stepaudio-sse",
+    ttsModel: "stepaudio-2.5-tts",
+    ttsTransport: "stepfun-audio-speech",
+    ttsVoice: "cixingnansheng",
+    supportsJsonObject: false,
+    supportsJsonSchema: false,
+  },
+]);
 export type AiProbeStatus = "succeeded" | "failed";
 
 /**
@@ -95,6 +165,9 @@ export interface PublicAiConnectionConfig {
   readonly visionModel: string | null;
   readonly asrModel: string | null;
   readonly asrTransport: AiAsrTransport;
+  readonly ttsModel: string | null;
+  readonly ttsTransport: AiTtsTransport | null;
+  readonly ttsVoice: string | null;
   readonly supportsJsonObject: boolean;
   readonly supportsJsonSchema: boolean;
   readonly hasApiKey: boolean;
@@ -108,6 +181,9 @@ export interface AiConnectionPublicInput {
   readonly visionModel?: string | null;
   readonly asrModel?: string | null;
   readonly asrTransport: AiAsrTransport;
+  readonly ttsModel?: string | null;
+  readonly ttsTransport?: AiTtsTransport | null;
+  readonly ttsVoice?: string | null;
   readonly supportsJsonObject: boolean;
   readonly supportsJsonSchema: boolean;
 }
@@ -271,21 +347,51 @@ export interface ContentAnalysisRecord {
   readonly updatedAt: string;
 }
 
+/**
+ * An ephemeral, safe projection of an actual structured-model stream. It
+ * intentionally carries no raw JSON, provider reasoning, or private request
+ * data. It exists only while the caller owns the running request.
+ */
+export interface StructuredStreamProgress {
+  readonly phase: "receiving" | "validating" | "repairing";
+  readonly receivedCharacters: number;
+  readonly sections: readonly string[];
+  /** Whitelisted, short text fields for content-analysis only; never raw JSON. */
+  readonly highlights: readonly StructuredStreamHighlight[];
+}
+
+export interface StructuredStreamHighlight {
+  readonly label: string;
+  readonly value: string;
+}
+
+export type ContentAnalysisStreamEvent =
+  | { readonly type: "progress"; readonly progress: StructuredStreamProgress }
+  | { readonly type: "completed"; readonly record: ContentAnalysisRecord }
+  | { readonly type: "failed"; readonly issue: TaskIssue };
+
 export interface AnalysisService {
   get(taskId: string): Promise<ContentAnalysisRecord | undefined>;
-  run(taskId: string): Promise<ContentAnalysisRecord>;
+  /** Emits only a safe live structure projection; raw provider output is never persisted or exposed. */
+  run(taskId: string, onEvent?: (event: ContentAnalysisStreamEvent) => void | Promise<void>): Promise<ContentAnalysisRecord>;
 }
 
 export type ProductionStatus = "draft" | "planning" | "ready" | "rendering" | "succeeded" | "failed";
+export type ProductionMode = "montage" | "avatar";
+export type ProductionAssetRole = "visual" | "avatar" | "music";
 
 export interface ProductionAsset extends MediaReference {
   readonly id: string;
+  readonly role: ProductionAssetRole;
 }
 
 export interface ProductionProjectRecord {
   readonly projectId: string;
   readonly analysisTaskId: string;
   readonly brief: string;
+  readonly mode: ProductionMode;
+  /** Required only for avatar mode and used as the caption source. */
+  readonly avatarScript?: string;
   readonly targetDurationSeconds: number;
   readonly status: ProductionStatus;
   readonly assets: readonly ProductionAsset[];
@@ -301,7 +407,13 @@ export type ProductionEvent =
   | { readonly type: "render-progress"; readonly projectId: string; readonly progress: number; readonly message: string };
 
 export interface ProductionService {
-  create(input: { readonly analysisTaskId: string; readonly brief: string; readonly targetDurationSeconds: number }): Promise<ProductionProjectRecord>;
+  create(input: {
+    readonly analysisTaskId: string;
+    readonly brief: string;
+    readonly targetDurationSeconds: number;
+    readonly mode?: ProductionMode;
+    readonly avatarScript?: string;
+  }): Promise<ProductionProjectRecord>;
   get(projectId: string): Promise<ProductionProjectRecord | undefined>;
   list(): Promise<readonly ProductionProjectRecord[]>;
   /** Opens the system picker and copies selected items into this project's private directory. */
@@ -348,6 +460,11 @@ export type DiagnosisStreamEvent =
   | { readonly type: "completed"; readonly message: DiagnosisMessage }
   | { readonly type: "failed"; readonly issue: TaskIssue };
 
+export type DiagnosisReportStreamEvent =
+  | { readonly type: "progress"; readonly progress: StructuredStreamProgress }
+  | { readonly type: "completed"; readonly record: DiagnosisReportRecord }
+  | { readonly type: "failed"; readonly issue: TaskIssue };
+
 export type DiagnosisImageRecovery =
   | { readonly status: "none" }
   | { readonly status: "succeeded"; readonly image: MediaReference }
@@ -362,7 +479,7 @@ export interface DiagnosisService {
   consumeImageRecovery(): Promise<DiagnosisImageRecovery>;
   createSession(input: { readonly mode: ObservationMode; readonly image: MediaReference }): Promise<DiagnosisSessionRecord>;
   /** Starts the initial report for a pending session; it never fabricates a completed report. */
-  runReport(sessionId: string): Promise<DiagnosisReportRecord>;
+  runReport(sessionId: string, onEvent?: (event: DiagnosisReportStreamEvent) => void | Promise<void>): Promise<DiagnosisReportRecord>;
   getSession(sessionId: string): Promise<DiagnosisSessionRecord | undefined>;
   /** Ordered by most recent change, with no image bytes or API reasoning exposed. */
   listSessions(): Promise<readonly DiagnosisSessionRecord[]>;
@@ -390,6 +507,7 @@ export type FeatureCapabilityRegistry = Readonly<Record<AppFeature, FeatureCapab
 
 export interface AppRuntime {
   readonly profile: ProfileService;
+  readonly deviceSettings: DeviceSettingsService;
   readonly aiSettings: AiSettingsService;
   readonly tasks: TaskService;
   readonly analysis: AnalysisService;
