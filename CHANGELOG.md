@@ -24,7 +24,7 @@
 ### 变更
 
 - 将 `fix/issue05-issue07` 的受控 Release 签名、Android 7 HEIF fallback、WebView 兼容和云端 TTS 基线，与 `feat/video-workflow-management` 的本地视频拆解、模板和制作管理能力安全合并到同一救援谱系。
-- Android 源码候选从已发布测试版 `0.1.4` / `versionCode=11` 单调递增为 `0.1.5` / `versionCode=12`；正式 Release 仍须通过签名、升级和物理设备门禁。
+- Android 源码候选从已发布测试版 `0.1.4` / `versionCode=11` 单调递增为 `0.1.5` / `versionCode=12`；正式签名 APK、同证书 Release 升级和 API 35 模拟器门禁已通过，物理设备门禁仍未完成。
 - 相机继续使用系统相机 Intent 与 FileProvider 临时 URI 授权，相册继续使用系统 Photo Picker/单项文档授权；不新增 `CAMERA`、整库相册或存储危险权限，因此系统设置中没有独立“权限”板块仍可能是正常表现。
 
 ### 修复
@@ -36,7 +36,8 @@
 ### 发布边界
 
 - 公开地址中曾出现文件名为 `HongTai-AI-Agent-debug-v0.1.5.apk` 的错误测试包，但其包内真实身份是 `0.0.1` / `versionCode=3` 且使用 Debug 签名，不能覆盖升级 `0.1.4` / `versionCode=11`；下载页已将其标记为撤回并移除安装入口。
-- 本条目记录源码候选，不表示 `0.1.5` 已正式发布。新的 Debug/Release 产物、字节数、SHA-256、证书和设备证据以 [v0.1.5 谱系救援验收记录](docs/验收/2026-08-13-v015-lineage-recovery.md) 为准。
+- 当前公开 v0.1.4 使用 Debug 证书；Android 已在模拟器上明确拒绝其直接覆盖为团队证书签名的 v0.1.5 Release。正式发布前必须确定允许导出数据的迁移与一次性卸载重装方案，不能用更高 `versionCode` 绕过签名身份。
+- 本条目记录已构建的发布候选，不表示 `0.1.5` 已正式发布。新的 Debug/Release 产物、字节数、SHA-256、证书和设备证据以 [v0.1.5 谱系救援验收记录](docs/验收/2026-08-13-v015-lineage-recovery.md) 为准。
 
 ## [0.1.4] - 2026-08-12
 

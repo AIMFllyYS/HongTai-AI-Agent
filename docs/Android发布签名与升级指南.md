@@ -48,7 +48,7 @@ properties 文件由初始化脚本写成 UTF-8 无 BOM，Gradle 也显式按 UT
 构建脚本每次都依次执行 Web production build、Capacitor Android sync、`:app:testReleaseUnitTest`、`:app:lintRelease` 和 `:app:assembleRelease`，不提供跳过构建并验收旧 APK 的参数。Capacitor sync 后会立即对已知生成文件 `android/app/src/main/res/xml/config.xml` 做窄范围确定性格式规范化：保留所有非空语义行，只移除空白行和行尾空白，写回 UTF-8 无 BOM、LF 与单个 EOF newline；不会恢复整个文件或隐藏 Capacitor 的内容变化。它只接受本次流程产生的 `android/app/build/outputs/apk/release/app-release.apk`，并自动执行以下主机门禁：
 
 - `zipalign -c -P 16 -v 4`；
-- `aapt2 dump badging`，要求包名 `com.hongtai.aiagent`、当前源码候选 `versionCode=8`、`versionName=0.1.1`；
+- `aapt2 dump badging`，要求包名 `com.hongtai.aiagent`、当前源码候选 `versionCode=12`、`versionName=0.1.5`；
 - `apksigner verify --verbose --print-certs`，要求 v2/v3 均为 `true`，且 DN 不含 `Android Debug`；
 - signer SHA-256 必须与 `android/release-certificate.sha256` 的公开证书锚点完全一致；
 - 计算并打印 APK SHA-256。
@@ -63,7 +63,7 @@ properties 文件由初始化脚本写成 UTF-8 无 BOM，Gradle 也显式按 UT
 
 ## 安装与升级边界
 
-Android Debug 证书与本 release 证书不是同一身份。已有 Debug/QA 安装不能直接升级为 release；进入 release 谱系前需要先备份允许导出的数据、卸载 Debug 包，再安装 release，卸载会清除应用私有数据。
+Android Debug 证书与本 release 证书不是同一身份。已有 Debug/QA 安装不能直接升级为 release；当前公开推荐的 v0.1.4/code11 就属于 Debug 谱系。进入 release 谱系前需要先备份允许导出的数据、卸载 Debug 包，再安装 release，卸载会清除应用私有数据。不得把更高 `versionCode` 当作跨证书升级手段；Android 会先校验签名并拒绝不兼容覆盖。
 
 进入 release 谱系后，后续候选必须使用同一 release 证书并递增 `versionCode`。普通升级命令是：
 
@@ -71,6 +71,6 @@ Android Debug 证书与本 release 证书不是同一身份。已有 Debug/QA �
 adb install -r android\app\build\outputs\apk\release\app-release.apk
 ```
 
-验收时不得使用 `-d`，也不得在升级前卸载；应核对安装前后证书指纹、版本、`firstInstallTime` 和受控本地数据。2026-08-10 已在 API 35 read-only 模拟器上以同一 release 证书完成 v3→v4 普通升级：`firstInstallTime` 保持、本地档案标记保留，升级后冷启动通过。该证据不是物理真机证据；物理真机与其他发布门禁仍未完成，整体仍不可正式分发。详细数值见[当日签名链验收](验收/2026-08-10-android-release-signing.md)。
+验收时不得使用 `-d`，也不得在升级前卸载；应核对安装前后证书指纹、版本、`firstInstallTime` 和受控本地数据。2026-08-10 已在 API 35 read-only 模拟器上以同一 release 证书完成 v3→v4 普通升级：`firstInstallTime` 保持、本地档案标记保留，升级后冷启动通过。2026-08-13 又以同一正式证书完成 v3→v0.1.5/code12 普通升级，`firstInstallTime` 保持；同一轮把公开 v0.1.4 Debug 覆盖为 v0.1.5 Release 时，系统按预期返回 `INSTALL_FAILED_UPDATE_INCOMPATIBLE` 并保留旧安装。两者都只是模拟器证据；物理真机、公开用户的数据迁移方案与其他发布门禁仍未完成，整体仍不可正式分发。详细数值见[签名链验收](验收/2026-08-10-android-release-signing.md)与[v0.1.5 救援验收](验收/2026-08-13-v015-lineage-recovery.md)。
 
 Play App Signing、CI 密钥库或远程签名服务只是未来可选的部署方案。启用前需单独设计权限、备份、审计和迁移流程；当前仓库未配置这些系统。

@@ -181,15 +181,15 @@ git commit -m "chore(release): prepare truthful v0.1.5 identity"
 - Generate: `android/app/build/outputs/apk/debug/app-debug.apk`
 - Generate: `android/app/build/outputs/apk/release/app-release.apk`
 
-- [ ] 从干净源码执行 `pnpm test`。
-- [ ] 执行 `pnpm check`。
-- [ ] 执行 `pnpm --filter @hongtai/web build`。
-- [ ] 执行相关 Gradle unit test、lint、debug assemble。
-- [ ] 使用仓库 Release 脚本构建正式签名 APK；不得读取或打印 keystore 密码/私钥内容。
-- [ ] 使用 `aapt`/`apkanalyzer` 验证包内真实身份是 0.1.5/12。
-- [ ] 使用 `apksigner verify --verbose --print-certs` 验证 Release APK 非 debuggable、签名链有效，并记录公开证书 SHA-256。
-- [ ] 计算候选 APK SHA-256 和字节数；同一候选在端测后不得重新构建再冒充同一产物。
-- [ ] 检查 `git diff --check`、未解决冲突标记、U+FFFD、tracked secrets 和精确工作区状态。
+- [x] 从已提交可执行源码执行 `pnpm test`：245/245 通过。
+- [x] 执行 `pnpm check`：TypeScript、ESLint 与 245/245 测试通过。
+- [x] 执行 `pnpm --filter @hongtai/web build`：626 modules transformed。
+- [x] 执行相关 Gradle unit test、lint、debug assemble：Debug/Release JVM 各 70/70，lint 各 0 error，Debug 和 androidTest APK 构建成功。
+- [x] 使用仓库 Release 脚本构建正式签名 APK；未读取或打印 keystore 密码/私钥内容。
+- [x] 使用 `aapt` 验证包内真实身份是 0.1.5/12、包名正确、四 ABI 完整。
+- [x] 使用 `apksigner verify --verbose --print-certs` 验证 Release APK 非 debuggable、v2/v3 有效，并记录公开证书 SHA-256。
+- [x] 计算候选 APK SHA-256 和字节数；端测后的最终重建哈希保持 `48D658...E6D`。
+- [x] 最终文档提交前检查 `git diff --check`、未解决冲突标记、文本 U+FFFD、tracked secrets 和精确工作区状态；两个 U+FFFD grep 命中仅来自既有 PNG 二进制字节，不是文本编码损坏。
 
 ## Task 7：端侧验收与升级谱系判定
 
@@ -197,14 +197,16 @@ git commit -m "chore(release): prepare truthful v0.1.5 identity"
 
 - Update: `docs/验收/2026-08-13-v015-lineage-recovery.md`
 
-- [ ] 执行 `adb devices -l`，区分模拟器与物理设备；没有物理设备时不得写“真机通过”。
-- [ ] Debug 谱系：从当前公开 v0.1.4/code11 debug 签名安装状态验证到 code12 debug 候选的正常覆盖升级，用于迁移期 QA。
-- [ ] Release 谱系：以相同正式证书的旧 Release 基线验证到 v0.1.5/code12 的无降级参数升级。
+- [x] 执行 `adb devices -l`：唯一设备为 API 35 x86_64 AVD，`ro.kernel.qemu=1`；没有物理设备。
+- [x] Debug 谱系：从当前公开 v0.1.4/code11 Debug 正常覆盖到 code12 Debug，用于迁移期 QA。
+- [x] Release 谱系：以相同正式证书的 v3 Release 基线验证到 v0.1.5/code12，无卸载、无 `-d`，升级成功并保持 `firstInstallTime`；同时记录公开 Debug→Release 被签名规则拒绝。
 - [ ] 验证最小化/切换应用后流程继续或恢复为明确终态，页面不永久显示“正在执行中”。
 - [ ] 验证相机/系统照片选择器路径与设置页权限表现；不新增宽泛媒体权限来掩盖问题。
 - [ ] 验证本地视频导入、分析、诊察、生产、取消、恢复与关键输出。
-- [ ] 将设备型号、Android 版本、输入产物哈希、安装命令结果和失败证据写入验收记录。
-- [ ] 若任一物理设备门禁失败或不可执行，保留救援分支，禁止回合并 `main`，并明确剩余阻塞。
+- [x] 将设备型号、Android 版本、输入产物哈希、安装命令结果和失败证据写入验收记录。
+- [x] 物理设备不可用；保留救援分支，禁止回合并 `main`，并明确签名迁移与物理端侧剩余阻塞。
+
+当前模拟器已通过 Home 往返、受控进程重建、相机/Photo Picker/MP4 Picker 打开和取消、Media3 instrumentation；上面三项仍保持未勾选，是因为没有物理真机、有效 AI Key 与真实媒体，尚不能把部分烟测写成完整端侧 E2E。
 
 ## Task 8：受门禁保护地回合并 main
 
