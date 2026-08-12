@@ -15,6 +15,35 @@ import type {
 /** Versioned boundary between the presentation layer and local application services. */
 export const APP_RUNTIME_CONTRACT_VERSION = "app-runtime.v1";
 
+export const RUNTIME_WORK_KIND_VALUES = [
+  "ingest",
+  "content-analysis",
+  "diagnosis-report",
+  "production-plan",
+  "production-render",
+  "transient-operation",
+] as const;
+
+export type RuntimeWorkKind = typeof RUNTIME_WORK_KIND_VALUES[number];
+export type RuntimeWorkExecution = "in-process" | "external-activity";
+
+export interface RuntimeUnfinishedWork {
+  readonly kind: RuntimeWorkKind;
+  readonly id: string;
+  readonly source: "memory" | "persisted";
+  readonly execution: RuntimeWorkExecution;
+}
+
+export interface RuntimeRecoveryProjection {
+  readonly unfinished: readonly RuntimeUnfinishedWork[];
+  readonly recovered: readonly RuntimeUnfinishedWork[];
+}
+
+export interface RuntimeRecoveryService {
+  inspectUnfinishedWork(): Promise<readonly RuntimeUnfinishedWork[]>;
+  recoverInterruptedWork(): Promise<RuntimeRecoveryProjection>;
+}
+
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 export type JsonObject = { readonly [key: string]: JsonValue };
@@ -366,6 +395,7 @@ export interface AppRuntime {
   readonly analysis: AnalysisService;
   readonly diagnosis: DiagnosisService;
   readonly production: ProductionService;
+  readonly recovery: RuntimeRecoveryService;
   readonly features: FeatureCapabilityRegistry;
 }
 

@@ -5,6 +5,7 @@ import {
   APP_RUNTIME_CONTRACT_VERSION,
   FEATURE_CAPABILITY_VALUES,
   PIPELINE_STAGES,
+  RUNTIME_WORK_KIND_VALUES,
   TASK_STATUS_VALUES,
   TaskError,
   issueFromAppError,
@@ -43,6 +44,14 @@ test("应用运行时契约保留七个采集阶段，并将任务与内容拆�
   ]);
   assert.deepEqual(ANALYSIS_STATUS_VALUES, ["not_started", "running", "succeeded", "failed"]);
   assert.deepEqual(FEATURE_CAPABILITY_VALUES, ["available", "planned"]);
+  assert.deepEqual(RUNTIME_WORK_KIND_VALUES, [
+    "ingest",
+    "content-analysis",
+    "diagnosis-report",
+    "production-plan",
+    "production-render",
+    "transient-operation",
+  ]);
   assert.equal(isTerminalTaskStatus("interrupted"), true);
   assert.equal(isTerminalTaskStatus("running"), false);
   assert.deepEqual(PIPELINE_STAGES, TASK_STAGE_VALUES);
