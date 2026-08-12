@@ -176,7 +176,7 @@ test("runtime task pages are wired to AppRuntime and static fixtures remain outs
   }
   assert.match(read("pages/TaskHomePage.tsx"), /runtime\.tasks\.inspectInput/);
   assert.match(read("pages/TaskHomePage.tsx"), /submitLocalTask\(runtime\.tasks/);
-  assert.match(read("pages/TaskHomePage.tsx"), /runtime\.analysis\.importVideo\(\)/);
+  assert.match(read("pages/TaskHomePage.tsx"), /runtime\.analysis\.importVideo\(/);
   assert.match(read("pages/TaskHomePage.tsx"), /sourceKind === "local_video"/);
   assert.match(read("pages/TaskProcessingPage.tsx"), /runtime\.tasks\.subscribe/);
   assert.match(read("pages/TaskProcessingPage.tsx"), /runtime\.tasks\.listEvents/);
@@ -214,7 +214,7 @@ test("task pages keep real events but never offer stop or lineage-retry controls
   assert.doesNotMatch(processing, /if \(!ingestAvailable\) return/);
   assert.match(detail, /runtime\.tasks\.getDetail/);
   assert.match(analysis, /runtime\.analysis\.get/);
-  assert.match(detail, /<IssueNotice issue=\{issue\}/);
+  assert.match(detail, /<IssueNotice actions=\{issueActions\} issue=\{activeIssue\}/);
   assert.doesNotMatch(processing, /runtime\.tasks\.(cancel|retry)/);
   assert.doesNotMatch(detail, /runtime\.tasks\.retry/);
   assert.doesNotMatch(processing, /retryOfTaskId/);

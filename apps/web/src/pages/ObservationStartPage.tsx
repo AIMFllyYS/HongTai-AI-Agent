@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { issueFromAppError } from "@hongtai/core";
 import type { AppRuntime, DiagnosisSessionRecord, MediaReference, ObservationMode, StructuredGenerationProgressV1, TaskIssue } from "@hongtai/core";
 
@@ -9,8 +9,10 @@ import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { RuntimeMediaFrame } from "../components/RuntimeMediaFrame";
 import { EmptyState, LoadingState } from "../components/StatePanels";
-import { StructuredStreamProgress } from "../components/StructuredStreamProgress";
+import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
+import { diagnosisModuleDefinitions } from "../features/diagnosis/diagnosis-module-progress";
 import { observationModeLabel } from "../features/diagnosis/diagnosis-presenters";
+import { LiveListReadReconciler } from "../features/generation/live-list-read-reconciler";
 import { useAppResume } from "../hooks/useAppResume";
 import { observationReportPath, type Navigate } from "../router";
 
@@ -44,21 +46,47 @@ function statusIcon(session: DiagnosisSessionRecord): "pending" | "sync" | "chec
   return "error";
 }
 
+export function upsertObservationSession(
+  current: readonly DiagnosisSessionRecord[] | undefined,
+  session: DiagnosisSessionRecord,
+): readonly DiagnosisSessionRecord[] {
+  const byId = new Map((current ?? []).map((item) => [item.sessionId, item]));
+  byId.set(session.sessionId, session);
+  return [...byId.values()].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
+}
+
 export function ObservationStartPage({ runtime, navigate }: ObservationStartPageProps) {
   const diagnosisAvailable = runtime.features.diagnosis === "available";
+  const observationHistoryReads = useRef(new LiveListReadReconciler<DiagnosisSessionRecord>());
   const [mode, setMode] = useState<ObservationMode>("tongue");
   const [image, setImage] = useState<MediaReference>();
   const [sessions, setSessions] = useState<readonly DiagnosisSessionRecord[]>();
   const [issue, setIssue] = useState<TaskIssue>();
+  const [historyIssue, setHistoryIssue] = useState<TaskIssue>();
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(true);
   const [reportProgress, setReportProgress] = useState<StructuredGenerationProgressV1>();
 
+  const applySessionChange = useCallback((session: DiagnosisSessionRecord) => {
+    observationHistoryReads.current.record(session);
+    setSessions((current) => upsertObservationSession(current, session));
+  }, []);
+
   const loadSessions = useCallback(async () => {
+    const read = observationHistoryReads.current.beginRead();
     try {
-      setSessions(await runtime.diagnosis.listSessions());
+      const loaded = await runtime.diagnosis.listSessions();
+      const reconciled = observationHistoryReads.current.reconcile(
+        read,
+        loaded,
+        (current, session) => upsertObservationSession(current, session),
+      );
+      if (reconciled === undefined) return;
+      setSessions(reconciled);
+      setHistoryIssue(undefined);
     } catch (error) {
-      setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "本地观察历史暂时无法读取", action: "none" }));
+      if (!observationHistoryReads.current.abandon(read)) return;
+      setHistoryIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "本地观察历史暂时无法读取", action: "none" }));
     }
   }, [runtime]);
 
@@ -67,6 +95,28 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
   useEffect(() => {
     void loadSessions();
   }, [loadSessions]);
+
+  useEffect(() => {
+    const running = sessions?.filter((session) => session.reportStatus === "running") ?? [];
+    const subscriptions: Array<() => void> = [];
+    try {
+      for (const session of running) {
+        subscriptions.push(runtime.diagnosis.subscribeReport(session.sessionId, (event) => {
+          if (event.type === "completed") {
+            applySessionChange({ ...session, reportStatus: "succeeded", updatedAt: event.record.updatedAt });
+          }
+          if (event.type === "failed") {
+            void runtime.diagnosis.getSession(session.sessionId).then((stored) => {
+              if (stored) applySessionChange(stored);
+            }).catch(() => undefined);
+          }
+        }));
+      }
+    } catch (error) {
+      setHistoryIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "观察历史自动更新暂时不可用", action: "none" }));
+    }
+    return () => subscriptions.forEach((unsubscribe) => unsubscribe());
+  }, [applySessionChange, runtime, sessions]);
 
   useEffect(() => {
     let active = true;
@@ -127,10 +177,21 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
     setReportProgress(undefined);
     try {
       const session = await runtime.diagnosis.createSession({ mode, image });
+      applySessionChange(session);
+      applySessionChange({ ...session, reportStatus: "running" });
       try {
-        await runtime.diagnosis.runReport(session.sessionId, async (event) => {
+        await runtime.diagnosis.runReport(session.sessionId, (event) => {
           if (event.type === "progress") setReportProgress(event.progress);
-          if (event.type === "failed") setIssue(event.issue);
+          if (event.type === "failed") {
+            setReportProgress(event.progress);
+            setIssue(event.issue);
+            void runtime.diagnosis.getSession(session.sessionId).then((stored) => {
+              if (stored) applySessionChange(stored);
+            }).catch(() => undefined);
+          }
+          if (event.type === "completed") {
+            applySessionChange({ ...session, reportStatus: "succeeded", updatedAt: event.record.updatedAt });
+          }
         });
         navigate(observationReportPath(session.sessionId));
       } catch (error) {
@@ -139,15 +200,15 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
         // report page must not present that stale running row as live work.
         const stored = await runtime.diagnosis.getReport(session.sessionId).catch(() => undefined);
         if (stored?.status === "succeeded" || stored?.status === "failed") {
+          const storedSession = await runtime.diagnosis.getSession(session.sessionId).catch(() => undefined);
+          if (storedSession) applySessionChange(storedSession);
           navigate(observationReportPath(session.sessionId));
         } else {
           setIssue(issueFromAppError(error, { code: "STORAGE_WRITE_FAILED", message: "观察报告状态无法安全保存，请释放空间后重试。", action: "free_storage" }));
-          void loadSessions();
         }
       }
     } catch (error) {
       setIssue(issueFromAppError(error, { code: "STORAGE_WRITE_FAILED", message: "无法创建本地观察会话", action: "free_storage" }));
-      void loadSessions();
     } finally {
       setLoading(false);
     }
@@ -179,13 +240,14 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
         <GlassCard className="observation-capture-card">
           <div className="observation-capture-card__copy"><span className="eyebrow">STEP 2</span><h3>{observationModeLabel(mode)}图片</h3><p>{mode === "tongue" ? "尽量保持舌面清晰、避免滤镜和强色光。" : "尽量保持正面、自然光和无遮挡。"}</p></div>
           {importing ? <div aria-live="polite" className="observation-capture-card__empty" role="status"><Icon name="sync" size={30} /><span>正在导入图片</span></div> : image ? <RuntimeMediaFrame className="observation-capture-card__image" label={`${observationModeLabel(mode)}图片`} media={image} /> : <div className="observation-capture-card__empty"><Icon name="camera" size={30} /><span>尚未选择图片</span></div>}
-          <div className="observation-capture-card__actions mobile-action-group"><Button disabled={!diagnosisAvailable || loading || importing} icon={<Icon name="camera" size={18} />} onClick={() => void captureImage()} variant="secondary">拍摄图片</Button><Button disabled={!diagnosisAvailable || loading || importing} icon={<Icon name="upload_file" size={18} />} onClick={() => void pickImage()} variant="secondary">选择图片</Button><Button disabled={!diagnosisAvailable || !image || loading || importing} icon={<Icon name="auto_awesome" size={18} />} onClick={() => void createReport()}>{loading ? "正在创建报告" : "生成观察报告"}</Button></div>
-          {loading ? <StructuredStreamProgress progress={reportProgress} title="正在生成真实观察报告" /> : null}
+          <div className="observation-capture-card__actions mobile-action-group"><Button disabled={!diagnosisAvailable || loading || importing} icon={<Icon name="camera" size={18} />} onClick={() => void captureImage()} variant="secondary">拍摄图片</Button><Button disabled={!diagnosisAvailable || loading || importing} icon={<Icon name="upload_file" size={18} />} onClick={() => void pickImage()} variant="secondary">选择图片</Button><Button disabled={!diagnosisAvailable || !image || loading || importing} icon={<Icon name="auto_awesome" size={18} />} onClick={() => void createReport()}>{loading ? "正在生成五个板块" : "生成观察报告"}</Button></div>
+          {loading || reportProgress ? <ValidatedModuleProgress definitions={diagnosisModuleDefinitions} failedTitle="观察报告未完成" issue={issue} progress={reportProgress} title="正在生成真实观察报告" /> : null}
           <small className="observation-privacy-note"><Icon name="folder_special" size={15} />图片会复制到应用私有目录；不会作为公开素材或自动发布内容。</small>
         </GlassCard>
 
         <section className="page-section">
-          <div className="section-heading"><div><span className="eyebrow">LOCAL HISTORY</span><h3>本地观察历史</h3></div><button className="text-action" onClick={() => void loadSessions()} type="button">刷新</button></div>
+          <div className="section-heading"><div><span className="eyebrow">LOCAL HISTORY</span><h3>本地观察历史</h3></div>{historyIssue ? <Button onClick={() => void loadSessions()} variant="quiet">重新读取</Button> : null}</div>
+          {historyIssue ? <IssueNotice issue={historyIssue} /> : null}
           {sessions === undefined ? <LoadingState description="正在读取本地会话投影" title="读取观察历史" /> : sessions.length === 0 ? <EmptyState description="完成一次真实图片观察后，会话和正式报告会保存在本地这里。" icon="history" title="尚无本地观察" /> : <div className="observation-history-list">{sessions.map((session) => <button className="observation-history-item" key={session.sessionId} onClick={() => navigate(observationReportPath(session.sessionId))} type="button"><span className={`observation-history-item__icon is-${session.reportStatus}`}><Icon name={statusIcon(session)} size={20} /></span><span><strong>{observationModeLabel(session.mode)}</strong><small>{statusLabel(session)}</small></span><Icon name="chevron_right" size={18} /></button>)}</div>}
         </section>
       </div>

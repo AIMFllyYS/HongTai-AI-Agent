@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { issueFromAppError, safeUrlForDisplay } from "@hongtai/core";
-import type { AppRuntime, AppTaskRecord, InputInspection, TaskIssue } from "@hongtai/core";
+import type { AppRuntime, AppTaskRecord, InputInspection, StructuredGenerationProgressV1, TaskChangeEventV1, TaskIssue } from "@hongtai/core";
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
@@ -10,6 +10,9 @@ import { IssueNotice } from "../components/IssueNotice";
 import { ErrorState, LoadingState, EmptyState } from "../components/StatePanels";
 import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
+import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
+import { LiveListReadReconciler } from "../features/generation/live-list-read-reconciler";
+import { contentAnalysisModuleDefinitions } from "../features/tasks/content-analysis-module-progress";
 import { formatTaskTime, platformLabel } from "../features/tasks/task-presenters";
 import { useAppResume } from "../hooks/useAppResume";
 import { aiSettingsPath, taskAnalysisPath, taskDetailPath, taskProcessingPath, type Navigate } from "../router";
@@ -58,6 +61,19 @@ function taskPath(task: AppTaskRecord): string {
     : taskDetailPath(task.id);
 }
 
+export function applyTaskHistoryChange(
+  current: readonly AppTaskRecord[] | undefined,
+  event: TaskChangeEventV1,
+  limit = 12,
+): readonly AppTaskRecord[] {
+  if (event.type === "deleted") return (current ?? []).filter((task) => task.id !== event.taskId);
+  const byId = new Map((current ?? []).map((task) => [task.id, task]));
+  byId.set(event.task.id, event.task);
+  return [...byId.values()]
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+    .slice(0, limit);
+}
+
 function inspectionFor(runtime: AppRuntime, input: string): InputInspection | undefined {
   if (!input.trim()) return undefined;
   try {
@@ -95,6 +111,7 @@ function TaskHistory({ tasks, navigate }: { readonly tasks: readonly AppTaskReco
 
 export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
   const ingestAvailable = runtime.features.ingest === "available";
+  const taskHistoryReads = useRef(new LiveListReadReconciler<TaskChangeEventV1>());
   const [input, setInput] = useState("");
   const [inspection, setInspection] = useState<InputInspection>();
   const [tasks, setTasks] = useState<readonly AppTaskRecord[]>();
@@ -102,12 +119,22 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
   const [submitIssue, setSubmitIssue] = useState<TaskIssue>();
   const [submitting, setSubmitting] = useState(false);
   const [videoImporting, setVideoImporting] = useState(false);
+  const [videoProgress, setVideoProgress] = useState<StructuredGenerationProgressV1>();
 
   const loadHistory = useCallback(async () => {
+    const read = taskHistoryReads.current.beginRead();
     try {
       setHistoryIssue(undefined);
-      setTasks(await runtime.tasks.list({ limit: 12 }));
+      const loaded = await runtime.tasks.list({ limit: 12 });
+      const reconciled = taskHistoryReads.current.reconcile(
+        read,
+        loaded,
+        (current, event) => applyTaskHistoryChange(current, event),
+      );
+      if (reconciled === undefined) return;
+      setTasks(reconciled);
     } catch (error) {
+      if (!taskHistoryReads.current.abandon(read)) return;
       setHistoryIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "本地任务历史暂时无法读取", action: "none" }));
     }
   }, [runtime]);
@@ -117,6 +144,19 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
   useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
+
+  useEffect(() => {
+    try {
+      return runtime.tasks.subscribeChanges((event) => {
+        taskHistoryReads.current.record(event);
+        setTasks((current) => applyTaskHistoryChange(current, event));
+        setHistoryIssue(undefined);
+      });
+    } catch (error) {
+      setHistoryIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "本地任务自动更新暂时不可用", action: "none" }));
+      return undefined;
+    }
+  }, [runtime]);
 
   const updateInput = (next: string) => {
     setInput(next);
@@ -134,7 +174,6 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
         navigate(taskProcessingPath(result.task.id));
       } else {
         setSubmitIssue(result.issue);
-        if (result.status === "start_failed") await loadHistory();
       }
     } finally {
       setSubmitting(false);
@@ -145,13 +184,18 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
     if (!ingestAvailable || runtime.features.contentAnalysis !== "available" || submitting || videoImporting) return;
     setVideoImporting(true);
     setSubmitIssue(undefined);
+    setVideoProgress(undefined);
     try {
-      const record = await runtime.analysis.importVideo();
-      await loadHistory();
+      const record = await runtime.analysis.importVideo((event) => {
+        if (event.type === "progress") setVideoProgress(event.progress);
+        if (event.type === "failed") {
+          setVideoProgress(event.progress);
+          setSubmitIssue(event.issue);
+        }
+      });
       navigate(taskAnalysisPath(record.taskId));
     } catch (error) {
       setSubmitIssue(issueFromAppError(error, { code: "MEDIA_IMPORT_FAILED", message: "本地视频没有完成自动拆解", action: "select_media" }));
-      await loadHistory();
     } finally {
       setVideoImporting(false);
     }
@@ -174,6 +218,7 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
           <Button disabled={!ingestAvailable || runtime.features.contentAnalysis !== "available" || submitting || videoImporting} icon={<Icon name={videoImporting ? "sync" : "upload_file"} size={19} />} onClick={() => void importVideo()} size="lg">
             {videoImporting ? "正在处理并拆解视频" : "上传本地视频并自动拆解"}
           </Button>
+          {videoImporting || videoProgress ? <ValidatedModuleProgress definitions={contentAnalysisModuleDefinitions} failedTitle="本地视频内容拆解未完成" issue={submitIssue} progress={videoProgress} title="本地视频正在生成内容拆解" /> : null}
         </GlassCard>
 
         <GlassCard className="task-input-card">
@@ -209,7 +254,7 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
         </GlassCard>
 
         <section className="page-section">
-          <div className="section-heading"><h3>本地任务历史</h3><button className="text-action" onClick={() => void loadHistory()} type="button">刷新</button></div>
+          <div className="section-heading"><h3>本地任务历史</h3>{historyIssue ? <Button onClick={() => void loadHistory()} variant="quiet">重新读取</Button> : null}</div>
           {historyIssue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()) }} issue={historyIssue} /> : null}
           {historyIssue && tasks === undefined ? <ErrorState description={historyIssue.userMessage} title="任务历史无法读取" /> : tasks === undefined ? <LoadingState description="正在从本地仓储读取任务记录" title="读取任务历史" /> : <TaskHistory navigate={navigate} tasks={tasks} />}
         </section>

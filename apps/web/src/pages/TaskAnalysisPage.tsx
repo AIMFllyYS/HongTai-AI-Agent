@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { issueFromAppError, safeUrlForDisplay } from "@hongtai/core";
-import type { AppRuntime, ContentAnalysisRecord, TaskDetailRecord, TaskIssue } from "@hongtai/core";
+import type { AppRuntime, ContentAnalysisRecord, StructuredGenerationProgressV1, TaskDetailRecord, TaskIssue } from "@hongtai/core";
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
@@ -10,6 +10,8 @@ import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { EmptyState, ErrorState, LoadingState } from "../components/StatePanels";
 import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
+import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
+import { contentAnalysisModuleDefinitions } from "../features/tasks/content-analysis-module-progress";
 import { platformLabel, readContentAnalysis } from "../features/tasks/task-presenters";
 import { useAppResume } from "../hooks/useAppResume";
 import { aiSettingsPath, pathForRoute, taskDetailPath, type Navigate } from "../router";
@@ -25,6 +27,8 @@ export function TaskAnalysisPage({ runtime, taskId, navigate }: TaskAnalysisPage
   const [record, setRecord] = useState<ContentAnalysisRecord>();
   const [loading, setLoading] = useState(true);
   const [issue, setIssue] = useState<TaskIssue>();
+  const [readIssue, setReadIssue] = useState<TaskIssue>();
+  const [progress, setProgress] = useState<StructuredGenerationProgressV1>();
 
   const load = useCallback(async () => {
     try {
@@ -34,9 +38,9 @@ export function TaskAnalysisPage({ runtime, taskId, navigate }: TaskAnalysisPage
       ]);
       setDetail(nextDetail);
       setRecord(nextRecord);
-      setIssue(undefined);
+      setReadIssue(undefined);
     } catch (error) {
-      setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "内容拆解状态暂时无法读取", action: "none" }));
+      setReadIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "内容拆解状态暂时无法读取", action: "none" }));
     } finally {
       setLoading(false);
     }
@@ -46,18 +50,52 @@ export function TaskAnalysisPage({ runtime, taskId, navigate }: TaskAnalysisPage
 
   useEffect(() => {
     void load();
-  }, [load]);
+    let unsubscribeTaskChange: (() => void) | undefined;
+    let unsubscribeAnalysis: (() => void) | undefined;
+    try {
+      unsubscribeTaskChange = runtime.tasks.subscribeChanges((event) => {
+        if (event.type === "deleted" && event.taskId === taskId) {
+          setDetail(undefined);
+          return;
+        }
+        if (event.type === "upsert" && event.task.id === taskId) {
+          setDetail((current) => current ? { ...current, task: event.task } : current);
+          void load();
+        }
+      });
+      unsubscribeAnalysis = runtime.analysis.subscribe(taskId, (event) => {
+        if (event.type === "progress") setProgress(event.progress);
+        if (event.type === "failed") {
+          setProgress(event.progress);
+          setIssue(event.issue);
+          void load();
+        }
+        if (event.type === "completed") {
+          setRecord(event.record);
+          setProgress(undefined);
+          setIssue(undefined);
+        }
+      });
+    } catch (error) {
+      setReadIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "内容拆解自动更新暂时不可用", action: "none" }));
+    }
+    return () => {
+      unsubscribeTaskChange?.();
+      unsubscribeAnalysis?.();
+    };
+  }, [load, runtime, taskId]);
 
   if (loading) {
     return <AppShell activeNav="home" backPath={taskDetailPath(taskId)} navigate={navigate} title="内容拆解"><LoadingState description="正在读取已保存的拆解状态和真实证据" title="读取内容拆解" /></AppShell>;
   }
   if (!detail) {
-    return <AppShell activeNav="home" backPath="/" navigate={navigate} title="内容拆解"><div className="page-stack page-task-analysis">{issue ? <IssueNotice issue={issue} /> : null}<ErrorState description={issue?.userMessage ?? "该任务不存在，或没有可读取的本地详情。"} title="找不到任务" /></div></AppShell>;
+    const unavailableIssue = readIssue ?? issue;
+    return <AppShell activeNav="home" backPath="/" navigate={navigate} title="内容拆解"><div className="page-stack page-task-analysis">{unavailableIssue ? <IssueNotice issue={unavailableIssue} /> : null}<ErrorState description={unavailableIssue?.userMessage ?? "该任务不存在，或没有可读取的本地详情。"} title="找不到任务" /></div></AppShell>;
   }
 
   const analysisAvailable = runtime.features.contentAnalysis === "available";
   const analysis = record ? readContentAnalysis(record) : undefined;
-  const recordIssue = issue ?? record?.issue;
+  const recordIssue = readIssue ?? issue ?? record?.issue;
   const issueActions = {
     configureAi: () => navigate(aiSettingsPath()),
   };
@@ -82,7 +120,7 @@ export function TaskAnalysisPage({ runtime, taskId, navigate }: TaskAnalysisPage
         {!record || record.status === "not_started" ? (
           <EmptyState action={<Button icon={<Icon name="arrow_back" size={17} />} onClick={() => navigate(taskDetailPath(taskId))} variant="secondary">返回任务详情确认拆解</Button>} description="内容拆解不会自动开始。请在任务详情确认后，才会基于真实证据运行 AI 自动拆解。" icon="analytics" title="尚未开始拆解" />
         ) : null}
-        {record?.status === "running" ? <LoadingState description="拆解正在独立于采集七阶段运行。若本次由任务详情启动，实时结构区块会显示在那里；正式结果仍须通过 Schema 和证据校验后才会保存。" title="AI 正在拆解真实证据" /> : null}
+        {record?.status === "running" || progress ? <ValidatedModuleProgress definitions={contentAnalysisModuleDefinitions} failedTitle="内容拆解未完成" issue={issue ?? record?.issue} progress={progress} title="AI 正在拆解真实证据" /> : null}
         {record?.status === "failed" ? <ErrorState action={<Button icon={<Icon name="arrow_back" size={17} />} onClick={() => navigate(taskDetailPath(taskId))} variant="secondary">返回任务详情</Button>} description="上一次拆解没有生成可展示的正式结果。请查看上方稳定错误代码后，由你确认是否再次运行。" title="内容拆解未完成" /> : null}
         {record?.status === "succeeded" && !analysis?.available ? <ErrorState description="已保存的结果不符合 content-analysis.v1 展示契约，应用不会猜测或补写字段。" title="无法安全展示拆解结果" /> : null}
         {record?.status === "succeeded" && analysis?.available ? <ContentAnalysisDocument analysis={analysis} evidenceUnits={detail.evidenceUnits} /> : null}
@@ -90,7 +128,7 @@ export function TaskAnalysisPage({ runtime, taskId, navigate }: TaskAnalysisPage
 
         <GlassCard className="task-analysis-footer">
           <span><Icon name="info" size={18} />只展示正式结果和真实证据；不展示供应商 reasoning、原始响应或平台私有请求数据。</span>
-          <Button onClick={() => void load()} variant="quiet">刷新本地结果</Button>
+          {readIssue ? <Button onClick={() => void load()} variant="quiet">重新读取本地结果</Button> : null}
         </GlassCard>
       </div>
     </AppShell>

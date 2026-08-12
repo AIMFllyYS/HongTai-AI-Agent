@@ -9,7 +9,7 @@ import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { RuntimeMediaFrame } from "../components/RuntimeMediaFrame";
 import { EmptyState, ErrorState, LoadingState } from "../components/StatePanels";
-import { StructuredStreamProgress } from "../components/StructuredStreamProgress";
+import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
 import {
   imageQualityLabel,
   observationModeLabel,
@@ -17,6 +17,7 @@ import {
   safetyLabel,
   visibilityLabel,
 } from "../features/diagnosis/diagnosis-presenters";
+import { diagnosisModuleDefinitions } from "../features/diagnosis/diagnosis-module-progress";
 import { useAppResume } from "../hooks/useAppResume";
 import { observationNewPath, type Navigate } from "../router";
 
@@ -50,6 +51,7 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
   const [messages, setMessages] = useState<readonly DiagnosisMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [issue, setIssue] = useState<TaskIssue>();
+  const [readIssue, setReadIssue] = useState<TaskIssue>();
   const [reportPending, setReportPending] = useState(false);
   const [reportProgress, setReportProgress] = useState<StructuredGenerationProgressV1>();
   const [question, setQuestion] = useState("");
@@ -68,9 +70,9 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
       setSession(nextSession);
       setRecord(nextRecord);
       setMessages(nextMessages);
-      setIssue(undefined);
+      setReadIssue(undefined);
     } catch (error) {
-      setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "本地观察报告暂时无法读取", action: "none" }));
+      setReadIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "本地观察报告暂时无法读取", action: "none" }));
     } finally {
       setLoading(false);
     }
@@ -80,7 +82,29 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
 
   useEffect(() => {
     void load();
-  }, [load]);
+    let unsubscribe: (() => void) | undefined;
+    try {
+      unsubscribe = runtime.diagnosis.subscribeReport(sessionId, (event) => {
+        if (event.type === "progress") setReportProgress(event.progress);
+        if (event.type === "failed") {
+          setReportProgress(event.progress);
+          setIssue(event.issue);
+          setReportPending(false);
+          void load();
+        }
+        if (event.type === "completed") {
+          setRecord(event.record);
+          setReportProgress(undefined);
+          setReportPending(false);
+          setIssue(undefined);
+          void load();
+        }
+      });
+    } catch (error) {
+      setReadIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "观察报告自动更新暂时不可用", action: "none" }));
+    }
+    return () => unsubscribe?.();
+  }, [load, runtime, sessionId]);
 
   const report = useMemo(() => record ? readDiagnosisReport(record) : undefined, [record]);
 
@@ -90,10 +114,7 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
     setIssue(undefined);
     setReportProgress(undefined);
     try {
-      const next = await runtime.diagnosis.runReport(sessionId, async (event) => {
-        if (event.type === "progress") setReportProgress(event.progress);
-        if (event.type === "failed") setIssue(event.issue);
-      });
+      const next = await runtime.diagnosis.runReport(sessionId);
       setRecord(next);
       await load();
     } catch (error) {
@@ -145,12 +166,15 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
     return <AppShell activeNav="ai" backPath={observationNewPath()} navigate={navigate} title="观察报告" visualTheme="warm-soft-tech"><LoadingState description="正在读取本地保存的会话、正式报告与追问历史" title="读取观察报告" /></AppShell>;
   }
   if (!session) {
-    return <AppShell activeNav="ai" backPath={observationNewPath()} navigate={navigate} title="观察报告" visualTheme="warm-soft-tech"><ErrorState action={<Button onClick={() => navigate(observationNewPath())} variant="secondary">新建观察</Button>} description={issue?.userMessage ?? "该本地观察会话不存在，或无法安全读取。"} title="找不到观察会话" /></AppShell>;
+    const unavailableIssue = readIssue ?? issue;
+    return <AppShell activeNav="ai" backPath={observationNewPath()} navigate={navigate} title="观察报告" visualTheme="warm-soft-tech"><ErrorState action={<Button onClick={() => navigate(observationNewPath())} variant="secondary">新建观察</Button>} description={unavailableIssue?.userMessage ?? "该本地观察会话不存在，或无法安全读取。"} title="找不到观察会话" /></AppShell>;
   }
 
   const canShowReport = report?.available === true;
-  const reportIssue = issue ?? record?.issue;
+  const reportIssue = readIssue ?? issue ?? record?.issue;
   const reportRetryAllowed = record?.status === "failed" && reportIssue?.action === "retry" && diagnosisAvailable;
+  const reportIsActive = record?.status === "running" || reportPending || Boolean(reportProgress);
+  const reportWaitingForStart = !canShowReport && record?.status !== "failed" && !reportIsActive;
   const issueActions = {
     configureAi: () => navigate("/settings/ai"),
     selectMedia: () => navigate(observationNewPath()),
@@ -175,10 +199,8 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
         </GlassCard>
 
         {!diagnosisAvailable && record?.status !== "succeeded" ? <GlassCard className="observation-capability-notice" data-feature-capability="planned" tone="soft"><Icon name="pending" size={22} /><div><span>尚未接入</span><strong>本地 AI 报告能力尚未可用</strong><p>应用不会用示例结论替代真实报告。</p></div></GlassCard> : null}
-        {record?.status === "pending" || record?.status === "running" || reportPending ? <>
-          <LoadingState description="正在运行正式报告；正式文档仍须通过 Schema 与安全约束校验后才会保存。" title={reportPending ? "正在重新生成报告" : "正在生成观察报告"} />
-          {reportPending ? <StructuredStreamProgress progress={reportProgress} title="正在接收真实观察报告结构" /> : null}
-        </> : null}
+        {reportWaitingForStart ? <EmptyState action={<Button disabled={!diagnosisAvailable} icon={<Icon name="auto_awesome" size={17} />} onClick={() => void runReport()}>开始生成报告</Button>} description="图片与会话已经安全保存。开始后会依次显示五个真实生成板块，不需要手动刷新。" icon="pending" title="报告尚未开始生成" /> : null}
+        {reportIsActive ? <ValidatedModuleProgress definitions={diagnosisModuleDefinitions} failedTitle="观察报告未完成" issue={issue ?? record?.issue} progress={reportProgress} title={reportPending && record?.status === "failed" ? "正在重新生成观察报告" : "正在生成观察报告"} /> : null}
         {record?.status === "failed" ? <ErrorState action={reportRetryAllowed ? <Button disabled={reportPending} icon={<Icon name="sync" size={17} />} onClick={() => void runReport()} variant="secondary">{reportPending ? "正在重试" : "重新生成报告"}</Button> : undefined} description="上一次报告没有生成可展示的正式文档。请查看上方稳定错误代码后，再由你决定下一步。" title="观察报告未完成" /> : null}
         {record?.status === "succeeded" && !canShowReport ? <ErrorState description="已保存的报告不符合 diagnosis-report.v1 展示契约，应用不会猜测或补写字段。" title="无法安全展示报告" /> : null}
 

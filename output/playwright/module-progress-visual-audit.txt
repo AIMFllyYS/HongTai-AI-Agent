@@ -1,0 +1,37 @@
+宏泰 AI Agent v0.1.6：五板块生成进度视觉验收
+日期：2026-08-13
+工具：Playwright CLI / Chromium（headed）
+
+范围
+- 使用独立、临时的测试入口直接渲染生产 ValidatedModuleProgress 组件。
+- 临时入口未接入正式 main.tsx、App 路由或任何正式业务记录；验收后已删除。
+- 输入为 structured-generation-progress.v1 语义 DTO，不是供应商原始流或半截 JSON。
+
+已核验状态
+1. 舌诊/面诊生成中：模块 1 已校验，模块 2 流光生成，模块 3-5 等待。
+2. 舌诊/面诊结构校正：模块 1-2 已校验，模块 3 显示“正在校正本板块结构”。
+3. 内容拆解失败：模块 1-3 保留，模块 4 显示稳定 AI_FORMAT_REPAIR_FAILED，模块 5 显示“未开始”。
+4. 内容拆解保存：5/5 已校验，页头明确说明正在保存正式结果。
+
+浏览器与可访问性结果
+- 1440 x 1000 桌面：组件层级、完成内容、当前流光与等待状态清晰，无重叠。
+- 390 x 844 移动视口：documentElement.scrollWidth <= clientWidth，无横向溢出。
+- 390px 完整页面截图覆盖生成、校正、失败和保存状态。
+- 可访问性快照中只有隐藏状态句使用 role=status + aria-live=polite；已校验正文不进入实时播报区。
+- prefers-reduced-motion: reduce 实测为 true。
+- 流光骨架 computed animation-name = none。
+- 已校验结果 computed animation-name = none。
+- 最终浏览器控制台：0 error，0 warning。
+
+截图
+- module-progress-diagnosis-desktop.png（1440 x 1000）
+- module-progress-diagnosis-390px.png（390 x 1024 full page）
+- module-progress-repair-390px.png（390 x 1200 full page）
+- module-progress-failure-390px.png（390 x 1576 full page）
+- module-progress-saving-390px.png（390 x 2055 full page）
+
+人工复核结论
+- 页面没有显示原始 JSON、reasoning、私有图片 URI、字符数、百分比或预计耗时。
+- 失败页头不再沿用“正在校验”文案，而是明确说明失败模块与后续未开始。
+- 失败模块使用红色终态强调；生成/校正使用绿色运行态强调。
+- 五阶段反馈足以说明真实进展，不会把视觉动画伪装成模型逐字流。
