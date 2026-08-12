@@ -1,4 +1,5 @@
 import type { AiProvider, AiStreamEvent } from "./provider";
+import type { StructuredGenerationProgressListener } from "@hongtai/core";
 import type { DiagnosisReportV1, ObservationMode } from "../schemas/diagnosis-report";
 
 export interface DiagnosisSession {
@@ -43,6 +44,7 @@ export interface AiRunRecord {
   readonly completedAt: string;
   readonly rawResponse: string;
   readonly reasoning: string;
+  readonly promptVersions?: readonly string[];
   readonly errorCode?: string;
 }
 
@@ -81,4 +83,5 @@ export interface DiagnosisFlowDependencies {
   readonly repository: DiagnosisRepository;
   readonly contextWindowTokens: number;
   readonly onEvent?: (event: AiStreamEvent & { readonly runId: string }) => void | Promise<void>;
+  readonly onProgress?: StructuredGenerationProgressListener;
 }

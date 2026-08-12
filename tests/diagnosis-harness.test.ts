@@ -26,7 +26,16 @@ class HarnessProvider implements AiProvider {
 
   async generate(request: AiGenerateRequest) {
     this.calls += 1;
-    const content = request.output === "json" ? JSON.stringify(report) : "对话回复";
+    const moduleBySchema: Readonly<Record<string, unknown>> = {
+      diagnosis_visual_observations_v1: { imageQuality: report.imageQuality, observations: report.observations },
+      diagnosis_observation_summary_v1: { summary: report.summary },
+      diagnosis_wellness_recommendations_v1: { wellnessReferences: report.wellnessReferences, recommendations: report.recommendations },
+      diagnosis_safety_limitations_v1: { safetyGuidance: report.safetyGuidance, limitations: report.limitations, disclaimer: report.disclaimer },
+      diagnosis_follow_up_questions_v1: { followUpQuestions: report.followUpQuestions },
+    };
+    const content = request.output === "json"
+      ? JSON.stringify(moduleBySchema[request.jsonSchema?.name ?? ""])
+      : "对话回复";
     await request.onEvent?.({ type: "reasoning_delta", delta: "测试reasoning" });
     await request.onEvent?.({ type: "content_delta", delta: content });
     await request.onEvent?.({ type: "completed" });
@@ -55,7 +64,7 @@ test("本地测试入口只绑定回环地址并保存标准图片、报告与re
     assert.equal(response.status, 201);
     const body = await response.json() as { sessionId: string; report: { summary: { headline: string } } };
     assert.equal(body.report.summary.headline, "测试报告");
-    assert.equal(provider.calls, 1);
+    assert.equal(provider.calls, 5);
     const root = join(directory, body.sessionId);
     const session = JSON.parse(await readFile(join(root, "session.json"), "utf8")) as { image?: unknown; imagePath?: unknown };
     assert.deepEqual(session.image, { mimeType: "image/jpeg" });

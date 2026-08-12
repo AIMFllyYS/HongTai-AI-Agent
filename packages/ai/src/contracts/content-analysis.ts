@@ -1,4 +1,4 @@
-import type { ContentAnalysisPlatform, ContentType } from "@hongtai/core";
+import type { ContentAnalysisPlatform, ContentType, StructuredGenerationProgressListener } from "@hongtai/core";
 import type { AiProvider, AiStreamEvent } from "./provider";
 import type { ContentAnalysisResultV1 } from "../schemas/content-analysis";
 
@@ -26,6 +26,7 @@ export interface ContentAnalysisRunRecord {
   readonly completedAt: string;
   readonly rawResponse: string;
   readonly reasoning: string;
+  readonly promptVersions?: readonly string[];
   readonly errorCode?: string;
 }
 
@@ -39,4 +40,5 @@ export interface ContentAnalysisFlowDependencies {
   readonly provider: AiProvider;
   readonly store: ContentAnalysisStore;
   readonly onEvent?: (event: AiStreamEvent & { readonly runId: string }) => void | Promise<void>;
+  readonly onProgress?: StructuredGenerationProgressListener;
 }

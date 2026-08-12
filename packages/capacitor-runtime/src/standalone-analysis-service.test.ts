@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { AiProvider } from "@hongtai/ai";
+import type { AiGenerateRequest, AiProvider } from "@hongtai/ai";
 import type { TaskDetailRecord } from "@hongtai/core";
 
 import { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
@@ -20,6 +20,22 @@ const result = {
   reusableTemplate: { formula: "痛点-方法", steps: ["提出痛点"], variableSlots: ["行业痛点"], doNotCopy: ["具体原句"] },
   risks: [{ category: "unsupported_claim", level: "low", description: "需核对事实", evidenceRefs: ["segment-1"], suggestion: "补充依据" }],
 } as const;
+
+function analysisModuleContent(
+  request: AiGenerateRequest,
+  source: Pick<typeof result, "overview" | "hook" | "painPoints" | "emotionalDrivers" | "structure" | "coreClaims" | "style" | "reusableTemplate" | "risks"> = result,
+): string {
+  const moduleBySchema: Readonly<Record<string, unknown>> = {
+    content_analysis_overview_v1: { overview: source.overview },
+    content_analysis_hook_drivers_v1: { hook: source.hook, painPoints: source.painPoints, emotionalDrivers: source.emotionalDrivers },
+    content_analysis_structure_claims_v1: { structure: source.structure, coreClaims: source.coreClaims },
+    content_analysis_style_template_v1: { style: source.style, reusableTemplate: source.reusableTemplate },
+    content_analysis_risks_boundaries_v1: { risks: source.risks },
+  };
+  const value = moduleBySchema[request.jsonSchema?.name ?? ""];
+  if (!value) throw new Error(`unexpected analysis schema: ${request.jsonSchema?.name ?? "none"}`);
+  return JSON.stringify(value);
+}
 
 function detail(): TaskDetailRecord {
   const evidenceUnits = [{ id: "segment-1", source: "transcript" as const, text: "真实转写证据：先明确受众，再给出方法。", startSeconds: 0, endSeconds: 5 }];
@@ -42,9 +58,10 @@ test("StandaloneAnalysisService persists only the formal content-analysis docume
   const statuses: string[] = [];
   const provider: AiProvider = {
     generate: async (request) => {
-      await request.onEvent?.({ type: "content_delta", delta: JSON.stringify(result) });
+      const content = analysisModuleContent(request);
+      await request.onEvent?.({ type: "content_delta", delta: content });
       await request.onEvent?.({ type: "completed" });
-      return { content: JSON.stringify(result), reasoning: "internal reasoning" };
+      return { content, reasoning: "internal reasoning" };
     },
     transcribe: async () => "",
   };
@@ -139,10 +156,10 @@ test("StandaloneAnalysisService registers the real analysis promise lifetime", a
       setAnalysisStatus: async () => undefined,
     },
     getProvider: async () => ({
-      generate: async () => {
+      generate: async (request) => {
         entered.resolve();
         await release.promise;
-        return { content: JSON.stringify(result), reasoning: "" };
+        return { content: analysisModuleContent(request), reasoning: "" };
       },
       transcribe: async () => "",
     }),
@@ -166,7 +183,7 @@ test("StandaloneAnalysisService automatically runs ingest then formal analysis f
   const calls: string[] = [];
   const localResult = { ...result, source: { taskId: "task-local", platform: "local_upload", contentType: "video", sourceKind: "asr" } } as const;
   const provider: AiProvider = {
-    generate: async () => ({ content: JSON.stringify(localResult), reasoning: "must not persist" }),
+    generate: async (request) => ({ content: analysisModuleContent(request, localResult), reasoning: "must not persist" }),
     transcribe: async () => "",
   };
   const values = new Map<string, string>();

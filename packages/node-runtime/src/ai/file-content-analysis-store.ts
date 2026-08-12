@@ -79,7 +79,8 @@ export class FileContentAnalysisStore implements ContentAnalysisStore {
     await writeFile(join(root, "reasoning.jsonl"), reasoning ? `${reasoning}\n` : "", "utf8");
     await this.#writeJson(join(root, "run.json"), {
       id: run.id, status: run.status, startedAt: run.startedAt, completedAt: run.completedAt,
-      errorCode: run.errorCode, rawResponsePath: "raw-response.json", reasoningPath: "reasoning.jsonl",
+      errorCode: run.errorCode, promptVersions: run.promptVersions,
+      rawResponsePath: "raw-response.json", reasoningPath: "reasoning.jsonl",
     });
   }
 

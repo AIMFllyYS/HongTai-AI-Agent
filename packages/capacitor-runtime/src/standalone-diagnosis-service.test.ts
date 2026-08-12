@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { AiProvider } from "@hongtai/ai";
+import type { AiGenerateRequest, AiProvider } from "@hongtai/ai";
 import { TaskError } from "@hongtai/core";
 
 import { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
@@ -21,6 +21,19 @@ const report = {
   limitations: ["单张图片不能替代专业检查"],
   disclaimer: "本报告不是疾病诊断，也不提供患病概率。",
 } as const;
+
+function diagnosisModuleContent(request: AiGenerateRequest): string {
+  const moduleBySchema: Readonly<Record<string, unknown>> = {
+    diagnosis_visual_observations_v1: { imageQuality: report.imageQuality, observations: report.observations },
+    diagnosis_observation_summary_v1: { summary: report.summary },
+    diagnosis_wellness_recommendations_v1: { wellnessReferences: report.wellnessReferences, recommendations: report.recommendations },
+    diagnosis_safety_limitations_v1: { safetyGuidance: report.safetyGuidance, limitations: report.limitations, disclaimer: report.disclaimer },
+    diagnosis_follow_up_questions_v1: { followUpQuestions: report.followUpQuestions },
+  };
+  const value = moduleBySchema[request.jsonSchema?.name ?? ""];
+  if (!value) throw new Error(`unexpected diagnosis schema: ${request.jsonSchema?.name ?? "none"}`);
+  return JSON.stringify(value);
+}
 
 function memoryFiles() {
   const values = new Map<string, string>();
@@ -50,11 +63,11 @@ function deferred(): { readonly promise: Promise<void>; resolve(): void } {
 
 test("StandaloneDiagnosisService saves a formal report and real follow-up history without exposing private image URIs", async () => {
   const native = memoryFiles();
-  let calls = 0;
   const provider: AiProvider = {
     generate: async (request) => {
-      calls += 1;
-      const content = calls === 1 ? JSON.stringify(report) : "建议保持相近光线，持续记录变化。";
+      const content = request.output === "json"
+        ? diagnosisModuleContent(request)
+        : "建议保持相近光线，持续记录变化。";
       await request.onEvent?.({ type: "reasoning_delta", delta: "private reasoning" });
       await request.onEvent?.({ type: "content_delta", delta: content });
       await request.onEvent?.({ type: "completed" });
@@ -118,12 +131,14 @@ test("StandaloneDiagnosisService distinguishes external photo work from in-proce
       consumePhotoOperation: async () => ({ status: "none" }),
     },
     getProvider: async () => ({
-      generate: async () => {
+      generate: async (request) => {
         calls += 1;
         if (calls === 1) {
           reportEntered.resolve();
           await reportRelease.promise;
-          return { content: JSON.stringify(report), reasoning: "" };
+        }
+        if (request.output === "json") {
+          return { content: diagnosisModuleContent(request), reasoning: "" };
         }
         followUpEntered.resolve();
         await followUpRelease.promise;

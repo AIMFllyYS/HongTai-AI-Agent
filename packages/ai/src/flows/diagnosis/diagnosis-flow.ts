@@ -1,4 +1,5 @@
 import { createRuntimeId, TaskError } from "@hongtai/core";
+import type { StructuredGenerationModuleId } from "@hongtai/core";
 import type { AiGenerateResult, AiRequestMessage, AiStreamEvent } from "../../contracts/provider";
 import type {
   AiMessage,
@@ -7,9 +8,49 @@ import type {
   DiagnosisReportRunResult,
   DiagnosisSession,
 } from "../../contracts/diagnosis";
-import { diagnosisConversationPrompt, diagnosisInitialPrompt, diagnosisRepairPrompt } from "../../prompts/diagnosis";
-import { diagnosisReportJsonSchema, diagnosisReportSchema, type ObservationMode } from "../../schemas/diagnosis-report";
-import { parseStructuredOutput } from "../../structured-output/parse-structured-output";
+import { diagnosisConversationPrompt } from "../../prompts/diagnosis-conversation";
+import {
+  DIAGNOSIS_FOLLOW_UP_QUESTIONS_PROMPT_VERSION,
+  diagnosisFollowUpQuestionsPrompt,
+  diagnosisFollowUpQuestionsRepairPrompt,
+} from "../../prompts/diagnosis-follow-up-questions";
+import {
+  DIAGNOSIS_OBSERVATION_SUMMARY_PROMPT_VERSION,
+  diagnosisObservationSummaryPrompt,
+  diagnosisObservationSummaryRepairPrompt,
+} from "../../prompts/diagnosis-observation-summary";
+import {
+  DIAGNOSIS_SAFETY_LIMITATIONS_PROMPT_VERSION,
+  diagnosisSafetyLimitationsPrompt,
+  diagnosisSafetyLimitationsRepairPrompt,
+} from "../../prompts/diagnosis-safety-limitations";
+import {
+  DIAGNOSIS_VISUAL_OBSERVATIONS_PROMPT_VERSION,
+  diagnosisVisualObservationsPrompt,
+  diagnosisVisualObservationsRepairPrompt,
+} from "../../prompts/diagnosis-visual-observations";
+import {
+  DIAGNOSIS_WELLNESS_RECOMMENDATIONS_PROMPT_VERSION,
+  diagnosisWellnessRecommendationsPrompt,
+  diagnosisWellnessRecommendationsRepairPrompt,
+} from "../../prompts/diagnosis-wellness-recommendations";
+import {
+  diagnosisFollowUpQuestionsJsonSchema,
+  diagnosisFollowUpQuestionsSchema,
+  diagnosisObservationSummaryJsonSchema,
+  diagnosisObservationSummarySchema,
+  diagnosisReportSchema,
+  diagnosisSafetyLimitationsJsonSchema,
+  diagnosisSafetyLimitationsSchema,
+  diagnosisVisualObservationsJsonSchema,
+  diagnosisVisualObservationsSchema,
+  diagnosisWellnessRecommendationsJsonSchema,
+  diagnosisWellnessRecommendationsSchema,
+  type DiagnosisReportV1,
+  type ObservationMode,
+} from "../../schemas/diagnosis-report";
+import { generateStructuredModule, type StructuredModuleAttempt } from "../../structured-output/generate-structured-module";
+import { StructuredGenerationProgressTracker } from "../../structured-output/structured-generation-progress";
 
 const IMAGE_MIME_TYPE_PATTERN = /^image\/[a-z0-9][a-z0-9.+-]*$/;
 
@@ -78,10 +119,50 @@ function imageMessage(image: DiagnosisImageInput) {
   return { type: "image_uri" as const, uri: image.uri, mimeType: image.mimeType };
 }
 
-function diagnosisFailure(error: unknown): unknown {
+function diagnosisVisualFailure(error: unknown): unknown {
   return error instanceof TaskError && error.code === "AI_PERMISSION_DENIED"
     ? new TaskError({ code: "AI_VISION_UNAVAILABLE", message: "当前AI连接没有可用的视觉模型能力", action: "configure_ai", cause: error })
     : error;
+}
+
+const REPORT_MODULE_IDS = [
+  "visual-observations",
+  "observation-summary",
+  "wellness-recommendations",
+  "safety-limitations",
+  "follow-up-questions",
+] as const satisfies readonly StructuredGenerationModuleId[];
+
+const REPORT_PROMPT_VERSIONS = [
+  DIAGNOSIS_VISUAL_OBSERVATIONS_PROMPT_VERSION,
+  DIAGNOSIS_OBSERVATION_SUMMARY_PROMPT_VERSION,
+  DIAGNOSIS_WELLNESS_RECOMMENDATIONS_PROMPT_VERSION,
+  DIAGNOSIS_SAFETY_LIMITATIONS_PROMPT_VERSION,
+  DIAGNOSIS_FOLLOW_UP_QUESTIONS_PROMPT_VERSION,
+] as const;
+
+function validateVisualMode(value: import("../../schemas/diagnosis-report").DiagnosisVisualObservations, mode: ObservationMode): void {
+  const allowedPrefix = mode === "tongue" ? "tongue_" : "facial_";
+  if (value.observations.some((item) => item.category !== "localized_feature" && !item.category.startsWith(allowedPrefix))) {
+    throw new TaskError({ code: "AI_STRUCTURED_OUTPUT_INVALID", message: "观察分类与用户选择的图片类型不匹配", action: "retry" });
+  }
+}
+
+function validateWellnessReferences(
+  value: import("../../schemas/diagnosis-report").DiagnosisWellnessRecommendations,
+  visual: import("../../schemas/diagnosis-report").DiagnosisVisualObservations,
+): void {
+  const ids = new Set(visual.observations.map((item) => item.id));
+  const references = [
+    ...value.wellnessReferences.flatMap((item) => item.basisObservationIds),
+    ...value.recommendations.flatMap((item) => item.relatedObservationIds),
+  ];
+  if (references.some((id) => !ids.has(id))) {
+    throw new TaskError({ code: "AI_STRUCTURED_OUTPUT_INVALID", message: "状态参考或建议引用了不存在的观察项", action: "retry" });
+  }
+  if (!visual.imageQuality.usable && (value.wellnessReferences.length > 0 || value.recommendations.length > 0)) {
+    throw new TaskError({ code: "AI_STRUCTURED_OUTPUT_INVALID", message: "图片不可用时不能生成无依据的状态参考或建议", action: "retry" });
+  }
 }
 
 export class DiagnosisFlow {
@@ -110,66 +191,187 @@ export class DiagnosisFlow {
     }
     const runId = createRuntimeId();
     const startedAt = new Date().toISOString();
+    const progress = new StructuredGenerationProgressTracker("diagnosis-report", REPORT_MODULE_IDS, this.#dependencies.onProgress);
     let reasoning = "";
     let rawResponse = "";
     const onEvent = async (event: AiStreamEvent) => {
       if (event.type === "reasoning_delta") reasoning += `${reasoning ? "\n" : ""}${event.delta}`;
       await this.#dependencies.onEvent?.({ ...event, runId });
     };
+    const capture = (moduleId: StructuredGenerationModuleId) => async (attempt: StructuredModuleAttempt) => {
+      rawResponse += `${rawResponse ? "\n\n" : ""}--- ${moduleId}${attempt.repaired ? " repaired" : ""} ---\n${attempt.result.content}`;
+    };
+    const lifecycle = (moduleId: StructuredGenerationModuleId) => ({
+      onRepairing: () => progress.repairing(moduleId),
+      onValidating: (repairing: boolean) => progress.validating(moduleId, repairing),
+      onFailed: () => progress.failed(moduleId),
+      onAttempt: capture(moduleId),
+    });
     try {
       const session = safeSession(storedSession, sessionId);
       const image = safeSessionImage(
         await this.#dependencies.repository.loadSessionImage(session.id),
         session.image.mimeType,
       );
-      const initial = await this.#dependencies.provider.generate({
-        model: "vision",
-        output: "json",
-        jsonSchema: { name: "diagnosis_report_v1", schema: diagnosisReportJsonSchema, strict: true },
-        messages: [
-          { role: "system", content: diagnosisInitialPrompt(session.mode) },
-          { role: "user", content: [
-            { type: "text", text: "请分析这张图片并返回完整报告。" },
-            imageMessage(image),
-          ] },
-        ],
-        onEvent,
-      });
-      rawResponse = initial.content;
-      let report;
+      await progress.preparing();
+
+      await progress.running("visual-observations");
+      let visual;
       try {
-        report = parseStructuredOutput(initial.content, diagnosisReportSchema);
+        visual = await generateStructuredModule({
+          provider: this.#dependencies.provider,
+          request: {
+            model: "vision",
+            output: "json",
+            jsonSchema: {
+              name: "diagnosis_visual_observations_v1",
+              schema: diagnosisVisualObservationsJsonSchema,
+              strict: true,
+            },
+            messages: [
+              { role: "system", content: diagnosisVisualObservationsPrompt(session.mode) },
+              { role: "user", content: [
+                { type: "text", text: "请只生成可见观察模块。" },
+                imageMessage(image),
+              ] },
+            ],
+            onEvent,
+          },
+          schema: diagnosisVisualObservationsSchema,
+          validate: (value) => validateVisualMode(value, session.mode),
+          repairPrompt: (raw) => diagnosisVisualObservationsRepairPrompt(raw, session.mode),
+          failureMessage: "可见观察模块修复后仍不符合Schema",
+          ...lifecycle("visual-observations"),
+        });
       } catch (error) {
-        if (!(error instanceof TaskError) || error.code !== "AI_STRUCTURED_OUTPUT_INVALID") throw error;
-        const repaired = await this.#dependencies.provider.generate({
+        throw diagnosisVisualFailure(error);
+      }
+      await progress.succeeded("visual-observations", visual);
+
+      await progress.running("observation-summary");
+      const summary = await generateStructuredModule({
+        provider: this.#dependencies.provider,
+        request: {
           model: "text",
           output: "json",
-          jsonSchema: { name: "diagnosis_report_v1", schema: diagnosisReportJsonSchema, strict: true },
-          messages: [{ role: "system", content: diagnosisRepairPrompt(initial.content, session.mode) }],
+          jsonSchema: {
+            name: "diagnosis_observation_summary_v1",
+            schema: diagnosisObservationSummaryJsonSchema,
+            strict: true,
+          },
+          messages: [{ role: "system", content: diagnosisObservationSummaryPrompt(session.mode, visual) }],
           onEvent,
-        });
-        rawResponse = `${initial.content}\n\n--- repaired ---\n${repaired.content}`;
-        try {
-          report = parseStructuredOutput(repaired.content, diagnosisReportSchema);
-        } catch (repairError) {
-          throw new TaskError({ code: "AI_FORMAT_REPAIR_FAILED", message: "AI报告格式修复后仍不符合Schema", action: "retry", cause: repairError });
-        }
-      }
-      if (report.mode !== session.mode) {
-        throw new TaskError({ code: "AI_STRUCTURED_OUTPUT_INVALID", message: "AI报告类型与用户选择不一致", action: "retry" });
-      }
-      await this.#dependencies.repository.saveReport(session.id, report);
-      await this.#dependencies.repository.saveRun(session.id, {
-        id: runId, kind: "diagnosis", status: "succeeded", startedAt, completedAt: new Date().toISOString(), rawResponse, reasoning,
+        },
+        schema: diagnosisObservationSummarySchema,
+        repairPrompt: diagnosisObservationSummaryRepairPrompt,
+        failureMessage: "观察摘要模块修复后仍不符合Schema",
+        ...lifecycle("observation-summary"),
       });
-      return { session, report };
+      await progress.succeeded("observation-summary", summary);
+
+      await progress.running("wellness-recommendations");
+      const wellness = await generateStructuredModule({
+        provider: this.#dependencies.provider,
+        request: {
+          model: "text",
+          output: "json",
+          jsonSchema: {
+            name: "diagnosis_wellness_recommendations_v1",
+            schema: diagnosisWellnessRecommendationsJsonSchema,
+            strict: true,
+          },
+          messages: [{ role: "system", content: diagnosisWellnessRecommendationsPrompt(visual, summary) }],
+          onEvent,
+        },
+        schema: diagnosisWellnessRecommendationsSchema,
+        validate: (value) => validateWellnessReferences(value, visual),
+        repairPrompt: (raw) => diagnosisWellnessRecommendationsRepairPrompt(raw, visual.observations.map((item) => item.id)),
+        failureMessage: "状态参考与建议模块修复后仍不符合Schema或引用约束",
+        ...lifecycle("wellness-recommendations"),
+      });
+      await progress.succeeded("wellness-recommendations", wellness);
+
+      await progress.running("safety-limitations");
+      const safety = await generateStructuredModule({
+        provider: this.#dependencies.provider,
+        request: {
+          model: "text",
+          output: "json",
+          jsonSchema: {
+            name: "diagnosis_safety_limitations_v1",
+            schema: diagnosisSafetyLimitationsJsonSchema,
+            strict: true,
+          },
+          messages: [{ role: "system", content: diagnosisSafetyLimitationsPrompt({ ...visual, ...summary, ...wellness }) }],
+          onEvent,
+        },
+        schema: diagnosisSafetyLimitationsSchema,
+        repairPrompt: diagnosisSafetyLimitationsRepairPrompt,
+        failureMessage: "安全与限制模块修复后仍不符合Schema",
+        ...lifecycle("safety-limitations"),
+      });
+      await progress.succeeded("safety-limitations", safety);
+
+      await progress.running("follow-up-questions");
+      const followUp = await generateStructuredModule({
+        provider: this.#dependencies.provider,
+        request: {
+          model: "text",
+          output: "json",
+          jsonSchema: {
+            name: "diagnosis_follow_up_questions_v1",
+            schema: diagnosisFollowUpQuestionsJsonSchema,
+            strict: true,
+          },
+          messages: [{ role: "system", content: diagnosisFollowUpQuestionsPrompt({ ...visual, ...summary, ...wellness, ...safety }) }],
+          onEvent,
+        },
+        schema: diagnosisFollowUpQuestionsSchema,
+        repairPrompt: diagnosisFollowUpQuestionsRepairPrompt,
+        failureMessage: "追问模块修复后仍不符合Schema",
+        ...lifecycle("follow-up-questions"),
+      });
+      await progress.succeeded("follow-up-questions", followUp);
+
+      const assembled: DiagnosisReportV1 = {
+        schemaVersion: "diagnosis-report.v1",
+        mode: session.mode,
+        promptVersion: "diagnosis-modular.v1",
+        ...visual,
+        ...summary,
+        ...wellness,
+        ...safety,
+        ...followUp,
+      };
+      const report = diagnosisReportSchema.safeParse(assembled);
+      if (!report.success) {
+        throw new TaskError({
+          code: "AI_STRUCTURED_OUTPUT_INVALID",
+          message: "观察报告模块组装后不符合最终Schema",
+          action: "retry",
+          cause: report.error,
+        });
+      }
+      await progress.saving();
+      await this.#dependencies.repository.saveReport(session.id, report.data);
+      await this.#dependencies.repository.saveRun(session.id, {
+        id: runId,
+        kind: "diagnosis",
+        status: "succeeded",
+        startedAt,
+        completedAt: new Date().toISOString(),
+        rawResponse,
+        reasoning,
+        promptVersions: REPORT_PROMPT_VERSIONS,
+      });
+      return { session, report: report.data };
     } catch (error) {
-      const failure = diagnosisFailure(error);
       await this.#dependencies.repository.saveRun(sessionId, {
         id: runId, kind: "diagnosis", status: "failed", startedAt, completedAt: new Date().toISOString(), rawResponse, reasoning,
-        errorCode: failure instanceof TaskError ? failure.code : "INTERNAL_UNKNOWN_ERROR",
+        promptVersions: REPORT_PROMPT_VERSIONS,
+        errorCode: error instanceof TaskError ? error.code : "INTERNAL_UNKNOWN_ERROR",
       });
-      throw failure;
+      throw error;
     }
   }
 

@@ -137,6 +137,7 @@ export class FileDiagnosisRepository implements DiagnosisRepository {
       startedAt: run.startedAt,
       completedAt: run.completedAt,
       errorCode: run.errorCode,
+      promptVersions: run.promptVersions,
     };
     await this.#writeJson(join(root, "run.json"), { ...metadata, rawResponsePath: "raw-response.json", reasoningPath: "reasoning.jsonl" });
     await appendFile(join(this.#sessionRoot(sessionId), "task.log"), `${JSON.stringify({ runId: run.id, kind: run.kind, status: run.status, completedAt: run.completedAt, errorCode: run.errorCode })}\n`, "utf8");

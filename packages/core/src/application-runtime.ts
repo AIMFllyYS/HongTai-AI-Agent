@@ -48,6 +48,40 @@ export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 export type JsonObject = { readonly [key: string]: JsonValue };
 
+export type StructuredGenerationFlow = "diagnosis-report" | "content-analysis";
+
+export type StructuredGenerationModuleId =
+  | "visual-observations"
+  | "observation-summary"
+  | "wellness-recommendations"
+  | "safety-limitations"
+  | "follow-up-questions"
+  | "overview"
+  | "hook-drivers"
+  | "structure-claims"
+  | "style-template"
+  | "risks-boundaries";
+
+export type StructuredGenerationModuleStatus = "pending" | "running" | "repairing" | "succeeded" | "failed";
+
+export interface StructuredGenerationModuleV1 {
+  readonly moduleId: StructuredGenerationModuleId;
+  readonly status: StructuredGenerationModuleStatus;
+  /** Present only after this exact module passed Zod and semantic validation. */
+  readonly result?: JsonObject;
+}
+
+export interface StructuredGenerationProgressV1 {
+  readonly schemaVersion: "structured-generation-progress.v1";
+  readonly flow: StructuredGenerationFlow;
+  readonly phase: "preparing" | "generating" | "validating" | "saving";
+  readonly modules: readonly StructuredGenerationModuleV1[];
+}
+
+export type StructuredGenerationProgressListener = (
+  progress: StructuredGenerationProgressV1,
+) => void | Promise<void>;
+
 export interface VersionedDocument {
   readonly schemaVersion: string;
   readonly document: JsonObject;

@@ -159,6 +159,10 @@ async function runDiagnosisServe(args: readonly string[]): Promise<void> {
     onEvent: (event) => {
       streamPrinter.handle(event);
     },
+    onProgress: (progress) => {
+      const active = progress.modules.find((module) => module.status === "running" || module.status === "repairing");
+      if (active) console.log(`\n[报告模块] ${active.moduleId}：${active.status}`);
+    },
   });
   const server = createDiagnosisHarnessServer({
     flow,
@@ -187,6 +191,10 @@ async function runContentAnalysis(args: readonly string[]): Promise<void> {
     store: new FileContentAnalysisStore(workspaceDirectory),
     onEvent: (event) => {
       streamPrinter.handle(event);
+    },
+    onProgress: (progress) => {
+      const active = progress.modules.find((module) => module.status === "running" || module.status === "repairing");
+      if (active) console.log(`\n[拆解模块] ${active.moduleId}：${active.status}`);
     },
   });
   console.log(`开始拆解任务：${options.taskId}`);
