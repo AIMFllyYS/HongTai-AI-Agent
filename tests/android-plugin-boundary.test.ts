@@ -68,7 +68,20 @@ test("camera capture declares package visibility and cleans up unavailable launc
   const manifest = read("android/app/src/main/AndroidManifest.xml");
   const fileMedia = read("android/app/src/main/java/com/hongtai/aiagent/bridge/FileMediaPlugin.kt");
 
+  for (const permission of [
+    "android.permission.CAMERA",
+    "android.permission.READ_MEDIA_IMAGES",
+    "android.permission.READ_EXTERNAL_STORAGE",
+    "android.permission.MANAGE_EXTERNAL_STORAGE",
+  ]) {
+    assert.doesNotMatch(manifest, new RegExp(permission.replaceAll(".", "\\.")));
+  }
   assert.match(manifest, /<queries>[\s\S]*android\.media\.action\.IMAGE_CAPTURE[\s\S]*<\/queries>/);
+  assert.match(manifest, /android:name="androidx\.core\.content\.FileProvider"[\s\S]*android:exported="false"[\s\S]*android:grantUriPermissions="true"/);
+  assert.match(fileMedia, /MediaStore\.ACTION_IMAGE_CAPTURE/);
+  assert.match(fileMedia, /FLAG_GRANT_READ_URI_PERMISSION or Intent\.FLAG_GRANT_WRITE_URI_PERMISSION/);
+  assert.match(fileMedia, /MediaStore\.ACTION_PICK_IMAGES/);
+  assert.match(fileMedia, /Intent\.ACTION_OPEN_DOCUMENT/);
   assert.match(fileMedia, /ActivityNotFoundException/);
   assert.match(fileMedia, /catch\s*\(error:\s*ActivityNotFoundException\)[\s\S]*discardCapture\(capture\)/);
 });
