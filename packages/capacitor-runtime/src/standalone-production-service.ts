@@ -7,9 +7,12 @@ import type {
   ProductionEvent,
   ProductionProjectRecord,
   ProductionService,
+  RuntimeUnfinishedWork,
   TaskIssue,
 } from "@hongtai/core";
 
+import { persistedRuntimeWork, runtimeInterruptedIssue } from "./runtime-interruption.js";
+import type { RuntimeOperationIdentity, RuntimeOperationRegistry } from "./runtime-operation-registry.js";
 import type { NativeProductionAsset, NativeProductionResult, StandaloneProductionRuntimePlugin } from "./standalone-bridge.js";
 
 const PROJECT_PATH = "project.json";
@@ -44,6 +47,7 @@ export interface StandaloneProductionServiceOptions {
   readonly toDisplayUri: (uri: string) => string;
   readonly createProjectId?: () => string;
   readonly now?: () => Date;
+  readonly operations?: RuntimeOperationRegistry;
 }
 
 function taskError(message: string, action: "retry" | "select_media" = "retry"): TaskError {
@@ -104,6 +108,13 @@ export class StandaloneProductionService implements ProductionService {
   }
 
   async importAssets(projectId: string): Promise<ProductionProjectRecord> {
+    return this.#track(
+      { kind: "transient-operation", id: `production-assets:${projectId}`, execution: "external-activity" },
+      () => this.#importAssets(projectId),
+    );
+  }
+
+  async #importAssets(projectId: string): Promise<ProductionProjectRecord> {
     const project = await this.#required(projectId);
     const remaining = 12 - project.assets.length;
     if (remaining <= 0) throw taskError("每个制作项目最多使用12个素材", "select_media");
@@ -118,6 +129,13 @@ export class StandaloneProductionService implements ProductionService {
   }
 
   async generatePlan(projectId: string): Promise<ProductionProjectRecord> {
+    return this.#track(
+      { kind: "production-plan", id: projectId, execution: "in-process" },
+      () => this.#generatePlan(projectId),
+    );
+  }
+
+  async #generatePlan(projectId: string): Promise<ProductionProjectRecord> {
     let project = await this.#required(projectId);
     if (project.assets.length < 3) throw taskError("请至少导入3个制作素材", "select_media");
     const { plan: _plan, output: _output, issue: _issue, ...planningBase } = project;
@@ -144,6 +162,13 @@ export class StandaloneProductionService implements ProductionService {
   }
 
   async render(projectId: string): Promise<ProductionProjectRecord> {
+    return this.#track(
+      { kind: "production-render", id: projectId, execution: "in-process" },
+      () => this.#render(projectId),
+    );
+  }
+
+  async #render(projectId: string): Promise<ProductionProjectRecord> {
     let project = await this.#required(projectId);
     if (!project.plan) throw taskError("请先生成可执行制作计划");
     const { output: _output, issue: _issue, ...renderBase } = project;
@@ -163,11 +188,41 @@ export class StandaloneProductionService implements ProductionService {
     }
   }
 
+  async inspectUnfinishedWork(): Promise<readonly RuntimeUnfinishedWork[]> {
+    const { projectIds } = await this.#options.files.listProductionIds();
+    const unfinished: RuntimeUnfinishedWork[] = [];
+    for (const projectId of projectIds) {
+      const project = await this.get(projectId);
+      if (project?.status === "planning") {
+        unfinished.push(persistedRuntimeWork("production-plan", projectId));
+      } else if (project?.status === "rendering") {
+        unfinished.push(persistedRuntimeWork("production-render", projectId));
+      }
+    }
+    return unfinished;
+  }
+
+  async recoverInterruptedWork(): Promise<readonly RuntimeUnfinishedWork[]> {
+    const unfinished = await this.inspectUnfinishedWork();
+    const recovered: RuntimeUnfinishedWork[] = [];
+    for (const work of unfinished) {
+      const project = await this.#required(work.id);
+      if (project.status !== "planning" && project.status !== "rendering") continue;
+      await this.#persist({ ...project, status: "failed", issue: runtimeInterruptedIssue() });
+      recovered.push(work);
+    }
+    return recovered;
+  }
+
   subscribe(projectId: string, listener: (event: ProductionEvent) => void | Promise<void>) {
     const listeners = this.#listeners.get(projectId) ?? new Set();
     listeners.add(listener);
     this.#listeners.set(projectId, listeners);
     return () => { listeners.delete(listener); if (listeners.size === 0) this.#listeners.delete(projectId); };
+  }
+
+  async #track<T>(operation: RuntimeOperationIdentity, run: () => Promise<T>): Promise<T> {
+    return this.#options.operations ? this.#options.operations.track(operation, run) : run();
   }
 
   async #required(projectId: string): Promise<PersistedProject> {

@@ -3,18 +3,23 @@ import type { AiProvider, ContentAnalysisInput, ContentAnalysisRunRecord, Conten
 import { issueFromAppError, TaskError } from "@hongtai/core";
 import type {
   AnalysisService,
+  AppTaskRecord,
   ContentAnalysisRecord,
   JsonObject,
+  RuntimeUnfinishedWork,
   TaskDetailRecord,
   TaskIssue,
 } from "@hongtai/core";
 
 import type { StandaloneTaskFilesPlugin } from "./standalone-task-service.js";
+import { persistedRuntimeWork, runtimeInterruptedIssue } from "./runtime-interruption.js";
+import type { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
 
 const ANALYSIS_PATH = "analysis.json";
 
 export interface StandaloneAnalysisTaskPort {
   getDetail(taskId: string): Promise<TaskDetailRecord | undefined>;
+  list?(): Promise<readonly AppTaskRecord[]>;
   setAnalysisStatus(taskId: string, status: "not_started" | "running" | "succeeded" | "failed"): Promise<void>;
 }
 
@@ -23,6 +28,7 @@ export interface StandaloneAnalysisServiceOptions {
   readonly tasks: StandaloneAnalysisTaskPort;
   readonly getProvider: () => Promise<AiProvider>;
   readonly now?: () => Date;
+  readonly operations?: RuntimeOperationRegistry;
 }
 
 function taskError(code: ConstructorParameters<typeof TaskError>[0]["code"], message: string, action: ConstructorParameters<typeof TaskError>[0]["action"] = "none"): TaskError {
@@ -90,12 +96,14 @@ export class StandaloneAnalysisService implements AnalysisService {
   readonly #tasks: StandaloneAnalysisTaskPort;
   readonly #getProvider: () => Promise<AiProvider>;
   readonly #now: () => Date;
+  readonly #operations?: RuntimeOperationRegistry;
 
   constructor(options: StandaloneAnalysisServiceOptions) {
     this.#files = options.files;
     this.#tasks = options.tasks;
     this.#getProvider = options.getProvider;
     this.#now = options.now ?? (() => new Date());
+    this.#operations = options.operations;
   }
 
   async get(taskId: string): Promise<ContentAnalysisRecord | undefined> {
@@ -124,6 +132,13 @@ export class StandaloneAnalysisService implements AnalysisService {
   }
 
   async run(taskId: string): Promise<ContentAnalysisRecord> {
+    const execute = () => this.#run(taskId);
+    return this.#operations
+      ? this.#operations.track({ kind: "content-analysis", id: taskId, execution: "in-process" }, execute)
+      : execute();
+  }
+
+  async #run(taskId: string): Promise<ContentAnalysisRecord> {
     const startedAt = iso(this.#now);
     await this.#tasks.setAnalysisStatus(taskId, "running");
     await this.#write({ taskId, status: "running", createdAt: startedAt, updatedAt: startedAt });
@@ -164,6 +179,42 @@ export class StandaloneAnalysisService implements AnalysisService {
       }
       throw error;
     }
+  }
+
+  async inspectUnfinishedWork(): Promise<readonly RuntimeUnfinishedWork[]> {
+    const [{ taskIds }, tasks] = await Promise.all([
+      this.#files.listTaskIds(),
+      this.#tasks.list?.() ?? Promise.resolve([]),
+    ]);
+    const taskById = new Map(tasks.map((task) => [task.id, task]));
+    const ids = new Set([...taskIds, ...tasks.filter((task) => task.analysisStatus === "running").map((task) => task.id)]);
+    const unfinished: RuntimeUnfinishedWork[] = [];
+    for (const taskId of ids) {
+      const record = await this.get(taskId);
+      if (record?.status === "running" || taskById.get(taskId)?.analysisStatus === "running") {
+        unfinished.push(persistedRuntimeWork("content-analysis", taskId));
+      }
+    }
+    return unfinished;
+  }
+
+  async recoverInterruptedWork(): Promise<readonly RuntimeUnfinishedWork[]> {
+    const unfinished = await this.inspectUnfinishedWork();
+    const recovered: RuntimeUnfinishedWork[] = [];
+    for (const work of unfinished) {
+      const current = await this.get(work.id);
+      const updatedAt = iso(this.#now);
+      await this.#tasks.setAnalysisStatus(work.id, "failed");
+      await this.#write({
+        taskId: work.id,
+        status: "failed",
+        issue: runtimeInterruptedIssue(),
+        createdAt: current?.createdAt ?? updatedAt,
+        updatedAt,
+      });
+      recovered.push(work);
+    }
+    return recovered;
   }
 
   async #write(record: ContentAnalysisRecord): Promise<void> {

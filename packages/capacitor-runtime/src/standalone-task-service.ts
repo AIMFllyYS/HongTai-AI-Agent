@@ -17,12 +17,14 @@ import type {
   TaskListOptions,
   TaskRecord,
   TaskRecoveryProjection,
+  RuntimeUnfinishedWork,
   TaskService,
   TaskStatus,
 } from "@hongtai/core";
 
 import { NativeTaskFiles } from "./thin-task-files.js";
 import type { LocalTaskFilesPlugin } from "./thin-task-files.js";
+import type { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
 
 const TASK_REQUEST_PATH = "request.json";
 const TASK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/;
@@ -49,6 +51,7 @@ export interface StandaloneTaskServiceOptions {
   readonly toDisplayUri: (nativeUri: string) => string;
   readonly createTaskId?: () => string;
   readonly now?: () => Date;
+  readonly operations?: RuntimeOperationRegistry;
 }
 
 type StoredTaskRequest = { readonly normalizedUrl: string };
@@ -144,6 +147,7 @@ export class StandaloneTaskService implements TaskService {
   readonly #toDisplayUri: (nativeUri: string) => string;
   readonly #createTaskId: () => string;
   readonly #now: () => Date;
+  readonly #operations?: RuntimeOperationRegistry;
   readonly #active = new Map<string, CancellableTask>();
   readonly #listeners = new Map<string, Set<TaskEventListener>>();
 
@@ -159,6 +163,7 @@ export class StandaloneTaskService implements TaskService {
     this.#toDisplayUri = options.toDisplayUri;
     this.#createTaskId = options.createTaskId ?? generatedTaskId;
     this.#now = options.now ?? (() => new Date());
+    this.#operations = options.operations;
   }
 
   inspectInput(input: string) {
@@ -209,11 +214,14 @@ export class StandaloneTaskService implements TaskService {
       store: this.#artifactStore,
       reporter: { report: async (event) => this.#report(event) },
     });
-    const completion = pipeline.run({ input: request.normalizedUrl, taskId }).then(async () => {
+    const execute = () => pipeline.run({ input: request.normalizedUrl, taskId }).then(async () => {
       const finished = await this.get(taskId);
       if (!finished) throw taskError("TASK_ARTIFACT_MISSING", "任务完成后未找到本地结果", "view_partial_result");
       return finished;
     });
+    const completion = this.#operations
+      ? this.#operations.track({ kind: "ingest", id: taskId, execution: "in-process" }, execute)
+      : execute();
     const cancellable: CancellableTask = {
       taskId,
       completion,
@@ -330,13 +338,24 @@ export class StandaloneTaskService implements TaskService {
     };
   }
 
-  async getStartupRecovery(): Promise<TaskRecoveryProjection> {
+  async inspectUnfinishedWork(): Promise<readonly RuntimeUnfinishedWork[]> {
     const tasks = await this.list();
-    const interrupted: string[] = [];
-    for (const item of tasks) {
-      if (item.status !== "running") continue;
-      const task = await this.#readTask(item.id);
-      if (!task) continue;
+    return tasks
+      .filter((task) => task.status === "running")
+      .map((task) => ({
+        kind: "ingest" as const,
+        id: task.id,
+        source: "persisted" as const,
+        execution: "in-process" as const,
+      }));
+  }
+
+  async recoverInterruptedWork(): Promise<readonly RuntimeUnfinishedWork[]> {
+    const unfinished = await this.inspectUnfinishedWork();
+    const recovered: RuntimeUnfinishedWork[] = [];
+    for (const work of unfinished) {
+      const task = await this.#readTask(work.id);
+      if (!task || task.status !== "running") continue;
       const paths = await this.#artifactStore.initializeTask(task.id);
       const now = currentIso(this.#now);
       await this.#artifactStore.writeJson(paths.task, {
@@ -346,9 +365,14 @@ export class StandaloneTaskService implements TaskService {
         updatedAt: now,
         issues: [...task.issues, issueForInterrupted()],
       });
-      interrupted.push(task.id);
+      recovered.push(work);
     }
-    return { taskIds: interrupted, status: "interrupted" };
+    return recovered;
+  }
+
+  async getStartupRecovery(): Promise<TaskRecoveryProjection> {
+    const recovered = await this.recoverInterruptedWork();
+    return { taskIds: recovered.map((work) => work.id), status: "interrupted" };
   }
 
   async cancel(_taskId: string): Promise<AppTaskRecord> {

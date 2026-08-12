@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type { MediaDownloader, MediaTools, PlatformAdapter } from "@hongtai/core";
 
+import { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
 import { StandaloneTaskService } from "./standalone-task-service.js";
 
 function memoryFiles() {
@@ -10,6 +11,7 @@ function memoryFiles() {
   const ids = new Set<string>();
   const key = (taskId: string, relativePath: string) => `${taskId}/${relativePath}`;
   return {
+    values,
     plugin: {
       ensure: async ({ taskId }: { readonly taskId: string }) => { ids.add(taskId); },
       writeText: async ({ taskId, relativePath, value }: { readonly taskId: string; readonly relativePath: string; readonly value: string; readonly replace: boolean }) => {
@@ -99,6 +101,7 @@ test("StandaloneTaskService runs the existing IngestPipeline and persists its se
 
 test("StandaloneTaskService writes the minimal running projection before the shared pipeline completes", async () => {
   const native = memoryFiles();
+  const operations = new RuntimeOperationRegistry();
   const started = deferred();
   const release = deferred();
   const base = imageTextAdapter();
@@ -118,13 +121,68 @@ test("StandaloneTaskService writes the minimal running projection before the sha
     mediaTools: { merge: async () => undefined, probeDuration: async () => 0, extractAudio: async () => undefined, splitAudio: async () => [] },
     createTaskId: () => "task-running-1",
     toDisplayUri: (value) => `display:${value}`,
+    operations,
   });
 
   const task = await service.create({ input: "https://www.xiaohongshu.com/discovery/item/abc123" });
   const active = await service.start(task.id);
   await started.promise;
   assert.equal((await service.get(task.id))?.status, "running");
+  assert.deepEqual(operations.list(), [{
+    kind: "ingest",
+    id: "task-running-1",
+    source: "memory",
+    execution: "in-process",
+  }]);
 
   release.resolve();
   await active.completion;
+  assert.deepEqual(operations.list(), []);
+});
+
+test("StandaloneTaskService recovers a persisted running task exactly once", async () => {
+  const native = memoryFiles();
+  await native.plugin.ensure({ taskId: "task-interrupted-1" });
+  await native.plugin.writeText({
+    taskId: "task-interrupted-1",
+    relativePath: "task.json",
+    value: JSON.stringify({
+      id: "task-interrupted-1",
+      sourceUrl: "https://www.xiaohongshu.com/discovery/item/abc123",
+      status: "running",
+      currentStage: "resolve-link",
+      platform: "xiaohongshu",
+      analysisStatus: "not_started",
+      createdAt: "2026-08-07T00:00:00.000Z",
+      updatedAt: "2026-08-07T00:00:01.000Z",
+      issues: [],
+    }),
+    replace: true,
+  });
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    adapters: [],
+    http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 0, extractAudio: async () => undefined, splitAudio: async () => [] },
+    toDisplayUri: (value) => value,
+    now: () => new Date("2026-08-12T01:02:03.000Z"),
+  });
+
+  assert.deepEqual(await service.inspectUnfinishedWork(), [{
+    kind: "ingest",
+    id: "task-interrupted-1",
+    source: "persisted",
+    execution: "in-process",
+  }]);
+  assert.equal((await service.recoverInterruptedWork()).length, 1);
+  assert.equal((await service.recoverInterruptedWork()).length, 0);
+
+  const recovered = await service.get("task-interrupted-1");
+  assert.equal(recovered?.status, "interrupted");
+  assert.equal(recovered?.interruptedAt, "2026-08-12T01:02:03.000Z");
+  assert.equal(recovered?.currentStage, "resolve-link");
+  assert.equal(recovered?.issues.length, 1);
+  assert.equal(recovered?.issues[0]?.code, "TASK_INTERRUPTED");
+  assert.equal(recovered?.issues[0]?.action, "edit_input");
 });

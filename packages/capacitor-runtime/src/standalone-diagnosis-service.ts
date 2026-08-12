@@ -18,8 +18,12 @@ import type {
   DiagnosisStreamEvent,
   MediaReference,
   ObservationMode,
+  RuntimeUnfinishedWork,
   TaskIssue,
 } from "@hongtai/core";
+
+import { persistedRuntimeWork, runtimeInterruptedIssue } from "./runtime-interruption.js";
+import type { RuntimeOperationIdentity, RuntimeOperationRegistry } from "./runtime-operation-registry.js";
 
 const SESSION_PATH = "session.json";
 const REPORT_PATH = "report.json";
@@ -73,6 +77,7 @@ export interface StandaloneDiagnosisServiceOptions {
   readonly toDisplayUri: (nativeUri: string) => string;
   readonly createSessionId?: () => string;
   readonly now?: () => Date;
+  readonly operations?: RuntimeOperationRegistry;
 }
 
 interface StoredSession {
@@ -187,6 +192,7 @@ export class StandaloneDiagnosisService implements DiagnosisService {
   readonly #toDisplayUri: (nativeUri: string) => string;
   readonly #createSessionId: () => string;
   readonly #now: () => Date;
+  readonly #operations?: RuntimeOperationRegistry;
   readonly #picked = new Map<string, { readonly nativeUri: string; readonly mimeType: string; readonly sizeBytes: number }>();
 
   constructor(options: StandaloneDiagnosisServiceOptions) {
@@ -196,14 +202,21 @@ export class StandaloneDiagnosisService implements DiagnosisService {
     this.#toDisplayUri = options.toDisplayUri;
     this.#createSessionId = options.createSessionId ?? generatedId;
     this.#now = options.now ?? (() => new Date());
+    this.#operations = options.operations;
   }
 
   async pickImage(): Promise<MediaReference> {
-    return this.#pickedImage(() => this.#fileMedia.pickPhoto(), "imported");
+    return this.#track(
+      { kind: "transient-operation", id: "diagnosis-photo", execution: "external-activity" },
+      () => this.#pickedImage(() => this.#fileMedia.pickPhoto(), "imported"),
+    );
   }
 
   async captureImage(): Promise<MediaReference> {
-    return this.#pickedImage(() => this.#fileMedia.capturePhoto(), "captured");
+    return this.#track(
+      { kind: "transient-operation", id: "diagnosis-photo", execution: "external-activity" },
+      () => this.#pickedImage(() => this.#fileMedia.capturePhoto(), "captured"),
+    );
   }
 
   async consumeImageRecovery(): Promise<DiagnosisImageRecovery> {
@@ -246,6 +259,13 @@ export class StandaloneDiagnosisService implements DiagnosisService {
   }
 
   async runReport(sessionId: string): Promise<DiagnosisReportRecord> {
+    return this.#track(
+      { kind: "diagnosis-report", id: sessionId, execution: "in-process" },
+      () => this.#runReport(sessionId),
+    );
+  }
+
+  async #runReport(sessionId: string): Promise<DiagnosisReportRecord> {
     const state = await this.#readSession(sessionId);
     if (!state) throw taskError("AI_SESSION_NOT_FOUND", "未找到本地观察会话", "select_media");
     const started = await this.#setStatus(state, "running");
@@ -287,6 +307,30 @@ export class StandaloneDiagnosisService implements DiagnosisService {
     return this.#toReport(state, formal);
   }
 
+  async inspectUnfinishedWork(): Promise<readonly RuntimeUnfinishedWork[]> {
+    const { sessionIds } = await this.#files.listObservationIds();
+    const unfinished: RuntimeUnfinishedWork[] = [];
+    for (const sessionId of sessionIds) {
+      const state = await this.#readSession(sessionId);
+      if (state?.reportStatus === "running") {
+        unfinished.push(persistedRuntimeWork("diagnosis-report", sessionId));
+      }
+    }
+    return unfinished;
+  }
+
+  async recoverInterruptedWork(): Promise<readonly RuntimeUnfinishedWork[]> {
+    const unfinished = await this.inspectUnfinishedWork();
+    const recovered: RuntimeUnfinishedWork[] = [];
+    for (const work of unfinished) {
+      const state = await this.#readSession(work.id);
+      if (!state || state.reportStatus !== "running") continue;
+      await this.#setStatus(state, "failed", runtimeInterruptedIssue());
+      recovered.push(work);
+    }
+    return recovered;
+  }
+
   async listMessages(sessionId: string): Promise<readonly DiagnosisMessage[]> {
     const state = await this.#readSession(sessionId);
     if (!state) return [];
@@ -311,6 +355,13 @@ export class StandaloneDiagnosisService implements DiagnosisService {
   }
 
   async followUp(sessionId: string, question: string, onEvent?: (event: DiagnosisStreamEvent) => void | Promise<void>): Promise<DiagnosisMessage> {
+    return this.#track(
+      { kind: "transient-operation", id: `diagnosis-follow-up:${sessionId}`, execution: "in-process" },
+      () => this.#followUp(sessionId, question, onEvent),
+    );
+  }
+
+  async #followUp(sessionId: string, question: string, onEvent?: (event: DiagnosisStreamEvent) => void | Promise<void>): Promise<DiagnosisMessage> {
     if (!question.trim()) throw taskError("INPUT_EMPTY", "追问内容不能为空", "edit_input");
     try {
       const flow = new DiagnosisFlow({
@@ -332,6 +383,10 @@ export class StandaloneDiagnosisService implements DiagnosisService {
       await onEvent?.({ type: "failed", issue: failure });
       throw error;
     }
+  }
+
+  async #track<T>(operation: RuntimeOperationIdentity, run: () => Promise<T>): Promise<T> {
+    return this.#operations ? this.#operations.track(operation, run) : run();
   }
 
   async #pickedImage(

@@ -4,6 +4,7 @@ import test from "node:test";
 import type { AiProvider } from "@hongtai/ai";
 import type { TaskDetailRecord } from "@hongtai/core";
 
+import { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
 import { StandaloneAnalysisService } from "./standalone-analysis-service.js";
 
 const result = {
@@ -29,6 +30,11 @@ function detail(): TaskDetailRecord {
     transcript: { source: "asr", segments: evidenceUnits },
     evidenceUnits,
   };
+}
+
+function deferred(): { readonly promise: Promise<void>; resolve(): void } {
+  let resolve!: () => void;
+  return { promise: new Promise<void>((done) => { resolve = done; }), resolve };
 }
 
 test("StandaloneAnalysisService persists only the formal content-analysis document and keeps it outside the seven stages", async () => {
@@ -61,4 +67,86 @@ test("StandaloneAnalysisService persists only the formal content-analysis docume
   assert.equal(record.result?.schemaVersion, "content-analysis.v1");
   assert.deepEqual(statuses, ["running", "succeeded"]);
   assert.doesNotMatch(values.get("task-1/analysis.json") ?? "", /internal reasoning|rawResponse/);
+});
+
+test("StandaloneAnalysisService recovers a running analysis and synchronizes its task projection", async () => {
+  const values = new Map<string, string>([[
+    "task-1/analysis.json",
+    JSON.stringify({
+      taskId: "task-1",
+      status: "running",
+      createdAt: "2026-08-07T00:00:00.000Z",
+      updatedAt: "2026-08-07T00:00:01.000Z",
+    }),
+  ]]);
+  let analysisStatus: "running" | "failed" = "running";
+  const service = new StandaloneAnalysisService({
+    files: {
+      readText: async ({ taskId, relativePath }: { readonly taskId: string; readonly relativePath: string }) => ({ value: values.get(`${taskId}/${relativePath}`) }),
+      writeText: async ({ taskId, relativePath, value }: { readonly taskId: string; readonly relativePath: string; readonly value: string }) => { values.set(`${taskId}/${relativePath}`, value); },
+      listTaskIds: async () => ({ taskIds: ["task-1"] }),
+    } as never,
+    tasks: {
+      getDetail: async () => detail(),
+      list: async () => [{ ...detail().task, analysisStatus }],
+      setAnalysisStatus: async (_taskId, status) => { analysisStatus = status as "running" | "failed"; },
+    },
+    getProvider: async () => ({ generate: async () => ({ content: "", reasoning: "" }), transcribe: async () => "" }),
+    now: () => new Date("2026-08-12T01:02:03.000Z"),
+  });
+
+  assert.deepEqual(await service.inspectUnfinishedWork(), [{
+    kind: "content-analysis",
+    id: "task-1",
+    source: "persisted",
+    execution: "in-process",
+  }]);
+  assert.equal((await service.recoverInterruptedWork()).length, 1);
+  assert.equal((await service.recoverInterruptedWork()).length, 0);
+
+  const recovered = await service.get("task-1");
+  assert.equal(recovered?.status, "failed");
+  assert.equal(recovered?.createdAt, "2026-08-07T00:00:00.000Z");
+  assert.equal(recovered?.updatedAt, "2026-08-12T01:02:03.000Z");
+  assert.equal(recovered?.issue?.code, "TASK_INTERRUPTED");
+  assert.equal(recovered?.issue?.action, "retry");
+  assert.equal(analysisStatus, "failed");
+});
+
+test("StandaloneAnalysisService registers the real analysis promise lifetime", async () => {
+  const values = new Map<string, string>();
+  const entered = deferred();
+  const release = deferred();
+  const operations = new RuntimeOperationRegistry();
+  const service = new StandaloneAnalysisService({
+    files: {
+      readText: async ({ taskId, relativePath }: { readonly taskId: string; readonly relativePath: string }) => ({ value: values.get(`${taskId}/${relativePath}`) }),
+      writeText: async ({ taskId, relativePath, value }: { readonly taskId: string; readonly relativePath: string; readonly value: string }) => { values.set(`${taskId}/${relativePath}`, value); },
+    } as never,
+    tasks: {
+      getDetail: async () => detail(),
+      setAnalysisStatus: async () => undefined,
+    },
+    getProvider: async () => ({
+      generate: async () => {
+        entered.resolve();
+        await release.promise;
+        return { content: JSON.stringify(result), reasoning: "" };
+      },
+      transcribe: async () => "",
+    }),
+    operations,
+  });
+
+  const running = service.run("task-1");
+  await entered.promise;
+  assert.deepEqual(operations.list(), [{
+    kind: "content-analysis",
+    id: "task-1",
+    source: "memory",
+    execution: "in-process",
+  }]);
+  release.resolve();
+  await running;
+  assert.deepEqual(operations.list(), []);
 });

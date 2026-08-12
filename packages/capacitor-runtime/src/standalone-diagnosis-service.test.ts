@@ -4,6 +4,7 @@ import test from "node:test";
 import type { AiProvider } from "@hongtai/ai";
 import { TaskError } from "@hongtai/core";
 
+import { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
 import { StandaloneDiagnosisService } from "./standalone-diagnosis-service.js";
 
 const report = {
@@ -40,6 +41,11 @@ function memoryFiles() {
       }),
     },
   };
+}
+
+function deferred(): { readonly promise: Promise<void>; resolve(): void } {
+  let resolve!: () => void;
+  return { promise: new Promise<void>((done) => { resolve = done; }), resolve };
 }
 
 test("StandaloneDiagnosisService saves a formal report and real follow-up history without exposing private image URIs", async () => {
@@ -84,6 +90,69 @@ test("StandaloneDiagnosisService saves a formal report and real follow-up histor
   assert.doesNotMatch(JSON.stringify(session), /file:\/\//);
   assert.doesNotMatch(JSON.stringify(savedReport), /private reasoning|file:\/\//);
   assert.equal((await service.listMessages(session.sessionId)).length, 2);
+});
+
+test("StandaloneDiagnosisService distinguishes external photo work from in-process AI work", async () => {
+  const native = memoryFiles();
+  const pickEntered = deferred();
+  const pickRelease = deferred();
+  const reportEntered = deferred();
+  const reportRelease = deferred();
+  const followUpEntered = deferred();
+  const followUpRelease = deferred();
+  const operations = new RuntimeOperationRegistry();
+  let calls = 0;
+  const service = new StandaloneDiagnosisService({
+    files: native.plugin,
+    fileMedia: {
+      pickPhoto: async () => {
+        pickEntered.resolve();
+        await pickRelease.promise;
+        return { uri: "file:///private/media/imported.jpg", mimeType: "image/jpeg", sizeBytes: 128 };
+      },
+      capturePhoto: async () => ({ uri: "file:///private/media/captured.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      consumePhotoOperation: async () => ({ status: "none" }),
+    },
+    getProvider: async () => ({
+      generate: async () => {
+        calls += 1;
+        if (calls === 1) {
+          reportEntered.resolve();
+          await reportRelease.promise;
+          return { content: JSON.stringify(report), reasoning: "" };
+        }
+        followUpEntered.resolve();
+        await followUpRelease.promise;
+        return { content: "继续保持同一光线记录。", reasoning: "" };
+      },
+      transcribe: async () => "",
+    }),
+    toDisplayUri: (value) => `capacitor://localhost/observation/${encodeURIComponent(value)}`,
+    createSessionId: () => "session-ops",
+    operations,
+  });
+
+  const picking = service.pickImage();
+  await pickEntered.promise;
+  assert.deepEqual(operations.list(), [{ kind: "transient-operation", id: "diagnosis-photo", source: "memory", execution: "external-activity" }]);
+  pickRelease.resolve();
+  const image = await picking;
+  assert.deepEqual(operations.list(), []);
+
+  const session = await service.createSession({ mode: "tongue", image });
+  const reporting = service.runReport(session.sessionId);
+  await reportEntered.promise;
+  assert.deepEqual(operations.list(), [{ kind: "diagnosis-report", id: "session-ops", source: "memory", execution: "in-process" }]);
+  reportRelease.resolve();
+  await reporting;
+  assert.deepEqual(operations.list(), []);
+
+  const followingUp = service.followUp(session.sessionId, "如何继续记录？");
+  await followUpEntered.promise;
+  assert.deepEqual(operations.list(), [{ kind: "transient-operation", id: "diagnosis-follow-up:session-ops", source: "memory", execution: "in-process" }]);
+  followUpRelease.resolve();
+  await followingUp;
+  assert.deepEqual(operations.list(), []);
 });
 
 test("StandaloneDiagnosisService keeps the selected image MIME across private copy and reload", async () => {
@@ -263,4 +332,40 @@ test("StandaloneDiagnosisService maps cancellation from a live picker call witho
     (error) => error instanceof TaskError && error.code === "MEDIA_SELECTION_CANCELLED" && error.action === "select_media",
   );
   assert.equal((await native.plugin.listObservationIds()).sessionIds.length, 0);
+});
+
+test("StandaloneDiagnosisService recovers a running report without losing its private image projection", async () => {
+  const native = memoryFiles();
+  const options = {
+    files: native.plugin,
+    fileMedia: {
+      pickPhoto: async () => ({ uri: "file:///private/media/imported.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      capturePhoto: async () => ({ uri: "file:///private/media/captured.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      consumePhotoOperation: async () => ({ status: "none" as const }),
+    },
+    getProvider: async () => ({ generate: async () => ({ content: JSON.stringify(report), reasoning: "" }), transcribe: async () => "" }),
+    toDisplayUri: (value: string) => `capacitor://localhost/observation/${encodeURIComponent(value)}`,
+    createSessionId: () => "session-interrupted",
+    now: () => new Date("2026-08-12T01:02:03.000Z"),
+  };
+  const service = new StandaloneDiagnosisService(options);
+  const image = await service.pickImage();
+  await service.createSession({ mode: "tongue", image });
+  const stored = JSON.parse(native.values.get("session-interrupted/session.json") ?? "{}") as Record<string, unknown>;
+  native.values.set("session-interrupted/session.json", JSON.stringify({ ...stored, reportStatus: "running" }));
+
+  assert.deepEqual(await service.inspectUnfinishedWork(), [{
+    kind: "diagnosis-report",
+    id: "session-interrupted",
+    source: "persisted",
+    execution: "in-process",
+  }]);
+  assert.equal((await service.recoverInterruptedWork()).length, 1);
+  assert.equal((await service.recoverInterruptedWork()).length, 0);
+
+  const recovered = await service.getReport("session-interrupted");
+  assert.equal(recovered?.status, "failed");
+  assert.equal(recovered?.issue?.code, "TASK_INTERRUPTED");
+  assert.equal(recovered?.issue?.action, "retry");
+  assert.equal((await service.getSession("session-interrupted"))?.image.mimeType, "image/jpeg");
 });
