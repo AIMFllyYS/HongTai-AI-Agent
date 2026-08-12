@@ -31,6 +31,7 @@ test("standalone runtime exposes local profile and write-only AI settings withou
         listTaskIds: async () => ({ taskIds: [] }),
         listObservationIds: async () => ({ sessionIds: [] }),
         listProductionIds: async () => ({ projectIds: [] }),
+        listTemplateIds: async () => ({ templateIds: [] }),
       } as never,
       nativeNetwork: {} as never,
       fileMedia: { pickPhoto: async () => ({ uri: "file:///private/avatar.jpg", mimeType: "image/jpeg", sizeBytes: 1 }), capturePhoto: async () => ({ uri: "file:///private/avatar.jpg", mimeType: "image/jpeg", sizeBytes: 1 }), pickVideo: async () => ({ uri: "file:///private/video.mp4", mimeType: "video/mp4", displayName: "video.mp4", sizeBytes: 1, durationSeconds: 1 }), consumePhotoOperation: async () => ({ status: "none" }), copyFromUri: async () => ({ uri: "file:///private/avatar.jpg", mimeType: "image/jpeg", sizeBytes: 1 }) },
@@ -59,7 +60,9 @@ test("standalone runtime exposes local profile and write-only AI settings withou
   assert.equal(secret, "not-returned-to-react");
   assert.equal(JSON.stringify(connection).includes("not-returned-to-react"), false);
   assert.equal(runtime.features.ingest, "available");
+  assert.equal(runtime.features.templates, "available");
   assert.deepEqual(await runtime.recovery.inspectUnfinishedWork(), []);
+  assert.deepEqual(await runtime.templates.list(), []);
 });
 
 test("cloud TTS remains in the AI connection and probes through the native renderer", async () => {

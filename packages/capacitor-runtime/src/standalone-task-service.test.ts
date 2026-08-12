@@ -238,6 +238,61 @@ test("StandaloneTaskService imports one private MP4 through the shared pipeline 
   assert.equal(await service.get(imported.id), undefined);
 });
 
+test("StandaloneTaskService tracks the local-video picker and recovers its queued snapshot after interruption", async () => {
+  const native = memoryFiles();
+  const pickerEntered = deferred();
+  const pickerRelease = deferred();
+  const operations = new RuntimeOperationRegistry();
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    fileMedia: {
+      pickVideo: async ({ taskId }) => {
+        pickerEntered.resolve();
+        await pickerRelease.promise;
+        await native.plugin.writeText({ taskId, relativePath: "media/video.mp4", value: "private-mp4", replace: true });
+        return { uri: `file:///private/tasks/${taskId}/media/video.mp4`, mimeType: "video/mp4", displayName: "恢复测试.mp4", sizeBytes: 128, durationSeconds: 8 };
+      },
+    },
+    adapters: [],
+    http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 8, extractAudio: async () => undefined, splitAudio: async () => [] },
+    createTaskId: () => "task-local-recovery",
+    toDisplayUri: (value) => value,
+    now: () => new Date("2026-08-13T01:02:03.000Z"),
+    operations,
+  });
+
+  const importing = service.importVideo();
+  await pickerEntered.promise;
+  assert.deepEqual((await native.plugin.listTaskIds()).taskIds, [], "external selection must remain transient until a real MP4 returns");
+  assert.deepEqual(operations.list(), [{
+    kind: "transient-operation",
+    id: "task-video:task-local-recovery",
+    source: "memory",
+    execution: "external-activity",
+  }]);
+
+  pickerRelease.resolve();
+  const queued = await importing;
+  assert.equal(queued.status, "queued");
+  assert.deepEqual(operations.list(), []);
+  assert.deepEqual(await service.inspectUnfinishedWork(), [{
+    kind: "ingest",
+    id: "task-local-recovery",
+    source: "persisted",
+    execution: "in-process",
+  }]);
+
+  const recoveredWork = await service.recoverInterruptedWork();
+  assert.equal(recoveredWork.length, 1);
+  const recovered = await service.get("task-local-recovery");
+  assert.equal(recovered?.status, "interrupted");
+  assert.equal(recovered?.issues.at(-1)?.code, "TASK_INTERRUPTED");
+  assert.equal(recovered?.issues.at(-1)?.action, "select_media");
+  assert.match(recovered?.issues.at(-1)?.userMessage ?? "", /重新选择.*视频/u);
+});
+
 test("StandaloneTaskService opens the picker without creating a task and maps cancellation", async () => {
   const native = memoryFiles();
   const service = new StandaloneTaskService({

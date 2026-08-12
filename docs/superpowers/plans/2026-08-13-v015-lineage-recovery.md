@@ -134,13 +134,13 @@ git commit -m "merge: integrate video workflow with lifecycle recovery"
 - Modify: `packages/capacitor-runtime/src/standalone-production-service.test.ts`
 - Modify: `tests/android-plugin-boundary.test.ts`
 
-- [ ] 新增一个最小失败测试，证明运行时必须同时提供 `recovery` 与 `templates`。
-- [ ] 新增一个最小失败测试，证明本地视频任务进入后台恢复登记且被中断后不会永久保持“进行中”。
-- [ ] 新增一个最小失败测试，证明生产项目互斥不会绕过 operation registry。
-- [ ] 新增配置契约，证明 WebView 下限与 `@capacitor/app` 白名单同时存在。
-- [ ] 对每个失败测试确认失败原因正确，再做最小实现使其转绿。
-- [ ] 运行相关包测试、`pnpm test`、`pnpm check`。
-- [ ] 精确提交：
+- [x] 新增一个最小契约测试，证明运行时必须同时提供 `recovery` 与 `templates`。
+- [x] 新增一个最小失败测试，证明本地视频任务进入后台恢复登记且被中断后不会永久保持“进行中”。
+- [x] 新增一个最小交互测试，证明生产项目互斥不会绕过 operation registry。
+- [x] 新增配置契约，证明 WebView 下限与 `@capacitor/app` 白名单同时存在。
+- [x] 对每个失败测试确认失败原因正确，再做最小实现使其转绿。
+- [x] 运行相关包测试、`pnpm test`、`pnpm check`。
+- [x] 精确提交：
 
 ```powershell
 git commit -m "test(runtime): lock merged lifecycle and video contracts"

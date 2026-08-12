@@ -154,13 +154,16 @@ function contentString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function issueForInterrupted(): TaskIssue {
+function issueForInterrupted(sourceKind: TaskRecord["sourceKind"]): TaskIssue {
+  const localVideo = sourceKind === "local_video";
   return {
     code: "TASK_INTERRUPTED",
     severity: "warning",
-    userMessage: "应用上次退出时任务尚未完成，请重新提交链接。",
+    userMessage: localVideo
+      ? "应用上次退出时本地视频处理尚未完成，请重新选择本地视频。"
+      : "应用上次退出时任务尚未完成，请重新提交链接。",
     retryable: false,
-    action: "edit_input",
+    action: localVideo ? "select_media" : "edit_input",
   };
 }
 
@@ -234,14 +237,18 @@ export class StandaloneTaskService implements TaskService {
   }
 
   async importVideo(): Promise<AppTaskRecord> {
-    if (!this.#fileMedia) throw taskError("APP_RUNTIME_UNAVAILABLE", "本地视频选择器尚未加载", "select_media");
+    const fileMedia = this.#fileMedia;
+    if (!fileMedia) throw taskError("APP_RUNTIME_UNAVAILABLE", "本地视频选择器尚未加载", "select_media");
     const taskId = this.#createTaskId();
     if (!TASK_ID_PATTERN.test(taskId)) throw taskError("MEDIA_IMPORT_FAILED", "本地任务标识无效", "select_media");
     try {
       // Opening an external picker is not yet a task. Defer the task snapshot
       // until Android has returned a real private MP4, so cancellation or an
       // Activity lifecycle interruption cannot leave a visible empty task.
-      const selected = await this.#fileMedia.pickVideo({ taskId });
+      const selectVideo = () => fileMedia.pickVideo({ taskId });
+      const selected = this.#operations
+        ? await this.#operations.track({ kind: "transient-operation", id: `task-video:${taskId}`, execution: "external-activity" }, selectVideo)
+        : await selectVideo();
       if (selected.mimeType !== "video/mp4" || !selected.displayName.trim() || selected.sizeBytes <= 0 || selected.durationSeconds <= 0) {
         throw taskError("MEDIA_IMPORT_FAILED", "本地视频导入没有返回有效 MP4", "select_media");
       }
@@ -452,7 +459,7 @@ export class StandaloneTaskService implements TaskService {
         status: "interrupted",
         interruptedAt: now,
         updatedAt: now,
-        issues: [...task.issues, issueForInterrupted()],
+        issues: [...task.issues, issueForInterrupted(task.sourceKind)],
       });
       recovered.push(work);
     }

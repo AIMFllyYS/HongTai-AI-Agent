@@ -19,6 +19,11 @@ test("the standalone APK registers only its explicit custom plugins and official
     /android:\s*\{[\s\S]*?includePlugins:\s*\[\s*"@capacitor\/app"\s*\]/,
     "the Android plugin allowlist must include only the official lifecycle plugin",
   );
+  assert.match(
+    config,
+    /android:\s*\{[\s\S]*?minWebViewVersion:\s*89[\s\S]*?minHuaweiWebViewVersion:\s*10[\s\S]*?includePlugins:\s*\[\s*"@capacitor\/app"\s*\]/,
+    "WebView compatibility floors and lifecycle plugin discovery must coexist in one Android config",
+  );
   assert.doesNotMatch(
     config,
     /plugins:\s*\{[\s\S]*?CapacitorSQLite/,

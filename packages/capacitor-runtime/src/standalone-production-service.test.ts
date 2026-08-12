@@ -266,6 +266,8 @@ test("制作服务按真实 Promise 区分系统素材选择、计划与渲染",
   const planning = service.generatePlan("project-ops");
   await planEntered.promise;
   assert.deepEqual(operations.list(), [{ kind: "production-plan", id: "project-ops", source: "memory", execution: "in-process" }]);
+  await assert.rejects(() => service.delete("project-ops"), /正在/u);
+  assert.deepEqual(operations.list(), [{ kind: "production-plan", id: "project-ops", source: "memory", execution: "in-process" }]);
   planRelease.resolve();
   await planning;
   assert.deepEqual(operations.list(), []);
