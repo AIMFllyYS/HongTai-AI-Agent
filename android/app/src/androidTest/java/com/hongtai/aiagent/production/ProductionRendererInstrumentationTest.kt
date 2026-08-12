@@ -9,6 +9,9 @@ import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import kotlin.math.sin
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -18,7 +21,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ProductionRendererInstrumentationTest {
   @Test
-  fun rendersRealLengthPortraitShotsWithSegmentedSystemNarrationAndCaptions() {
+  fun rendersRealLengthPortraitShotsWithDeterministicNarrationAndCaptions() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val projectId = "instrumentation-production"
     val inputsDirectory = File(context.filesDir, "productions/$projectId/inputs").apply { mkdirs() }
@@ -53,7 +56,8 @@ class ProductionRendererInstrumentationTest {
     )
 
     val progress = mutableListOf<Int>()
-    val result = ProductionRenderer(context, ProductionMediaStore(context)).render(projectId, plan) { value, _ -> progress += value }
+    val store = ProductionMediaStore(context)
+    val result = ProductionRenderer(context, store).render(projectId, plan, FixtureNarrationSynthesizer(store)) { value, _ -> progress += value }
 
     assertTrue(result.sizeBytes > 0)
     assertTrue(result.durationSeconds in 14.5..15.5)
@@ -75,5 +79,60 @@ class ProductionRendererInstrumentationTest {
     assertTrue(mimes.contains("audio/mp4a-latm"))
     assertEquals(720, displayWidth)
     assertEquals(1280, displayHeight)
+  }
+}
+
+/**
+ * The renderer test owns its audio fixture. Depending on an emulator's system
+ * TTS voice makes Media3 coverage fail when that voice requires a network
+ * download, even though rendering itself is healthy.
+ */
+private class FixtureNarrationSynthesizer(
+  private val store: ProductionMediaStore,
+) : NarrationSynthesizer {
+  override fun synthesize(projectId: String, plan: NativeProductionPlan): List<Pair<File, Long>> = plan.shots.map { shot ->
+    val output = File(store.audioDirectory(projectId), "fixture-narration-${shot.order}.wav")
+    writePcmWav(output, shot.durationMs)
+    output to shot.durationMs
+  }
+
+  private fun writePcmWav(output: File, durationMs: Long) {
+    val sampleCount = (durationMs * SAMPLE_RATE / 1_000L).toInt()
+    val dataSize = sampleCount * BYTES_PER_SAMPLE
+    val header = ByteBuffer.allocate(WAV_HEADER_BYTES).order(ByteOrder.LITTLE_ENDIAN).apply {
+      put("RIFF".toByteArray(Charsets.US_ASCII))
+      putInt(36 + dataSize)
+      put("WAVE".toByteArray(Charsets.US_ASCII))
+      put("fmt ".toByteArray(Charsets.US_ASCII))
+      putInt(16)
+      putShort(1)
+      putShort(1)
+      putInt(SAMPLE_RATE)
+      putInt(SAMPLE_RATE * BYTES_PER_SAMPLE)
+      putShort(BYTES_PER_SAMPLE.toShort())
+      putShort(BITS_PER_SAMPLE.toShort())
+      put("data".toByteArray(Charsets.US_ASCII))
+      putInt(dataSize)
+    }
+    val pcm = ByteBuffer.allocate(dataSize).order(ByteOrder.LITTLE_ENDIAN).apply {
+      repeat(sampleCount) { index ->
+        val phase = 2.0 * Math.PI * TONE_HZ * index / SAMPLE_RATE
+        putShort((sin(phase) * AMPLITUDE).toInt().toShort())
+      }
+    }
+    output.outputStream().use { stream ->
+      stream.write(header.array())
+      stream.write(pcm.array())
+      stream.fd.sync()
+    }
+  }
+
+  private companion object {
+    const val SAMPLE_RATE = 16_000
+    const val BITS_PER_SAMPLE = 16
+    const val BYTES_PER_SAMPLE = BITS_PER_SAMPLE / 8
+    const val WAV_HEADER_BYTES = 44
+    const val TONE_HZ = 220.0
+    const val AMPLITUDE = 1_200.0
   }
 }
