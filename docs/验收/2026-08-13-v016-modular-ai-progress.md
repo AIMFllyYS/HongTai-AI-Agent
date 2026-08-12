@@ -68,11 +68,12 @@ Phase 5 清洗后的最终代码已通过：
 - `7b2ddda feat(ai): generate validated reports in five modules`
 - `1e32473 feat(runtime): expose validated generation progress`
 - `4936659 feat(web): show live validated module progress`
+- `47aa7a2 refactor: remove raw-json stream preview residue`
 
 各阶段均使用明确路径暂存并本地提交；未推送功能分支。根工作区用户文件 `HongTai.zip` 未被读取、移动、删除、覆盖或暂存。
 
 ## 发布边界
 
-截至本记录进入清洗阶段时，Android 仍为公开谱系的 `0.1.5` / `versionCode=12`；源码功能完成不等于 v0.1.6 已发布。下一阶段才会准备 `0.1.6` / `versionCode=13` 并执行 Android Release、API 35 模拟器、签名和哈希后验。
+Android 源码身份已推进为 `0.1.6` / `versionCode=13`，Release 脚本也使用同一硬校验；当前公开下载页仍为已验证的 `0.1.5` / `versionCode=12`。这只是候选源码身份，完成 Android Release、API 35 模拟器、签名和哈希后验前不能称为已签名候选，更不能称为正式发布。
 
 即使候选 APK 与模拟器门禁通过，只要没有真实 Android 设备完成同签名正常升级、旧数据保留、舌诊、面诊、链接拆解、本地 MP4 与前后台恢复，就只能称为“已签名候选 APK”。物理设备通过前不得公开上传 v0.1.6、切换下载页、合并 `main` 或推送远端。

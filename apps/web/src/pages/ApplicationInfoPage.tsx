@@ -15,10 +15,10 @@ export interface ApplicationInfoPageProps {
 }
 
 const latestUpdates = [
-  "观察图片选择框的图标与提示文字已逐项居中，报告按钮改为高可读黑字。",
-  "已保存视频会在读取到真实媒体尺寸后按横版、竖版或方形比例展示。",
-  "AI 连接新增小米 MiMo 与阶跃星辰一键配置：只需选择供应商并填写 API Key，即可检测文本、视觉、ASR 与视频配音。",
-  "素材剪辑会使用 AI 连接中的云端 TTS 生成旁白与字幕；数字人口播保留上传视频原声，只生成同步字幕。",
+  "舌象与面部观察会依次显示五个板块：当前生成到哪里、是否正在校正、哪些内容已经通过校验都清晰可见。",
+  "内容拆解会依次显示五个板块，只有通过模块校验的真实内容才会渐显，正式结果仍须完整校验并保存。",
+  "任务和报告状态会自动更新，无需手动刷新；只有本地读取或订阅异常时才提供重新读取。",
+  "页面不会展示半截 JSON、字符数、模型 reasoning、私有图片地址或未校验的医疗相关内容。",
 ] as const;
 
 export function ApplicationInfoPage({ runtime, navigate }: ApplicationInfoPageProps) {

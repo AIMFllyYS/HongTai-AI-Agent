@@ -58,3 +58,11 @@ test("Android device settings bridge exposes build identity without creating a s
   assert.match(bridge, /registerPlugin<StandaloneDeviceSettingsPlugin>\("DeviceSettings"\)/);
   assert.doesNotMatch(bridge, /openTextToSpeechSettings/);
 });
+
+test("application information describes v0.1.6 module progress and automatic updates", () => {
+  const page = read("apps/web/src/pages/ApplicationInfoPage.tsx");
+
+  assert.match(page, /舌象与面部观察.*五个板块/u);
+  assert.match(page, /内容拆解.*五个板块/u);
+  assert.match(page, /任务和报告.*自动更新.*无需手动刷新/u);
+});
