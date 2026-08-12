@@ -48,6 +48,14 @@ test("应用运行时契约保留七个采集阶段，并将任务与内容拆�
   assert.deepEqual(PIPELINE_STAGES, TASK_STAGE_VALUES);
 });
 
+test("任务来源明确区分公网链接和本地视频", () => {
+  const publicTask = { sourceKind: "public_link" } satisfies Pick<AppTaskRecord, "sourceKind">;
+  const localTask = { sourceKind: "local_video" } satisfies Pick<AppTaskRecord, "sourceKind">;
+
+  assert.equal(publicTask.sourceKind, "public_link");
+  assert.equal(localTask.sourceKind, "local_video");
+});
+
 test("应用界面任务服务可以预检输入并在重载后读取持久化事件", () => {
   const service = {} as TaskService;
   const repository = {} as TaskRepository;

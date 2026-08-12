@@ -1,4 +1,4 @@
-import type { ContentType, SupportedPlatform } from "@hongtai/core";
+import type { ContentAnalysisPlatform, ContentType } from "@hongtai/core";
 import type { AiProvider, AiStreamEvent } from "./provider";
 import type { ContentAnalysisResultV1 } from "../schemas/content-analysis";
 
@@ -11,7 +11,7 @@ export interface ContentEvidenceUnit {
 
 export interface ContentAnalysisInput {
   readonly taskId: string;
-  readonly platform: SupportedPlatform;
+  readonly platform: ContentAnalysisPlatform;
   readonly contentType: Extract<ContentType, "video" | "image_text">;
   readonly sourceKind: "asr" | "description" | "image_text";
   readonly title?: string;
