@@ -83,12 +83,39 @@ code 14 版本阶段补充验证：
 - 完整 `pnpm check` 通过：typecheck、ESLint 与 267/267 测试全部成功；其中包括 Windows 原生 HEIF 构建门禁、Release 签名入口防护、媒体选择生命周期、Provider 推理字段、单次 AI Flow、Runtime 和 Web 回归。
 - 受限沙箱中的第一次全量尝试因 Java `user.home` 指向无 Gradle 分发的隔离目录，并被禁止联网下载而在 Wrapper 层失败；使用本机既有 Gradle/JDK 缓存重跑后全部通过。该环境失败没有进入项目断言，也没有通过修改测试或放宽安全门禁规避。
 
+## code 14 已签名候选 APK
+
+| 项目 | 结果 |
+| --- | --- |
+| 精确来源提交 | `c496a5d79583415de43b50ffa286787b63e7872d` |
+| 固定交付文件 | `android/app/build/outputs/apk/release/HongTai-AI-Agent-release-v0.1.6.apk`（Git 忽略，不提交） |
+| 包身份 | `com.hongtai.aiagent`，`versionName=0.1.6`，`versionCode=14` |
+| 字节数 | 25,955,765 |
+| APK SHA-256 | `6575FA8C8AE14D557959233D9BE3A62B903A276B234D646B126C1D911093BEFE` |
+| 签名 | non-debuggable；v1=false、v2=true、v3=true；DN 为 `CN=HongTai AI Agent Release, O=HongTai AI Agent, C=CN` |
+| 证书 SHA-256 | `54DF122CD4F99720C613737815385E771BFAEB17715C160AED178062AB5B2FDE`，与仓库公开锚点一致 |
+| ABI | `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` |
+| 权限 | INTERNET、ACCESS_NETWORK_STATE、WAKE_LOCK 和 Android 自动生成的非导出 receiver 权限；无相机、相册或存储危险权限 |
+
+仓库 Release 入口重新执行 Web build、Capacitor sync、`:app:testReleaseUnitTest`、`:app:lintRelease`、四 ABI native build 和 `:app:assembleRelease`；148 个 Gradle 任务成功。Gradle 原始 `app-release.apk` 与固定交付名副本的字节数和 SHA-256 完全一致。既有 Vite 大 chunk、Capacitor `flatDir` 和 SDK XML 兼容提示仍为非阻断警告。
+
+## API 35 模拟器证据
+
+- 设备为 `SciChatApi35`：Android 15 / API 35 / x86_64，model `sdk_gphone64_x86_64`，`ro.kernel.qemu=1`，明确不是物理设备；以 `-read-only -no-window -no-snapshot-save` 启动，结束后已关机且未写回 Debug 测试状态。
+- 覆盖前为同一 Release 证书的 v0.1.6/code13，`firstInstallTime=2026-08-12 12:14:26`。执行 `adb install -r` 安装 code14，未卸载、未清数据、未使用 `-d`；安装后 `firstInstallTime` 保持。
+- code14 冷启动为 `Status: ok`、`LaunchState: COLD`、`TotalTime: 1246 ms`，`MainActivity` resumed，当前应用 PID 日志中 0 条 fatal。首页截图目视确认不是白屏，中文、品牌、拆解入口与底部导航正常。
+- 在分享输入框写入只存在于 React 内存的 `PICKER_STATE_814`，再打开真实 `com.android.documentsui.picker.PickActivity` 并取消。返回前后应用 PID 均为 11095，回到同一 `MainActivity`，内存标记仍在，页面明确显示 `MEDIA_SELECTION_CANCELLED`，证明正常系统选择器返回没有重载 WebView。
+- Debug、Android test APK 与 lint/JVM 通过 169 个 Gradle 任务构建。只读覆盖层内运行 `AndroidJUnitRunner` 得到 `OK (7 tests)`：5 项实际成功，2 项因仅适用于 API 24/25 HEIF fallback 而按设计跳过；Media3 确定性渲染通过，完整 instrumentation 后 0 条 fatal。
+- 本地、未跟踪的模拟器证据位于 `output/android-v016-code14/`。冷启动图为 455,163 字节、SHA-256 `05E6046F07E485B7F2534A4DD4F26CCFD8DF85293E75C19B8F76A1FDF361AE0B`；选择器返回图为 478,593 字节、SHA-256 `574F185661D73E17CC95C94B80C14929A3AE0A321E6E1ED84EA3069939AFFCE2`。
+
+检查 ADB 时没有连接任何物理设备。本节所有升级、选择器、冷启动和 instrumentation 结论都只属于模拟器，不能表述成真机通过。
+
 ## 仍需完成的发布门禁
 
 1. 已清除旧五调用 Prompt 文件与过时活文档，并完成定向测试、完整 `pnpm check`、Web build、UTF-8/U+FFFD 和 diff 检查。
-2. 已将修复源码候选推进到 `versionName=0.1.6`、新的 `versionCode=14`；code 13 永不复用。code 14 的签名 APK 与设备证据仍须由后续步骤产生。
-3. 从精确来源提交重新构建 Release，独立验证包名、版本、zipalign、v2/v3 签名、证书、ABI、字节数和 SHA-256。
-4. 重新执行 API 35 模拟器回归。
+2. 已将修复源码候选推进到 `versionName=0.1.6`、新的 `versionCode=14`；code 13 永不复用。
+3. 已从精确来源提交重新构建 Release，并独立验证包名、版本、zipalign、v2/v3 签名、证书、ABI、权限、字节数和 SHA-256。
+4. 已重新执行 API 35 普通覆盖升级、冷启动、系统视频选择器取消返回和 instrumentation 回归。
 5. 在物理设备上验证 v0.1.5 正常覆盖升级、真实视频选择/导入、舌象/面部观察、内容拆解、深度思考显示与前后台行为。
 6. 真机通过后才允许人工上传、公网哈希回验、下载页切换、合并 `main` 和推送；当前公开推荐继续为 v0.1.5/code12。
 
