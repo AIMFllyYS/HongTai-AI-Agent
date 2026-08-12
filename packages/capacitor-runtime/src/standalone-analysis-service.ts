@@ -5,10 +5,13 @@ import type {
   AnalysisService,
   AppTaskRecord,
   CancellableTask,
+  ContentAnalysisEventListener,
   ContentAnalysisStreamEvent,
   ContentAnalysisRecord,
   JsonObject,
   RuntimeUnfinishedWork,
+  StructuredGenerationModuleId,
+  StructuredGenerationProgressV1,
   TaskDetailRecord,
   TaskIssue,
 } from "@hongtai/core";
@@ -16,7 +19,6 @@ import type {
 import type { StandaloneTaskFilesPlugin } from "./standalone-task-service.js";
 import { persistedRuntimeWork, runtimeInterruptedIssue } from "./runtime-interruption.js";
 import type { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
-import { StructuredStreamPreview } from "./structured-stream-preview.js";
 
 const ANALYSIS_PATH = "analysis.json";
 
@@ -104,6 +106,9 @@ export class StandaloneAnalysisService implements AnalysisService {
   readonly #getProvider: () => Promise<AiProvider>;
   readonly #now: () => Date;
   readonly #operations?: RuntimeOperationRegistry;
+  readonly #active = new Map<string, Promise<ContentAnalysisRecord>>();
+  readonly #listeners = new Map<string, Set<ContentAnalysisEventListener>>();
+  readonly #snapshots = new Map<string, StructuredGenerationProgressV1>();
 
   constructor(options: StandaloneAnalysisServiceOptions) {
     this.#files = options.files;
@@ -138,7 +143,7 @@ export class StandaloneAnalysisService implements AnalysisService {
     }
   }
 
-  async importVideo(): Promise<ContentAnalysisRecord> {
+  async importVideo(onEvent?: ContentAnalysisEventListener): Promise<ContentAnalysisRecord> {
     const imported = await this.#tasks.importVideo();
     const ingest = await this.#tasks.start(imported.id);
     const completed = await ingest.completion;
@@ -146,35 +151,52 @@ export class StandaloneAnalysisService implements AnalysisService {
       const issue = completed.issues.at(-1);
       throw taskError(issue?.code ?? "MEDIA_IMPORT_FAILED", issue?.userMessage ?? "本地视频处理没有完成", issue?.action ?? "retry");
     }
-    return this.run(imported.id);
+    return this.run(imported.id, onEvent);
   }
 
-  async run(taskId: string, onEvent?: (event: ContentAnalysisStreamEvent) => void | Promise<void>): Promise<ContentAnalysisRecord> {
-    const execute = () => this.#run(taskId, onEvent);
-    return this.#operations
+  run(taskId: string, onEvent?: ContentAnalysisEventListener): Promise<ContentAnalysisRecord> {
+    const active = this.#active.get(taskId);
+    if (active) {
+      const listener = onEvent ? this.#attachRunListener(taskId, onEvent) : undefined;
+      if (listener) void active.finally(() => this.#removeListener(taskId, listener)).catch(() => undefined);
+      return active;
+    }
+    const listener = onEvent ? this.#attachRunListener(taskId, onEvent) : undefined;
+    const execute = () => this.#run(taskId);
+    const operation = this.#operations
       ? this.#operations.track({ kind: "content-analysis", id: taskId, execution: "in-process" }, execute)
       : execute();
+    this.#active.set(taskId, operation);
+    void operation.finally(() => {
+      if (this.#active.get(taskId) === operation) {
+        this.#active.delete(taskId);
+        this.#snapshots.delete(taskId);
+      }
+      if (listener) this.#removeListener(taskId, listener);
+    }).catch(() => undefined);
+    return operation;
   }
 
-  async #run(taskId: string, onEvent?: (event: ContentAnalysisStreamEvent) => void | Promise<void>): Promise<ContentAnalysisRecord> {
-    const startedAt = iso(this.#now);
-    const preview = new StructuredStreamPreview("content-analysis");
-    const notify = async (event: ContentAnalysisStreamEvent): Promise<void> => {
-      try {
-        await onEvent?.(event);
-      } catch {
-        // A view can disappear while a foreground request is still being
-        // finalized. That must not change the persisted task outcome.
-      }
+  subscribe(taskId: string, listener: ContentAnalysisEventListener): () => void {
+    this.#addListener(taskId, listener);
+    const snapshot = this.#snapshots.get(taskId);
+    if (snapshot) void this.#notifyListener(listener, { type: "progress", taskId, progress: snapshot });
+    return () => {
+      const listeners = this.#listeners.get(taskId);
+      listeners?.delete(listener);
+      if (listeners?.size === 0) this.#listeners.delete(taskId);
     };
-    await this.#tasks.setAnalysisStatus(taskId, "running");
+  }
+
+  async #run(taskId: string): Promise<ContentAnalysisRecord> {
+    const startedAt = iso(this.#now);
     await this.#write({ taskId, status: "running", createdAt: startedAt, updatedAt: startedAt });
+    await this.#tasks.setAnalysisStatus(taskId, "running");
     const store: ContentAnalysisStore = {
       loadInput: async (requestedTaskId) => analysisInput(requestedTaskId, await this.#tasks.getDetail(requestedTaskId)),
       saveResult: async (requestedTaskId, result, run) => {
         const document = formalDocument({ schemaVersion: result.schemaVersion, document: result });
         if (!document) throw taskError("AI_STRUCTURED_OUTPUT_INVALID", "内容拆解结果不符合正式文档结构", "retry");
-        await this.#tasks.setAnalysisStatus(requestedTaskId, "succeeded");
         await this.#write({
           taskId: requestedTaskId,
           status: "succeeded",
@@ -182,20 +204,21 @@ export class StandaloneAnalysisService implements AnalysisService {
           createdAt: run.startedAt,
           updatedAt: run.completedAt,
         });
+        await this.#tasks.setAnalysisStatus(requestedTaskId, "succeeded");
       },
       saveFailedRun: async (requestedTaskId, run) => {
         const issue = this.#issueFromRun(run);
-        await this.#tasks.setAnalysisStatus(requestedTaskId, "failed");
         await this.#write({ taskId: requestedTaskId, status: "failed", issue, createdAt: run.startedAt, updatedAt: run.completedAt });
+        await this.#tasks.setAnalysisStatus(requestedTaskId, "failed");
       },
     };
     try {
       const flow = new ContentAnalysisFlow({
         provider: await this.#getProvider(),
         store,
-        onEvent: async (event) => {
-          if (event.type === "content_delta") await notify({ type: "progress", progress: preview.append(event.delta) });
-          if (event.type === "completed") await notify({ type: "progress", progress: preview.completeProviderResponse() });
+        onProgress: (progress) => {
+          this.#snapshots.set(taskId, progress);
+          this.#notify(taskId, { type: "progress", taskId, progress });
         },
       });
       await flow.run(taskId);
@@ -203,7 +226,7 @@ export class StandaloneAnalysisService implements AnalysisService {
       if (!record || record.status !== "succeeded" || !record.result) {
         throw taskError("STORAGE_WRITE_FAILED", "内容拆解完成后没有保存正式本地文档", "free_storage");
       }
-      await notify({ type: "completed", record });
+      this.#notify(taskId, { type: "completed", taskId, record });
       return record;
     } catch (error) {
       const current = await this.get(taskId).catch(() => undefined);
@@ -211,10 +234,18 @@ export class StandaloneAnalysisService implements AnalysisService {
       if (current?.status !== "failed") {
         const issue = issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "内容拆解没有完成", action: "retry" });
         failure = issue;
-        await this.#tasks.setAnalysisStatus(taskId, "failed").catch(() => undefined);
         await this.#write({ taskId, status: "failed", issue, createdAt: startedAt, updatedAt: iso(this.#now) }).catch(() => undefined);
+        await this.#tasks.setAnalysisStatus(taskId, "failed").catch(() => undefined);
       }
-      await notify({ type: "failed", issue: failure ?? issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "内容拆解没有完成", action: "retry" }) });
+      const issue = failure ?? issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "内容拆解没有完成", action: "retry" });
+      const progress = this.#snapshots.get(taskId) ?? this.#emptyProgress();
+      this.#notify(taskId, {
+        type: "failed",
+        taskId,
+        issue,
+        ...(this.#failedModuleId(progress) ? { failedModuleId: this.#failedModuleId(progress) } : {}),
+        progress,
+      });
       throw error;
     }
   }
@@ -242,7 +273,6 @@ export class StandaloneAnalysisService implements AnalysisService {
     for (const work of unfinished) {
       const current = await this.get(work.id);
       const updatedAt = iso(this.#now);
-      await this.#tasks.setAnalysisStatus(work.id, "failed");
       await this.#write({
         taskId: work.id,
         status: "failed",
@@ -250,6 +280,7 @@ export class StandaloneAnalysisService implements AnalysisService {
         createdAt: current?.createdAt ?? updatedAt,
         updatedAt,
       });
+      await this.#tasks.setAnalysisStatus(work.id, "failed");
       recovered.push(work);
     }
     return recovered;
@@ -257,6 +288,54 @@ export class StandaloneAnalysisService implements AnalysisService {
 
   async #write(record: ContentAnalysisRecord): Promise<void> {
     await this.#files.writeText({ taskId: record.taskId, relativePath: ANALYSIS_PATH, value: JSON.stringify(record), replace: true });
+  }
+
+  #addListener(taskId: string, listener: ContentAnalysisEventListener): void {
+    const listeners = this.#listeners.get(taskId) ?? new Set<ContentAnalysisEventListener>();
+    listeners.add(listener);
+    this.#listeners.set(taskId, listeners);
+  }
+
+  #attachRunListener(taskId: string, onEvent: ContentAnalysisEventListener): ContentAnalysisEventListener {
+    const listener: ContentAnalysisEventListener = (event) => onEvent(event);
+    this.#addListener(taskId, listener);
+    const snapshot = this.#snapshots.get(taskId);
+    if (snapshot) void this.#notifyListener(listener, { type: "progress", taskId, progress: snapshot });
+    return listener;
+  }
+
+  #removeListener(taskId: string, listener: ContentAnalysisEventListener): void {
+    const listeners = this.#listeners.get(taskId);
+    listeners?.delete(listener);
+    if (listeners?.size === 0) this.#listeners.delete(taskId);
+  }
+
+  #notify(taskId: string, event: ContentAnalysisStreamEvent): void {
+    const listeners = this.#listeners.get(taskId);
+    if (!listeners) return;
+    for (const listener of listeners) void this.#notifyListener(listener, event);
+  }
+
+  async #notifyListener(listener: ContentAnalysisEventListener, event: ContentAnalysisStreamEvent): Promise<void> {
+    try {
+      await listener(event);
+    } catch {
+      // Page lifecycle changes cannot affect a persisted formal result.
+    }
+  }
+
+  #emptyProgress(): StructuredGenerationProgressV1 {
+    return {
+      schemaVersion: "structured-generation-progress.v1",
+      flow: "content-analysis",
+      phase: "preparing",
+      modules: (["overview", "hook-drivers", "structure-claims", "style-template", "risks-boundaries"] as const)
+        .map((moduleId) => ({ moduleId, status: "pending" as const })),
+    };
+  }
+
+  #failedModuleId(progress: StructuredGenerationProgressV1): StructuredGenerationModuleId | undefined {
+    return progress.modules.find((module) => module.status === "failed")?.moduleId;
   }
 
   #issueFromRun(run: ContentAnalysisRunRecord): TaskIssue {

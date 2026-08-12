@@ -12,6 +12,7 @@ import { issueFromAppError, TaskError } from "@hongtai/core";
 import type {
   DiagnosisMessage,
   DiagnosisImageRecovery,
+  DiagnosisReportEventListener,
   DiagnosisReportStreamEvent,
   DiagnosisReportRecord,
   DiagnosisService,
@@ -20,12 +21,13 @@ import type {
   MediaReference,
   ObservationMode,
   RuntimeUnfinishedWork,
+  StructuredGenerationModuleId,
+  StructuredGenerationProgressV1,
   TaskIssue,
 } from "@hongtai/core";
 
 import { persistedRuntimeWork, runtimeInterruptedIssue } from "./runtime-interruption.js";
 import type { RuntimeOperationIdentity, RuntimeOperationRegistry } from "./runtime-operation-registry.js";
-import { StructuredStreamPreview } from "./structured-stream-preview.js";
 
 const SESSION_PATH = "session.json";
 const REPORT_PATH = "report.json";
@@ -196,6 +198,9 @@ export class StandaloneDiagnosisService implements DiagnosisService {
   readonly #now: () => Date;
   readonly #operations?: RuntimeOperationRegistry;
   readonly #picked = new Map<string, { readonly nativeUri: string; readonly mimeType: string; readonly sizeBytes: number }>();
+  readonly #activeReports = new Map<string, Promise<DiagnosisReportRecord>>();
+  readonly #reportListeners = new Map<string, Set<DiagnosisReportEventListener>>();
+  readonly #reportSnapshots = new Map<string, StructuredGenerationProgressV1>();
 
   constructor(options: StandaloneDiagnosisServiceOptions) {
     this.#files = options.files;
@@ -260,39 +265,58 @@ export class StandaloneDiagnosisService implements DiagnosisService {
     return this.#toUiSession(state, copied.uri);
   }
 
-  async runReport(sessionId: string, onEvent?: (event: DiagnosisReportStreamEvent) => void | Promise<void>): Promise<DiagnosisReportRecord> {
-    return this.#track(
+  runReport(sessionId: string, onEvent?: DiagnosisReportEventListener): Promise<DiagnosisReportRecord> {
+    const active = this.#activeReports.get(sessionId);
+    if (active) {
+      const listener = onEvent ? this.#attachRunReportListener(sessionId, onEvent) : undefined;
+      if (listener) void active.finally(() => this.#removeReportListener(sessionId, listener)).catch(() => undefined);
+      return active;
+    }
+    const listener = onEvent ? this.#attachRunReportListener(sessionId, onEvent) : undefined;
+    const operation = this.#track(
       { kind: "diagnosis-report", id: sessionId, execution: "in-process" },
-      () => this.#runReport(sessionId, onEvent),
+      () => this.#runReport(sessionId),
     );
+    this.#activeReports.set(sessionId, operation);
+    void operation.finally(() => {
+      if (this.#activeReports.get(sessionId) === operation) {
+        this.#activeReports.delete(sessionId);
+        this.#reportSnapshots.delete(sessionId);
+      }
+      if (listener) this.#removeReportListener(sessionId, listener);
+    }).catch(() => undefined);
+    return operation;
   }
 
-  async #runReport(sessionId: string, onEvent?: (event: DiagnosisReportStreamEvent) => void | Promise<void>): Promise<DiagnosisReportRecord> {
+  subscribeReport(sessionId: string, listener: DiagnosisReportEventListener): () => void {
+    this.#addReportListener(sessionId, listener);
+    const snapshot = this.#reportSnapshots.get(sessionId);
+    if (snapshot) void this.#notifyReportListener(listener, { type: "progress", sessionId, progress: snapshot });
+    return () => {
+      const listeners = this.#reportListeners.get(sessionId);
+      listeners?.delete(listener);
+      if (listeners?.size === 0) this.#reportListeners.delete(sessionId);
+    };
+  }
+
+  async #runReport(sessionId: string): Promise<DiagnosisReportRecord> {
     const state = await this.#readSession(sessionId);
     if (!state) throw taskError("AI_SESSION_NOT_FOUND", "未找到本地观察会话", "select_media");
     const started = await this.#setStatus(state, "running");
-    const preview = new StructuredStreamPreview("diagnosis-report");
-    const notify = async (event: DiagnosisReportStreamEvent): Promise<void> => {
-      try {
-        await onEvent?.(event);
-      } catch {
-        // Page lifecycle changes cannot invalidate an already-running report.
-      }
-    };
     try {
       const flow = new DiagnosisFlow({
         provider: await this.#getProvider(),
         repository: this.#repository(),
         contextWindowTokens: 32_000,
-        onEvent: async (event) => {
-          if (event.type === "content_delta") await notify({ type: "progress", progress: preview.append(event.delta) });
-          if (event.type === "completed") await notify({ type: "progress", progress: preview.completeProviderResponse() });
+        onProgress: (progress) => {
+          this.#reportSnapshots.set(sessionId, progress);
+          this.#notifyReport(sessionId, { type: "progress", sessionId, progress });
         },
       });
       await flow.runReport(sessionId);
       const saved = await this.getReport(sessionId);
       if (!saved?.report || saved.status !== "succeeded") throw taskError("STORAGE_WRITE_FAILED", "观察报告没有保存为正式本地文档", "free_storage");
-      await notify({ type: "completed", record: saved });
+      this.#notifyReport(sessionId, { type: "completed", sessionId, record: saved });
       return saved;
     } catch (error) {
       const failure = issue(error, "观察报告未能完成");
@@ -300,7 +324,15 @@ export class StandaloneDiagnosisService implements DiagnosisService {
       if (current?.status !== "succeeded") {
         await this.#setStatus(started, "failed", failure).catch(() => undefined);
       }
-      await notify({ type: "failed", issue: current?.issue ?? failure });
+      const progress = this.#reportSnapshots.get(sessionId) ?? this.#emptyReportProgress();
+      const failedModuleId = this.#failedReportModuleId(progress);
+      this.#notifyReport(sessionId, {
+        type: "failed",
+        sessionId,
+        issue: current?.issue ?? failure,
+        ...(failedModuleId ? { failedModuleId } : {}),
+        progress,
+      });
       throw error;
     }
   }
@@ -408,6 +440,54 @@ export class StandaloneDiagnosisService implements DiagnosisService {
 
   async #track<T>(operation: RuntimeOperationIdentity, run: () => Promise<T>): Promise<T> {
     return this.#operations ? this.#operations.track(operation, run) : run();
+  }
+
+  #addReportListener(sessionId: string, listener: DiagnosisReportEventListener): void {
+    const listeners = this.#reportListeners.get(sessionId) ?? new Set<DiagnosisReportEventListener>();
+    listeners.add(listener);
+    this.#reportListeners.set(sessionId, listeners);
+  }
+
+  #attachRunReportListener(sessionId: string, onEvent: DiagnosisReportEventListener): DiagnosisReportEventListener {
+    const listener: DiagnosisReportEventListener = (event) => onEvent(event);
+    this.#addReportListener(sessionId, listener);
+    const snapshot = this.#reportSnapshots.get(sessionId);
+    if (snapshot) void this.#notifyReportListener(listener, { type: "progress", sessionId, progress: snapshot });
+    return listener;
+  }
+
+  #removeReportListener(sessionId: string, listener: DiagnosisReportEventListener): void {
+    const listeners = this.#reportListeners.get(sessionId);
+    listeners?.delete(listener);
+    if (listeners?.size === 0) this.#reportListeners.delete(sessionId);
+  }
+
+  #notifyReport(sessionId: string, event: DiagnosisReportStreamEvent): void {
+    const listeners = this.#reportListeners.get(sessionId);
+    if (!listeners) return;
+    for (const listener of listeners) void this.#notifyReportListener(listener, event);
+  }
+
+  async #notifyReportListener(listener: DiagnosisReportEventListener, event: DiagnosisReportStreamEvent): Promise<void> {
+    try {
+      await listener(event);
+    } catch {
+      // Page lifecycle changes cannot affect a persisted formal report.
+    }
+  }
+
+  #emptyReportProgress(): StructuredGenerationProgressV1 {
+    return {
+      schemaVersion: "structured-generation-progress.v1",
+      flow: "diagnosis-report",
+      phase: "preparing",
+      modules: (["visual-observations", "observation-summary", "wellness-recommendations", "safety-limitations", "follow-up-questions"] as const)
+        .map((moduleId) => ({ moduleId, status: "pending" as const })),
+    };
+  }
+
+  #failedReportModuleId(progress: StructuredGenerationProgressV1): StructuredGenerationModuleId | undefined {
+    return progress.modules.find((module) => module.status === "failed")?.moduleId;
   }
 
   async #pickedImage(

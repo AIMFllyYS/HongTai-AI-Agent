@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { issueFromAppError } from "@hongtai/core";
-import type { AppRuntime, DiagnosisSessionRecord, MediaReference, ObservationMode, StructuredStreamProgress as StructuredStreamProgressValue, TaskIssue } from "@hongtai/core";
+import type { AppRuntime, DiagnosisSessionRecord, MediaReference, ObservationMode, StructuredGenerationProgressV1, TaskIssue } from "@hongtai/core";
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
@@ -52,7 +52,7 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
   const [issue, setIssue] = useState<TaskIssue>();
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(true);
-  const [reportProgress, setReportProgress] = useState<StructuredStreamProgressValue>();
+  const [reportProgress, setReportProgress] = useState<StructuredGenerationProgressV1>();
 
   const loadSessions = useCallback(async () => {
     try {

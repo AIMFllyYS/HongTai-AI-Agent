@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { issueFromAppError } from "@hongtai/core";
-import type { AppRuntime, DiagnosisMessage, DiagnosisReportRecord, DiagnosisSessionRecord, StructuredStreamProgress as StructuredStreamProgressValue, TaskIssue } from "@hongtai/core";
+import type { AppRuntime, DiagnosisMessage, DiagnosisReportRecord, DiagnosisSessionRecord, StructuredGenerationProgressV1, TaskIssue } from "@hongtai/core";
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
@@ -51,7 +51,7 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
   const [loading, setLoading] = useState(true);
   const [issue, setIssue] = useState<TaskIssue>();
   const [reportPending, setReportPending] = useState(false);
-  const [reportProgress, setReportProgress] = useState<StructuredStreamProgressValue>();
+  const [reportProgress, setReportProgress] = useState<StructuredGenerationProgressV1>();
   const [question, setQuestion] = useState("");
   const [pendingQuestion, setPendingQuestion] = useState<string>();
   const [streamedAnswer, setStreamedAnswer] = useState("");

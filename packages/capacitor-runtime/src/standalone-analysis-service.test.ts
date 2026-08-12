@@ -89,7 +89,8 @@ test("StandaloneAnalysisService persists only the formal content-analysis docume
   assert.doesNotMatch(values.get("task-1/analysis.json") ?? "", /internal reasoning|rawResponse/);
   assert.equal(events.some((event) => (event as { readonly type?: string }).type === "progress"), true);
   assert.equal(events.some((event) => (event as { readonly type?: string }).type === "completed"), true);
-  assert.match(JSON.stringify(events), /内容概览/);
+  assert.match(JSON.stringify(events), /"moduleId":"overview"/);
+  assert.match(JSON.stringify(events), /从真实证据中拆解/);
   assert.doesNotMatch(JSON.stringify(events), /internal reasoning|真实转写证据/);
 });
 
@@ -177,6 +178,180 @@ test("StandaloneAnalysisService registers the real analysis promise lifetime", a
   release.resolve();
   await running;
   assert.deepEqual(operations.list(), []);
+});
+
+test("StandaloneAnalysisService single-flights by task id and replays validated progress to late subscribers", async () => {
+  const values = new Map<string, string>();
+  const entered = deferred();
+  const release = deferred();
+  let calls = 0;
+  const service = new StandaloneAnalysisService({
+    files: {
+      readText: async ({ taskId, relativePath }: { readonly taskId: string; readonly relativePath: string }) => ({ value: values.get(`${taskId}/${relativePath}`) }),
+      writeText: async ({ taskId, relativePath, value }: { readonly taskId: string; readonly relativePath: string; readonly value: string }) => { values.set(`${taskId}/${relativePath}`, value); },
+    } as never,
+    tasks: {
+      importVideo: async () => { throw new Error("unused"); },
+      start: async () => { throw new Error("unused"); },
+      getDetail: async () => detail(),
+      setAnalysisStatus: async () => undefined,
+    },
+    getProvider: async () => ({
+      generate: async (request) => {
+        calls += 1;
+        if (calls === 1) {
+          entered.resolve();
+          await release.promise;
+        }
+        return { content: analysisModuleContent(request), reasoning: "" };
+      },
+      transcribe: async () => "",
+    }),
+  });
+
+  const first = service.run("task-1");
+  await entered.promise;
+  const lateEvents: import("@hongtai/core").ContentAnalysisStreamEvent[] = [];
+  const unsubscribe = service.subscribe("task-1", async (event) => {
+    lateEvents.push(event);
+    if (event.type === "completed") {
+      assert.equal((await service.get("task-1"))?.status, "succeeded", "completed must follow formal persistence");
+    }
+  });
+  const second = service.run("task-1");
+
+  assert.strictEqual(second, first, "same task id must return the same in-flight Promise");
+  assert.equal(lateEvents[0]?.type, "progress", "a late page must immediately receive the active cumulative snapshot");
+  if (lateEvents[0]?.type === "progress") {
+    assert.equal(lateEvents[0].taskId, "task-1");
+    assert.equal(lateEvents[0].progress.modules[0]?.moduleId, "overview");
+    assert.equal(lateEvents[0].progress.modules[0]?.status, "running");
+  }
+
+  release.resolve();
+  const [left, right] = await Promise.all([first, second]);
+  unsubscribe();
+  assert.strictEqual(left, right);
+  assert.equal(calls, 5);
+  assert.equal(lateEvents.at(-1)?.type, "completed");
+});
+
+test("StandaloneAnalysisService unsubscribe and listener failures never cancel formal persistence", async () => {
+  const values = new Map<string, string>();
+  const service = new StandaloneAnalysisService({
+    files: {
+      readText: async ({ taskId, relativePath }: { readonly taskId: string; readonly relativePath: string }) => ({ value: values.get(`${taskId}/${relativePath}`) }),
+      writeText: async ({ taskId, relativePath, value }: { readonly taskId: string; readonly relativePath: string; readonly value: string }) => { values.set(`${taskId}/${relativePath}`, value); },
+    } as never,
+    tasks: {
+      importVideo: async () => { throw new Error("unused"); },
+      start: async () => { throw new Error("unused"); },
+      getDetail: async () => detail(),
+      setAnalysisStatus: async () => undefined,
+    },
+    getProvider: async () => ({
+      generate: async (request) => ({ content: analysisModuleContent(request), reasoning: "" }),
+      transcribe: async () => "",
+    }),
+  });
+  const unsubscribe = service.subscribe("task-1", () => { throw new Error("view disappeared"); });
+  const running = service.run("task-1");
+  unsubscribe();
+
+  const completed = await running;
+
+  assert.equal(completed.status, "succeeded");
+  assert.equal((await service.get("task-1"))?.status, "succeeded");
+});
+
+test("StandaloneAnalysisService never lets a slow page listener stall the formal flow", { timeout: 1_000 }, async () => {
+  const values = new Map<string, string>();
+  const providerEntered = deferred();
+  const neverSettles = new Promise<void>(() => undefined);
+  const service = new StandaloneAnalysisService({
+    files: {
+      readText: async ({ taskId, relativePath }: { readonly taskId: string; readonly relativePath: string }) => ({ value: values.get(`${taskId}/${relativePath}`) }),
+      writeText: async ({ taskId, relativePath, value }: { readonly taskId: string; readonly relativePath: string; readonly value: string }) => { values.set(`${taskId}/${relativePath}`, value); },
+    } as never,
+    tasks: {
+      importVideo: async () => { throw new Error("unused"); },
+      start: async () => { throw new Error("unused"); },
+      getDetail: async () => detail(),
+      setAnalysisStatus: async () => undefined,
+    },
+    getProvider: async () => ({
+      generate: async (request) => {
+        providerEntered.resolve();
+        return { content: analysisModuleContent(request), reasoning: "" };
+      },
+      transcribe: async () => "",
+    }),
+  });
+  const unsubscribe = service.subscribe("task-1", () => neverSettles);
+  const running = service.run("task-1");
+
+  await providerEntered.promise;
+  unsubscribe();
+
+  assert.equal((await running).status, "succeeded");
+});
+
+test("StandaloneAnalysisService keeps three validated modules on module-four failure and retries from module one", async () => {
+  const values = new Map<string, string>();
+  const schemas: string[] = [];
+  let styleAttempts = 0;
+  const service = new StandaloneAnalysisService({
+    files: {
+      readText: async ({ taskId, relativePath }: { readonly taskId: string; readonly relativePath: string }) => ({ value: values.get(`${taskId}/${relativePath}`) }),
+      writeText: async ({ taskId, relativePath, value }: { readonly taskId: string; readonly relativePath: string; readonly value: string }) => { values.set(`${taskId}/${relativePath}`, value); },
+    } as never,
+    tasks: {
+      importVideo: async () => { throw new Error("unused"); },
+      start: async () => { throw new Error("unused"); },
+      getDetail: async () => detail(),
+      setAnalysisStatus: async () => undefined,
+    },
+    getProvider: async () => ({
+      generate: async (request) => {
+        const schema = request.jsonSchema?.name ?? "none";
+        schemas.push(schema);
+        if (schema === "content_analysis_style_template_v1" && styleAttempts++ < 2) {
+          return { content: "{}", reasoning: "" };
+        }
+        return { content: analysisModuleContent(request), reasoning: "" };
+      },
+      transcribe: async () => "",
+    }),
+  });
+  const events: import("@hongtai/core").ContentAnalysisStreamEvent[] = [];
+
+  await assert.rejects(() => service.run("task-1", (event) => { events.push(event); }));
+
+  const failed = events.at(-1);
+  assert.equal(failed?.type, "failed");
+  if (failed?.type === "failed") {
+    assert.equal(failed.failedModuleId, "style-template");
+    assert.deepEqual(failed.progress.modules.map(({ moduleId, status }) => ({ moduleId, status })), [
+      { moduleId: "overview", status: "succeeded" },
+      { moduleId: "hook-drivers", status: "succeeded" },
+      { moduleId: "structure-claims", status: "succeeded" },
+      { moduleId: "style-template", status: "failed" },
+      { moduleId: "risks-boundaries", status: "pending" },
+    ]);
+  }
+  const failedRecord = JSON.parse(values.get("task-1/analysis.json") ?? "{}") as Record<string, unknown>;
+  assert.equal(failedRecord.status, "failed");
+  assert.equal("result" in failedRecord, false);
+  assert.deepEqual(schemas.slice(0, 5), [
+    "content_analysis_overview_v1",
+    "content_analysis_hook_drivers_v1",
+    "content_analysis_structure_claims_v1",
+    "content_analysis_style_template_v1",
+    "content_analysis_style_template_v1",
+  ]);
+
+  assert.equal((await service.run("task-1")).status, "succeeded");
+  assert.equal(schemas[5], "content_analysis_overview_v1");
 });
 
 test("StandaloneAnalysisService automatically runs ingest then formal analysis for a picked local video", async () => {

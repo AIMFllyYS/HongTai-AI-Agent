@@ -1,4 +1,15 @@
-import type { StructuredStreamHighlight, StructuredStreamProgress } from "@hongtai/core";
+interface StructuredStreamHighlight {
+  readonly label: string;
+  readonly value: string;
+}
+
+interface StructuredStreamProgress {
+  readonly flow: "content-analysis" | "diagnosis-report";
+  readonly phase: "receiving" | "validating" | "repairing";
+  readonly receivedCharacters: number;
+  readonly sections: readonly string[];
+  readonly highlights: readonly StructuredStreamHighlight[];
+}
 
 type PreviewKind = "content-analysis" | "diagnosis-report";
 
@@ -68,6 +79,7 @@ export class StructuredStreamPreview {
       .filter(([key]) => new RegExp(`\\"${key}\\"\\s*:`).test(this.#buffer))
       .map(([, label]) => label);
     return {
+      flow: this.#kind,
       phase: this.#phase,
       receivedCharacters: this.#receivedCharacters,
       sections,

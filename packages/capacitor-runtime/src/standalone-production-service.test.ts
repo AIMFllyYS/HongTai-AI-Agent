@@ -83,7 +83,7 @@ function harness(narration: "system" | "provider" = "system") {
   const create = () => new StandaloneProductionService({
     files,
     native,
-    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis },
+    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, subscribe: () => () => undefined },
     getProvider: async () => provider,
     getNarrationMode: async () => narration,
     toDisplayUri: (uri: string) => uri.replace("file:///private/", "capacitor://localhost/private/"),
@@ -143,7 +143,7 @@ test("制作计划失败时保留项目和已导入素材", async () => {
       deleteProduction: async () => undefined,
     },
     native: { pickAssets: async () => ({ assets: [] }), render: async () => { throw new Error("unused"); }, probeTts: async () => undefined },
-    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis },
+    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, subscribe: () => () => undefined },
     getProvider: async () => ({ generate: async () => { throw new Error("provider down"); }, transcribe: async () => "" }),
     getNarrationMode: async () => "system",
     toDisplayUri: (uri) => uri,
@@ -240,7 +240,7 @@ test("制作服务按真实 Promise 区分系统素材选择、计划与渲染",
       },
       probeTts: async () => undefined,
     },
-    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis },
+    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, subscribe: () => () => undefined },
     getProvider: async () => ({
       generate: async () => {
         planEntered.resolve();
@@ -368,7 +368,7 @@ test("制作服务将原生媒体和 TTS 失败转换为可行动的稳定错误
       render: async () => { throw { code: "ERR_TTS_UNAVAILABLE" }; },
       probeTts: async () => undefined,
     },
-    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis },
+    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, subscribe: () => () => undefined },
     getProvider: async () => ({ generate: async () => ({ content: JSON.stringify(plan), reasoning: "" }), transcribe: async () => "" }),
     getNarrationMode: async () => "system",
     toDisplayUri: (uri) => uri,

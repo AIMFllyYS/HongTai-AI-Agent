@@ -13,7 +13,7 @@ import type {
 } from "./models";
 
 /** Versioned boundary between the presentation layer and local application services. */
-export const APP_RUNTIME_CONTRACT_VERSION = "app-runtime.v1";
+export const APP_RUNTIME_CONTRACT_VERSION = "app-runtime.v2";
 
 export const RUNTIME_WORK_KIND_VALUES = [
   "ingest",
@@ -403,35 +403,26 @@ export interface ContentAnalysisRecord {
   readonly updatedAt: string;
 }
 
-/**
- * An ephemeral, safe projection of an actual structured-model stream. It
- * intentionally carries no raw JSON, provider reasoning, or private request
- * data. It exists only while the caller owns the running request.
- */
-export interface StructuredStreamProgress {
-  readonly phase: "receiving" | "validating" | "repairing";
-  readonly receivedCharacters: number;
-  readonly sections: readonly string[];
-  /** Whitelisted, short text fields for content-analysis only; never raw JSON. */
-  readonly highlights: readonly StructuredStreamHighlight[];
-}
-
-export interface StructuredStreamHighlight {
-  readonly label: string;
-  readonly value: string;
-}
-
 export type ContentAnalysisStreamEvent =
-  | { readonly type: "progress"; readonly progress: StructuredStreamProgress }
-  | { readonly type: "completed"; readonly record: ContentAnalysisRecord }
-  | { readonly type: "failed"; readonly issue: TaskIssue };
+  | { readonly type: "progress"; readonly taskId: string; readonly progress: StructuredGenerationProgressV1 }
+  | { readonly type: "completed"; readonly taskId: string; readonly record: ContentAnalysisRecord }
+  | {
+      readonly type: "failed";
+      readonly taskId: string;
+      readonly issue: TaskIssue;
+      readonly failedModuleId?: StructuredGenerationModuleId;
+      readonly progress: StructuredGenerationProgressV1;
+    };
+
+export type ContentAnalysisEventListener = (event: ContentAnalysisStreamEvent) => void | Promise<void>;
 
 export interface AnalysisService {
   get(taskId: string): Promise<ContentAnalysisRecord | undefined>;
-  /** Emits only a safe live structure projection; raw provider output is never persisted or exposed. */
-  run(taskId: string, onEvent?: (event: ContentAnalysisStreamEvent) => void | Promise<void>): Promise<ContentAnalysisRecord>;
+  /** Emits only validated semantic modules; raw provider output is never exposed. */
+  run(taskId: string, onEvent?: ContentAnalysisEventListener): Promise<ContentAnalysisRecord>;
   /** Selects one local MP4, runs the shared ingest pipeline, then creates the formal analysis. */
-  importVideo(): Promise<ContentAnalysisRecord>;
+  importVideo(onEvent?: ContentAnalysisEventListener): Promise<ContentAnalysisRecord>;
+  subscribe(taskId: string, listener: ContentAnalysisEventListener): Unsubscribe;
 }
 
 export type ProductionStatus = "draft" | "planning" | "ready" | "rendering" | "succeeded" | "failed";
@@ -549,9 +540,17 @@ export type DiagnosisStreamEvent =
   | { readonly type: "failed"; readonly issue: TaskIssue };
 
 export type DiagnosisReportStreamEvent =
-  | { readonly type: "progress"; readonly progress: StructuredStreamProgress }
-  | { readonly type: "completed"; readonly record: DiagnosisReportRecord }
-  | { readonly type: "failed"; readonly issue: TaskIssue };
+  | { readonly type: "progress"; readonly sessionId: string; readonly progress: StructuredGenerationProgressV1 }
+  | { readonly type: "completed"; readonly sessionId: string; readonly record: DiagnosisReportRecord }
+  | {
+      readonly type: "failed";
+      readonly sessionId: string;
+      readonly issue: TaskIssue;
+      readonly failedModuleId?: StructuredGenerationModuleId;
+      readonly progress: StructuredGenerationProgressV1;
+    };
+
+export type DiagnosisReportEventListener = (event: DiagnosisReportStreamEvent) => void | Promise<void>;
 
 export type DiagnosisImageRecovery =
   | { readonly status: "none" }
@@ -567,7 +566,8 @@ export interface DiagnosisService {
   consumeImageRecovery(): Promise<DiagnosisImageRecovery>;
   createSession(input: { readonly mode: ObservationMode; readonly image: MediaReference }): Promise<DiagnosisSessionRecord>;
   /** Starts the initial report for a pending session; it never fabricates a completed report. */
-  runReport(sessionId: string, onEvent?: (event: DiagnosisReportStreamEvent) => void | Promise<void>): Promise<DiagnosisReportRecord>;
+  runReport(sessionId: string, onEvent?: DiagnosisReportEventListener): Promise<DiagnosisReportRecord>;
+  subscribeReport(sessionId: string, listener: DiagnosisReportEventListener): Unsubscribe;
   getSession(sessionId: string): Promise<DiagnosisSessionRecord | undefined>;
   /** Ordered by most recent change, with no image bytes or API reasoning exposed. */
   listSessions(): Promise<readonly DiagnosisSessionRecord[]>;

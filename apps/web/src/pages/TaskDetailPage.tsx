@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { issueFromAppError, safeUrlForDisplay } from "@hongtai/core";
-import type { AppRuntime, MediaReference, StructuredStreamProgress as StructuredStreamProgressValue, TaskDetailRecord, TaskIssue } from "@hongtai/core";
+import type { AppRuntime, MediaReference, StructuredGenerationProgressV1, TaskDetailRecord, TaskIssue } from "@hongtai/core";
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
@@ -38,7 +38,7 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<"analysis" | "delete">();
-  const [streamProgress, setStreamProgress] = useState<StructuredStreamProgressValue>();
+  const [streamProgress, setStreamProgress] = useState<StructuredGenerationProgressV1>();
 
   const load = useCallback(async () => {
     try {

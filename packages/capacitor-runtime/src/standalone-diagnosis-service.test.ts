@@ -104,8 +104,9 @@ test("StandaloneDiagnosisService saves a formal report and real follow-up histor
   assert.doesNotMatch(JSON.stringify(session), /file:\/\//);
   assert.doesNotMatch(JSON.stringify(savedReport), /private reasoning|file:\/\//);
   const progressEvents = reportEvents.filter((event) => (event as { readonly type?: string }).type === "progress");
-  assert.match(JSON.stringify(progressEvents), /图片质量/);
-  assert.doesNotMatch(JSON.stringify(progressEvents), /private reasoning|颜色较均匀/);
+  assert.match(JSON.stringify(progressEvents), /"moduleId":"visual-observations"/);
+  assert.match(JSON.stringify(progressEvents), /颜色较均匀/);
+  assert.doesNotMatch(JSON.stringify(progressEvents), /private reasoning|file:\/\//);
   assert.equal((await service.listMessages(session.sessionId)).length, 2);
 });
 
@@ -172,6 +173,148 @@ test("StandaloneDiagnosisService distinguishes external photo work from in-proce
   followUpRelease.resolve();
   await followingUp;
   assert.deepEqual(operations.list(), []);
+});
+
+test("StandaloneDiagnosisService single-flights report generation and replays the active validated snapshot", async () => {
+  const native = memoryFiles();
+  const entered = deferred();
+  const release = deferred();
+  let calls = 0;
+  const service = new StandaloneDiagnosisService({
+    files: native.plugin,
+    fileMedia: {
+      pickPhoto: async () => ({ uri: "file:///private/media/imported.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      capturePhoto: async () => ({ uri: "file:///private/media/captured.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      consumePhotoOperation: async () => ({ status: "none" }),
+    },
+    getProvider: async () => ({
+      generate: async (request) => {
+        calls += 1;
+        if (calls === 1) {
+          entered.resolve();
+          await release.promise;
+        }
+        return { content: diagnosisModuleContent(request), reasoning: "" };
+      },
+      transcribe: async () => "",
+    }),
+    toDisplayUri: (value) => `capacitor://localhost/observation/${encodeURIComponent(value)}`,
+    createSessionId: () => "session-single-flight",
+  });
+  const image = await service.pickImage();
+  const session = await service.createSession({ mode: "tongue", image });
+  const first = service.runReport(session.sessionId);
+  await entered.promise;
+  const lateEvents: import("@hongtai/core").DiagnosisReportStreamEvent[] = [];
+  service.subscribeReport(session.sessionId, async (event) => {
+    lateEvents.push(event);
+    if (event.type === "completed") {
+      assert.equal((await service.getReport(session.sessionId))?.status, "succeeded");
+    }
+  });
+  const second = service.runReport(session.sessionId);
+
+  assert.strictEqual(second, first);
+  assert.equal(lateEvents[0]?.type, "progress");
+  if (lateEvents[0]?.type === "progress") {
+    assert.equal(lateEvents[0].sessionId, session.sessionId);
+    assert.equal(lateEvents[0].progress.modules[0]?.moduleId, "visual-observations");
+    assert.equal(lateEvents[0].progress.modules[0]?.status, "running");
+  }
+
+  release.resolve();
+  await Promise.all([first, second]);
+  assert.equal(calls, 5);
+  assert.equal(lateEvents.at(-1)?.type, "completed");
+});
+
+test("StandaloneDiagnosisService never lets a slow report listener stall the formal flow", { timeout: 1_000 }, async () => {
+  const native = memoryFiles();
+  const providerEntered = deferred();
+  const neverSettles = new Promise<void>(() => undefined);
+  const service = new StandaloneDiagnosisService({
+    files: native.plugin,
+    fileMedia: {
+      pickPhoto: async () => ({ uri: "file:///private/media/imported.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      capturePhoto: async () => ({ uri: "file:///private/media/captured.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      consumePhotoOperation: async () => ({ status: "none" }),
+    },
+    getProvider: async () => ({
+      generate: async (request) => {
+        providerEntered.resolve();
+        return { content: diagnosisModuleContent(request), reasoning: "" };
+      },
+      transcribe: async () => "",
+    }),
+    toDisplayUri: (value) => value,
+    createSessionId: () => "session-slow-listener",
+  });
+  const image = await service.pickImage();
+  const session = await service.createSession({ mode: "tongue", image });
+  const unsubscribe = service.subscribeReport(session.sessionId, () => neverSettles);
+  const running = service.runReport(session.sessionId);
+
+  await providerEntered.promise;
+  unsubscribe();
+
+  assert.equal((await running).status, "succeeded");
+});
+
+test("StandaloneDiagnosisService keeps three validated modules on module-four failure without a formal report", async () => {
+  const native = memoryFiles();
+  const schemas: string[] = [];
+  let safetyAttempts = 0;
+  const service = new StandaloneDiagnosisService({
+    files: native.plugin,
+    fileMedia: {
+      pickPhoto: async () => ({ uri: "file:///private/media/imported.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      capturePhoto: async () => ({ uri: "file:///private/media/captured.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      consumePhotoOperation: async () => ({ status: "none" }),
+    },
+    getProvider: async () => ({
+      generate: async (request) => {
+        const schema = request.jsonSchema?.name ?? "none";
+        schemas.push(schema);
+        if (schema === "diagnosis_safety_limitations_v1" && safetyAttempts++ < 2) {
+          return { content: "{}", reasoning: "" };
+        }
+        return { content: diagnosisModuleContent(request), reasoning: "" };
+      },
+      transcribe: async () => "",
+    }),
+    toDisplayUri: (value) => value,
+    createSessionId: () => "session-module-four-failure",
+  });
+  const image = await service.pickImage();
+  const session = await service.createSession({ mode: "tongue", image });
+  const events: import("@hongtai/core").DiagnosisReportStreamEvent[] = [];
+
+  await assert.rejects(() => service.runReport(session.sessionId, (event) => { events.push(event); }));
+
+  const failed = events.at(-1);
+  assert.equal(failed?.type, "failed");
+  if (failed?.type === "failed") {
+    assert.equal(failed.failedModuleId, "safety-limitations");
+    assert.deepEqual(failed.progress.modules.map(({ moduleId, status }) => ({ moduleId, status })), [
+      { moduleId: "visual-observations", status: "succeeded" },
+      { moduleId: "observation-summary", status: "succeeded" },
+      { moduleId: "wellness-recommendations", status: "succeeded" },
+      { moduleId: "safety-limitations", status: "failed" },
+      { moduleId: "follow-up-questions", status: "pending" },
+    ]);
+  }
+  assert.equal(native.values.has(`${session.sessionId}/report.json`), false);
+  assert.equal((await service.getReport(session.sessionId))?.status, "failed");
+  assert.deepEqual(schemas.slice(0, 5), [
+    "diagnosis_visual_observations_v1",
+    "diagnosis_observation_summary_v1",
+    "diagnosis_wellness_recommendations_v1",
+    "diagnosis_safety_limitations_v1",
+    "diagnosis_safety_limitations_v1",
+  ]);
+
+  assert.equal((await service.runReport(session.sessionId)).status, "succeeded");
+  assert.equal(schemas[5], "diagnosis_visual_observations_v1");
 });
 
 test("StandaloneDiagnosisService keeps the selected image MIME across private copy and reload", async () => {
