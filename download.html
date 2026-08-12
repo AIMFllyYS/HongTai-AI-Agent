@@ -1090,6 +1090,15 @@
     // 更新维护区：时间来自 Git 提交记录，显示时明确使用 UTC+13。
     const CHANGELOG = [
       {
+        iso: "2026-08-12",
+        date: "2026.08.12",
+        time: "当前开发测试版本",
+        category: "功能升级 · v0.1.4",
+        title: "视频拆解、制作与模板管理完成一轮升级",
+        description: "现在可以直接从手机选择本地视频进行 AI 拆解，并对拆解任务、视频素材、生成视频和整个制作项目进行安全删除；成功的拆解结果还能保存成自定义模板，之后继续编辑、复用和管理。底部菜单也重新整理为 AI、拆解、制作、模板和设置，日常操作路径更加清楚。本次开发基于真正的 v0.1.3 版本继续升级，已完成自动化测试和模拟器覆盖升级验证；v0.1.4 目前仍是 Debug 验收版本，尚未正式对外发布，因此页面推荐下载继续保留 v0.1.3。",
+        referenceLabel: "当前状态：Debug 验收通过，尚未正式发布"
+      },
+      {
         iso: "2026-08-11T20:56:16+13:00",
         date: "2026.08.11",
         time: "20:56:16 UTC+13",
@@ -1248,7 +1257,7 @@
       content.append(createElement("span", "timeline-category", entry.category));
       content.append(createElement("h3", "timeline-title", entry.title));
       content.append(createElement("p", "timeline-description", entry.description));
-      content.append(createElement("span", "commit-ref", `代码提交 ${entry.commit}`));
+      content.append(createElement("span", "commit-ref", entry.referenceLabel || `代码提交 ${entry.commit}`));
 
       item.append(time, content);
       return item;
