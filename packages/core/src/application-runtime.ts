@@ -231,6 +231,8 @@ export interface TaskService {
   cancel(taskId: string): Promise<AppTaskRecord>;
   /** Creates a new immutable task with a distinct ID and `retryOfTaskId=taskId`. */
   retry(taskId: string): Promise<AppTaskRecord>;
+  /** Permanently removes one terminal task and all of its private artifacts. */
+  delete(taskId: string): Promise<void>;
 }
 
 export interface ContentAnalysisRecord {
@@ -245,6 +247,8 @@ export interface ContentAnalysisRecord {
 export interface AnalysisService {
   get(taskId: string): Promise<ContentAnalysisRecord | undefined>;
   run(taskId: string): Promise<ContentAnalysisRecord>;
+  /** Selects one local MP4, runs the shared ingest pipeline, then creates the formal analysis. */
+  importVideo(): Promise<ContentAnalysisRecord>;
 }
 
 export type ProductionStatus = "draft" | "planning" | "ready" | "rendering" | "succeeded" | "failed";
@@ -279,7 +283,37 @@ export interface ProductionService {
   importAssets(projectId: string): Promise<ProductionProjectRecord>;
   generatePlan(projectId: string): Promise<ProductionProjectRecord>;
   render(projectId: string): Promise<ProductionProjectRecord>;
+  /** Removes one imported asset and invalidates any plan and output that referenced it. */
+  removeAsset(projectId: string, assetId: string): Promise<ProductionProjectRecord>;
+  /** Removes only the rendered output while preserving a valid plan. */
+  removeOutput(projectId: string): Promise<ProductionProjectRecord>;
+  /** Permanently removes one production project and all owned private artifacts. */
+  delete(projectId: string): Promise<void>;
   subscribe(projectId: string, listener: (event: ProductionEvent) => void | Promise<void>): Unsubscribe;
+}
+
+export interface ContentTemplateInput {
+  readonly name: string;
+  readonly summary: string;
+  readonly formula: string;
+  readonly steps: readonly string[];
+  readonly variableSlots: readonly string[];
+}
+
+export interface ContentTemplateRecord extends ContentTemplateInput {
+  readonly templateId: string;
+  readonly sourceTaskId?: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface TemplateService {
+  list(): Promise<readonly ContentTemplateRecord[]>;
+  get(templateId: string): Promise<ContentTemplateRecord | undefined>;
+  createFromAnalysis(taskId: string): Promise<ContentTemplateRecord>;
+  create(input: ContentTemplateInput): Promise<ContentTemplateRecord>;
+  update(templateId: string, input: ContentTemplateInput): Promise<ContentTemplateRecord>;
+  delete(templateId: string): Promise<void>;
 }
 
 export type ObservationMode = "tongue" | "face";
@@ -356,6 +390,7 @@ export type AppFeature =
   | "diagnosis"
   | "create"
   | "assets"
+  | "templates"
   | "publish";
 export type FeatureCapabilityRegistry = Readonly<Record<AppFeature, FeatureCapability>>;
 
@@ -366,6 +401,7 @@ export interface AppRuntime {
   readonly analysis: AnalysisService;
   readonly diagnosis: DiagnosisService;
   readonly production: ProductionService;
+  readonly templates: TemplateService;
   readonly features: FeatureCapabilityRegistry;
 }
 

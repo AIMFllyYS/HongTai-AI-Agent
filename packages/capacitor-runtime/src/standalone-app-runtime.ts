@@ -22,6 +22,7 @@ import { StandaloneDiagnosisService } from "./standalone-diagnosis-service.js";
 import { StandaloneProductionService } from "./standalone-production-service.js";
 import { NativeIngestPorts } from "./thin-ingest-ports.js";
 import { StandaloneTaskService } from "./standalone-task-service.js";
+import { StandaloneTemplateService } from "./standalone-template-service.js";
 import type { StandaloneAiConnection, StandaloneLocalProfile, StandaloneNativePlugins } from "./standalone-bridge.js";
 
 const LOCAL_PROFILE_ID = "local";
@@ -34,6 +35,7 @@ const FEATURES: FeatureCapabilityRegistry = Object.freeze({
   diagnosis: "available",
   create: "available",
   assets: "planned",
+  templates: "available",
   publish: "planned",
 });
 const PROBE_ORDER: readonly AiCapability[] = ["text", "vision", "asr"];
@@ -246,6 +248,7 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
   };
   const tasks = new StandaloneTaskService({
     files: options.plugins.localFiles,
+    fileMedia: options.plugins.fileMedia,
     adapters: platformRegistry.all,
     http: ingestPorts.http,
     downloader: ingestPorts.downloader,
@@ -277,6 +280,7 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
     toDisplayUri: display,
     now,
   });
+  const templates = new StandaloneTemplateService({ files: options.plugins.localFiles, analysis, now });
 
   return {
     profile: {
@@ -386,6 +390,7 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
     analysis,
     diagnosis,
     production,
+    templates,
     features: FEATURES,
   };
 }

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { TaskError } from "@hongtai/core";
 import type { MediaDownloader, MediaTools, PlatformAdapter } from "@hongtai/core";
 
 import { StandaloneTaskService } from "./standalone-task-service.js";
@@ -21,6 +22,10 @@ function memoryFiles() {
       readText: async ({ taskId, relativePath }: { readonly taskId: string; readonly relativePath: string }) => ({ value: values.get(key(taskId, relativePath)) }),
       exists: async ({ taskId, relativePath }: { readonly taskId: string; readonly relativePath: string }) => ({ exists: values.has(key(taskId, relativePath)) }),
       listTaskIds: async () => ({ taskIds: [...ids] }),
+      deleteTask: async ({ taskId }: { readonly taskId: string }) => {
+        ids.delete(taskId);
+        for (const path of [...values.keys()]) if (path.startsWith(`${taskId}/`)) values.delete(path);
+      },
       getUri: async ({ taskId, relativePath }: { readonly taskId: string; readonly relativePath: string }) => ({
         uri: values.has(key(taskId, relativePath)) ? `file:///private/tasks/${taskId}/${relativePath}` : undefined,
       }),
@@ -127,4 +132,70 @@ test("StandaloneTaskService writes the minimal running projection before the sha
 
   release.resolve();
   await active.completion;
+});
+
+test("StandaloneTaskService imports one private MP4 through the shared pipeline and deletes only its terminal task", async () => {
+  const native = memoryFiles();
+  let picked = 0;
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    fileMedia: {
+      pickVideo: async ({ taskId }) => {
+        picked += 1;
+        await native.plugin.writeText({ taskId, relativePath: "media/video.mp4", value: "private-mp4", replace: true });
+        return { uri: `file:///private/tasks/${taskId}/media/video.mp4`, mimeType: "video/mp4", displayName: "真实口播.mp4", sizeBytes: 128, durationSeconds: 8 };
+      },
+    },
+    adapters: [],
+    http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    downloader: { download: async () => { throw new Error("local video must not download"); } },
+    mediaTools: {
+      merge: async () => undefined,
+      probeDuration: async () => 8,
+      extractAudio: async () => undefined,
+      splitAudio: async () => ["task://task-local-1/media/segments/segment-1.wav"],
+    },
+    transcriber: {
+      transcribe: async () => ({
+        status: "transcribed",
+        text: "真实本地视频文稿",
+        segments: [{ index: 0, startSeconds: 0, endSeconds: 8, text: "真实本地视频文稿", status: "succeeded" }],
+      }),
+    },
+    createTaskId: () => "task-local-1",
+    toDisplayUri: (value) => `display:${value}`,
+  });
+
+  const imported = await service.importVideo();
+  assert.equal(imported.sourceKind, "local_video");
+  assert.equal(imported.sourceUrl, "");
+  assert.equal(imported.platform, undefined);
+  assert.equal(imported.media[0]?.origin, "imported");
+  assert.equal(picked, 1);
+
+  await assert.rejects(() => service.delete(imported.id), /尚未完成/u);
+  const completed = await (await service.start(imported.id)).completion;
+  assert.equal(completed.status, "succeeded");
+  await service.delete(imported.id);
+  assert.equal(await service.get(imported.id), undefined);
+});
+
+test("StandaloneTaskService maps picker cancellation and removes the unfinished private task", async () => {
+  const native = memoryFiles();
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    fileMedia: { pickVideo: async () => { throw { code: "ERR_MEDIA_SELECTION_CANCELLED" }; } },
+    adapters: [],
+    http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 0, extractAudio: async () => undefined, splitAudio: async () => [] },
+    createTaskId: () => "task-cancelled-video",
+    toDisplayUri: (value) => value,
+  });
+
+  await assert.rejects(
+    () => service.importVideo(),
+    (error) => error instanceof TaskError && error.code === "MEDIA_SELECTION_CANCELLED" && error.action === "select_media",
+  );
+  assert.deepEqual((await native.plugin.listTaskIds()).taskIds, []);
 });
