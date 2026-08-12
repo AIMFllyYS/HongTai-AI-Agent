@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -182,6 +182,14 @@ test("an older list response cannot resolve after a newer read has started", asy
   assert.equal(reads.reconcile(olderRead, ["stale"], (current, event) => [...current, event]), undefined);
   reads.record("live");
   assert.deepEqual(reads.reconcile(newerRead, ["fresh"], (current, event) => [...current, event]), ["fresh", "live"]);
+});
+
+test("legacy raw-json stream preview residue is removed from runtime and web UI", () => {
+  assert.equal(existsSync(join(webRoot, "components", "StructuredStreamProgress.tsx")), false);
+  assert.equal(existsSync(join(process.cwd(), "packages", "capacitor-runtime", "src", "structured-stream-preview.ts")), false);
+  assert.equal(existsSync(join(process.cwd(), "packages", "capacitor-runtime", "src", "structured-stream-preview.test.ts")), false);
+  assert.doesNotMatch(read("styles/components.css"), /\.structured-stream-progress/);
+  assert.equal(existsSync(join(webRoot, "components", "ValidatedModuleProgress.tsx")), true);
 });
 
 test("live generation pages use narrow subscriptions with no healthy-state manual refresh", () => {
