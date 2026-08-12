@@ -27,7 +27,7 @@ test("web application routes expose canonical runtime paths", () => {
     "/tasks/:taskId/analysis",
     "/create",
     "/publish",
-    "/assets",
+    "/templates",
     "/settings",
     "/settings/profile",
     "/settings/ai",
@@ -43,6 +43,8 @@ test("web application routes expose canonical runtime paths", () => {
 
   assert.equal(pathForRoute("home"), "/");
   assert.equal(pathForRoute("observation-new"), "/observation/new");
+  assert.equal(pathForRoute("templates"), "/templates");
+  assert.equal(matchRoute("/assets").key, "templates");
   assert.equal(matchRoute("/unknown").key, "not-found");
 });
 

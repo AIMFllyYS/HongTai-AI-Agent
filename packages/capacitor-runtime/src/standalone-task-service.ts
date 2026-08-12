@@ -1,4 +1,4 @@
-import { IngestPipeline, TaskError, inspectInput, safeUrlForDisplay } from "@hongtai/core";
+import { IngestPipeline, TaskError, inspectInput, isTerminalTaskStatus, safeUrlForDisplay } from "@hongtai/core";
 import type {
   AppTaskRecord,
   CancellableTask,
@@ -33,6 +33,7 @@ export interface StandaloneTaskFilesPlugin extends LocalTaskFilesPlugin {
   readText(options: { readonly taskId: string; readonly relativePath: string }): Promise<{ readonly value?: string }>;
   exists(options: { readonly taskId: string; readonly relativePath: string }): Promise<{ readonly exists: boolean }>;
   listTaskIds(): Promise<{ readonly taskIds: readonly string[] }>;
+  deleteTask(options: { readonly taskId: string }): Promise<void>;
   getUri(options: { readonly taskId: string; readonly relativePath: string }): Promise<{
     readonly uri?: string;
     readonly sizeBytes?: number;
@@ -40,8 +41,19 @@ export interface StandaloneTaskFilesPlugin extends LocalTaskFilesPlugin {
   }>;
 }
 
+export interface StandaloneTaskVideoPicker {
+  pickVideo(options: { readonly taskId: string }): Promise<{
+    readonly uri: string;
+    readonly mimeType: "video/mp4";
+    readonly displayName: string;
+    readonly sizeBytes: number;
+    readonly durationSeconds: number;
+  }>;
+}
+
 export interface StandaloneTaskServiceOptions {
   readonly files: StandaloneTaskFilesPlugin;
+  readonly fileMedia?: StandaloneTaskVideoPicker;
   readonly adapters: readonly PlatformAdapter[];
   readonly http: HttpClient;
   readonly downloader: MediaDownloader;
@@ -54,7 +66,9 @@ export interface StandaloneTaskServiceOptions {
   readonly operations?: RuntimeOperationRegistry;
 }
 
-type StoredTaskRequest = { readonly normalizedUrl: string };
+type StoredTaskRequest =
+  | { readonly kind: "public_link"; readonly normalizedUrl: string }
+  | { readonly kind: "local_video"; readonly displayName: string };
 
 function currentIso(now: () => Date): string {
   return now().toISOString();
@@ -74,6 +88,25 @@ function generatedTaskId(): string {
   return `task-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function nativeCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const code = (error as Readonly<Record<string, unknown>>).code;
+  return typeof code === "string" ? code : undefined;
+}
+
+function videoImportError(error: unknown): TaskError {
+  switch (nativeCode(error)) {
+    case "ERR_MEDIA_SELECTION_CANCELLED":
+      return taskError("MEDIA_SELECTION_CANCELLED", "已取消选择本地视频", "select_media");
+    case "ERR_MEDIA_SOURCE_MISSING":
+      return taskError("MEDIA_SOURCE_NOT_FOUND", "系统没有返回可读取的视频", "select_media");
+    case "ERR_MEDIA_READ_FAILED":
+      return taskError("MEDIA_READ_FAILED", "所选本地视频无法读取", "select_media");
+    default:
+      return error instanceof TaskError ? error : taskError("MEDIA_IMPORT_FAILED", "本地视频导入没有完成", "select_media");
+  }
+}
+
 function isTaskStatus(value: unknown): value is TaskStatus {
   return value === "queued" || value === "running" || value === "succeeded" || value === "degraded" ||
     value === "failed" || value === "cancelled" || value === "interrupted";
@@ -89,7 +122,8 @@ function toAppTask(task: TaskRecord, media: readonly MediaReference[] = []): App
   }
   return {
     id: task.id,
-    sourceUrl: safeUrlForDisplay(task.sourceUrl),
+    sourceUrl: task.sourceKind === "local_video" ? "" : safeUrlForDisplay(task.sourceUrl),
+    sourceKind: task.sourceKind ?? "public_link",
     status: task.status,
     ...(task.currentStage ? { currentStage: task.currentStage } : {}),
     ...(task.platform ? { platform: task.platform } : {}),
@@ -138,6 +172,7 @@ function issueForInterrupted(): TaskIssue {
 export class StandaloneTaskService implements TaskService {
   readonly #files: StandaloneTaskFilesPlugin;
   readonly #artifactStore: NativeTaskFiles;
+  readonly #fileMedia: StandaloneTaskVideoPicker | undefined;
   readonly #adapters: readonly PlatformAdapter[];
   readonly #http: HttpClient;
   readonly #downloader: MediaDownloader;
@@ -149,11 +184,13 @@ export class StandaloneTaskService implements TaskService {
   readonly #now: () => Date;
   readonly #operations?: RuntimeOperationRegistry;
   readonly #active = new Map<string, CancellableTask>();
+  readonly #deletions = new Map<string, Promise<void>>();
   readonly #listeners = new Map<string, Set<TaskEventListener>>();
 
   constructor(options: StandaloneTaskServiceOptions) {
     this.#files = options.files;
     this.#artifactStore = new NativeTaskFiles(options.files);
+    this.#fileMedia = options.fileMedia;
     this.#adapters = options.adapters;
     this.#http = options.http;
     this.#downloader = options.downloader;
@@ -180,6 +217,7 @@ export class StandaloneTaskService implements TaskService {
     const task: TaskRecord = {
       id: taskId,
       sourceUrl: inspection.value.normalizedUrl,
+      sourceKind: "public_link",
       status: "queued",
       platform: inspection.value.platform,
       analysisStatus: "not_started",
@@ -190,9 +228,57 @@ export class StandaloneTaskService implements TaskService {
     };
     await Promise.all([
       this.#artifactStore.writeJson(paths.task, task),
-      this.#artifactStore.writeJson(`task://${taskId}/${TASK_REQUEST_PATH}`, { normalizedUrl: inspection.value.normalizedUrl } satisfies StoredTaskRequest),
+      this.#artifactStore.writeJson(`task://${taskId}/${TASK_REQUEST_PATH}`, { kind: "public_link", normalizedUrl: inspection.value.normalizedUrl } satisfies StoredTaskRequest),
     ]);
     return toAppTask(task);
+  }
+
+  async importVideo(): Promise<AppTaskRecord> {
+    if (!this.#fileMedia) throw taskError("APP_RUNTIME_UNAVAILABLE", "本地视频选择器尚未加载", "select_media");
+    const taskId = this.#createTaskId();
+    if (!TASK_ID_PATTERN.test(taskId)) throw taskError("MEDIA_IMPORT_FAILED", "本地任务标识无效", "select_media");
+    try {
+      // Opening an external picker is not yet a task. Defer the task snapshot
+      // until Android has returned a real private MP4, so cancellation or an
+      // Activity lifecycle interruption cannot leave a visible empty task.
+      const selected = await this.#fileMedia.pickVideo({ taskId });
+      if (selected.mimeType !== "video/mp4" || !selected.displayName.trim() || selected.sizeBytes <= 0 || selected.durationSeconds <= 0) {
+        throw taskError("MEDIA_IMPORT_FAILED", "本地视频导入没有返回有效 MP4", "select_media");
+      }
+      const paths = await this.#artifactStore.initializeTask(taskId);
+      const now = currentIso(this.#now);
+      const pending: TaskRecord = {
+        id: taskId,
+        sourceUrl: "",
+        sourceKind: "local_video",
+        status: "queued",
+        contentType: "video",
+        analysisStatus: "not_started",
+        createdAt: now,
+        updatedAt: now,
+        issues: [],
+        paths,
+      };
+      await Promise.all([
+        this.#artifactStore.writeJson(paths.task, pending),
+        this.#artifactStore.writeJson(`task://${taskId}/${TASK_REQUEST_PATH}`, {
+          kind: "local_video",
+          displayName: selected.displayName.trim(),
+        } satisfies StoredTaskRequest),
+      ]);
+      return toAppTask(pending, [{
+        uri: this.#toDisplayUri(selected.uri),
+        kind: "video",
+        origin: "imported",
+        mimeType: "video/mp4",
+        byteLength: selected.sizeBytes,
+        durationSeconds: selected.durationSeconds,
+        displayName: selected.displayName.trim(),
+      }]);
+    } catch (error) {
+      await this.#files.deleteTask({ taskId }).catch(() => undefined);
+      throw videoImportError(error);
+    }
   }
 
   async start(taskId: string): Promise<CancellableTask> {
@@ -214,7 +300,10 @@ export class StandaloneTaskService implements TaskService {
       store: this.#artifactStore,
       reporter: { report: async (event) => this.#report(event) },
     });
-    const execute = () => pipeline.run({ input: request.normalizedUrl, taskId }).then(async () => {
+    const pipelineRequest = request.kind === "local_video"
+      ? { taskId, localVideo: { displayName: request.displayName } } as const
+      : { input: request.normalizedUrl, taskId } as const;
+    const execute = () => pipeline.run(pipelineRequest).then(async () => {
       const finished = await this.get(taskId);
       if (!finished) throw taskError("TASK_ARTIFACT_MISSING", "任务完成后未找到本地结果", "view_partial_result");
       return finished;
@@ -341,7 +430,7 @@ export class StandaloneTaskService implements TaskService {
   async inspectUnfinishedWork(): Promise<readonly RuntimeUnfinishedWork[]> {
     const tasks = await this.list();
     return tasks
-      .filter((task) => task.status === "running")
+      .filter((task) => task.status === "running" || (task.status === "queued" && task.sourceKind === "local_video"))
       .map((task) => ({
         kind: "ingest" as const,
         id: task.id,
@@ -355,7 +444,7 @@ export class StandaloneTaskService implements TaskService {
     const recovered: RuntimeUnfinishedWork[] = [];
     for (const work of unfinished) {
       const task = await this.#readTask(work.id);
-      if (!task || task.status !== "running") continue;
+      if (!task || (task.status !== "running" && !(task.status === "queued" && task.sourceKind === "local_video"))) continue;
       const paths = await this.#artifactStore.initializeTask(task.id);
       const now = currentIso(this.#now);
       await this.#artifactStore.writeJson(paths.task, {
@@ -383,6 +472,14 @@ export class StandaloneTaskService implements TaskService {
   async retry(_taskId: string): Promise<AppTaskRecord> {
     void _taskId;
     throw taskError("TASK_INTERRUPTED", "请返回首页重新提交链接；首版不会复制或覆盖旧任务。", "edit_input");
+  }
+
+  async delete(taskId: string): Promise<void> {
+    const existing = this.#deletions.get(taskId);
+    if (existing) return existing;
+    const operation = this.#deleteTerminalTask(taskId).finally(() => this.#deletions.delete(taskId));
+    this.#deletions.set(taskId, operation);
+    return operation;
   }
 
   /** Used only by the analysis adapter to keep the task projection current. */
@@ -417,9 +514,14 @@ export class StandaloneTaskService implements TaskService {
     const value = await this.#readOptionalText(taskId, TASK_REQUEST_PATH);
     if (!value) throw taskError("TASK_ARTIFACT_MISSING", "任务缺少已保存的安全链接", "edit_input");
     try {
-      const parsed = JSON.parse(value) as Partial<StoredTaskRequest>;
-      if (typeof parsed.normalizedUrl !== "string" || !parsed.normalizedUrl.startsWith("https://")) throw new TypeError();
-      return { normalizedUrl: parsed.normalizedUrl };
+      const parsed = JSON.parse(value) as Readonly<Record<string, unknown>>;
+      if (parsed.kind === "local_video") {
+        if (typeof parsed.displayName !== "string" || !parsed.displayName.trim()) throw new TypeError();
+        return { kind: "local_video", displayName: parsed.displayName.trim() };
+      }
+      const normalizedUrl = parsed.normalizedUrl;
+      if (typeof normalizedUrl !== "string" || !normalizedUrl.startsWith("https://")) throw new TypeError();
+      return { kind: "public_link", normalizedUrl };
     } catch {
       throw taskError("TASK_ARTIFACT_MISSING", "任务安全链接格式无效", "edit_input");
     }
@@ -443,7 +545,13 @@ export class StandaloneTaskService implements TaskService {
   async #taskMedia(task: TaskRecord): Promise<readonly MediaReference[]> {
     const media: MediaReference[] = [];
     if (task.contentType === "video") {
-      const video = await this.#mediaReference(task.id, "media/video.mp4", "video", "下载的视频");
+      const video = await this.#mediaReference(
+        task.id,
+        "media/video.mp4",
+        "video",
+        task.sourceKind === "local_video" ? "本地上传视频" : "下载的视频",
+        task.sourceKind === "local_video" ? "imported" : "downloaded",
+      );
       if (video) media.push(video);
     }
     if (task.contentType === "image_text") {
@@ -457,16 +565,33 @@ export class StandaloneTaskService implements TaskService {
     return media;
   }
 
-  async #mediaReference(taskId: string, relativePath: string, kind: MediaReference["kind"], displayName: string): Promise<MediaReference | undefined> {
+  async #mediaReference(
+    taskId: string,
+    relativePath: string,
+    kind: MediaReference["kind"],
+    displayName: string,
+    origin: MediaReference["origin"] = "downloaded",
+  ): Promise<MediaReference | undefined> {
     const result = await this.#files.getUri({ taskId, relativePath });
     if (!result.uri) return undefined;
     return {
       uri: this.#toDisplayUri(result.uri),
       kind,
-      origin: "downloaded",
+      origin,
       ...(result.mimeType ? { mimeType: result.mimeType } : {}),
       ...(Number.isFinite(result.sizeBytes) ? { byteLength: result.sizeBytes } : {}),
       displayName,
     };
+  }
+
+  async #deleteTerminalTask(taskId: string): Promise<void> {
+    if (this.#active.has(taskId)) throw taskError("TASK_INTERRUPTED", "任务正在处理中，尚未完成，不能删除", "wait_and_retry");
+    const task = await this.#readTask(taskId);
+    if (!task) throw taskError("TASK_ARTIFACT_MISSING", "未找到要删除的本地任务", "none");
+    if (!isTerminalTaskStatus(task.status)) {
+      throw taskError("TASK_INTERRUPTED", "任务尚未完成，不能删除", "wait_and_retry");
+    }
+    await this.#files.deleteTask({ taskId });
+    this.#listeners.delete(taskId);
   }
 }

@@ -96,13 +96,13 @@ git commit -m "merge: restore release and compatibility baseline"
 - Modify: `docs/当前能力与发布状态.md`
 - Test: adjacent `*.test.ts` files in the same packages
 
-- [ ] 以非快进、停止在提交前的方式合入视频工作流分支：
+- [x] 以非快进、停止在提交前的方式合入视频工作流分支：
 
 ```powershell
 git merge --no-ff --no-commit feat/video-workflow-management
 ```
 
-- [ ] `AppRuntime` 同时暴露生命周期恢复能力与视频模板能力：
+- [x] `AppRuntime` 同时暴露生命周期恢复能力与视频模板能力：
 
 ```ts
 export interface AppRuntime {
@@ -111,13 +111,13 @@ export interface AppRuntime {
 }
 ```
 
-- [ ] `StandaloneAppRuntime` 同时构造并返回两类服务，禁止以整侧文件覆盖丢失依赖。
-- [ ] `StandaloneTaskService` 同时保留本地视频 Pipeline 请求、operation registry 跟踪，以及运行中/排队中本地视频任务的异常恢复。
-- [ ] 分析与诊察服务同时保留结构化流式事件和生命周期恢复。
-- [ ] 生产服务同时保留项目级互斥、operation registry、取消/删除和异常恢复。
-- [ ] Web 同时保留新增路由、模板/视频入口与 `useAppResume` 恢复触发。
-- [ ] 先运行定向测试观察红灯，再只修复语义并集缺口，直至定向测试通过。
-- [ ] 运行 `pnpm test` 与 `pnpm check`，然后提交三方合并：
+- [x] `StandaloneAppRuntime` 同时构造并返回两类服务，禁止以整侧文件覆盖丢失依赖。
+- [x] `StandaloneTaskService` 同时保留本地视频 Pipeline 请求、operation registry 跟踪，以及运行中/排队中本地视频任务的异常恢复。
+- [x] 分析与诊察服务同时保留结构化流式事件和生命周期恢复。
+- [x] 生产服务同时保留项目级互斥、operation registry、取消/删除和异常恢复。
+- [x] Web 同时保留新增路由、模板/视频入口与 `useAppResume` 恢复触发。
+- [x] 先运行定向测试观察红灯，再只修复语义并集缺口，直至定向测试通过。
+- [x] 运行 `pnpm test` 与 `pnpm check`，然后提交三方合并：
 
 ```powershell
 git commit -m "merge: integrate video workflow with lifecycle recovery"

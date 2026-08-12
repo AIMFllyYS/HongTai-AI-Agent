@@ -4,6 +4,7 @@ import { issueFromAppError, TaskError } from "@hongtai/core";
 import type {
   AnalysisService,
   AppTaskRecord,
+  CancellableTask,
   ContentAnalysisStreamEvent,
   ContentAnalysisRecord,
   JsonObject,
@@ -20,6 +21,8 @@ import { StructuredStreamPreview } from "./structured-stream-preview.js";
 const ANALYSIS_PATH = "analysis.json";
 
 export interface StandaloneAnalysisTaskPort {
+  importVideo(): Promise<AppTaskRecord>;
+  start(taskId: string): Promise<CancellableTask>;
   getDetail(taskId: string): Promise<TaskDetailRecord | undefined>;
   list?(): Promise<readonly AppTaskRecord[]>;
   setAnalysisStatus(taskId: string, status: "not_started" | "running" | "succeeded" | "failed"): Promise<void>;
@@ -54,16 +57,18 @@ function formalDocument(value: unknown): ContentAnalysisRecord["result"] {
 }
 
 function analysisInput(taskId: string, detail: TaskDetailRecord | undefined): ContentAnalysisInput {
-  if (!detail || detail.task.id !== taskId || !detail.task.platform) {
+  if (!detail || detail.task.id !== taskId) {
     throw taskError("TASK_ARTIFACT_MISSING", "未找到可供拆解的本地任务证据", "view_partial_result");
   }
+  const platform = detail.task.sourceKind === "local_video" ? "local_upload" as const : detail.task.platform;
+  if (!platform) throw taskError("TASK_ARTIFACT_MISSING", "拆解任务缺少明确来源", "view_partial_result");
   if (detail.task.contentType === "image_text") {
     const evidenceUnits = detail.evidenceUnits.filter((item) => item.source === "image_text")
       .map(({ id, text, startSeconds, endSeconds }) => ({ id, text, ...(startSeconds === undefined ? {} : { startSeconds }), ...(endSeconds === undefined ? {} : { endSeconds }) }));
     if (evidenceUnits.length === 0) throw taskError("TASK_ARTIFACT_MISSING", "图文任务没有已保存的正文证据", "view_partial_result");
     return {
       taskId,
-      platform: detail.task.platform,
+      platform,
       contentType: "image_text",
       sourceKind: "image_text",
       ...(detail.content.title ? { title: detail.content.title } : {}),
@@ -79,7 +84,7 @@ function analysisInput(taskId: string, detail: TaskDetailRecord | undefined): Co
   if (evidenceUnits.length === 0) throw taskError("TASK_ARTIFACT_MISSING", "视频任务没有可供拆解的文稿证据", "view_partial_result");
   return {
     taskId,
-    platform: detail.task.platform,
+    platform,
     contentType: "video",
     sourceKind: detail.transcript.source,
     ...(detail.content.title ? { title: detail.content.title } : {}),
@@ -131,6 +136,17 @@ export class StandaloneAnalysisService implements AnalysisService {
     } catch {
       return undefined;
     }
+  }
+
+  async importVideo(): Promise<ContentAnalysisRecord> {
+    const imported = await this.#tasks.importVideo();
+    const ingest = await this.#tasks.start(imported.id);
+    const completed = await ingest.completion;
+    if (completed.status !== "succeeded" && completed.status !== "degraded") {
+      const issue = completed.issues.at(-1);
+      throw taskError(issue?.code ?? "MEDIA_IMPORT_FAILED", issue?.userMessage ?? "本地视频处理没有完成", issue?.action ?? "retry");
+    }
+    return this.run(imported.id);
   }
 
   async run(taskId: string, onEvent?: (event: ContentAnalysisStreamEvent) => void | Promise<void>): Promise<ContentAnalysisRecord> {

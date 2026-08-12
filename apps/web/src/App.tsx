@@ -10,7 +10,7 @@ import { useInteractionFeedback } from "./hooks/useInteractionFeedback";
 import { useBrowserRoute } from "./hooks/useBrowserRoute";
 import { matchRoute } from "./router";
 import { AnalysisResultPage } from "./pages/AnalysisResultPage";
-import { AssetsPage } from "./pages/AssetsPage";
+import { TemplatesPage } from "./pages/TemplatesPage";
 import { CreatePage } from "./pages/CreatePage";
 import { DetailPage } from "./pages/DetailPage";
 import { HomePage } from "./pages/HomePage";
@@ -99,8 +99,8 @@ export function App({ runtime, visualData }: AppProps = {}) {
     if (runtime && renderedRoute.key === "create") {
       return <CreatePage navigate={navigate} runtime={runtime} />;
     }
-    if (runtime && renderedRoute.key === "assets") {
-      return <AssetsPage capability={runtime.features.assets} navigate={navigate} />;
+    if (runtime && renderedRoute.key === "templates") {
+      return <TemplatesPage navigate={navigate} runtime={runtime} />;
     }
     if (runtime && renderedRoute.key === "publish") {
       return <PublishPage capability={runtime.features.publish} navigate={navigate} />;
@@ -115,7 +115,6 @@ export function App({ runtime, visualData }: AppProps = {}) {
       if (renderedRoute.key === "gallery-detail") return <DetailPage navigate={navigate} viewModel={visualData.getDetail("gallery")} />;
       if (renderedRoute.key === "create") return <CreatePage navigate={navigate} viewModel={visualData.getCreate()} />;
       if (renderedRoute.key === "publish") return <PublishPage navigate={navigate} viewModel={visualData.getPublish()} />;
-      if (renderedRoute.key === "assets") return <AssetsPage navigate={navigate} viewModel={visualData.getAssets()} />;
     }
 
     const unsupported = renderedRoute.key === "not-found"

@@ -93,6 +93,7 @@ export class IngestPipeline {
 
   async run(request: IngestRequest): Promise<IngestResult> {
     const taskId = taskIdFor(request);
+    const sourceKind = request.localVideo ? "local_video" as const : "public_link" as const;
     const createdAt = new Date().toISOString();
     let progressSequence = 0;
     const issues: import("./models").TaskIssue[] = [];
@@ -129,6 +130,7 @@ export class IngestPipeline {
       const task: TaskRecord = {
         id: taskId,
         sourceUrl,
+        sourceKind,
         status,
         currentStage,
         platform,
@@ -181,9 +183,160 @@ export class IngestPipeline {
       return value;
     };
 
+    const processVideo = async (description: string | undefined, maxDuration: number): Promise<IngestResult> => {
+      await report("obtain-transcript", "running", "开始读取视频并准备文稿");
+      const duration = await this.#dependencies.mediaTools.probeDuration(paths.video);
+      if (duration > maxDuration) {
+        throw new TaskError({ code: "MEDIA_DURATION_EXCEEDED", message: `视频时长 ${Math.ceil(duration)} 秒，超过首版限制 ${maxDuration} 秒`, action: "edit_input", details: { durationSeconds: Math.ceil(duration), maxDurationSeconds: maxDuration } });
+      }
+
+      await report("obtain-transcript", "running", `媒体校验通过：时长=${Math.ceil(duration)}秒`);
+      let transcript = "";
+      let segments: import("./models").TranscriptionResult["segments"] = [];
+      let completedCharacters = 0;
+
+      if (this.#dependencies.transcriber) {
+        try {
+          await this.#dependencies.mediaTools.extractAudio(paths.video, paths.audio);
+          const segmentPaths = await this.#dependencies.mediaTools.splitAudio(paths.audio, paths.segmentDirectory, SEGMENT_SECONDS);
+          await report("obtain-transcript", "running", `音频分段=${segmentPaths.length}个`);
+          const transcription = await this.#dependencies.transcriber.transcribe(
+            segmentPaths,
+            SEGMENT_SECONDS,
+            async (segment, completed, total) => {
+              completedCharacters += segment.text.length;
+              const segmentMessage = segment.status === "failed" ? "失败" : segment.status === "no_speech" ? "未检测到口播" : "完成";
+              await report(
+                "obtain-transcript",
+                segment.status === "failed" ? "degraded" : "running",
+                `转写 ${completed}/${total}，当前分段=${segmentMessage}，已生成约 ${completedCharacters} 字`,
+                { progress: total > 0 ? completed / total : undefined },
+                segment.issue,
+              );
+            },
+          );
+          speechStatus = transcription.status;
+          segments = transcription.segments;
+          transcript = transcription.text;
+          if (transcript) transcriptSource = "asr";
+          const failedSegments = segments.filter((segment) => segment.status === "failed");
+          if (failedSegments.length > 0) {
+            const segmentIssue = failedSegments.find((segment) => segment.issue)?.issue;
+            if (segmentIssue) {
+              issues.push({
+                ...segmentIssue,
+                severity: "warning",
+                platform,
+                details: { ...segmentIssue.details, failedSegments: failedSegments.length },
+              });
+            }
+            issues.push(warningIssue("ASR_PARTIAL_FAILURE", "obtain-transcript", `语音转写部分失败：${failedSegments.length}/${segments.length}个分段未完成`, { action: "view_partial_result", platform, details: { failedSegments: failedSegments.length, totalSegments: segments.length } }));
+          }
+        } catch (error) {
+          speechStatus = "failed";
+          const issue = issueFromError(error, "obtain-transcript", platform);
+          issues.push({ ...issue, severity: "warning", action: "view_partial_result" });
+        }
+      } else {
+        speechStatus = "failed";
+        issues.push(warningIssue("AI_NOT_CONFIGURED", "obtain-transcript", "未配置AI API Key，跳过语音转写", { action: "configure_ai", platform }));
+      }
+
+      if (speechStatus !== "no_speech" && !transcript && description) {
+        transcript = description;
+        transcriptSource = "description";
+        issues.push(warningIssue("AI_EMPTY_RESPONSE", "obtain-transcript", "没有获得语音转写，已使用平台描述作为降级文稿", { action: "view_partial_result", platform }));
+      }
+
+      if (transcript) {
+        await this.#dependencies.store.writeText(paths.transcript, `${transcript.trim()}\n`);
+        transcriptWritten = true;
+      }
+      if (segments.length > 0 || transcriptWritten) {
+        await this.#dependencies.store.writeJson(paths.transcriptJson, {
+          speechStatus,
+          source: speechStatus === "no_speech" ? "none" : transcriptSource ?? "description",
+          durationSeconds: duration,
+          segments,
+        });
+      }
+
+      if (transcript && this.#dependencies.rewriter) {
+        try {
+          const draft = await this.#dependencies.rewriter.rewrite(transcript);
+          if (draft.trim()) {
+            await this.#dependencies.store.writeText(paths.draft, `${draft.trim()}\n`);
+            draftWritten = true;
+            await report("obtain-transcript", "running", `整理稿完成：${draft.trim().length} 字`);
+          }
+        } catch (error) {
+          const base = issueFromError(error, "obtain-transcript", platform);
+          issues.push(warningIssue("TEXT_REWRITE_FAILED", "obtain-transcript", `整理稿生成失败：${base.userMessage}`, { action: "view_partial_result", platform }));
+        }
+      }
+
+      const transcriptStatus = speechStatus === "no_speech"
+        ? "succeeded"
+        : transcriptWritten ? (issues.length > 0 ? "degraded" : "succeeded") : "failed";
+      await report(
+        "obtain-transcript",
+        transcriptStatus,
+        speechStatus === "no_speech"
+          ? "完成：未检测到有效口播，无需生成文稿"
+          : transcriptWritten
+            ? `完成：原始文稿 ${transcript.length} 字${draftWritten ? "，整理稿已生成" : ""}`
+            : "失败：没有生成任何文稿",
+      );
+
+      await report("save-artifacts", "running", "开始保存最终任务结果");
+      const finalStatus = videoDownloaded && (transcriptWritten || speechStatus === "no_speech")
+        ? issues.length > 0 ? "degraded" : "succeeded"
+        : "failed";
+      await writeTask(finalStatus);
+      await report("save-artifacts", "succeeded", `完成：${paths.root}`);
+
+      return {
+        taskId,
+        status: finalStatus,
+        sourceKind,
+        platform,
+        contentType,
+        speechStatus,
+        videoPath: videoDownloaded ? paths.video : undefined,
+        transcriptPath: transcriptWritten ? paths.transcript : undefined,
+        draftPath: draftWritten ? paths.draft : undefined,
+        issues,
+      };
+    };
+
     await writeTask("running");
 
     try {
+      if (request.localVideo) {
+        const displayName = request.localVideo.displayName.trim();
+        if (!displayName) throw new TaskError({ code: "INPUT_EMPTY", message: "本地视频名称不能为空", action: "select_media" });
+        contentType = "video";
+        await complete("detect-platform", "开始识别输入来源", async () => sourceKind, (_value, elapsedMs) => `完成：本地上传，耗时 ${elapsedMs}ms`);
+        await complete("resolve-link", "检查本地输入", async () => true, (_value, elapsedMs) => `完成：本地输入无需解析外部链接，耗时 ${elapsedMs}ms`);
+        await complete(
+          "parse-content",
+          "读取本地视频元数据",
+          async () => {
+            await this.#dependencies.store.writeJson(paths.metadata, { sourceKind, contentType, title: displayName });
+            return displayName;
+          },
+          (value, elapsedMs) => `完成：文件=${value}，耗时 ${elapsedMs}ms`,
+        );
+        await complete("select-media", "确认用户选择的视频", async () => paths.video, (value, elapsedMs) => `完成：${value}，耗时 ${elapsedMs}ms`);
+        await complete(
+          "download-media",
+          "确认视频已复制到应用私有目录",
+          async () => { videoDownloaded = true; return paths.video; },
+          (value, elapsedMs) => `完成：${value}，无需网络下载，耗时 ${elapsedMs}ms`,
+        );
+        return await processVideo(undefined, request.maxDurationSeconds ?? DEFAULT_MAX_DURATION_SECONDS);
+      }
+
       const detected = await complete(
         "detect-platform",
         "开始识别平台",
@@ -345,134 +498,7 @@ export class IngestPipeline {
         (value, elapsedMs) => `完成：${value}，耗时 ${elapsedMs}ms`,
       );
 
-      await report("obtain-transcript", "running", "开始读取视频并准备文稿");
-      const duration = await this.#dependencies.mediaTools.probeDuration(paths.video);
-      if (duration > maxDuration) {
-        throw new TaskError({ code: "MEDIA_DURATION_EXCEEDED", message: `视频时长 ${Math.ceil(duration)} 秒，超过首版限制 ${maxDuration} 秒`, action: "edit_input", details: { durationSeconds: Math.ceil(duration), maxDurationSeconds: maxDuration } });
-      }
-
-      await report("obtain-transcript", "running", `媒体校验通过：时长=${Math.ceil(duration)}秒`);
-      let transcript = "";
-      let segments: import("./models").TranscriptionResult["segments"] = [];
-      let completedCharacters = 0;
-
-      if (this.#dependencies.transcriber) {
-        try {
-          await this.#dependencies.mediaTools.extractAudio(paths.video, paths.audio);
-          const segmentPaths = await this.#dependencies.mediaTools.splitAudio(
-            paths.audio,
-            paths.segmentDirectory,
-            SEGMENT_SECONDS,
-          );
-          await report("obtain-transcript", "running", `音频分段=${segmentPaths.length}个`);
-          const transcription = await this.#dependencies.transcriber.transcribe(
-            segmentPaths,
-            SEGMENT_SECONDS,
-            async (segment, completed, total) => {
-              completedCharacters += segment.text.length;
-              const segmentMessage = segment.status === "failed"
-                ? "失败"
-                : segment.status === "no_speech" ? "未检测到口播" : "完成";
-              await report(
-                "obtain-transcript",
-                segment.status === "failed" ? "degraded" : "running",
-                `转写 ${completed}/${total}，当前分段=${segmentMessage}，已生成约 ${completedCharacters} 字`,
-                { progress: total > 0 ? completed / total : undefined },
-                segment.issue,
-              );
-            },
-          );
-          speechStatus = transcription.status;
-          segments = transcription.segments;
-          transcript = transcription.text;
-          if (transcript) transcriptSource = "asr";
-          const failedSegments = segments.filter((segment) => segment.status === "failed");
-          if (failedSegments.length > 0) {
-            const segmentIssue = failedSegments.find((segment) => segment.issue)?.issue;
-            if (segmentIssue) {
-              issues.push({
-                ...segmentIssue,
-                severity: "warning",
-                platform,
-                details: { ...segmentIssue.details, failedSegments: failedSegments.length },
-              });
-            }
-            issues.push(warningIssue("ASR_PARTIAL_FAILURE", "obtain-transcript", `语音转写部分失败：${failedSegments.length}/${segments.length}个分段未完成`, { action: "view_partial_result", platform, details: { failedSegments: failedSegments.length, totalSegments: segments.length } }));
-          }
-        } catch (error) {
-          speechStatus = "failed";
-          const issue = issueFromError(error, "obtain-transcript", platform);
-          issues.push({ ...issue, severity: "warning", action: "view_partial_result" });
-        }
-      } else {
-        speechStatus = "failed";
-        issues.push(warningIssue("AI_NOT_CONFIGURED", "obtain-transcript", "未配置AI API Key，跳过语音转写", { action: "configure_ai", platform }));
-      }
-
-      if (speechStatus !== "no_speech" && !transcript && content.description) {
-        transcript = content.description;
-        transcriptSource = "description";
-        issues.push(warningIssue("AI_EMPTY_RESPONSE", "obtain-transcript", "没有获得语音转写，已使用平台描述作为降级文稿", { action: "view_partial_result", platform }));
-      }
-
-      if (transcript) {
-        await this.#dependencies.store.writeText(paths.transcript, `${transcript.trim()}\n`);
-        transcriptWritten = true;
-      }
-      if (segments.length > 0 || transcriptWritten) {
-        await this.#dependencies.store.writeJson(paths.transcriptJson, {
-          speechStatus,
-          source: speechStatus === "no_speech" ? "none" : transcriptSource ?? "description",
-          durationSeconds: duration,
-          segments,
-        });
-      }
-
-      if (transcript && this.#dependencies.rewriter) {
-        try {
-          const draft = await this.#dependencies.rewriter.rewrite(transcript);
-          if (draft.trim()) {
-            await this.#dependencies.store.writeText(paths.draft, `${draft.trim()}\n`);
-            draftWritten = true;
-            await report("obtain-transcript", "running", `整理稿完成：${draft.trim().length} 字`);
-          }
-        } catch (error) {
-          const base = issueFromError(error, "obtain-transcript", platform);
-          issues.push(warningIssue("TEXT_REWRITE_FAILED", "obtain-transcript", `整理稿生成失败：${base.userMessage}`, { action: "view_partial_result", platform }));
-        }
-      }
-
-      const transcriptStatus = speechStatus === "no_speech"
-        ? "succeeded"
-        : transcriptWritten ? (issues.length > 0 ? "degraded" : "succeeded") : "failed";
-      await report(
-        "obtain-transcript",
-        transcriptStatus,
-        speechStatus === "no_speech"
-          ? "完成：未检测到有效口播，无需生成文稿"
-          : transcriptWritten
-            ? `完成：原始文稿 ${transcript.length} 字${draftWritten ? "，整理稿已生成" : ""}`
-            : "失败：没有生成任何文稿",
-      );
-
-      await report("save-artifacts", "running", "开始保存最终任务结果");
-      const finalStatus = videoDownloaded && (transcriptWritten || speechStatus === "no_speech")
-        ? issues.length > 0 ? "degraded" : "succeeded"
-        : "failed";
-      await writeTask(finalStatus);
-      await report("save-artifacts", "succeeded", `完成：${paths.root}`);
-
-      return {
-        taskId,
-        status: finalStatus,
-        platform,
-        contentType,
-        speechStatus,
-        videoPath: videoDownloaded ? paths.video : undefined,
-        transcriptPath: transcriptWritten ? paths.transcript : undefined,
-        draftPath: draftWritten ? paths.draft : undefined,
-        issues,
-      };
+      return await processVideo(content.description, maxDuration);
     } catch (error) {
       const failureStage = currentStage as TaskStage;
       const issue = issueFromError(error, failureStage, platform);

@@ -48,6 +48,12 @@ class MemoryContentStore implements ContentAnalysisStore {
   async saveFailedRun(_taskId: string, run: import("../packages/ai/src/index").ContentAnalysisRunRecord): Promise<void> { this.failedRun = run; }
 }
 
+class LocalVideoContentStore extends MemoryContentStore {
+  override async loadInput(): Promise<ContentAnalysisInput> {
+    return { ...input, platform: "local_upload" };
+  }
+}
+
 class SequenceProvider implements AiProvider {
   calls: AiGenerateRequest[] = [];
   constructor(readonly responses: readonly string[]) {}
@@ -93,4 +99,17 @@ test("证据不足时允许空受众、空结构和空模板步骤而不诱导�
   insufficient.structure = [];
   insufficient.reusableTemplate.steps = [];
   assert.equal(contentAnalysisResultSchema.safeParse(insufficient).success, true);
+});
+
+test("本地上传视频使用显式来源并通过正式拆解语义校验", async () => {
+  const store = new LocalVideoContentStore();
+  const localResult = resultWithReference("segment-0");
+  localResult.source.platform = "local_upload";
+  const provider = new SequenceProvider([JSON.stringify(localResult)]);
+
+  const result = await new ContentAnalysisFlow({ provider, store }).run("task-1");
+
+  assert.equal(result.source.platform, "local_upload");
+  assert.equal(contentAnalysisResultSchema.safeParse(result).success, true);
+  assert.equal(provider.calls.length, 1);
 });

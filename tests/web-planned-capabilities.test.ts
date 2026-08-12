@@ -17,11 +17,8 @@ test("planned feature panel has a safe default capability and clear availability
   assert.match(source, /data-feature-capability/);
 });
 
-test("assets and publishing remain planned while creation uses the real production runtime", () => {
-  const pages = [
-    "pages/AssetsPage.tsx",
-    "pages/PublishPage.tsx",
-  ];
+test("templates and production use real runtimes while publishing remains planned", () => {
+  const pages = ["pages/PublishPage.tsx"];
 
   for (const page of pages) {
     const source = read(page);
@@ -32,6 +29,7 @@ test("assets and publishing remain planned while creation uses the real producti
 
   const create = read("pages/CreatePage.tsx");
   assert.match(create, /runtime\.production\.(create|importAssets|generatePlan|render)/);
+  assert.match(create, /runtime\.production\.(removeAsset|removeOutput|delete)/);
   assert.match(create, /IssueNotice/);
   assert.match(create, /content-analysis\.v1/);
   assert.match(create, /production-plan\.v1/);
@@ -42,9 +40,11 @@ test("assets and publishing remain planned while creation uses the real producti
   assert.match(create, /mode === "montage"\s*\?\s*"is-selected"/);
   assert.match(create, /mode === "avatar"\s*\?\s*"is-selected"/);
 
-  const assets = read("pages/AssetsPage.tsx");
-  assert.doesNotMatch(assets, /viewModel\.(assets|assetCount|templates|folders|filters|tabs|activeTab)/);
-  assert.doesNotMatch(assets, /asset\.kind|StatusBadge/);
+  const templates = read("pages/TemplatesPage.tsx");
+  assert.match(templates, /runtime\.templates\.(list|createFromAnalysis|create|update|delete)/);
+  assert.match(templates, /runtime\.analysis\.get/);
+  assert.match(templates, /确认删除模板/);
+  assert.doesNotMatch(templates, /data\/fixtures|visualData|viewModel/);
 
   const publish = read("pages/PublishPage.tsx");
   assert.doesNotMatch(publish, /viewModel\.(media|platforms|primaryAction|secondaryActions)/);
@@ -59,21 +59,31 @@ test("planned feature styling makes disabled controls legible without inventing 
   assert.match(componentStyles, /\.feature-unavailable-panel/);
   assert.match(componentStyles, /\.button:disabled/);
   assert.match(creationStyles, /\.planned-workbench/);
-  assert.match(libraryStyles, /\.planned-library/);
+  assert.match(libraryStyles, /\.template-workspace/);
   assert.match(creationStyles, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.planned-workbench__footer[^}]*grid-template-columns:\s*1fr/);
   assert.match(creationStyles, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.platform-grid[^}]*grid-template-columns:\s*1fr/);
-  assert.match(libraryStyles, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.planned-library__toolbar[^}]*grid-template-columns:\s*1fr/);
+  assert.match(libraryStyles, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.template-editor__actions[^}]*grid-template-columns:\s*1fr/);
 });
 
 test("production runtime uses capability-gated shells while fixtures stay explicit", () => {
   const app = read("App.tsx");
 
   assert.match(app, /runtime && renderedRoute\.key === "create"[\s\S]*<CreatePage navigate=\{navigate\} runtime=\{runtime\} \/>/);
-  assert.match(app, /runtime && renderedRoute\.key === "assets"[\s\S]*<AssetsPage capability=\{runtime\.features\.assets\} navigate=\{navigate\} \/>/);
+  assert.match(app, /runtime && renderedRoute\.key === "templates"[\s\S]*<TemplatesPage navigate=\{navigate\} runtime=\{runtime\} \/>/);
   assert.match(app, /runtime && renderedRoute\.key === "publish"[\s\S]*<PublishPage capability=\{runtime\.features\.publish\} navigate=\{navigate\} \/>/);
-  assert.match(app, /if \(visualData\) \{[\s\S]*visualData\.getCreate\(\)[\s\S]*visualData\.getPublish\(\)[\s\S]*visualData\.getAssets\(\)/);
+  assert.match(app, /if \(visualData\) \{[\s\S]*visualData\.getCreate\(\)[\s\S]*visualData\.getPublish\(\)/);
 
-  for (const page of ["pages/CreatePage.tsx", "pages/AssetsPage.tsx", "pages/PublishPage.tsx"]) {
+  for (const page of ["pages/CreatePage.tsx", "pages/PublishPage.tsx"]) {
     assert.match(read(page), /viewModel\?:/);
   }
+});
+
+test("production deletion requires named confirmation controls", () => {
+  const card = read("components/ProductionProjectCard.tsx");
+  assert.match(card, /aria-label=\{`删除素材/);
+  assert.match(card, /确认删除成片/);
+  assert.match(card, /确认删除项目/);
+  assert.match(card, /onRemoveAsset/);
+  assert.match(card, /onRemoveOutput/);
+  assert.match(card, /onDeleteProject/);
 });

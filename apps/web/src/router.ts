@@ -1,4 +1,4 @@
-export type PrimaryNavKey = "ai" | "home" | "create" | "assets" | "settings";
+export type PrimaryNavKey = "ai" | "home" | "create" | "templates" | "settings";
 
 /** Routes that have an actively supported page in the local application. */
 export type ActiveRouteKey =
@@ -8,7 +8,7 @@ export type ActiveRouteKey =
   | "task-analysis"
   | "create"
   | "publish"
-  | "assets"
+  | "templates"
   | "settings"
   | "settings-profile"
   | "settings-ai"
@@ -73,7 +73,7 @@ export const appRoutes: readonly AppRoute[] = [
   { path: "/tasks/:taskId/analysis", key: "task-analysis", navKey: "home" },
   { path: "/create", key: "create", navKey: "create" },
   { path: "/publish", key: "publish" },
-  { path: "/assets", key: "assets", navKey: "assets" },
+  { path: "/templates", key: "templates", navKey: "templates" },
   { path: "/settings", key: "settings", navKey: "settings" },
   { path: "/settings/profile", key: "settings-profile", navKey: "settings" },
   { path: "/settings/ai", key: "settings-ai", navKey: "settings" },
@@ -125,6 +125,7 @@ const dynamicRoutes: readonly DynamicRouteDefinition[] = [
 
 /** The old scan entry is harmless because it has no report/session identifier. */
 const legacyAliases: Readonly<Record<string, Pick<AppRoute, "key" | "navKey">>> = {
+  "/assets": { key: "templates", navKey: "templates" },
   "/vitality/scan": { key: "observation-new", navKey: "ai" },
 };
 
@@ -224,7 +225,7 @@ export function observationReportPath(sessionId: string): string {
   return `/observation/${encodedPathSegment(sessionId)}`;
 }
 
-const primaryNavigationOrder = ["ai", "home", "create", "assets", "settings"] as const;
+const primaryNavigationOrder = ["ai", "home", "create", "templates", "settings"] as const;
 
 function routeIndex(route: MatchedAppRoute): number {
   if (route.key === "not-found") return -1;

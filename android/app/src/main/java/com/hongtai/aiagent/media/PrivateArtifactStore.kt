@@ -195,6 +195,24 @@ class PrivateArtifactStore(context: Context) {
     }
   }
 
+  fun deleteArtifact(taskId: String, relativePath: String) {
+    val directory = File(taskRoot, PrivateArtifactPolicy.taskDirectoryName(taskId))
+    if (!directory.isDirectory) return
+    val target = File(directory, PrivateArtifactPolicy.normalizeRelativePath(relativePath)).canonicalFile
+    requirePrivateTaskFile(target)
+    if (target.exists() && (!target.isFile || !target.delete())) {
+      throw IllegalStateException("Could not delete the private task artifact.")
+    }
+  }
+
+  fun deleteTask(taskId: String) {
+    val directory = File(taskRoot, PrivateArtifactPolicy.taskDirectoryName(taskId)).canonicalFile
+    requirePrivateTaskFile(directory)
+    if (directory.exists() && (!directory.deleteRecursively() || directory.exists())) {
+      throw IllegalStateException("Could not delete the private task directory.")
+    }
+  }
+
   /**
    * Stores a task-state snapshot as a new immutable artifact. The database
    * owns the matching timestamp; readers ignore snapshots that do not match

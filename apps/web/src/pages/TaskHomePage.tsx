@@ -12,7 +12,7 @@ import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
 import { formatTaskTime, platformLabel } from "../features/tasks/task-presenters";
 import { useAppResume } from "../hooks/useAppResume";
-import { aiSettingsPath, taskDetailPath, taskProcessingPath, type Navigate } from "../router";
+import { aiSettingsPath, taskAnalysisPath, taskDetailPath, taskProcessingPath, type Navigate } from "../router";
 
 export interface TaskHomePageProps {
   readonly runtime: AppRuntime;
@@ -74,13 +74,14 @@ function TaskHistory({ tasks, navigate }: { readonly tasks: readonly AppTaskReco
   return (
     <div className="runtime-task-history">
       {tasks.map((task) => {
-        const platform = platformLabel(task.platform);
+        const localVideo = task.sourceKind === "local_video";
+        const platform = localVideo ? "本地上传" : platformLabel(task.platform);
         const updatedAt = formatTaskTime(task.updatedAt);
         return (
           <button className="runtime-task-history__item" key={task.id} onClick={() => navigate(taskPath(task))} type="button">
             <span className="runtime-task-history__icon"><Icon name={task.contentType === "image_text" ? "grid" : "video_file"} size={19} /></span>
             <span className="runtime-task-history__body">
-              <strong className="technical-value">{safeUrlForDisplay(task.sourceUrl)}</strong>
+              <strong className="technical-value">{localVideo ? "本地上传视频" : safeUrlForDisplay(task.sourceUrl)}</strong>
               <span>{[platform, updatedAt].filter(Boolean).join(" · ") || `任务 ${task.id}`}</span>
             </span>
             <TaskStatusBadge compact status={task.status} />
@@ -100,6 +101,7 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
   const [historyIssue, setHistoryIssue] = useState<TaskIssue>();
   const [submitIssue, setSubmitIssue] = useState<TaskIssue>();
   const [submitting, setSubmitting] = useState(false);
+  const [videoImporting, setVideoImporting] = useState(false);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -123,7 +125,7 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
   };
 
   const submit = async () => {
-    if (!ingestAvailable || !inspection?.ok || submitting) return;
+    if (!ingestAvailable || !inspection?.ok || submitting || videoImporting) return;
     setSubmitting(true);
     setSubmitIssue(undefined);
     try {
@@ -139,22 +141,47 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
     }
   };
 
+  const importVideo = async () => {
+    if (!ingestAvailable || runtime.features.contentAnalysis !== "available" || submitting || videoImporting) return;
+    setVideoImporting(true);
+    setSubmitIssue(undefined);
+    try {
+      const record = await runtime.analysis.importVideo();
+      await loadHistory();
+      navigate(taskAnalysisPath(record.taskId));
+    } catch (error) {
+      setSubmitIssue(issueFromAppError(error, { code: "MEDIA_IMPORT_FAILED", message: "本地视频没有完成自动拆解", action: "select_media" }));
+      await loadHistory();
+    } finally {
+      setVideoImporting(false);
+    }
+  };
+
   return (
     <AppShell activeNav="home" navigate={navigate} title="宏泰AI智能体">
       <div className="page-stack page-task-home">
         <section className="task-page-heading">
-          <span className="eyebrow">LOCAL INGEST</span>
-          <h2>从分享文案开始</h2>
-          <p>粘贴含链接的完整分享内容。应用只会保存任务所需的安全链接，不会保存原始分享文本。</p>
+          <span className="eyebrow">TWO REAL SOURCES</span>
+          <h2>链接拆解，或上传自己的视频</h2>
+          <p>两种入口共用同一套七阶段、ASR 证据和 content-analysis.v1；本地视频不会被伪装成任何平台作品。</p>
         </section>
 
         <TaskCapabilityNotice capability={runtime.features.ingest} feature="ingest" />
 
+        <GlassCard className="task-local-upload-card">
+          <span className="task-source-index">01</span>
+          <div><strong>上传本地 MP4 并自动拆解</strong><p>系统选择器会把视频复制到应用私有目录，再提取音频、生成真实文稿并自动进入正式拆解。</p><small>单个 MP4，最大 250MB；取消选择不会留下空任务。</small></div>
+          <Button disabled={!ingestAvailable || runtime.features.contentAnalysis !== "available" || submitting || videoImporting} icon={<Icon name={videoImporting ? "sync" : "upload_file"} size={19} />} onClick={() => void importVideo()} size="lg">
+            {videoImporting ? "正在处理并拆解视频" : "上传本地视频并自动拆解"}
+          </Button>
+        </GlassCard>
+
         <GlassCard className="task-input-card">
+          <span className="task-source-index">02</span>
           <label className="field-label" htmlFor="task-share-input"><Icon name="link" size={20} />分享文案或作品链接</label>
           <textarea
             aria-describedby="task-share-hint"
-            disabled={submitting}
+            disabled={submitting || videoImporting}
             id="task-share-input"
             onChange={(event) => updateInput(event.target.value)}
             placeholder="可直接粘贴平台分享文字，应用会从中提取第一个受支持链接"
@@ -176,7 +203,7 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
           ) : inspection ? <IssueNotice issue={inspection.issue} /> : null}
           {submitIssue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()) }} issue={submitIssue} /> : null}
 
-          <Button className="task-input-card__submit" disabled={!ingestAvailable || !inspection?.ok || submitting} icon={<Icon name={submitting ? "sync" : "bolt"} size={19} />} onClick={() => void submit()} size="lg">
+          <Button className="task-input-card__submit" disabled={!ingestAvailable || !inspection?.ok || submitting || videoImporting} icon={<Icon name={submitting ? "sync" : "bolt"} size={19} />} onClick={() => void submit()} size="lg">
             {submitting ? "正在创建本地任务" : "开始采集"}
           </Button>
         </GlassCard>

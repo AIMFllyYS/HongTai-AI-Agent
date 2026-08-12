@@ -3,16 +3,12 @@ import type { AppFeature, FeatureCapability } from "@hongtai/core";
 import { GlassCard } from "./GlassCard";
 import { Icon } from "./Icon";
 
-type PlannedFeature = Extract<AppFeature, "create" | "assets" | "publish">;
+type PlannedFeature = Extract<AppFeature, "create" | "publish">;
 
 const defaultCopy: Readonly<Record<PlannedFeature, { readonly title: string; readonly description: string }>> = {
   create: {
     title: "智能制作正在准备中",
     description: "当前版本尚未接入脚本生成、素材编排和成片导出。",
-  },
-  assets: {
-    title: "素材空间正在准备中",
-    description: "当前版本尚未接入素材上传、分类与本地管理。",
   },
   publish: {
     title: "发布能力正在准备中",

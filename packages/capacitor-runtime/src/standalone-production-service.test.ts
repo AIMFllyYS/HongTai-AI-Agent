@@ -53,6 +53,11 @@ function harness(narration: "system" | "provider" = "system") {
     writeProductionText: async ({ projectId, relativePath, value }: { readonly projectId: string; readonly relativePath: string; readonly value: string; readonly replace: boolean }) => { values.set(`${projectId}/${relativePath}`, value); },
     readProductionText: async ({ projectId, relativePath }: { readonly projectId: string; readonly relativePath: string }) => ({ value: values.get(`${projectId}/${relativePath}`) }),
     listProductionIds: async () => ({ projectIds: [...ids] }),
+    deleteProductionFile: async ({ projectId, relativePath }: { readonly projectId: string; readonly relativePath: string }) => { values.delete(`${projectId}/${relativePath}`); },
+    deleteProduction: async ({ projectId }: { readonly projectId: string }) => {
+      ids.delete(projectId);
+      for (const path of [...values.keys()]) if (path.startsWith(`${projectId}/`)) values.delete(path);
+    },
   };
   const provider: AiProvider = {
     generate: async () => ({ content: JSON.stringify(plan), reasoning: "" }),
@@ -78,14 +83,14 @@ function harness(narration: "system" | "provider" = "system") {
   const create = () => new StandaloneProductionService({
     files,
     native,
-    analysis: { get: async () => analysis, run: async () => analysis },
+    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis },
     getProvider: async () => provider,
     getNarrationMode: async () => narration,
     toDisplayUri: (uri: string) => uri.replace("file:///private/", "capacitor://localhost/private/"),
     createProjectId: () => "project-1",
     now: () => new Date("2026-08-08T00:00:00.000Z"),
   });
-  return { create, values, pickCalls, renderCalls };
+  return { create, values, ids, files, pickCalls, renderCalls };
 }
 
 test("制作项目导入素材、生成计划和渲染结果后可在重启后恢复", async () => {
@@ -134,9 +139,11 @@ test("制作计划失败时保留项目和已导入素材", async () => {
       writeProductionText: async ({ projectId, relativePath, value }) => { values.set(`${projectId}/${relativePath}`, value); },
       readProductionText: async ({ projectId, relativePath }) => ({ value: values.get(`${projectId}/${relativePath}`) }),
       listProductionIds: async () => ({ projectIds: ["project-1"] }),
+      deleteProductionFile: async () => undefined,
+      deleteProduction: async () => undefined,
     },
     native: { pickAssets: async () => ({ assets: [] }), render: async () => { throw new Error("unused"); }, probeTts: async () => undefined },
-    analysis: { get: async () => analysis, run: async () => analysis },
+    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis },
     getProvider: async () => ({ generate: async () => { throw new Error("provider down"); }, transcribe: async () => "" }),
     getNarrationMode: async () => "system",
     toDisplayUri: (uri) => uri,
@@ -217,6 +224,8 @@ test("制作服务按真实 Promise 区分系统素材选择、计划与渲染",
       writeProductionText: async ({ projectId, relativePath, value }) => { values.set(`${projectId}/${relativePath}`, value); },
       readProductionText: async ({ projectId, relativePath }) => ({ value: values.get(`${projectId}/${relativePath}`) }),
       listProductionIds: async () => ({ projectIds: [...ids] }),
+      deleteProductionFile: async () => undefined,
+      deleteProduction: async () => undefined,
     },
     native: {
       pickAssets: async () => {
@@ -231,7 +240,7 @@ test("制作服务按真实 Promise 区分系统素材选择、计划与渲染",
       },
       probeTts: async () => undefined,
     },
-    analysis: { get: async () => analysis, run: async () => analysis },
+    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis },
     getProvider: async () => ({
       generate: async () => {
         planEntered.resolve();
@@ -267,6 +276,49 @@ test("制作服务按真实 Promise 区分系统素材选择、计划与渲染",
   renderRelease.resolve();
   await rendering;
   assert.deepEqual(operations.list(), []);
+});
+
+test("制作素材、成片和项目删除同步更新持久状态与私有文件", async () => {
+  const { create, values } = harness();
+  const service = create();
+  await service.create({ analysisTaskId: "task-1", brief: "真实门店", targetDurationSeconds: 20 });
+  await service.importAssets("project-1");
+  await service.generatePlan("project-1");
+  await service.render("project-1");
+
+  const ready = await service.removeOutput("project-1");
+  assert.equal(ready.status, "ready");
+  assert.ok(ready.plan);
+  assert.equal(ready.output, undefined);
+
+  await service.render("project-1");
+  const draft = await service.removeAsset("project-1", "asset-1");
+  assert.equal(draft.status, "draft");
+  assert.equal(draft.assets.length, 2);
+  assert.equal(draft.plan, undefined);
+  assert.equal(draft.output, undefined);
+
+  await service.delete("project-1");
+  assert.equal((await service.list()).length, 0);
+  assert.equal([...values.keys()].some((path) => path.startsWith("project-1/")), false);
+});
+
+test("制作项目在规划或渲染中拒绝删除且同一项目只允许一个变更", async () => {
+  const { create, values } = harness();
+  const service = create();
+  await service.create({ analysisTaskId: "task-1", brief: "真实门店", targetDurationSeconds: 20 });
+  await service.importAssets("project-1");
+  await service.generatePlan("project-1");
+  await service.render("project-1");
+  const raw = JSON.parse(values.get("project-1/project.json") ?? "{}") as Record<string, unknown>;
+  values.set("project-1/project.json", JSON.stringify({ ...raw, status: "planning" }));
+  await assert.rejects(() => service.delete("project-1"), /正在/u);
+
+  values.set("project-1/project.json", JSON.stringify(raw));
+  const original = service.removeOutput("project-1");
+  const competing = service.removeAsset("project-1", "asset-1");
+  await assert.rejects(() => competing, /正在/u);
+  await original;
 });
 
 test("数字人口播项目要求口播稿、只导入一个视频，并在本地生成原声字幕计划", async () => {
@@ -306,13 +358,15 @@ test("制作服务将原生媒体和 TTS 失败转换为可行动的稳定错误
       writeProductionText: async ({ projectId, relativePath, value }) => { values.set(`${projectId}/${relativePath}`, value); },
       readProductionText: async ({ projectId, relativePath }) => ({ value: values.get(`${projectId}/${relativePath}`) }),
       listProductionIds: async () => ({ projectIds: ["project-1"] }),
+      deleteProductionFile: async () => undefined,
+      deleteProduction: async () => undefined,
     },
     native: {
       pickAssets: async () => { throw { code: "ERR_MEDIA_SOURCE_INVALID" }; },
       render: async () => { throw { code: "ERR_TTS_UNAVAILABLE" }; },
       probeTts: async () => undefined,
     },
-    analysis: { get: async () => analysis, run: async () => analysis },
+    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis },
     getProvider: async () => ({ generate: async () => ({ content: JSON.stringify(plan), reasoning: "" }), transcribe: async () => "" }),
     getNarrationMode: async () => "system",
     toDisplayUri: (uri) => uri,

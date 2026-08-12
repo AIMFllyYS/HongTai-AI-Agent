@@ -176,10 +176,13 @@ test("runtime task pages are wired to AppRuntime and static fixtures remain outs
   }
   assert.match(read("pages/TaskHomePage.tsx"), /runtime\.tasks\.inspectInput/);
   assert.match(read("pages/TaskHomePage.tsx"), /submitLocalTask\(runtime\.tasks/);
+  assert.match(read("pages/TaskHomePage.tsx"), /runtime\.analysis\.importVideo\(\)/);
+  assert.match(read("pages/TaskHomePage.tsx"), /sourceKind === "local_video"/);
   assert.match(read("pages/TaskProcessingPage.tsx"), /runtime\.tasks\.subscribe/);
   assert.match(read("pages/TaskProcessingPage.tsx"), /runtime\.tasks\.listEvents/);
   assert.match(read("pages/TaskDetailPage.tsx"), /runtime\.tasks\.getDetail/);
   assert.match(read("pages/TaskDetailPage.tsx"), /runtime\.analysis\.run/);
+  assert.match(read("pages/TaskDetailPage.tsx"), /runtime\.tasks\.delete\(taskId\)/);
   assert.match(read("pages/TaskAnalysisPage.tsx"), /runtime\.analysis\.get/);
 });
 
@@ -206,7 +209,7 @@ test("task pages keep real events but never offer stop or lineage-retry controls
 
   assert.match(home, /runtime\.tasks\.inspectInput/);
   assert.match(home, /runtime\.tasks\.list/);
-  assert.match(home, /disabled=\{!ingestAvailable \|\| !inspection\?\.ok \|\| submitting\}/);
+  assert.match(home, /disabled=\{!ingestAvailable \|\| !inspection\?\.ok \|\| submitting \|\| videoImporting\}/);
   assert.doesNotMatch(home, /if \(!ingestAvailable\) return/);
   assert.doesNotMatch(processing, /if \(!ingestAvailable\) return/);
   assert.match(detail, /runtime\.tasks\.getDetail/);

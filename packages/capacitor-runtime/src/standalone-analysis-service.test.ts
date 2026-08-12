@@ -54,6 +54,8 @@ test("StandaloneAnalysisService persists only the formal content-analysis docume
       writeText: async ({ taskId, relativePath, value }: { readonly taskId: string; readonly relativePath: string; readonly value: string }) => { values.set(`${taskId}/${relativePath}`, value); },
     } as never,
     tasks: {
+      importVideo: async () => { throw new Error("unused"); },
+      start: async () => { throw new Error("unused"); },
       getDetail: async () => detail(),
       setAnalysisStatus: async (_taskId, status) => { statuses.push(status); },
     },
@@ -92,6 +94,8 @@ test("StandaloneAnalysisService recovers a running analysis and synchronizes its
       listTaskIds: async () => ({ taskIds: ["task-1"] }),
     } as never,
     tasks: {
+      importVideo: async () => { throw new Error("unused"); },
+      start: async () => { throw new Error("unused"); },
       getDetail: async () => detail(),
       list: async () => [{ ...detail().task, analysisStatus }],
       setAnalysisStatus: async (_taskId, status) => { analysisStatus = status as "running" | "failed"; },
@@ -129,6 +133,8 @@ test("StandaloneAnalysisService registers the real analysis promise lifetime", a
       writeText: async ({ taskId, relativePath, value }: { readonly taskId: string; readonly relativePath: string; readonly value: string }) => { values.set(`${taskId}/${relativePath}`, value); },
     } as never,
     tasks: {
+      importVideo: async () => { throw new Error("unused"); },
+      start: async () => { throw new Error("unused"); },
       getDetail: async () => detail(),
       setAnalysisStatus: async () => undefined,
     },
@@ -154,4 +160,40 @@ test("StandaloneAnalysisService registers the real analysis promise lifetime", a
   release.resolve();
   await running;
   assert.deepEqual(operations.list(), []);
+});
+
+test("StandaloneAnalysisService automatically runs ingest then formal analysis for a picked local video", async () => {
+  const calls: string[] = [];
+  const localResult = { ...result, source: { taskId: "task-local", platform: "local_upload", contentType: "video", sourceKind: "asr" } } as const;
+  const provider: AiProvider = {
+    generate: async () => ({ content: JSON.stringify(localResult), reasoning: "must not persist" }),
+    transcribe: async () => "",
+  };
+  const values = new Map<string, string>();
+  const localDetail: TaskDetailRecord = {
+    ...detail(),
+    task: { ...detail().task, id: "task-local", sourceUrl: "", sourceKind: "local_video", platform: undefined },
+  };
+  const service = new StandaloneAnalysisService({
+    files: {
+      readText: async ({ taskId, relativePath }: { readonly taskId: string; readonly relativePath: string }) => ({ value: values.get(`${taskId}/${relativePath}`) }),
+      writeText: async ({ taskId, relativePath, value }: { readonly taskId: string; readonly relativePath: string; readonly value: string }) => { values.set(`${taskId}/${relativePath}`, value); },
+    } as never,
+    tasks: {
+      importVideo: async () => { calls.push("pick"); return localDetail.task; },
+      start: async () => {
+        calls.push("ingest");
+        return { taskId: "task-local", completion: Promise.resolve(localDetail.task), cancel: async () => undefined };
+      },
+      getDetail: async () => localDetail,
+      setAnalysisStatus: async (_taskId, status) => { calls.push(`analysis:${status}`); },
+    },
+    getProvider: async () => provider,
+  });
+
+  const record = await service.importVideo();
+  assert.equal(record.taskId, "task-local");
+  assert.equal(record.status, "succeeded");
+  assert.deepEqual(calls, ["pick", "ingest", "analysis:running", "analysis:succeeded"]);
+  assert.equal(record.result?.document.source && (record.result.document.source as { readonly platform?: string }).platform, "local_upload");
 });

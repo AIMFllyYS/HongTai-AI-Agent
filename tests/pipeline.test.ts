@@ -133,6 +133,51 @@ test("已创建的本地任务可把固定任务ID交给共享流水线而不重
   assert.match(setup.store.values.get(paths.task) ?? "", /"id":"local-task-42"/);
 });
 
+test("本地上传视频复用七阶段和ASR证据且不伪造平台或下载", async () => {
+  const setup = dependencies(true);
+  let adapterCalled = false;
+  let downloaderCalled = false;
+  const result = await new IngestPipeline({
+    ...setup.dependencies,
+    adapters: setup.dependencies.adapters.map((adapter) => ({
+      ...adapter,
+      matches: () => { adapterCalled = true; return true; },
+      resolve: async (...args) => { adapterCalled = true; return adapter.resolve(...args); },
+    })),
+    downloader: {
+      download: async () => { downloaderCalled = true; },
+    },
+  }).run({
+    taskId: "task-local-video",
+    localVideo: { displayName: "口播原片.mp4" },
+  });
+
+  const task = JSON.parse(setup.store.values.get(paths.task) ?? "{}") as {
+    readonly sourceKind?: string;
+    readonly sourceUrl?: string;
+    readonly platform?: string;
+  };
+  const metadata = JSON.parse(setup.store.values.get(paths.metadata) ?? "{}") as {
+    readonly title?: string;
+    readonly sourceKind?: string;
+  };
+
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.sourceKind, "local_video");
+  assert.equal(result.platform, undefined);
+  assert.equal(task.sourceKind, "local_video");
+  assert.equal(task.sourceUrl, "");
+  assert.equal(task.platform, undefined);
+  assert.equal(metadata.title, "口播原片.mp4");
+  assert.equal(metadata.sourceKind, "local_video");
+  assert.equal(adapterCalled, false);
+  assert.equal(downloaderCalled, false);
+  assert.match(setup.store.values.get(paths.transcript) ?? "", /原始文稿/u);
+  assert.deepEqual(new Set(setup.events.map((event) => event.stage)), new Set([
+    "detect-platform", "resolve-link", "parse-content", "select-media", "download-media", "obtain-transcript", "save-artifacts",
+  ]));
+});
+
 test("分离媒体下载分别标明视频流和音频流", async () => {
   const setup = dependencies(true, true);
 

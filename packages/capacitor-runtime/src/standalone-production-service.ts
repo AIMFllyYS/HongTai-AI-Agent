@@ -25,6 +25,8 @@ interface ProductionFilesPort {
   writeProductionText(options: { readonly projectId: string; readonly relativePath: string; readonly value: string; readonly replace: boolean }): Promise<void>;
   readProductionText(options: { readonly projectId: string; readonly relativePath: string }): Promise<{ readonly value?: string }>;
   listProductionIds(): Promise<{ readonly projectIds: readonly string[] }>;
+  deleteProductionFile(options: { readonly projectId: string; readonly relativePath: string }): Promise<void>;
+  deleteProduction(options: { readonly projectId: string }): Promise<void>;
 }
 
 interface PersistedProject {
@@ -65,7 +67,7 @@ function defaultAssetRole(value: Pick<NativeProductionAsset, "kind">): Productio
 }
 
 function nativeAsset(value: NativeProductionAsset): NativeProductionAsset | undefined {
-  if (!value.id || !value.uri || !value.displayName || value.sizeBytes <= 0) return undefined;
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/u.test(value.id) || !value.uri || !value.displayName || value.sizeBytes <= 0) return undefined;
   if (value.kind === "image" && !["image/jpeg", "image/png", "image/webp"].includes(value.mimeType)) return undefined;
   if (value.kind === "video" && value.mimeType !== "video/mp4") return undefined;
   if (value.kind === "audio" && !["audio/mpeg", "audio/mp4", "audio/wav"].includes(value.mimeType)) return undefined;
@@ -75,6 +77,19 @@ function nativeAsset(value: NativeProductionAsset): NativeProductionAsset | unde
   if (role === "music" && value.kind !== "audio") return undefined;
   if (role === "visual" && value.kind === "audio") return undefined;
   return { ...value, role };
+}
+
+function assetPath(asset: NativeProductionAsset): string {
+  const extension = asset.mimeType === "image/jpeg" ? "jpg"
+    : asset.mimeType === "image/png" ? "png"
+      : asset.mimeType === "image/webp" ? "webp"
+        : asset.mimeType === "video/mp4" ? "mp4"
+          : asset.mimeType === "audio/mpeg" ? "mp3"
+            : asset.mimeType === "audio/mp4" ? "m4a"
+              : asset.mimeType === "audio/wav" ? "wav"
+                : undefined;
+  if (!extension) throw taskError("素材格式不支持安全删除");
+  return `inputs/${asset.id}.${extension}`;
 }
 
 function parseProject(value: string, projectId: string): PersistedProject | undefined {
@@ -135,6 +150,7 @@ function productionTaskError(error: unknown, fallbackMessage: string): TaskError
 export class StandaloneProductionService implements ProductionService {
   readonly #options: StandaloneProductionServiceOptions;
   readonly #listeners = new Map<string, Set<(event: ProductionEvent) => void | Promise<void>>>();
+  readonly #mutations = new Map<string, Promise<unknown>>();
 
   constructor(options: StandaloneProductionServiceOptions) { this.#options = options; }
 
@@ -178,10 +194,10 @@ export class StandaloneProductionService implements ProductionService {
   }
 
   async importAssets(projectId: string): Promise<ProductionProjectRecord> {
-    return this.#track(
+    return this.#exclusive(projectId, () => this.#track(
       { kind: "transient-operation", id: `production-assets:${projectId}`, execution: "external-activity" },
       () => this.#importAssets(projectId),
-    );
+    ));
   }
 
   async #importAssets(projectId: string): Promise<ProductionProjectRecord> {
@@ -211,10 +227,10 @@ export class StandaloneProductionService implements ProductionService {
   }
 
   async generatePlan(projectId: string): Promise<ProductionProjectRecord> {
-    return this.#track(
+    return this.#exclusive(projectId, () => this.#track(
       { kind: "production-plan", id: projectId, execution: "in-process" },
       () => this.#generatePlan(projectId),
-    );
+    ));
   }
 
   async #generatePlan(projectId: string): Promise<ProductionProjectRecord> {
@@ -264,10 +280,10 @@ export class StandaloneProductionService implements ProductionService {
   }
 
   async render(projectId: string): Promise<ProductionProjectRecord> {
-    return this.#track(
+    return this.#exclusive(projectId, () => this.#track(
       { kind: "production-render", id: projectId, execution: "in-process" },
       () => this.#render(projectId),
-    );
+    ));
   }
 
   async #render(projectId: string): Promise<ProductionProjectRecord> {
@@ -321,6 +337,57 @@ export class StandaloneProductionService implements ProductionService {
     return recovered;
   }
 
+  async removeAsset(projectId: string, assetId: string): Promise<ProductionProjectRecord> {
+    return this.#exclusive(projectId, async () => {
+      const project = await this.#required(projectId);
+      this.#requireDeletable(project);
+      const asset = project.assets.find((item) => item.id === assetId);
+      if (!asset) throw taskError("未找到要删除的制作素材", "select_media");
+      const { plan: _plan, output: _output, issue: _issue, ...base } = project;
+      void _plan; void _output; void _issue;
+      const next = await this.#persist({ ...base, assets: project.assets.filter((item) => item.id !== assetId), status: "draft" });
+      try {
+        await this.#options.files.deleteProductionFile({ projectId, relativePath: assetPath(asset) });
+      } catch (error) {
+        await this.#save(project).catch(() => undefined);
+        await this.#emit(projectId, { type: "state", project: this.#project(project) }).catch(() => undefined);
+        throw error;
+      }
+      if (project.output) {
+        await this.#options.files.deleteProductionFile({ projectId, relativePath: "output.mp4" });
+      }
+      return this.#project(next);
+    });
+  }
+
+  async removeOutput(projectId: string): Promise<ProductionProjectRecord> {
+    return this.#exclusive(projectId, async () => {
+      const project = await this.#required(projectId);
+      this.#requireDeletable(project);
+      if (!project.output) throw taskError("当前制作项目没有可删除的成片");
+      const { output: _output, issue: _issue, ...base } = project;
+      void _output; void _issue;
+      const next = await this.#persist({ ...base, status: project.plan ? "ready" : "draft" });
+      try {
+        await this.#options.files.deleteProductionFile({ projectId, relativePath: "output.mp4" });
+      } catch (error) {
+        await this.#save(project).catch(() => undefined);
+        await this.#emit(projectId, { type: "state", project: this.#project(project) }).catch(() => undefined);
+        throw error;
+      }
+      return this.#project(next);
+    });
+  }
+
+  async delete(projectId: string): Promise<void> {
+    return this.#exclusive(projectId, async () => {
+      const project = await this.#required(projectId);
+      this.#requireDeletable(project);
+      await this.#options.files.deleteProduction({ projectId });
+      this.#listeners.delete(projectId);
+    });
+  }
+
   subscribe(projectId: string, listener: (event: ProductionEvent) => void | Promise<void>) {
     const listeners = this.#listeners.get(projectId) ?? new Set();
     listeners.add(listener);
@@ -337,6 +404,23 @@ export class StandaloneProductionService implements ProductionService {
     const project = response.value ? parseProject(response.value, projectId) : undefined;
     if (!project) throw taskError("制作项目不存在或已损坏");
     return project;
+  }
+
+  #requireDeletable(project: PersistedProject): void {
+    if (project.status === "planning" || project.status === "rendering") {
+      throw taskError("制作项目正在处理中，暂时不能删除");
+    }
+  }
+
+  async #exclusive<T>(projectId: string, operation: () => Promise<T>): Promise<T> {
+    if (this.#mutations.has(projectId)) throw taskError("制作项目正在处理另一项操作，请稍后再试");
+    const active = operation();
+    this.#mutations.set(projectId, active);
+    try {
+      return await active;
+    } finally {
+      if (this.#mutations.get(projectId) === active) this.#mutations.delete(projectId);
+    }
   }
 
   async #persist(project: PersistedProject): Promise<PersistedProject> {

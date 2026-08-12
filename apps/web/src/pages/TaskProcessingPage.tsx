@@ -103,8 +103,9 @@ export function TaskProcessingPage({ runtime, taskId, navigate }: TaskProcessing
     return <AppShell activeNav="home" backPath="/" navigate={navigate} title="采集任务"><div className="page-stack page-task-processing">{issue ? <IssueNotice issue={issue} /> : null}<ErrorState action={<Button onClick={() => navigate(pathForRoute("home"))} variant="secondary">重新提交链接</Button>} description={issue?.userMessage ?? "该任务不存在，或本机无法读取它的安全投影。"} title="找不到本地任务" /></div></AppShell>;
   }
 
-  const source = safeUrlForDisplay(task.sourceUrl);
-  const platform = platformLabel(task.platform);
+  const localVideo = task.sourceKind === "local_video";
+  const source = localVideo ? "本地上传视频 · 已复制到应用私有目录" : safeUrlForDisplay(task.sourceUrl);
+  const platform = localVideo ? "本地上传" : platformLabel(task.platform);
   const needsNewSubmission = task.status === "failed" || task.status === "interrupted" || task.status === "cancelled";
 
   return (
@@ -114,7 +115,7 @@ export function TaskProcessingPage({ runtime, taskId, navigate }: TaskProcessing
         <section className="task-processing-hero">
           <span className={`task-processing-hero__orb ${task.status === "running" ? "is-running" : ""}`.trim()}><Icon name={task.status === "succeeded" || task.status === "degraded" ? "check_circle" : task.status === "failed" || task.status === "interrupted" ? "error" : "sync"} size={31} /></span>
           <div>
-            <div className="task-processing-hero__line"><h2>{platform ? `${platform}采集任务` : "本地采集任务"}</h2><TaskStatusBadge status={task.status} /></div>
+            <div className="task-processing-hero__line"><h2>{localVideo ? "本地视频处理任务" : platform ? `${platform}采集任务` : "本地采集任务"}</h2><TaskStatusBadge status={task.status} /></div>
             <p className="technical-value">{source}</p>
           </div>
         </section>
@@ -132,7 +133,7 @@ export function TaskProcessingPage({ runtime, taskId, navigate }: TaskProcessing
 
         <div className="task-page-actions mobile-action-group">
           {task.status === "queued" ? <Button disabled={!ingestAvailable || actionPending !== undefined} icon={<Icon name="bolt" size={18} />} onClick={() => void start()}>{actionPending === "start" ? "正在启动" : "开始执行"}</Button> : null}
-          {needsNewSubmission ? <Button icon={<Icon name="sync" size={18} />} onClick={() => navigate(pathForRoute("home"))} variant="secondary">重新提交链接</Button> : null}
+          {needsNewSubmission ? <Button icon={<Icon name="sync" size={18} />} onClick={() => navigate(pathForRoute("home"))} variant="secondary">{localVideo ? "重新选择视频" : "重新提交链接"}</Button> : null}
           {task.status === "succeeded" || task.status === "degraded" || task.status === "failed" || task.status === "cancelled" || task.status === "interrupted" ? <Button icon={<Icon name="chevron_right" size={18} />} onClick={() => navigate(taskDetailPath(task.id))} variant="ghost">查看任务详情</Button> : null}
         </div>
       </div>

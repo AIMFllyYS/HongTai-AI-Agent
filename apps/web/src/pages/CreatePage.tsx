@@ -70,7 +70,7 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
       ]);
       const records = await Promise.all(tasks.map(async (task) => ({ task, analysis: await runtime.analysis.get(task.id) })));
       const available = records.filter(({ analysis }) => analysis?.status === "succeeded" && analysis.result?.schemaVersion === "content-analysis.v1")
-        .map(({ task }) => ({ task, label: `${platformName(task.platform)} · ${new Date(task.updatedAt).toLocaleDateString("zh-CN")}` }));
+        .map(({ task }) => ({ task, label: `${platformName(task.platform, task.sourceKind)} · ${new Date(task.updatedAt).toLocaleDateString("zh-CN")}` }));
       setSources(available);
       setProjects(savedProjects);
       setSourceId((current) => current || available[0]?.task.id || "");
@@ -125,6 +125,23 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
     }));
   };
 
+  const deleteProject = async (projectId: string) => {
+    setBusy(true);
+    setIssue(undefined);
+    try {
+      await runtime.production.delete(projectId);
+      const remaining = await runtime.production.list();
+      setProjects(remaining);
+      setProject(remaining[0]);
+      setProgress(0);
+      setProgressMessage("");
+    } catch (error) {
+      setIssue(issueFromAppError(error, { code: "STORAGE_WRITE_FAILED", message: "制作项目没有删除完成", action: "retry" }));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (loading) return <AppShell activeNav="create" navigate={navigate} title="制作"><LoadingState description="正在读取正式拆解与本地制作项目" title="打开制作工作台" /></AppShell>;
 
   return (
@@ -168,6 +185,9 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
             busy={busy}
             onGeneratePlan={() => void perform(() => runtime.production.generatePlan(project.projectId))}
             onImport={() => void perform(() => runtime.production.importAssets(project.projectId))}
+            onDeleteProject={() => void deleteProject(project.projectId)}
+            onRemoveAsset={(assetId) => void perform(() => runtime.production.removeAsset(project.projectId, assetId))}
+            onRemoveOutput={() => void perform(() => runtime.production.removeOutput(project.projectId))}
             onRender={() => void perform(() => runtime.production.render(project.projectId))}
             progress={progress}
             progressMessage={progressMessage}
@@ -186,8 +206,9 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
   );
 }
 
-function platformName(platform: AppTaskRecord["platform"]): string {
-  return ({ douyin: "抖音", xiaohongshu: "小红书", bilibili: "B站", kuaishou: "快手" } as const)[platform ?? "douyin"] ?? "内容任务";
+function platformName(platform: AppTaskRecord["platform"], sourceKind: AppTaskRecord["sourceKind"]): string {
+  if (sourceKind === "local_video") return "本地上传";
+  return platform ? ({ douyin: "抖音", xiaohongshu: "小红书", bilibili: "B站", kuaishou: "快手" } as const)[platform] : "内容任务";
 }
 
 function statusLabel(status: ProductionProjectRecord["status"]): string {

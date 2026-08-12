@@ -1,4 +1,6 @@
 export type SupportedPlatform = "douyin" | "xiaohongshu" | "bilibili" | "kuaishou";
+export type ContentAnalysisPlatform = SupportedPlatform | "local_upload";
+export type TaskSourceKind = "public_link" | "local_video";
 export type PlatformSupportLevel = "stable" | "experimental";
 export type ContentType = "video" | "image_text" | "unknown";
 export type SpeechStatus = "transcribed" | "no_speech" | "failed";
@@ -133,8 +135,7 @@ export interface ProgressEvent {
   readonly timestamp: string;
 }
 
-export interface IngestRequest {
-  readonly input: string;
+interface IngestRequestOptions {
   /**
    * Optional pre-created local task ID. The application runtime uses this to
    * preserve retry lineage and immutable task history while the CLI may still
@@ -144,6 +145,11 @@ export interface IngestRequest {
   readonly outputDirectory?: string;
   readonly maxDurationSeconds?: number;
 }
+
+export type IngestRequest = IngestRequestOptions & (
+  | { readonly input: string; readonly localVideo?: never }
+  | { readonly input?: never; readonly taskId: string; readonly localVideo: { readonly displayName: string } }
+);
 
 export interface TranscriptSegment {
   readonly index: number;
@@ -224,6 +230,8 @@ export interface MediaReference {
 export interface TaskRecord {
   readonly id: string;
   readonly sourceUrl: string;
+  /** Historical records without this field are interpreted as public-link tasks. */
+  readonly sourceKind?: TaskSourceKind;
   readonly status: TaskStatus;
   readonly currentStage?: TaskStage;
   readonly platform?: SupportedPlatform;
@@ -246,6 +254,7 @@ export interface TaskRecord {
 export interface IngestResult {
   readonly taskId: string;
   readonly status: TaskStatus;
+  readonly sourceKind?: TaskSourceKind;
   readonly platform?: SupportedPlatform;
   readonly contentType?: ContentType;
   readonly speechStatus?: SpeechStatus;

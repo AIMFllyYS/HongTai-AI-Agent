@@ -9,6 +9,7 @@ const read = (path: string) => readFileSync(join(root, path), "utf8");
 test("mobile controls stay readable between 360 and 430 pixels", () => {
   const components = read("styles/components.css");
   const responsive = read("styles/responsive.css");
+  const library = read("styles/pages/library.css");
   const tokens = read("styles/tokens.css");
   const home = read("styles/pages/home.css");
   const vitality = read("styles/pages/vitality.css");
@@ -17,6 +18,7 @@ test("mobile controls stay readable between 360 and 430 pixels", () => {
   assert.match(components, /\.technical-value[^}]*overflow-wrap:\s*anywhere/s);
   assert.match(responsive, /@media\s*\(max-width:\s*26\.875rem\)/);
   assert.match(responsive, /\.mobile-action-group\s*\{[^}]*grid-template-columns:\s*1fr/s);
+  assert.match(library, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.template-editor__actions[^}]*grid-template-columns:\s*1fr/);
   assert.match(tokens, /--color-text-on-secondary:\s*var\(--palette-text\)/);
   assert.match(home, /\.home-empty__action\s*\{[^}]*color:\s*var\(--color-text-on-secondary\)/s);
   assert.match(vitality, /\.scan-actions \.button--primary\s*\{[^}]*color:\s*var\(--color-text-on-secondary\)/s);
