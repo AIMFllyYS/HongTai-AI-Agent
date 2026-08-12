@@ -56,9 +56,10 @@ test("profile and AI settings preserve local-only security boundaries", () => {
   assert.match(ai, /runtime\.aiSettings\.probe/);
   assert.match(ai, /runtime\.aiSettings\.getProbeResults/);
   assert.doesNotMatch(settings, /PRO|退出登录|首选配音/);
-  const publicSave = ai.match(/runtime\.aiSettings\.save\(\{([\s\S]*?)\}\);/);
-  assert.ok(publicSave, "the public connection save call should be present");
-  assert.doesNotMatch(publicSave[1] ?? "", /apiKey\s*:/);
+  assert.match(ai, /runtime\.aiSettings\.save\(inputFromDraft\(nextDraft\)\)/);
+  const publicInput = ai.match(/function inputFromDraft[\s\S]*?\r?\n}\r?\n\r?\n\/\*\*/)?.[0];
+  assert.ok(publicInput, "the public connection input mapper should be present");
+  assert.doesNotMatch(publicInput ?? "", /apiKey\s*:/);
 });
 
 test("UI copy describes local app storage and Keystore without promising an encrypted database", () => {
@@ -82,19 +83,26 @@ test("AI capability probes cannot run against a saved connection while the visib
   assert.match(ai, /hasUnsavedProbeInputs/);
   assert.match(ai, /const probeBlocked = connectionBusy \|\| hasUnsavedProbeInputs/);
   assert.match(ai, /if \(probeBlocked\) return/);
+  assert.match(ai, /for \(const capability of probeCapabilities\) \{\s*const result = await runProbe\(capability\);/s);
   assert.match(ai, /disabled=\{probeBlocked\}/);
   assert.match(ai, /请先保存当前 AI 设置后再测试/);
 });
 
-test("settings preserve a planned TTS slot without inventing runtime support", () => {
+test("settings keep cloud TTS inside AI connection and expose app information through AppRuntime", () => {
+  const app = read("App.tsx");
   const settings = read("pages/SettingsPage.tsx");
-  const profile = read("pages/ProfileSettingsPage.tsx");
   const ai = read("pages/AiSettingsPage.tsx");
+  const router = read("router.ts");
 
-  assert.match(settings, /data-settings-capability="tts"/);
-  assert.match(settings, /TTS 语音合成/);
-  assert.match(settings, /尚未接入/);
-  assert.doesNotMatch(settings, /runtime\.tts|OpenAI TTS|温润男声/);
-  assert.match(profile, /avatar-editor__actions mobile-action-group/);
-  assert.match(ai, /probe-row__action mobile-action-group/);
+  assert.match(settings, /appInfoSettingsPath/);
+  assert.match(settings, /应用信息/);
+  assert.match(ai, /一键配置/);
+  assert.match(ai, /视频配音模型/);
+  assert.match(ai, /AI_PROVIDER_PRESETS/);
+  assert.doesNotMatch(settings, /data-settings-capability="tts"/);
+  assert.doesNotMatch(settings, /TTS 语音合成/);
+  assert.doesNotMatch(router, /settings-tts/);
+  assert.match(router, /settings-app-info/);
+  assert.doesNotMatch(app, /TtsSettingsPage/);
+  assert.match(app, /ApplicationInfoPage/);
 });

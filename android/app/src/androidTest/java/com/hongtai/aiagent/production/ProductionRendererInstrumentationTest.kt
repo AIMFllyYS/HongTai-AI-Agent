@@ -72,6 +72,7 @@ class ProductionRendererInstrumentationTest {
     assertTrue(mimes.any { it?.startsWith("video/") == true })
     assertTrue(mimes.any { it?.startsWith("audio/") == true })
     assertEquals("video/avc", videoFormat.getString("mime"))
+    assertTrue(mimes.contains("audio/mp4a-latm"))
     assertEquals(720, displayWidth)
     assertEquals(1280, displayHeight)
   }

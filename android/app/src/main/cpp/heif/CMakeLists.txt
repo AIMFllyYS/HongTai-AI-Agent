@@ -1,0 +1,92 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(hongtai_legacy_heif LANGUAGES C CXX)
+
+set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic LGPL libraries" FORCE)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+add_link_options("-Wl,-z,max-page-size=16384" "-Wl,-z,relro" "-Wl,-z,now")
+
+get_filename_component(ANDROID_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../../.." ABSOLUTE)
+set(HONGTAI_HEIF_SOURCE_CACHE "${ANDROID_ROOT}/.native-deps/heif-sources" CACHE PATH "Verified HEIF source cache")
+set(LIBHEIF_COMMIT "2c4bbb54c2738d4a5efbbe3e5fa1d5d76bb88eb0")
+set(LIBDE265_COMMIT "4dd701fffac01632ffd5cabc5ef10deb56accba1")
+set(LIBHEIF_SOURCE_DIR "${HONGTAI_HEIF_SOURCE_CACHE}/libheif-${LIBHEIF_COMMIT}")
+set(LIBDE265_SOURCE_DIR "${HONGTAI_HEIF_SOURCE_CACHE}/libde265-${LIBDE265_COMMIT}")
+
+foreach(source_dir IN ITEMS "${LIBHEIF_SOURCE_DIR}" "${LIBDE265_SOURCE_DIR}")
+  if(NOT EXISTS "${source_dir}/CMakeLists.txt" OR NOT EXISTS "${source_dir}/.hongtai-source-lock.json")
+    message(FATAL_ERROR "Verified HEIF sources are missing. Run scripts/fetch-android-heif-sources.ps1 first.")
+  endif()
+endforeach()
+
+# libde265's ENABLE_DECODER option controls its dec265 CLI, not library decode.
+set(ENABLE_DECODER OFF CACHE BOOL "Do not build dec265 CLI" FORCE)
+set(ENABLE_ENCODER OFF CACHE BOOL "No HEVC encoder" FORCE)
+set(ENABLE_SDL OFF CACHE BOOL "No SDL" FORCE)
+set(ENABLE_SHERLOCK265 OFF CACHE BOOL "No inspection tool" FORCE)
+set(ENABLE_INTERNAL_DEVELOPMENT_TOOLS OFF CACHE BOOL "No development tools" FORCE)
+set(WITH_FUZZERS OFF CACHE BOOL "No fuzz executables" FORCE)
+set(USE_IWYU OFF CACHE BOOL "No development analysis" FORCE)
+set(ENABLE_AVX2 OFF CACHE BOOL "Avoid device-specific x86 assumptions" FORCE)
+set(ENABLE_AVX512 OFF CACHE BOOL "Avoid device-specific x86 assumptions" FORCE)
+add_subdirectory("${LIBDE265_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/libde265" EXCLUDE_FROM_ALL)
+
+set(LIBDE265_INCLUDE_DIR "${LIBDE265_SOURCE_DIR}" CACHE PATH "Pinned libde265 headers" FORCE)
+set(LIBDE265_LIBRARY de265 CACHE STRING "Pinned libde265 target" FORCE)
+set(ENABLE_PLUGIN_LOADING OFF CACHE BOOL "No runtime plugins" FORCE)
+set(WITH_LIBDE265 ON CACHE BOOL "Only HEVC decoder" FORCE)
+set(WITH_LIBDE265_PLUGIN OFF CACHE BOOL "Link libde265 dynamically, not as a plugin" FORCE)
+set(WITH_X265 OFF CACHE BOOL "No HEVC encoder" FORCE)
+set(WITH_KVAZAAR OFF CACHE BOOL "No HEVC encoder" FORCE)
+set(WITH_UVG266 OFF CACHE BOOL "No VVC encoder" FORCE)
+set(WITH_VVDEC OFF CACHE BOOL "No VVC decoder" FORCE)
+set(WITH_VVENC OFF CACHE BOOL "No VVC encoder" FORCE)
+set(WITH_X264 OFF CACHE BOOL "No AVC encoder" FORCE)
+set(WITH_OpenH264_DECODER OFF CACHE BOOL "No AVC decoder" FORCE)
+set(WITH_DAV1D OFF CACHE BOOL "No AV1 decoder" FORCE)
+set(WITH_AOM_DECODER OFF CACHE BOOL "No AV1 decoder" FORCE)
+set(WITH_AOM_ENCODER OFF CACHE BOOL "No AV1 encoder" FORCE)
+set(WITH_SvtEnc OFF CACHE BOOL "No AV1 encoder" FORCE)
+set(WITH_RAV1E OFF CACHE BOOL "No AV1 encoder" FORCE)
+set(WITH_JPEG_DECODER OFF CACHE BOOL "No JPEG codec" FORCE)
+set(WITH_JPEG_ENCODER OFF CACHE BOOL "No JPEG codec" FORCE)
+set(WITH_OpenJPEG_DECODER OFF CACHE BOOL "No JPEG 2000 codec" FORCE)
+set(WITH_OpenJPEG_ENCODER OFF CACHE BOOL "No JPEG 2000 codec" FORCE)
+set(WITH_FFMPEG_DECODER OFF CACHE BOOL "No FFmpeg" FORCE)
+set(WITH_OPENJPH_ENCODER OFF CACHE BOOL "No HT-J2K encoder" FORCE)
+set(WITH_UNCOMPRESSED_CODEC OFF CACHE BOOL "No uncompressed codec" FORCE)
+set(WITH_WEBCODECS OFF CACHE BOOL "No browser codec" FORCE)
+set(WITH_LIBSHARPYUV OFF CACHE BOOL "No extra color library" FORCE)
+set(WITH_EXAMPLES OFF CACHE BOOL "No examples" FORCE)
+set(WITH_EXAMPLE_HEIF_THUMB OFF CACHE BOOL "No thumbnail tool" FORCE)
+set(WITH_EXAMPLE_HEIF_VIEW OFF CACHE BOOL "No viewer" FORCE)
+set(WITH_GDK_PIXBUF OFF CACHE BOOL "No desktop plugin" FORCE)
+set(BUILD_DEVELOPMENT_TOOLS OFF CACHE BOOL "No development tools" FORCE)
+set(BUILD_DOCUMENTATION OFF CACHE BOOL "No documentation target" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "No upstream tests in APK build" FORCE)
+set(WITH_HEADER_COMPRESSION OFF CACHE BOOL "No compressed metadata dependency" FORCE)
+set(ENABLE_MULTITHREADING_SUPPORT ON CACHE BOOL "Decoder thread contract" FORCE)
+set(ENABLE_PARALLEL_TILE_DECODING OFF CACHE BOOL "Bound tile parallelism" FORCE)
+add_subdirectory("${LIBHEIF_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/libheif" EXCLUDE_FROM_ALL)
+target_include_directories(heif PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/libde265")
+
+add_library(hongtai_heif SHARED legacy_heif_jni.cpp)
+set_target_properties(hongtai_heif PROPERTIES
+  CXX_STANDARD 17
+  CXX_STANDARD_REQUIRED ON
+  CXX_EXTENSIONS OFF
+  CXX_VISIBILITY_PRESET hidden
+  VISIBILITY_INLINES_HIDDEN ON
+)
+target_compile_options(hongtai_heif PRIVATE -Wall -Wextra -Werror -fstack-protector-strong)
+target_include_directories(hongtai_heif PRIVATE
+  "${LIBHEIF_SOURCE_DIR}/libheif/api"
+  "${CMAKE_CURRENT_BINARY_DIR}/libheif"
+)
+target_link_options(hongtai_heif PRIVATE "-Wl,-z,max-page-size=16384" "-Wl,-z,relro" "-Wl,-z,now")
+find_library(ANDROID_JNIGRAPHICS_LIBRARY jnigraphics REQUIRED)
+find_library(ANDROID_LOG_LIBRARY log REQUIRED)
+target_link_libraries(hongtai_heif PRIVATE heif de265 ${ANDROID_JNIGRAPHICS_LIBRARY} ${ANDROID_LOG_LIBRARY})
+
+foreach(target IN ITEMS de265 heif)
+  target_link_options(${target} PRIVATE "-Wl,-z,max-page-size=16384" "-Wl,-z,relro" "-Wl,-z,now")
+endforeach()

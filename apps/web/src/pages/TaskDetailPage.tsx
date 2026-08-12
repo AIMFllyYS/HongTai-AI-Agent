@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { issueFromAppError, safeUrlForDisplay } from "@hongtai/core";
-import type { AppRuntime, MediaReference, TaskDetailRecord, TaskIssue } from "@hongtai/core";
+import type { AppRuntime, MediaReference, StructuredStreamProgress as StructuredStreamProgressValue, TaskDetailRecord, TaskIssue } from "@hongtai/core";
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
@@ -9,6 +9,7 @@ import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { RuntimeMediaFrame } from "../components/RuntimeMediaFrame";
 import { EmptyState, ErrorState, LoadingState } from "../components/StatePanels";
+import { StructuredStreamProgress } from "../components/StructuredStreamProgress";
 import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
 import { contentTypeLabel, formatTaskTime, platformLabel } from "../features/tasks/task-presenters";
@@ -36,6 +37,7 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<"analysis" | "delete">();
+  const [streamProgress, setStreamProgress] = useState<StructuredStreamProgressValue>();
 
   const load = useCallback(async () => {
     try {
@@ -56,8 +58,12 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
   const runAnalysis = async () => {
     setPendingAction("analysis");
     setIssue(undefined);
+    setStreamProgress(undefined);
     try {
-      await runtime.analysis.run(taskId);
+      await runtime.analysis.run(taskId, async (event) => {
+        if (event.type === "progress") setStreamProgress(event.progress);
+        if (event.type === "failed") setIssue(event.issue);
+      });
       navigate(taskAnalysisPath(taskId));
     } catch (error) {
       setIssue(issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "内容拆解无法开始", action: "none" }));
@@ -99,7 +105,7 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
   const localVideo = task.sourceKind === "local_video";
   const platform = localVideo ? "本地上传" : platformLabel(task.platform);
   const contentType = contentTypeLabel(task.contentType);
-  const activeIssue = issue ?? task.issues.at(-1);
+  const activeIssue = issue ?? task.issues[task.issues.length - 1];
   const needsNewSubmission = task.status === "failed" || task.status === "interrupted" || task.status === "cancelled";
   const hasEvidence = detail.evidenceUnits.length > 0;
   const terminalWithOutput = task.status === "succeeded" || task.status === "degraded";
@@ -164,8 +170,9 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
           {task.analysisStatus === "running" ? <GlassCard className="analysis-request-card"><Icon name="sync" size={22} /><p>内容拆解正在运行。采集七阶段不会因此增加新阶段。</p><Button onClick={() => navigate(taskAnalysisPath(task.id))} variant="secondary">查看当前状态</Button></GlassCard> : null}
           {task.analysisStatus === "failed" ? <GlassCard className="analysis-request-card"><Icon name="error" size={22} /><p>上一次内容拆解没有成功完成。请先查看真实错误状态，再由你确认是否重新运行。</p><Button onClick={() => navigate(taskAnalysisPath(task.id))} variant="secondary">查看拆解状态</Button></GlassCard> : null}
           {canRequestAnalysis ? (
-            confirmationOpen ? <GlassCard className="analysis-confirm-card"><strong>确认运行 AI 自动拆解？</strong><p>系统将基于此任务已保存的 {detail.evidenceUnits.length} 条证据生成 content-analysis.v1，不会把它写入采集阶段。</p><div className="analysis-confirm-card__actions mobile-action-group"><Button disabled={pendingAction === "analysis"} onClick={() => void runAnalysis()}>{pendingAction === "analysis" ? "正在请求拆解" : "确认运行"}</Button><Button disabled={pendingAction === "analysis"} onClick={() => setConfirmationOpen(false)} variant="quiet">暂不运行</Button></div></GlassCard> : <Button disabled={pendingAction !== undefined} icon={<Icon name="auto_awesome" size={18} />} onClick={() => setConfirmationOpen(true)}>AI 自动拆解</Button>
+            confirmationOpen ? <GlassCard className="analysis-confirm-card"><strong>确认运行 AI 自动拆解？</strong><p>系统将基于此任务已保存的 {detail.evidenceUnits.length} 条证据生成 content-analysis.v1，不会把它写入采集阶段。</p><div className="analysis-confirm-card__actions mobile-action-group"><Button disabled={pendingAction === "analysis"} onClick={() => void runAnalysis()}>{pendingAction === "analysis" ? "正在接收结构化内容" : "确认运行"}</Button><Button disabled={pendingAction === "analysis"} onClick={() => setConfirmationOpen(false)} variant="quiet">暂不运行</Button></div></GlassCard> : <Button disabled={pendingAction !== undefined} icon={<Icon name="auto_awesome" size={18} />} onClick={() => setConfirmationOpen(true)}>AI 自动拆解</Button>
           ) : task.analysisStatus === "not_started" && analysisAvailable && !terminalWithOutput ? <EmptyState description="采集任务完成或部分完成后，才可以确认运行内容拆解。" icon="pending" title="等待可用产物" /> : null}
+          {pendingAction === "analysis" ? <StructuredStreamProgress progress={streamProgress} title="AI 正在拆解真实证据" /> : null}
         </section>
 
         {needsNewSubmission ? <GlassCard className="analysis-request-card"><Icon name="sync" size={22} /><p>本版本不会继续或复制旧任务。若需再次处理，请返回首页重新提交链接。</p><Button icon={<Icon name="arrow_back" size={18} />} onClick={() => navigate(pathForRoute("home"))} variant="secondary">重新提交链接</Button></GlassCard> : null}

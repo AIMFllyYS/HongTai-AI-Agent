@@ -180,11 +180,20 @@ test("StandaloneTaskService imports one private MP4 through the shared pipeline 
   assert.equal(await service.get(imported.id), undefined);
 });
 
-test("StandaloneTaskService maps picker cancellation and removes the unfinished private task", async () => {
+test("StandaloneTaskService opens the picker without creating a task and maps cancellation", async () => {
   const native = memoryFiles();
   const service = new StandaloneTaskService({
     files: native.plugin,
-    fileMedia: { pickVideo: async () => { throw { code: "ERR_MEDIA_SELECTION_CANCELLED" }; } },
+    fileMedia: {
+      pickVideo: async () => {
+        assert.deepEqual(
+          (await native.plugin.listTaskIds()).taskIds,
+          [],
+          "opening the external picker must not create a task before a video is selected",
+        );
+        throw { code: "ERR_MEDIA_SELECTION_CANCELLED" };
+      },
+    },
     adapters: [],
     http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
     downloader: { download: async () => undefined },

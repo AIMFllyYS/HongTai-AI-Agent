@@ -19,10 +19,18 @@ workspace/ai/*
 # Capacitor/Android生成物
 android/.gradle/
 android/**/build/
+android/app/.cxx/
 android/local.properties
+android/.native-deps/heif-sources/
 # Empty Cordova source/resource placeholders are recreated by `cap sync`.
 android/capacitor-cordova-android-plugins/src/main/java/
 android/capacitor-cordova-android-plugins/src/main/res/
+
+# Android release signing material is always repository-external.
+*.jks
+*.keystore
+*.p12
+keystore.properties
 
 # 编辑器与系统文件
 .idea/

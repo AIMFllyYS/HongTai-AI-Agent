@@ -23,6 +23,7 @@ import { TaskHomePage } from "./pages/TaskHomePage";
 import { TaskProcessingPage } from "./pages/TaskProcessingPage";
 import { PublishPage } from "./pages/PublishPage";
 import { AiSettingsPage } from "./pages/AiSettingsPage";
+import { ApplicationInfoPage } from "./pages/ApplicationInfoPage";
 import { ProfileSettingsPage } from "./pages/ProfileSettingsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 
@@ -61,6 +62,11 @@ export function App({ runtime, visualData }: AppProps = {}) {
       return runtime
         ? <AiSettingsPage navigate={navigate} runtime={runtime} />
         : <RuntimePendingPage description="AI 设置需要通过应用运行时读取。" navigate={navigate} title="本地运行时未初始化" />;
+    }
+    if (renderedRoute.key === "settings-app-info") {
+      return runtime
+        ? <ApplicationInfoPage navigate={navigate} runtime={runtime} />
+        : <RuntimePendingPage description="应用信息需要通过本机运行时读取。" navigate={navigate} title="本地运行时未初始化" />;
     }
     if (runtime && renderedRoute.key === "home") return <TaskHomePage navigate={navigate} runtime={runtime} />;
     if (runtime && renderedRoute.key === "task-processing") {

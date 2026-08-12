@@ -171,7 +171,9 @@
 
 .observation-capture-card__empty {
   display: grid;
+  place-items: center;
   place-content: center;
+  justify-items: center;
   gap: var(--space-2);
   color: var(--observation-accent);
   text-align: center;
@@ -179,7 +181,10 @@
   border: 1px dashed rgba(40, 127, 120, 0.38);
 }
 
+.observation-capture-card__empty svg { display: block; justify-self: center; }
 .observation-capture-card__empty span {
+  display: block;
+  width: 100%;
   color: var(--color-text-muted);
   font-size: var(--text-caption);
 }
@@ -198,7 +203,14 @@
 .observation-capture-card__actions .button--primary {
   grid-column: 1 / -1;
   width: 100%;
-  background: linear-gradient(135deg, #246d67, #388f85);
+  color: #000;
+  background: linear-gradient(135deg, #80d5be, #55b69f);
+}
+
+.observation-capture-card__actions .button--primary:disabled {
+  color: #000;
+  background: #c7d9d1;
+  opacity: 1;
 }
 
 .observation-privacy-note {

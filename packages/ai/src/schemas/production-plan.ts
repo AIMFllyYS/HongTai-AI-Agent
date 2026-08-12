@@ -25,7 +25,7 @@ export const productionPlanResultSchema = z.object({
     narration: z.string().min(1).max(160),
     caption: z.string().min(1).max(40),
     fit: z.enum(["cover", "contain"]),
-  })).min(2).max(12),
+  })).min(1).max(12),
 });
 
 export type ProductionPlanResultV1 = z.infer<typeof productionPlanResultSchema>;

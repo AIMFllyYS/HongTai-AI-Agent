@@ -94,6 +94,7 @@
   --color-surface-pressed: var(--surface-pressed);
   --color-text-primary: var(--palette-text);
   --color-text-on-primary: #ffffff;
+  --color-text-on-secondary: var(--palette-text);
   --color-text-subtle: var(--palette-text-subtle);
   --color-text-muted: var(--palette-text-muted);
   --color-action-primary: var(--palette-deep-emerald);

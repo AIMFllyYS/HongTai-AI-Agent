@@ -1,24 +1,142 @@
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.util.Properties
+import org.gradle.api.Action
+import org.gradle.api.execution.TaskExecutionGraph
+
 plugins {
   id("com.android.application")
   id("org.jetbrains.kotlin.android")
 }
 
+val releaseSigningPath = providers.environmentVariable("HONGTAI_RELEASE_SIGNING_PROPERTIES").orNull
+val rawReleaseSigningFile = releaseSigningPath?.let(::File)
+if (rawReleaseSigningFile != null && !rawReleaseSigningFile.isAbsolute) {
+  throw GradleException("Release signing configuration must use an absolute path")
+}
+val releaseSigningFile = rawReleaseSigningFile?.let(::file)
+val repositoryRootDirectory = rootProject.projectDir.parentFile.canonicalFile
+val heifSourceCacheOverride = providers.environmentVariable("HONGTAI_HEIF_SOURCE_CACHE").orNull
+val rawHeifSourceCacheDirectory = heifSourceCacheOverride?.let(::File)
+if (rawHeifSourceCacheDirectory != null && !rawHeifSourceCacheDirectory.isAbsolute) {
+  throw GradleException("HEIF native source cache override must use an absolute path")
+}
+val heifSourceCacheDirectory = (
+  rawHeifSourceCacheDirectory ?: rootProject.projectDir.resolve(".native-deps/heif-sources")
+).toPath().toAbsolutePath().normalize().toFile()
+val heifSourceCacheCmakePath = heifSourceCacheDirectory.path.replace('\\', '/')
+
+fun isInsideRepository(candidate: File): Boolean {
+  val repositoryPath = repositoryRootDirectory.path.trimEnd('\\', '/')
+  val candidatePath = candidate.canonicalFile.path.trimEnd('\\', '/')
+  return candidatePath.equals(repositoryPath, ignoreCase = true) ||
+    candidatePath.startsWith("$repositoryPath${File.separator}", ignoreCase = true)
+}
+
+fun pathTraversesReparsePoint(candidate: File): Boolean {
+  val normalizedPath = candidate.toPath().toAbsolutePath().normalize()
+  if (
+    Files.exists(normalizedPath, LinkOption.NOFOLLOW_LINKS) &&
+    !normalizedPath.toRealPath().toString()
+      .equals(normalizedPath.toString(), ignoreCase = true)
+  ) {
+    return true
+  }
+
+  var current = normalizedPath
+  while (current != null) {
+    if (
+      Files.exists(current, LinkOption.NOFOLLOW_LINKS) &&
+      Files.isSymbolicLink(current)
+    ) {
+      return true
+    }
+    current = current.parent
+  }
+  return false
+}
+
+if (releaseSigningFile != null) {
+  if (!releaseSigningFile.isFile) {
+    throw GradleException("Release signing configuration must be an existing file")
+  }
+  if (isInsideRepository(releaseSigningFile)) {
+    throw GradleException("Release signing configuration must be outside the repository")
+  }
+  if (pathTraversesReparsePoint(releaseSigningFile)) {
+    throw GradleException("Release signing configuration must not traverse a reparse point")
+  }
+}
+
+val releaseSigning = Properties()
+if (releaseSigningFile != null) {
+  releaseSigningFile.reader(Charsets.UTF_8).use(releaseSigning::load)
+}
+
+fun requiredReleaseSigningValue(name: String): String =
+  releaseSigning.getProperty(name)?.takeIf(String::isNotBlank)
+    ?: throw GradleException("Release signing configuration is missing required field: $name")
+
 android {
   namespace = "com.hongtai.aiagent"
   compileSdk = 36
+  ndkVersion = "28.2.13676358"
 
   defaultConfig {
     applicationId = "com.hongtai.aiagent"
     minSdk = 24
     targetSdk = 36
-    versionCode = 3
-    versionName = "0.0.1"
+    versionCode = 11
+    versionName = "0.1.4"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    ndk {
+      abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64"))
+    }
+    externalNativeBuild {
+      cmake {
+        arguments.add("-DANDROID_PLATFORM=android-24")
+        arguments.add("-DHONGTAI_HEIF_SOURCE_CACHE=$heifSourceCacheCmakePath")
+      }
+    }
+  }
+
+  signingConfigs {
+    if (releaseSigningFile != null) {
+      create("release") {
+        val rawKeyStore = File(requiredReleaseSigningValue("storeFile"))
+        if (!rawKeyStore.isAbsolute) {
+          throw GradleException("Release signing keystore must use an absolute path")
+        }
+        val keyStore = file(rawKeyStore)
+        if (!keyStore.isFile) {
+          throw GradleException("Release signing keystore must be an existing file")
+        }
+        if (isInsideRepository(keyStore)) {
+          throw GradleException("Release signing keystore must be outside the repository")
+        }
+        if (pathTraversesReparsePoint(keyStore)) {
+          throw GradleException("Release signing keystore must not traverse a reparse point")
+        }
+        val alias = requiredReleaseSigningValue("keyAlias")
+        if (alias.equals("androiddebugkey", ignoreCase = true)) {
+          throw GradleException("Release signing alias must not use the Android Debug identity")
+        }
+        storeFile = keyStore
+        storePassword = requiredReleaseSigningValue("storePassword")
+        keyAlias = alias
+        keyPassword = requiredReleaseSigningValue("keyPassword")
+        enableV1Signing = false
+        enableV2Signing = true
+        enableV3Signing = true
+      }
+    }
   }
 
   buildTypes {
     release {
+      signingConfig = signingConfigs.findByName("release")
       isMinifyEnabled = false
       proguardFiles(
         getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -35,7 +153,64 @@ android {
   kotlinOptions {
     jvmTarget = "21"
   }
+
+  externalNativeBuild {
+    cmake {
+      path = file("src/main/cpp/heif/CMakeLists.txt")
+      version = "3.22.1"
+    }
+  }
 }
+
+val verifyHeifNativeSources = tasks.register<Exec>("verifyHeifNativeSources") {
+  group = "verification"
+  description = "Verifies the pinned HEIF native source trees without network access"
+  val fetchScript = repositoryRootDirectory.resolve("scripts/fetch-android-heif-sources.ps1")
+  commandLine(
+    "powershell.exe",
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    fetchScript.absolutePath,
+    "-SourceCache",
+    heifSourceCacheDirectory.absolutePath,
+    "-VerifyOnly",
+  )
+  outputs.upToDateWhen { false }
+}
+
+tasks.configureEach {
+  if (
+    name.startsWith("configureCMake") ||
+    name.startsWith("buildCMake")
+  ) {
+    dependsOn(verifyHeifNativeSources)
+  }
+}
+
+val releaseArtifactTaskNames = setOf(
+  "assembleRelease",
+  "bundleRelease",
+  "packageRelease",
+  "packageReleaseBundle",
+  "packageReleaseUniversalApk",
+  "signReleaseBundle",
+  "installRelease",
+  "validateSigningRelease",
+)
+val appProjectPath = project.path
+gradle.taskGraph.whenReady(object : Action<TaskExecutionGraph> {
+  override fun execute(graph: TaskExecutionGraph) {
+    val releaseArtifactInGraph = graph.allTasks.any { task ->
+      task.project.path == appProjectPath &&
+        task.name in releaseArtifactTaskNames
+    }
+    if (releaseArtifactInGraph && releaseSigningFile == null) {
+      throw GradleException("Release signing configuration is required via HONGTAI_RELEASE_SIGNING_PROPERTIES")
+    }
+  }
+})
 
 dependencies {
   // `cap sync` generates this project from the same @capacitor/android v8

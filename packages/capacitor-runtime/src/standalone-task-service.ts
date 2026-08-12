@@ -232,30 +232,35 @@ export class StandaloneTaskService implements TaskService {
     if (!this.#fileMedia) throw taskError("APP_RUNTIME_UNAVAILABLE", "本地视频选择器尚未加载", "select_media");
     const taskId = this.#createTaskId();
     if (!TASK_ID_PATTERN.test(taskId)) throw taskError("MEDIA_IMPORT_FAILED", "本地任务标识无效", "select_media");
-    const paths = await this.#artifactStore.initializeTask(taskId);
-    const now = currentIso(this.#now);
-    const pending: TaskRecord = {
-      id: taskId,
-      sourceUrl: "",
-      sourceKind: "local_video",
-      status: "queued",
-      contentType: "video",
-      analysisStatus: "not_started",
-      createdAt: now,
-      updatedAt: now,
-      issues: [],
-      paths,
-    };
-    await this.#artifactStore.writeJson(paths.task, pending);
     try {
+      // Opening an external picker is not yet a task. Defer the task snapshot
+      // until Android has returned a real private MP4, so cancellation or an
+      // Activity lifecycle interruption cannot leave a visible empty task.
       const selected = await this.#fileMedia.pickVideo({ taskId });
       if (selected.mimeType !== "video/mp4" || !selected.displayName.trim() || selected.sizeBytes <= 0 || selected.durationSeconds <= 0) {
         throw taskError("MEDIA_IMPORT_FAILED", "本地视频导入没有返回有效 MP4", "select_media");
       }
-      await this.#artifactStore.writeJson(`task://${taskId}/${TASK_REQUEST_PATH}`, {
-        kind: "local_video",
-        displayName: selected.displayName.trim(),
-      } satisfies StoredTaskRequest);
+      const paths = await this.#artifactStore.initializeTask(taskId);
+      const now = currentIso(this.#now);
+      const pending: TaskRecord = {
+        id: taskId,
+        sourceUrl: "",
+        sourceKind: "local_video",
+        status: "queued",
+        contentType: "video",
+        analysisStatus: "not_started",
+        createdAt: now,
+        updatedAt: now,
+        issues: [],
+        paths,
+      };
+      await Promise.all([
+        this.#artifactStore.writeJson(paths.task, pending),
+        this.#artifactStore.writeJson(`task://${taskId}/${TASK_REQUEST_PATH}`, {
+          kind: "local_video",
+          displayName: selected.displayName.trim(),
+        } satisfies StoredTaskRequest),
+      ]);
       return toAppTask(pending, [{
         uri: this.#toDisplayUri(selected.uri),
         kind: "video",

@@ -53,6 +53,9 @@ class LocalPreferences(context: Context) {
       visionModel = preferences.getString(AI_VISION_MODEL, null),
       asrModel = preferences.getString(AI_ASR_MODEL, null),
       asrTransport = preferences.getString(AI_ASR_TRANSPORT, null),
+      ttsModel = preferences.getString(AI_TTS_MODEL, null),
+      ttsTransport = preferences.getString(AI_TTS_TRANSPORT, null),
+      ttsVoice = preferences.getString(AI_TTS_VOICE, null),
       jsonObjectEnabled = preferences.getBoolean(AI_JSON_OBJECT_ENABLED, false),
       jsonSchemaEnabled = preferences.getBoolean(AI_JSON_SCHEMA_ENABLED, false),
       probeResultsJson = preferences.getString(AI_PROBE_RESULTS_JSON, "[]") ?: "[]",
@@ -70,6 +73,9 @@ class LocalPreferences(context: Context) {
       .putNullable(AI_VISION_MODEL, connection.visionModel)
       .putNullable(AI_ASR_MODEL, connection.asrModel)
       .putNullable(AI_ASR_TRANSPORT, connection.asrTransport)
+      .putNullable(AI_TTS_MODEL, connection.ttsModel)
+      .putNullable(AI_TTS_TRANSPORT, connection.ttsTransport)
+      .putNullable(AI_TTS_VOICE, connection.ttsVoice)
       .putBoolean(AI_JSON_OBJECT_ENABLED, connection.jsonObjectEnabled)
       .putBoolean(AI_JSON_SCHEMA_ENABLED, connection.jsonSchemaEnabled)
       .putString(AI_PROBE_RESULTS_JSON, connection.probeResultsJson)
@@ -121,6 +127,9 @@ class LocalPreferences(context: Context) {
     private const val AI_VISION_MODEL = "aiConnection.visionModel"
     private const val AI_ASR_MODEL = "aiConnection.asrModel"
     private const val AI_ASR_TRANSPORT = "aiConnection.asrTransport"
+    private const val AI_TTS_MODEL = "aiConnection.ttsModel"
+    private const val AI_TTS_TRANSPORT = "aiConnection.ttsTransport"
+    private const val AI_TTS_VOICE = "aiConnection.ttsVoice"
     private const val AI_JSON_OBJECT_ENABLED = "aiConnection.jsonObjectEnabled"
     private const val AI_JSON_SCHEMA_ENABLED = "aiConnection.jsonSchemaEnabled"
     private const val AI_PROBE_RESULTS_JSON = "aiConnection.probeResultsJson"

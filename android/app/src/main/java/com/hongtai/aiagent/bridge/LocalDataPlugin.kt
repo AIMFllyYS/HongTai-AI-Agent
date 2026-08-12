@@ -104,6 +104,9 @@ class LocalDataPlugin : Plugin() {
     visionModel = getString("visionModel"),
     asrModel = getString("asrModel"),
     asrTransport = getString("asrTransport"),
+    ttsModel = getString("ttsModel"),
+    ttsTransport = getString("ttsTransport"),
+    ttsVoice = getString("ttsVoice"),
     jsonObjectEnabled = getBoolean("jsonObjectEnabled", false) ?: false,
     jsonSchemaEnabled = getBoolean("jsonSchemaEnabled", false) ?: false,
     probeResultsJson = getString("probeResultsJson", "[]") ?: "[]",
@@ -184,7 +187,7 @@ class LocalDataPlugin : Plugin() {
     const val MAX_PROBE_TIMESTAMP_LENGTH = 80
     const val MAX_PROBE_MODEL_LENGTH = 200
     const val MAX_PROBE_MESSAGE_LENGTH = 1_000
-    val PROBE_CAPABILITIES = setOf("text", "vision", "asr")
+    val PROBE_CAPABILITIES = setOf("text", "vision", "asr", "tts")
     val PROBE_STATUSES = setOf("succeeded", "failed")
     val PROBE_ISSUE_ACTIONS = setOf(
       "edit_input", "retry", "wait_and_retry", "check_network", "configure_ai", "free_storage", "select_media", "view_partial_result", "none",

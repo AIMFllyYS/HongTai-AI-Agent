@@ -11,9 +11,18 @@ function invalid(message: string, cause?: unknown): TaskError {
 
 function validateInput(input: ProductionPlanInput): void {
   if (input.targetDurationSeconds < 15 || input.targetDurationSeconds > 60) throw invalid("制作目标时长必须在15到60秒之间");
-  if (input.assets.length < 3 || input.assets.length > 12) throw invalid("制作素材数量必须在3到12个之间");
+  if (input.assets.length === 0 || input.assets.length > 12) throw invalid("制作素材数量必须在1到12个之间");
   if (!input.brief.trim()) throw invalid("制作需求不能为空");
   if (input.analysis.source.taskId !== input.analysisTaskId) throw invalid("正式拆解与制作来源任务不一致");
+  if (input.mode === "montage" && input.assets.length < 3) throw invalid("素材剪辑模式至少需要3个制作素材");
+  if (input.mode === "avatar") {
+    if (!input.avatarScript?.trim()) throw invalid("数字人口播模式需要填写与视频一致的口播稿");
+    const avatars = input.assets.filter((asset) => asset.role === "avatar" && asset.kind === "video");
+    if (avatars.length !== 1) throw invalid("数字人口播模式需要且只能使用一个数字人口播视频");
+    if (avatars[0]?.durationSeconds === undefined || avatars[0].durationSeconds + 0.001 < input.targetDurationSeconds) {
+      throw invalid("数字人口播视频时长不足，请选择更长的视频或缩短目标时长");
+    }
+  }
 }
 
 function validatePlan(result: ProductionPlanResultV1, input: ProductionPlanInput): void {
@@ -27,6 +36,11 @@ function validatePlan(result: ProductionPlanResultV1, input: ProductionPlanInput
   const musicId = result.audio.backgroundMusicAssetId;
   if (musicId !== null && assets.get(musicId)?.kind !== "audio") throw invalid("背景音乐必须引用已导入的音频素材");
   if (musicId === null && result.audio.backgroundMusicVolume !== 0) throw invalid("没有背景音乐时音量必须为0");
+  if (input.mode === "avatar") {
+    const avatarId = input.assets.find((asset) => asset.role === "avatar")?.id;
+    if (!avatarId || result.shots.some((shot) => shot.assetId !== avatarId)) throw invalid("数字人口播计划只能使用上传的数字人视频");
+    if (musicId !== null || result.audio.backgroundMusicVolume !== 0) throw invalid("数字人口播模式保留原视频声音，不能叠加背景音乐");
+  }
 }
 
 export class ProductionPlanningFlow {

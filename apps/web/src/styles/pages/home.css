@@ -269,6 +269,6 @@
 }
 
 .home-empty__action {
-  color: var(--color-text-on-primary);
+  color: var(--color-text-on-secondary);
   background: var(--color-action-secondary);
 }

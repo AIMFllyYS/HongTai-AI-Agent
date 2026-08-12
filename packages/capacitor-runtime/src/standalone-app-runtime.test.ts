@@ -52,6 +52,63 @@ test("standalone runtime exposes local profile and write-only AI settings withou
   assert.equal(runtime.features.ingest, "available");
 });
 
+test("cloud TTS remains in the AI connection and probes through the native renderer", async () => {
+  let connection: StandaloneAiConnection | undefined;
+  let secret = "";
+  let ttsProbeCalls = 0;
+  const runtime = await createStandaloneAppRuntime({
+    plugins: {
+      secureSettings: {
+        writeSecret: async ({ value }) => { secret = value; },
+        hasSecret: async () => ({ exists: Boolean(secret) }),
+        removeSecret: async () => { secret = ""; },
+      },
+      localData: {
+        getProfile: async () => ({}),
+        saveProfile: async () => undefined,
+        getAiConnection: async () => ({ ...(connection ? { connection } : {}) }),
+        saveAiConnection: async (value) => { connection = value; },
+        compareAndSetAiProbeResults: async (value) => {
+          if (connection) connection = { ...connection, probeResultsJson: value.probeResultsJson, updatedAtEpochMs: value.updatedAtEpochMs };
+          return { applied: true };
+        },
+      },
+      localFiles: {} as never,
+      nativeNetwork: {} as never,
+      fileMedia: {} as never,
+      mediaRuntime: {} as never,
+      productionRuntime: {
+        pickAssets: async () => ({ assets: [] }),
+        render: async () => ({ uri: "file:///private/output.mp4", mimeType: "video/mp4", sizeBytes: 1, durationSeconds: 1 }),
+        probeTts: async () => { ttsProbeCalls += 1; },
+      },
+    },
+    convertFileSrc: (uri) => `capacitor://localhost/${uri.slice("file:///".length)}`,
+    now: () => new Date("2026-08-11T00:00:00.000Z"),
+  });
+
+  await runtime.aiSettings.save({
+    baseUrl: "https://api.xiaomimimo.com/v1",
+    textModel: "mimo-v2.5",
+    visionModel: "mimo-v2.5",
+    asrModel: "mimo-v2.5-asr",
+    asrTransport: "chat-input-audio",
+    ttsModel: "mimo-v2.5-tts",
+    ttsTransport: "mimo-chat-audio",
+    ttsVoice: "冰糖",
+    supportsJsonObject: true,
+    supportsJsonSchema: true,
+  });
+  await runtime.aiSettings.replaceApiKey("write-only-key");
+  const result = await runtime.aiSettings.probe("tts");
+
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.model, "mimo-v2.5-tts");
+  assert.equal(ttsProbeCalls, 1);
+  assert.equal(connection?.ttsTransport, "mimo-chat-audio");
+  assert.equal(JSON.stringify(connection).includes("write-only-key"), false);
+});
+
 test("profile saves the private avatar URI once and returns a display URI to the page", async () => {
   let profile: StandaloneLocalProfile | undefined;
   let copyCalls = 0;

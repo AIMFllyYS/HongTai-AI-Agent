@@ -18,6 +18,12 @@ if (!root) {
   throw new Error("缺少应用根节点");
 }
 
+// Android WebView does not consistently expose safe-area env values even
+// while target-SDK edge-to-edge is enforced.  The shell uses this narrowly
+// scoped baseline only for its fixed header; devices that expose a larger
+// inset still win through CSS max().
+document.documentElement.dataset.platform = Capacitor.getPlatform();
+
 let runtimePromise: Promise<AppRuntime> | undefined;
 
 function initializeRuntime(): Promise<AppRuntime> {

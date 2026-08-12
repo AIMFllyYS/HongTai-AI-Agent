@@ -4,9 +4,12 @@
 	"webDir": "apps/web/dist",
 	"loggingBehavior": "none",
 	"server": {
-		"androidScheme": "https"
+		"androidScheme": "https",
+		"errorPath": "unsupported-webview.html"
 	},
 	"android": {
+		"minWebViewVersion": 89,
+		"minHuaweiWebViewVersion": 10,
 		"includePlugins": []
 	}
 }

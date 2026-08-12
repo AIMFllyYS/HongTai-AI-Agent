@@ -21,6 +21,9 @@ data class LocalAiConnection(
   val visionModel: String?,
   val asrModel: String?,
   val asrTransport: String?,
+  val ttsModel: String?,
+  val ttsTransport: String?,
+  val ttsVoice: String?,
   val jsonObjectEnabled: Boolean,
   val jsonSchemaEnabled: Boolean,
   /** Per-capability public probe outcome JSON. Never contains the API key. */

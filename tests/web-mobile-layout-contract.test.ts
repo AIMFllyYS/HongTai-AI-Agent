@@ -10,12 +10,18 @@ test("mobile controls stay readable between 360 and 430 pixels", () => {
   const components = read("styles/components.css");
   const responsive = read("styles/responsive.css");
   const library = read("styles/pages/library.css");
+  const tokens = read("styles/tokens.css");
+  const home = read("styles/pages/home.css");
+  const vitality = read("styles/pages/vitality.css");
 
   assert.match(components, /\.button\s*\{[^}]*white-space:\s*nowrap/s);
   assert.match(components, /\.technical-value[^}]*overflow-wrap:\s*anywhere/s);
   assert.match(responsive, /@media\s*\(max-width:\s*26\.875rem\)/);
   assert.match(responsive, /\.mobile-action-group\s*\{[^}]*grid-template-columns:\s*1fr/s);
   assert.match(library, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.template-editor__actions[^}]*grid-template-columns:\s*1fr/);
+  assert.match(tokens, /--color-text-on-secondary:\s*var\(--palette-text\)/);
+  assert.match(home, /\.home-empty__action\s*\{[^}]*color:\s*var\(--color-text-on-secondary\)/s);
+  assert.match(vitality, /\.scan-actions \.button--primary\s*\{[^}]*color:\s*var\(--color-text-on-secondary\)/s);
 });
 
 test("approved gesture shell and compact navigation remain mounted", () => {
@@ -40,16 +46,13 @@ test("approved gesture shell and compact navigation remain mounted", () => {
   assert.match(read("styles/components.css"), /\.bottom-nav/);
 });
 
-test("Android WebView owns edge feedback while system bars stay inset-aware", () => {
+test("Android WebView has one safe-area owner and never double-pads the page", () => {
   const mainActivity = readFileSync(join(process.cwd(), "android", "app", "src", "main", "java", "com", "hongtai", "aiagent", "MainActivity.kt"), "utf8");
 
   assert.match(mainActivity, /WindowCompat\.enableEdgeToEdge\(window\)/);
-  assert.match(mainActivity, /val contentView = findViewById<View>\(android\.R\.id\.content\)/);
-  assert.match(mainActivity, /contentView\.setBackgroundColor\(Color\.rgb\(248, 250, 247\)\)/);
-  assert.match(mainActivity, /ViewCompat\.setOnApplyWindowInsetsListener\(contentView\)/);
-  assert.match(mainActivity, /WindowInsetsCompat\.Type\.systemBars\(\) or WindowInsetsCompat\.Type\.displayCutout\(\)/);
-  assert.match(mainActivity, /view\.setPadding\(safeInsets\.left, safeInsets\.top, safeInsets\.right, safeInsets\.bottom\)/);
-  assert.match(mainActivity, /ViewCompat\.requestApplyInsets\(contentView\)/);
+  assert.match(mainActivity, /window\.statusBarColor\s*=\s*Color\.TRANSPARENT/);
+  assert.match(mainActivity, /Web document[\s\S]*owns its safe-area spacing/);
+  assert.doesNotMatch(mainActivity, /setOnApplyWindowInsetsListener|setPadding\(safeInsets|requestApplyInsets/);
   assert.match(mainActivity, /bridge\.webView\.overScrollMode\s*=\s*View\.OVER_SCROLL_ALWAYS/);
   assert.match(mainActivity, /isAppearanceLightStatusBars\s*=\s*true/);
   assert.match(mainActivity, /isAppearanceLightNavigationBars\s*=\s*true/);
