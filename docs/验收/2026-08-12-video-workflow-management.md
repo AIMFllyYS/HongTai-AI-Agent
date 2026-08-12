@@ -1,122 +1,164 @@
-# 本地视频拆解、制作删除与模板管理验收
+# v0.1.4 本地视频拆解、制作删除与模板管理验收
 
 > 日期：2026-08-12
+>
 > 分支：`feat/video-workflow-management`
-> 范围：本地 MP4 自动拆解、终态任务删除、制作素材/成片/项目删除、模板自定义与删除、五项底部导航迁移。
-> 结论：共享逻辑、Android I/O、运行时、Web 交互和 Debug APK 构建均已通过自动化与浏览器端测；本机 ADB 无设备，因此未执行 Android 模拟器或物理真机的系统选择器、Media3 和重启持久化 E2E。
+>
+> 产品源码提交：`874220f`
+>
+> 范围：版本谱系恢复、本地 MP4 自动拆解、终态任务删除、制作素材/成片/项目删除、模板自定义与删除、五项底部导航迁移。
+>
+> 结论：`v0.1.4` / `versionCode=11` Debug 候选已通过自动化、真实 Chromium、API 35 x86_64 模拟器无降级升级、Android 系统选择器取消/有效 MP4 导入和任务删除端测；没有物理 Android 设备、有效 AI Key 或正式 release 签名，因此不声称物理真机、完整 AI 拆解、Media3 真机合成或正式发布通过。
 
 本文是日期证据，不是当前能力或正式发布状态的权威来源；当前事实以[当前能力与发布状态](../当前能力与发布状态.md)为准。
 
-## 任务契约
+## 第一性原理与任务契约
 
-### 用户结果
+本轮管理能力解决的不是“多放几个删除按钮”，而是本地优先应用最基本的三个闭环：
 
-- 拆解首页既接受公开分享文本，也允许用户选择一个本地 MP4；本地视频复用同一七阶段、ASR 证据、正式文稿和 `content-analysis.v1`，不伪装成公网平台。
-- 用户可以在任务详情删除终态任务及私有视频，在制作页删除单份素材、成片或整个项目；所有动作都有具名二次确认并作用于原生私有文件。
-- 正式拆解中的 `reusableTemplate` 可保存为独立模板；用户也可新建、编辑和删除自己的模板。
-- 底部五项稳定为 `AI / 拆解 / 制作 / 模板 / 设置`；原 `/assets` 只作为 `/templates` 的兼容别名。
+1. 用户把大体积私有媒体交给应用后，必须能撤回并确认物理文件确实删除，不能只隐藏列表记录；
+2. “AI 拆解”应接受用户真正拥有的视频，并复用唯一的采集、ASR、证据与 Schema 流程，不能复制第二套伪流程；
+3. 可复用知识应从一次性任务中独立出来，允许用户自定义、修改和删除，同时不复制原视频、私有路径或供应商 reasoning。
 
-### 明确边界
+由此确定以下边界：
 
-- 不实现时间线剪辑、撤销/重做、通用素材库、模板市场、云同步或发布。
-- 运行中的任务、规划中的项目和渲染中的项目拒绝删除；删除失败不能伪造成功。
-- 模板不保存原视频、私有路径、供应商响应或 reasoning；删除来源任务不级联删除已保存模板。
-- 本轮没有 Android 设备，因此不把浏览器 harness、JVM 测试或 APK 构建写成真机通过。
+- `taskId`、`projectId`、`templateId` 各自只有一个状态权威；运行中的任务或制作项目拒绝删除；
+- 删除必须进入受控 Android 私有根并由稳定 DTO 驱动，页面不接触文件系统路径；
+- 外部系统选择器尚未返回有效 MP4 时不创建任务快照，取消或 Activity 生命周期竞态不能留下空任务；
+- 模板与来源任务解耦，删除来源任务不级联删除已保存模板；
+- 不扩写为时间线剪辑、撤销/重做、通用素材库、模板市场、云同步或平台发布。
+
+## 版本谱系与 D 盘迁移结论
+
+问题不是 D 盘 Android SDK 或项目目录本身损坏，而是分支谱系分离：D 盘 `main` 与最初的功能分支仍停在历史 `0.0.1/code3`，真实 `0.1.3/code10` 位于尚未合回 `main` 的 `fix/issue05-issue07` 分支。若继续直接开发，会把新功能建立在低版本父提交上，并产生版本回退。
+
+处理结果：
+
+- 将 `fix/issue05-issue07` 的真实 `0.1.3/code10` 应用能力合入当前功能分支，保留双方实现并解决冲突；
+- Android 源码候选递增为 `versionName=0.1.4`、`versionCode=11`；
+- 根目录新增 [`CHANGELOG.md`](../../CHANGELOG.md)，默认只增加第三位补丁版本，前两位仅在产品负责人明确授权时变化；
+- `download.html` 仍保留已公开的 `0.1.3` 及历史 SHA-256，未把尚未正式发布的 `0.1.4` 伪装成公开下载版本；
+- D 盘 SDK 通过工作树内忽略的 `android/local.properties` 指向 `D:\Android\SdkMain`；构建使用 Android Studio 的 JDK 21。SDK 已在 D 盘，JDK 仍来自 `C:\Program Files\Android\Android Studio\jbr`，不宣称全部工具已迁到 D 盘。
 
 ## 实现与状态权威
 
 | 能力 | 权威 ID / 状态 | 实现事实 |
 | --- | --- | --- |
-| 本地视频拆解 | `taskId`、七个 `TaskStage`、独立 `analysisStatus` | `AnalysisService.importVideo()` 组合系统选择、私有复制、唯一 `IngestPipeline` 和既有 `ContentAnalysisFlow` |
+| 本地视频拆解 | `taskId`、七个 `TaskStage`、独立 `analysisStatus` | `AnalysisService.importVideo()` 组合系统选择、私有复制、唯一 `IngestPipeline` 和既有 `ContentAnalysisFlow`；选择前不创建任务 |
 | 任务删除 | `taskId` | 仅终态可删；删除 `tasks/<taskId>/`，模板与制作项目不级联 |
 | 制作删除 | `projectId` | 同 ID single-flight；素材删除清计划/成片，成片删除保留计划，项目删除受控根 |
 | 模板管理 | `templateId` | 有界 JSON 原子写入 `templates/<templateId>/template.json`；支持导入、新建、编辑、删除 |
-| 页面迁移 | canonical route | `/templates` 为真实模板页，`/assets` 为无状态兼容别名 |
+| 页面迁移 | canonical route | 底部为 `AI / 拆解 / 制作 / 模板 / 设置`；`/templates` 为真实模板页，`/assets` 为无状态兼容别名 |
 
-阶段提交：
+此前独立功能阶段提交：
 
 - `84c5f1a`：本地视频来源、七阶段与正式拆解契约；
 - `854ea36`：Android 私有 MP4 导入和受控删除端口；
 - `a927e92`：任务、拆解、制作与模板运行时服务；
-- `b782a09`：五项导航、上传入口、删除确认与模板页面。
+- `b782a09`：五项导航、上传入口、删除确认与模板页面；
+- `874220f`：恢复 `0.1.3` 父版本、递增 `0.1.4/code11`、增加更新日志、修复选择器取消事务边界并完成冲突集成。
 
-## 自动化验证
+## 自动化与构建验证
 
 ### TypeScript 与 Web
-
-在 `b782a09` 后运行：
 
 ```text
 pnpm check
 pnpm --filter @hongtai/web build
 ```
 
-结果：类型检查、ESLint 和 193 个根测试全部通过；Vite 转换 612 个模块并成功产出。仍有单个 JS chunk 大于 500 kB 的非阻断提示，本轮未以无关拆包扩大范围。
-
-定向覆盖包括：
-
-- 本地视频严格保留七阶段、跳过平台 adapter/下载器、生成真实 ASR 证据并使用 `local_upload`；
-- MP4 scheme、MIME、250 MB 上限、`ftyp`、视频轨与正时长；受控 task/production/template 路径；
-- 任务终态删除、项目 single-flight、素材/成片/项目删除状态转换；
-- 模板从正式拆解复制、自定义、持久化重载、字段边界和删除；
-- 五项导航、`/assets` 别名、真实 AppRuntime 边界、具名删除确认和 390px 布局。
+- TypeScript、ESLint 和根测试 `236/236` 通过；
+- 其中 `@hongtai/capacitor-runtime` 定向测试 `42/42` 通过；新增回归测试会在选择器打开时断言任务列表仍为空；
+- Vite 转换 617 个模块并成功产出；JS chunk 大于 500 kB 是非阻断提示，本轮没有用无关拆包扩大范围；
+- Capacitor 同步完成，源码/文档/资源 U+FFFD 扫描为 0。
 
 ### Android
 
-执行：
-
 ```text
-android/gradlew.bat testDebugUnitTest lintDebug assembleDebug
+android/gradlew.bat :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest
 ```
 
-结果：`BUILD SUCCESSFUL`，137 个 Gradle task（87 executed、50 up-to-date）；Android JVM 55/55 通过。应用 lint 为 0 errors / 23 warnings；Capacitor 依赖的既有 baseline 另提示 6 条已不再出现的记录。Debug APK 构建成功。
+- `BUILD SUCCESSFUL`，129 个 app 相关 task（15 executed、114 up-to-date）；
+- Android JVM：17 个 suite、70/70 通过，0 failure/error/skipped；
+- 应用 lint：0 errors / 23 warnings；
+- Debug APK 与 androidTest APK 均构建成功；四个 ABI 均包含 `libde265.so`、`libheif.so` 和 `libhongtai_heif.so`，共 12 个 `.so`；
+- 原生 HEIF 源锁验证为 libheif `2c4bbb54...`、libde265 `4dd701ff...`。
 
-## 浏览器交互端测
+## Chromium 页面端测
 
-使用真实 Chromium、正式 React 页面和 CSS，并注入只在端测进程中存在的受控 `AppRuntime`。该 harness 已在测试后删除，没有进入产品源代码；它验证页面契约和用户交互，不代表 Android 文件选择器或 Media3 真机 E2E。
+使用真实 Chromium、正式 React 页面与 CSS，并注入仅存在于端测进程的受控 `AppRuntime`；harness 测后已删除，没有进入产品源代码。
 
-实测闭环：
+实测通过：
 
-1. 1280×900 打开拆解首页，五个底部入口均存在；
-2. 点击“上传本地视频并自动拆解”，进入共用拆解结果并显示“本地上传 · 仅使用已保存文稿证据”；
-3. 进入模板页，新建并填写名称、摘要、公式、步骤和变量，保存后从列表删除；
-4. 切换 390×844，确认模板页无横向溢出、导航与操作可读；
-5. 进入制作页，依次确认并删除成片、单份素材和整个项目；
-6. 最终输出 `console_errors=0`、`page_errors=0`。
+1. 1280×900 页面存在 `AI / 拆解 / 制作 / 模板 / 设置` 五项导航；
+2. 本地视频入口只调用一次复用的 `analysis.importVideo()` 并进入拆解视图；
+3. 模板新建、编辑、保存、列表恢复与二次确认删除；
+4. 制作页依次二次确认删除成片、素材和整个项目；
+5. 390px 移动端无横向溢出；
+6. `console_errors=0`、`page_errors=0`。
 
-截图保存在未跟踪的本地验收目录：
+对应截图保存在未跟踪的本地验收目录：
 
-- [`desktop-task-home.png`](../../output/acceptance/video-workflow/desktop-task-home.png)
-- [`mobile-templates-390.png`](../../output/acceptance/video-workflow/mobile-templates-390.png)
-- [`mobile-production-delete-confirm.png`](../../output/acceptance/video-workflow/mobile-production-delete-confirm.png)
+- [`desktop-task-home-v0.1.4.png`](../../output/acceptance/video-workflow/desktop-task-home-v0.1.4.png)
+- [`mobile-templates-390-v0.1.4.png`](../../output/acceptance/video-workflow/mobile-templates-390-v0.1.4.png)
+- [`mobile-production-delete-confirm-v0.1.4.png`](../../output/acceptance/video-workflow/mobile-production-delete-confirm-v0.1.4.png)
 
-全页截图中的 fixed bottom nav 会出现在页面中段，这是 Chromium 全页截图对 fixed 元素的表现；真实点击采用正常滚动与非强制点击，完整闭环通过。
+## Android 模拟器端测
+
+环境：`SciChatApi35` x86_64 AVD、Google Android WebView `124.0.6367.219`。这是模拟器证据，不是物理真机证据。
+
+### 无降级升级
+
+1. 安装历史 `v0.1.3/code10` Debug APK；
+2. 使用 `adb install --no-streaming -r` 安装本轮 `v0.1.4/code11`，没有卸载、没有 `-d`；
+3. 两次安装均 `Success`，`firstInstallTime` 保持不变，包名和 Debug 证书一致。
+
+### 系统选择器取消
+
+- 首页真实渲染后点击“上传本地视频并自动拆解”，前台 Activity 为 Android `DocumentsUI PickActivity`；
+- 打开前任务数 `0`，选择器打开期间任务数 `0`，返回键取消并恢复 `MainActivity` 后任务数仍为 `0`；
+- Logcat Fatal 为 0；页面“取消选择不会留下空任务”与实际行为一致。
+
+### 有效 MP4 导入与删除
+
+- 端测生成 3 秒、32,314 字节的 H.264/AAC MP4，SHA-256 为 `2d7717d6fd51af2d9d5a1cf43046034275379f7c7d71af0e335b09878e15e0b4`；
+- 通过系统 Downloads 选择后，应用私有任务目录真实保存 `media/video.mp4`、`media/audio.wav`、`events.jsonl`、`metadata.json`、`request.json` 和 `task.json`；
+- 模拟器没有写入 AI Key，ASR 阶段如实进入 `AI_NOT_CONFIGURED`，任务状态为 failed、`analysisStatus=not_started`，没有伪造文稿或拆解结果；
+- 任务详情显示真实 3 秒视频和稳定错误；经页面“删除任务 → 确认删除任务”，私有任务目录从 1 回到 0；
+- 端测样本已从模拟器 Downloads/MediaStore 删除。
+
+截图：
+
+- [`emulator-home-v0.1.4.png`](../../output/acceptance/video-workflow/emulator-home-v0.1.4.png)
+- [`emulator-video-picker-v0.1.4.png`](../../output/acceptance/video-workflow/emulator-video-picker-v0.1.4.png)
+- [`emulator-local-task-history-v0.1.4.png`](../../output/acceptance/video-workflow/emulator-local-task-history-v0.1.4.png)
+- [`emulator-local-task-detail-v0.1.4.png`](../../output/acceptance/video-workflow/emulator-local-task-detail-v0.1.4.png)
+
+冷启动首次截图过早时只出现系统栏；继续等待后正式页面完成绘制，日志无 JavaScript 异常。该模拟器首次冷绘制约需十几秒，属于本轮观察到的性能边界，不把 Activity 已启动等同于首屏已经可交互。
 
 ## APK 身份
 
-APK 由产品源码提交 `b782a0930ca5e818780c31ee7c9163239bf77c98` 构建；随后仅追加本文和活文档，不改变 APK 字节。
+APK 由产品源码提交 `874220f` 构建；此后仅更新本验收文档和活状态文档，不改变 APK 字节。
 
 | 字段 | 值 |
 | --- | --- |
 | 绝对路径 | `D:\projects\Dev-Tools\HongTai-AI-Agent\.worktrees\video-workflow-management\android\app\build\outputs\apk\debug\app-debug.apk` |
 | 包名 | `com.hongtai.aiagent` |
-| versionCode / versionName | `3` / `0.0.1` |
-| minSdk / targetSdk | `24` / `36` |
-| 字节数 | `7,756,749` |
-| SHA-256 | `f6be00928c3102d9844178ca5f13ce6ef37226bca1604578414b4878594e644c` |
-| 签名 | Android Debug；证书 SHA-256 `b9d31f9089bf70b5fb487200021a3a35f1001e9b32c8dddf7aa0d8c0bdc66bd8` |
+| versionCode / versionName | `11` / `0.1.4` |
+| minSdk / targetSdk / compileSdk | `24` / `36` / `36` |
+| 字节数 | `39,330,485` |
+| SHA-256 | `1e90709a622a804b81ef7e80ccd462f77bf5d66681a18d331b95077e841d43a9` |
+| ABI | `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` |
+| 签名 | Android Debug；APK Signature Scheme v2；证书 SHA-256 `b9d31f9089bf70b5fb487200021a3a35f1001e9b32c8dddf7aa0d8c0bdc66bd8` |
+| androidTest APK | 583,423 字节；SHA-256 `bd8c5d9f93dcc077f6be5702c87671145c985b06f035c9ad56fa7f3df65d3008` |
 
-该 APK 仅用于 Debug/QA，不是团队 release 签名产物。
+该 APK 仅用于 Debug/QA，不是团队 release 签名产物；`download.html` 仍应保持公开推荐版本 `0.1.3`，直到 `0.1.4` 完成正式签名、物理真机门禁并被实际发布。
 
-## Android 端测缺口
+## 尚未验证的正式发布边界
 
-执行 `adb devices -l` 后输出只有 `List of devices attached`，没有序列号。因而本轮没有安装 APK，也没有在 Android 上实际选择 MP4、调用 ASR/AI、删除私有文件、执行 Media3 合成或重启检查持久化。
+- 没有物理 Android 设备，未验证 OEM 系统选择器、ARM 媒体栈、相册权限差异或正常升级；
+- 没有写入真实 AI Key，未在 Android 端完成云端 ASR 与 `content-analysis.v1` 成功结果；
+- 没有在物理机验证 Media3 合成、云端/系统 TTS、编码器兼容和制作删除重启闭环；
+- 没有使用团队 release 私钥构建本轮 APK，也没有更新公开下载页。
 
-后续设备验收必须使用上述同一 SHA-256 或重新记录新 APK 身份，并至少覆盖：
-
-1. 选择有效 MP4、取消选择、非 MP4、超限文件和无视频轨文件；
-2. 本地视频七阶段、真实 ASR 证据、自动拆解与无口播空结果；
-3. 模板保存/编辑/删除以及删除来源任务后模板仍存在；
-4. 删除素材后计划/成片失效、删除成片后计划保留、删除项目后重启不再出现；
-5. 规划/渲染中删除被拒绝，外部 Activity 或进程中断进入可解释终态；
-6. 物理机记录型号、Android 版本、WebView 版本、剩余存储、APK 哈希和每个实际结果。
+这些边界不会被浏览器 harness、模拟器、JVM 测试或 Debug 签名替代。
