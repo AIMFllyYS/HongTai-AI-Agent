@@ -78,10 +78,32 @@ export const diagnosisFollowUpQuestionsSchema = z.object({
   followUpQuestions: z.array(z.string()),
 });
 
+export const diagnosisSingleResponseFieldSchemas = {
+  quality: z.enum(["good", "limited", "unusable"]),
+  observation: z.string().trim().max(2000),
+  summary: z.string().trim().max(2000),
+  advice: z.string().trim().max(2000),
+  safety: z.string().trim().min(1).max(2000),
+  followUp: z.string().trim().max(500),
+} as const;
+
+export const diagnosisSingleResponseSchema = z.object(diagnosisSingleResponseFieldSchemas).strict().superRefine((value, context) => {
+  if (value.quality === "unusable" && value.observation) {
+    context.addIssue({ code: "custom", path: ["observation"], message: "图片不可用时不能输出可见观察" });
+  }
+  if (value.quality === "unusable" && value.advice) {
+    context.addIssue({ code: "custom", path: ["advice"], message: "图片不可用时不能输出无依据建议" });
+  }
+});
+
 const diagnosisReportBaseSchema = z.object({
   schemaVersion: z.literal("diagnosis-report.v1"),
   mode: observationModeSchema,
-  promptVersion: z.union([z.literal("diagnosis-initial.v1"), z.literal("diagnosis-modular.v1")]),
+  promptVersion: z.union([
+    z.literal("diagnosis-initial.v1"),
+    z.literal("diagnosis-modular.v1"),
+    z.literal("diagnosis-single-stream.v1"),
+  ]),
   imageQuality: diagnosisVisualObservationsSchema.shape.imageQuality,
   observations: diagnosisVisualObservationsSchema.shape.observations,
   ...diagnosisObservationSummarySchema.shape,
@@ -117,6 +139,7 @@ export type DiagnosisObservationSummary = z.infer<typeof diagnosisObservationSum
 export type DiagnosisWellnessRecommendations = z.infer<typeof diagnosisWellnessRecommendationsSchema>;
 export type DiagnosisSafetyLimitations = z.infer<typeof diagnosisSafetyLimitationsSchema>;
 export type DiagnosisFollowUpQuestions = z.infer<typeof diagnosisFollowUpQuestionsSchema>;
+export type DiagnosisSingleResponse = z.infer<typeof diagnosisSingleResponseSchema>;
 export type DiagnosisReportV1 = z.infer<typeof diagnosisReportSchema>;
 
 export const diagnosisVisualObservationsJsonSchema = toProviderJsonSchema(diagnosisVisualObservationsSchema);
@@ -124,4 +147,5 @@ export const diagnosisObservationSummaryJsonSchema = toProviderJsonSchema(diagno
 export const diagnosisWellnessRecommendationsJsonSchema = toProviderJsonSchema(diagnosisWellnessRecommendationsSchema);
 export const diagnosisSafetyLimitationsJsonSchema = toProviderJsonSchema(diagnosisSafetyLimitationsSchema);
 export const diagnosisFollowUpQuestionsJsonSchema = toProviderJsonSchema(diagnosisFollowUpQuestionsSchema);
+export const diagnosisSingleResponseJsonSchema = toProviderJsonSchema(diagnosisSingleResponseSchema);
 export const diagnosisReportJsonSchema = toProviderJsonSchema(diagnosisReportSchema);

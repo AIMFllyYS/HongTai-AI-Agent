@@ -63,6 +63,16 @@ export const contentAnalysisRisksBoundariesSchema = z.object({
   })),
 });
 
+export const contentAnalysisSingleResponseFieldSchemas = {
+  overview: contentAnalysisOverviewSchema.shape.overview,
+  hookDrivers: contentAnalysisHookDriversSchema,
+  structureClaims: contentAnalysisStructureClaimsSchema,
+  styleTemplate: contentAnalysisStyleTemplateSchema,
+  risksBoundaries: contentAnalysisRisksBoundariesSchema,
+} as const;
+
+export const contentAnalysisSingleResponseSchema = z.object(contentAnalysisSingleResponseFieldSchemas).strict();
+
 export const contentAnalysisSourceSchema = z.object({
   taskId: z.string().min(1),
   platform: z.enum(["douyin", "xiaohongshu", "bilibili", "kuaishou", "local_upload"]),
@@ -85,6 +95,7 @@ export type ContentAnalysisHookDrivers = z.infer<typeof contentAnalysisHookDrive
 export type ContentAnalysisStructureClaims = z.infer<typeof contentAnalysisStructureClaimsSchema>;
 export type ContentAnalysisStyleTemplate = z.infer<typeof contentAnalysisStyleTemplateSchema>;
 export type ContentAnalysisRisksBoundaries = z.infer<typeof contentAnalysisRisksBoundariesSchema>;
+export type ContentAnalysisSingleResponse = z.infer<typeof contentAnalysisSingleResponseSchema>;
 export type ContentAnalysisResultV1 = z.infer<typeof contentAnalysisResultSchema>;
 
 export const contentAnalysisOverviewJsonSchema = toProviderJsonSchema(contentAnalysisOverviewSchema);
@@ -92,4 +103,5 @@ export const contentAnalysisHookDriversJsonSchema = toProviderJsonSchema(content
 export const contentAnalysisStructureClaimsJsonSchema = toProviderJsonSchema(contentAnalysisStructureClaimsSchema);
 export const contentAnalysisStyleTemplateJsonSchema = toProviderJsonSchema(contentAnalysisStyleTemplateSchema);
 export const contentAnalysisRisksBoundariesJsonSchema = toProviderJsonSchema(contentAnalysisRisksBoundariesSchema);
+export const contentAnalysisSingleResponseJsonSchema = toProviderJsonSchema(contentAnalysisSingleResponseSchema);
 export const contentAnalysisResultJsonSchema = toProviderJsonSchema(contentAnalysisResultSchema);

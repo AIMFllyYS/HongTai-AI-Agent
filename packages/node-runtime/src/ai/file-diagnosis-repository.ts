@@ -2,7 +2,6 @@ import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AiMessage, AiRunRecord, DiagnosisImageInput, DiagnosisReportV1, DiagnosisRepository, DiagnosisSession, ObservationMode } from "@hongtai/ai";
 import { TaskError } from "@hongtai/core";
-import { sanitizeAiArtifactText } from "./sanitize-ai-artifact";
 
 const SOURCE_IMAGE_PATH = join("source", "normalized-image.jpg");
 
@@ -124,12 +123,10 @@ export class FileDiagnosisRepository implements DiagnosisRepository {
   async saveRun(sessionId: string, run: AiRunRecord): Promise<void> {
     const root = join(this.#sessionRoot(sessionId), "runs", run.id);
     await mkdir(root, { recursive: true });
-    const rawResponse = sanitizeAiArtifactText(run.rawResponse);
-    const reasoning = sanitizeAiArtifactText(run.reasoning);
-    await writeFile(join(root, "raw-response.json"), `${JSON.stringify({ content: rawResponse }, null, 2)}\n`, "utf8");
-    const reasoningLines = reasoning.split(/\r?\n/).filter(Boolean)
-      .map((content) => JSON.stringify({ type: "reasoning", content })).join("\n");
-    await writeFile(join(root, "reasoning.jsonl"), reasoningLines ? `${reasoningLines}\n` : "", "utf8");
+    // Keep the legacy artifact paths readable, but never persist provider raw
+    // output or reasoning. Live thinking is an in-memory presentation stream.
+    await writeFile(join(root, "raw-response.json"), `${JSON.stringify({ content: "" }, null, 2)}\n`, "utf8");
+    await writeFile(join(root, "reasoning.jsonl"), "", "utf8");
     const metadata = {
       id: run.id,
       kind: run.kind,

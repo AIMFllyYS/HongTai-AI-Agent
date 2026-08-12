@@ -1,4 +1,4 @@
-import { OpenAiCompatibleProvider } from "@hongtai/ai";
+import { OpenAiCompatibleProvider, reasoningDialectForBaseUrl } from "@hongtai/ai";
 import { issueFromAppError, issueFromError, TaskError } from "@hongtai/core";
 import type {
   AiAsrTransport,
@@ -218,7 +218,7 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
       supportsJsonSchema: connection.supportsJsonSchema,
       asrTransport: connection.asrTransport,
       contextWindowTokens: 32_000,
-      reasoningMode: "provider-default",
+      reasoningDialect: reasoningDialectForBaseUrl(connection.baseUrl),
     });
   };
   const narrationMode = async (): Promise<"system" | "provider"> => {

@@ -1,5 +1,6 @@
 export type AiModelRole = "text" | "vision";
 export type AiMessageRole = "system" | "user" | "assistant";
+export type AiReasoningDialect = "xiaomi-mimo" | "stepfun" | "generic";
 
 export type AiMessageContent = string | readonly (
   | { readonly type: "text"; readonly text: string }
@@ -27,6 +28,7 @@ export interface AiGenerateRequest {
     readonly schema: Readonly<Record<string, unknown>>;
     readonly strict?: boolean;
   };
+  readonly maxOutputTokens?: number;
   readonly onEvent?: (event: AiStreamEvent) => void | Promise<void>;
 }
 
@@ -125,7 +127,7 @@ export interface OpenAiCompatibleProviderConfig {
   readonly supportsJsonSchema?: boolean;
   readonly asrTransport: "audio-transcriptions" | "chat-input-audio" | "stepaudio-sse";
   readonly contextWindowTokens: number;
-  readonly reasoningMode: "provider-default";
+  readonly reasoningDialect: AiReasoningDialect;
   readonly retryDelaysMs?: readonly number[];
   readonly timeoutMs?: number;
 }

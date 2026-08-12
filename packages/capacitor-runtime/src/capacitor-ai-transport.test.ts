@@ -178,7 +178,7 @@ test("shared OpenAI-compatible provider carries a native private image URI throu
     supportsJsonObject: false,
     asrTransport: "audio-transcriptions",
     contextWindowTokens: 32_000,
-    reasoningMode: "provider-default",
+    reasoningDialect: "generic",
     retryDelaysMs: [0],
   });
 

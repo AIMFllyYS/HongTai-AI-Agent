@@ -62,7 +62,6 @@ export function readNodeRuntimeConfig(): NodeRuntimeConfig {
           supportsJsonSchema: process.env.HONGTAI_AI_JSON_SCHEMA?.trim().toLowerCase() === "true",
           asrTransport: process.env.HONGTAI_AI_ASR_TRANSPORT?.trim() === "chat-input-audio" ? "chat-input-audio" : "audio-transcriptions",
           contextWindowTokens: Number.isFinite(contextWindow) && contextWindow > 0 ? contextWindow : 32_000,
-          reasoningMode: "provider-default",
         }
       : undefined,
   };

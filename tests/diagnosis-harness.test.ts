@@ -26,15 +26,15 @@ class HarnessProvider implements AiProvider {
 
   async generate(request: AiGenerateRequest) {
     this.calls += 1;
-    const moduleBySchema: Readonly<Record<string, unknown>> = {
-      diagnosis_visual_observations_v1: { imageQuality: report.imageQuality, observations: report.observations },
-      diagnosis_observation_summary_v1: { summary: report.summary },
-      diagnosis_wellness_recommendations_v1: { wellnessReferences: report.wellnessReferences, recommendations: report.recommendations },
-      diagnosis_safety_limitations_v1: { safetyGuidance: report.safetyGuidance, limitations: report.limitations, disclaimer: report.disclaimer },
-      diagnosis_follow_up_questions_v1: { followUpQuestions: report.followUpQuestions },
-    };
     const content = request.output === "json"
-      ? JSON.stringify(moduleBySchema[request.jsonSchema?.name ?? ""])
+      ? JSON.stringify({
+          quality: "good",
+          observation: "图片中的舌部区域清晰可见。",
+          summary: report.summary.narrative,
+          advice: "保持相近光线继续记录。",
+          safety: report.safetyGuidance.recommendedAction,
+          followUp: report.followUpQuestions[0],
+        })
       : "对话回复";
     await request.onEvent?.({ type: "reasoning_delta", delta: "测试reasoning" });
     await request.onEvent?.({ type: "content_delta", delta: content });
@@ -44,7 +44,7 @@ class HarnessProvider implements AiProvider {
   async transcribe(): Promise<string> { return ""; }
 }
 
-test("本地测试入口只绑定回环地址并保存标准图片、报告与reasoning", async () => {
+test("本地测试入口只绑定回环地址并保存标准图片、报告且不持久化reasoning", async () => {
   const directory = await mkdtemp(join(tmpdir(), "hongtai-diagnosis-harness-"));
   const repository = new FileDiagnosisRepository(directory);
   const provider = new HarnessProvider();
@@ -63,8 +63,8 @@ test("本地测试入口只绑定回环地址并保存标准图片、报告与re
     });
     assert.equal(response.status, 201);
     const body = await response.json() as { sessionId: string; report: { summary: { headline: string } } };
-    assert.equal(body.report.summary.headline, "测试报告");
-    assert.equal(provider.calls, 5);
+    assert.equal(body.report.summary.headline, "舌部可见状态摘要");
+    assert.equal(provider.calls, 1);
     const root = join(directory, body.sessionId);
     const session = JSON.parse(await readFile(join(root, "session.json"), "utf8")) as { image?: unknown; imagePath?: unknown };
     assert.deepEqual(session.image, { mimeType: "image/jpeg" });
@@ -73,7 +73,23 @@ test("本地测试入口只绑定回环地址并保存标准图片、报告与re
     assert.equal(JSON.parse(await readFile(join(root, "report.json"), "utf8")).schemaVersion, "diagnosis-report.v1");
     const runIds = await readdir(join(root, "runs"));
     const reasoning = await readFile(join(root, "runs", runIds[0]!, "reasoning.jsonl"), "utf8");
-    assert.match(reasoning, /测试reasoning/);
+    assert.equal(reasoning, "");
+    const rawResponse = JSON.parse(await readFile(join(root, "runs", runIds[0]!, "raw-response.json"), "utf8")) as { content: string };
+    assert.equal(rawResponse.content, "");
+    await repository.saveRun(body.sessionId, {
+      id: "storage-boundary",
+      kind: "diagnosis",
+      status: "succeeded",
+      startedAt: "a",
+      completedAt: "b",
+      rawResponse: "data:image/png;base64,AAAA",
+      reasoning: "不应落盘的推理链",
+    });
+    assert.deepEqual(
+      JSON.parse(await readFile(join(root, "runs", "storage-boundary", "raw-response.json"), "utf8")),
+      { content: "" },
+    );
+    assert.equal(await readFile(join(root, "runs", "storage-boundary", "reasoning.jsonl"), "utf8"), "");
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     await rm(directory, { recursive: true, force: true });

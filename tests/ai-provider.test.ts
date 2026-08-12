@@ -14,6 +14,42 @@ async function* rawChunks(chunks: readonly string[]): AsyncIterable<string> {
   for (const chunk of chunks) yield chunk;
 }
 
+async function generateWithReasoningDialect(
+  reasoningDialect: "xiaomi-mimo" | "stepfun" | "generic",
+  chunks: readonly string[] = ['data: {"choices":[{"delta":{"content":"done"}}]}\n\n', "data: [DONE]\n\n"],
+) {
+  let received: AiTransportRequest | undefined;
+  const transport: AiTransport = {
+    async request(request) {
+      received = request;
+      return {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+        body: { kind: "stream", chunks: rawChunks(chunks) },
+      };
+    },
+  };
+  const config = {
+    transport,
+    models: { text: "text-model" },
+    supportsJsonObject: true,
+    asrTransport: "audio-transcriptions" as const,
+    contextWindowTokens: 32_000,
+    reasoningDialect,
+    retryDelaysMs: [0],
+  };
+  const provider = new OpenAiCompatibleProvider(config);
+  const request = {
+    model: "text" as const,
+    messages: [{ role: "user" as const, content: "reply" }],
+    output: "text" as const,
+    maxOutputTokens: 2_048,
+  };
+  const result = await provider.generate(request);
+  const body = received?.body.kind === "json" ? JSON.parse(received.body.json) as Record<string, unknown> : undefined;
+  return { body, result };
+}
+
 test("one-click provider presets retain the live-verified four-model protocols", () => {
   const mimo = AI_PROVIDER_PRESETS.find((item) => item.id === "xiaomi-mimo");
   const stepfun = AI_PROVIDER_PRESETS.find((item) => item.id === "stepfun");
@@ -71,7 +107,6 @@ test("Node-only factory restores Fetch credentials while the root AI entry expor
       supportsJsonObject: false,
       asrTransport: "audio-transcriptions",
       contextWindowTokens: 32_000,
-      reasoningMode: "provider-default",
       retryDelaysMs: [0],
     });
     const result = await provider.generate({ model: "text", messages: [{ role: "user", content: "hello" }], output: "text" });
@@ -187,7 +222,7 @@ test("OpenAI-compatible Provider sends relative stream DTOs to a custom transpor
     supportsJsonSchema: true,
     asrTransport: "audio-transcriptions",
     contextWindowTokens: 32_000,
-    reasoningMode: "provider-default",
+    reasoningDialect: "generic",
     retryDelaysMs: [0],
   });
 
@@ -203,6 +238,49 @@ test("OpenAI-compatible Provider sends relative stream DTOs to a custom transpor
   assert.equal("apiKey" in (requests[0] ?? {}), false);
   assert.equal(result.content, "visible");
   assert.equal(result.reasoning, "internal");
+});
+
+test("OpenAI-compatible Provider maps Xiaomi and StepFun reasoning request dialects", async () => {
+  const xiaomi = await generateWithReasoningDialect("xiaomi-mimo");
+  const stepfun = await generateWithReasoningDialect("stepfun");
+  const generic = await generateWithReasoningDialect("generic");
+
+  assert.deepEqual(xiaomi.body?.thinking, { type: "enabled" });
+  assert.equal(xiaomi.body?.max_completion_tokens, 2_048);
+  assert.equal("reasoning_format" in (xiaomi.body ?? {}), false);
+  assert.equal("max_tokens" in (xiaomi.body ?? {}), false);
+
+  assert.equal(stepfun.body?.reasoning_format, "general");
+  assert.equal(stepfun.body?.max_tokens, 2_048);
+  assert.equal("reasoning_effort" in (stepfun.body ?? {}), false);
+  assert.equal("thinking" in (stepfun.body ?? {}), false);
+
+  assert.equal(generic.body?.max_tokens, 2_048);
+  assert.equal("thinking" in (generic.body ?? {}), false);
+  assert.equal("reasoning_format" in (generic.body ?? {}), false);
+});
+
+test("OpenAI-compatible Provider prefers the native reasoning field for each dialect", async () => {
+  const chunks = [
+    'data: {"choices":[{"delta":{"reasoning_content":"mimo-native","reasoning":"stepfun-native"}}]}\n\n',
+    'data: {"choices":[{"delta":{"content":"done"}}]}\n\n',
+    "data: [DONE]\n\n",
+  ];
+
+  assert.equal((await generateWithReasoningDialect("xiaomi-mimo", chunks)).result.reasoning, "mimo-native");
+  assert.equal((await generateWithReasoningDialect("stepfun", chunks)).result.reasoning, "stepfun-native");
+  assert.equal((await generateWithReasoningDialect("generic", chunks)).result.reasoning, "mimo-native");
+});
+
+test("reasoning dialect selection recognizes only the two fixed provider Base URLs", () => {
+  const resolveDialect = (rootAi as unknown as {
+    reasoningDialectForBaseUrl?: (baseUrl: string) => string;
+  }).reasoningDialectForBaseUrl;
+
+  assert.equal(resolveDialect?.("https://api.xiaomimimo.com/v1/"), "xiaomi-mimo");
+  assert.equal(resolveDialect?.("https://api.stepfun.com/v1"), "stepfun");
+  assert.equal(resolveDialect?.("https://custom.example/v1"), "generic");
+  assert.equal(resolveDialect?.("not-a-url"), "generic");
 });
 
 test("OpenAI-compatible Provider maps malformed raw SSE chunks to a stable error", async () => {
@@ -221,7 +299,7 @@ test("OpenAI-compatible Provider maps malformed raw SSE chunks to a stable error
     supportsJsonObject: false,
     asrTransport: "audio-transcriptions",
     contextWindowTokens: 32_000,
-    reasoningMode: "provider-default",
+    reasoningDialect: "generic",
     retryDelaysMs: [0],
   });
 
@@ -249,7 +327,7 @@ test("OpenAI-compatible Provider passes a native audio URI to a custom transcrip
     supportsJsonObject: false,
     asrTransport: "audio-transcriptions",
     contextWindowTokens: 32_000,
-    reasoningMode: "provider-default",
+    reasoningDialect: "generic",
     retryDelaysMs: [0],
   });
 
@@ -294,7 +372,7 @@ test("OpenAI-compatible Provider puts a visual native URI in a data-url attachme
     supportsJsonObject: false,
     asrTransport: "audio-transcriptions",
     contextWindowTokens: 32_000,
-    reasoningMode: "provider-default",
+    reasoningDialect: "generic",
     retryDelaysMs: [0],
   });
 
@@ -336,7 +414,7 @@ test("OpenAI-compatible Provider uses raw-base64 materialization for chat audio 
     supportsJsonObject: false,
     asrTransport: "chat-input-audio",
     contextWindowTokens: 32_000,
-    reasoningMode: "provider-default",
+    reasoningDialect: "generic",
     retryDelaysMs: [0],
   });
 
@@ -382,7 +460,7 @@ test("OpenAI-compatible Provider sends StepFun ASR SSE and returns only its comp
     supportsJsonObject: false,
     asrTransport: "stepaudio-sse",
     contextWindowTokens: 32_000,
-    reasoningMode: "provider-default",
+    reasoningDialect: "generic",
     retryDelaysMs: [0],
   });
 
@@ -442,7 +520,6 @@ test("OpenAI兼容Provider使用自定义视觉模型并分离正文与reasoning
       supportsJsonSchema: true,
       asrTransport: "audio-transcriptions",
       contextWindowTokens: 32_000,
-      reasoningMode: "provider-default",
       retryDelaysMs: [0],
     });
     const events: AiStreamEvent[] = [];
@@ -507,7 +584,6 @@ test("OpenAI兼容Provider在不支持JSON Schema时回退JSON Object", async ()
       supportsJsonSchema: false,
       asrTransport: "audio-transcriptions",
       contextWindowTokens: 32_000,
-      reasoningMode: "provider-default",
       retryDelaysMs: [0],
     });
     await provider.generate({
@@ -539,7 +615,6 @@ test("OpenAI兼容Provider使用标准音频转写端点", async () => {
       supportsJsonObject: false,
       asrTransport: "audio-transcriptions",
       contextWindowTokens: 32_000,
-      reasoningMode: "provider-default",
       retryDelaysMs: [0],
     });
     const result = await provider.transcribe({ data: new Uint8Array([1, 2, 3]), filename: "part.wav", mimeType: "audio/wav" });

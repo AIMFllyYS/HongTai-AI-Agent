@@ -4,6 +4,7 @@ import type {
   AiGenerateResult,
   AiMediaSource,
   AiProvider,
+  AiReasoningDialect,
   AiRequestMessage,
   AiStreamEvent,
   AiTransport,
@@ -49,7 +50,7 @@ interface OpenAiProtocolConfig {
   readonly supportsJsonSchema?: boolean;
   readonly asrTransport: OpenAiCompatibleProviderConfig["asrTransport"];
   readonly contextWindowTokens: number;
-  readonly reasoningMode: OpenAiCompatibleProviderConfig["reasoningMode"];
+  readonly reasoningDialect: OpenAiCompatibleProviderConfig["reasoningDialect"];
   readonly retryDelaysMs?: readonly number[];
   readonly timeoutMs?: number;
 }
@@ -58,6 +59,26 @@ function transcriptionSource(request: AiTranscriptionRequest): AiMediaSource {
   return request.data
     ? { kind: "base64", base64: encodeBase64(request.data) }
     : { kind: "uri", uri: request.uri };
+}
+
+function reasoningValue(
+  value: { readonly reasoning_content?: unknown; readonly reasoning?: unknown } | undefined,
+  dialect: AiReasoningDialect,
+): string {
+  if (dialect === "stepfun") return textValue(value?.reasoning) || textValue(value?.reasoning_content);
+  return textValue(value?.reasoning_content) || textValue(value?.reasoning);
+}
+
+export function reasoningDialectForBaseUrl(baseUrl: string): AiReasoningDialect {
+  try {
+    const url = new URL(baseUrl);
+    const normalized = `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/u, "")}`;
+    if (normalized === "https://api.xiaomimimo.com/v1") return "xiaomi-mimo";
+    if (normalized === "https://api.stepfun.com/v1") return "stepfun";
+  } catch {
+    return "generic";
+  }
+  return "generic";
 }
 
 function stepFunAudioFormat(request: AiTranscriptionRequest): "wav" | "mp3" | "ogg" | "pcm" {
@@ -110,7 +131,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
       supportsJsonSchema: config.supportsJsonSchema,
       asrTransport: config.asrTransport,
       contextWindowTokens: config.contextWindowTokens,
-      reasoningMode: config.reasoningMode,
+      reasoningDialect: config.reasoningDialect,
       retryDelaysMs: config.retryDelaysMs,
       timeoutMs: config.timeoutMs,
     };
@@ -128,11 +149,23 @@ export class OpenAiCompatibleProvider implements AiProvider {
         ? { type: "json_object" }
         : undefined;
     const mappedMessages = mapMessages(request.messages);
+    const reasoningBody = this.#config.reasoningDialect === "xiaomi-mimo"
+      ? { thinking: { type: "enabled" } }
+      : this.#config.reasoningDialect === "stepfun"
+        ? { reasoning_format: "general" }
+        : {};
+    const tokenLimitBody = request.maxOutputTokens == null
+      ? {}
+      : this.#config.reasoningDialect === "xiaomi-mimo"
+        ? { max_completion_tokens: request.maxOutputTokens }
+        : { max_tokens: request.maxOutputTokens };
     const body = {
       model,
       messages: mappedMessages.messages,
       stream: true,
       stream_options: { include_usage: true },
+      ...reasoningBody,
+      ...tokenLimitBody,
       ...(responseFormat ? { response_format: responseFormat } : {}),
     };
     const response = await this.#request("chat/completions", {
@@ -150,7 +183,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
       const message = payload.choices?.[0]?.message;
       const content = textValue(message?.content).trim();
       if (!content) throw new TaskError({ code: "AI_EMPTY_RESPONSE", message: "AI响应缺少最终文本", action: "retry" });
-      const reasoning = textValue(message?.reasoning_content) || textValue(message?.reasoning);
+      const reasoning = reasoningValue(message, this.#config.reasoningDialect);
       if (reasoning) await request.onEvent?.({ type: "reasoning_delta", delta: reasoning });
       await request.onEvent?.({ type: "content_delta", delta: content });
       const usage = this.#usage(payload);
@@ -297,7 +330,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
           throw new TaskError({ code: "AI_SERVER_ERROR", message: "AI返回了无效的流式JSON", retryable: true, action: "retry", cause: error });
         }
         const delta = payload.choices?.[0]?.delta;
-        const reasoningDelta = textValue(delta?.reasoning_content) || textValue(delta?.reasoning);
+        const reasoningDelta = reasoningValue(delta, this.#config.reasoningDialect);
         const contentDelta = textValue(delta?.content);
         if (reasoningDelta) {
           reasoning += reasoningDelta;

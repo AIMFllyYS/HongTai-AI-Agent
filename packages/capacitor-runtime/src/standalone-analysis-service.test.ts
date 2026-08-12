@@ -25,16 +25,16 @@ function analysisModuleContent(
   request: AiGenerateRequest,
   source: Pick<typeof result, "overview" | "hook" | "painPoints" | "emotionalDrivers" | "structure" | "coreClaims" | "style" | "reusableTemplate" | "risks"> = result,
 ): string {
-  const moduleBySchema: Readonly<Record<string, unknown>> = {
-    content_analysis_overview_v1: { overview: source.overview },
-    content_analysis_hook_drivers_v1: { hook: source.hook, painPoints: source.painPoints, emotionalDrivers: source.emotionalDrivers },
-    content_analysis_structure_claims_v1: { structure: source.structure, coreClaims: source.coreClaims },
-    content_analysis_style_template_v1: { style: source.style, reusableTemplate: source.reusableTemplate },
-    content_analysis_risks_boundaries_v1: { risks: source.risks },
-  };
-  const value = moduleBySchema[request.jsonSchema?.name ?? ""];
-  if (!value) throw new Error(`unexpected analysis schema: ${request.jsonSchema?.name ?? "none"}`);
-  return JSON.stringify(value);
+  if (request.jsonSchema?.name !== "content_analysis_single_response_v1") {
+    throw new Error(`unexpected analysis schema: ${request.jsonSchema?.name ?? "none"}`);
+  }
+  return JSON.stringify({
+    overview: source.overview,
+    hookDrivers: { hook: source.hook, painPoints: source.painPoints, emotionalDrivers: source.emotionalDrivers },
+    structureClaims: { structure: source.structure, coreClaims: source.coreClaims },
+    styleTemplate: { style: source.style, reusableTemplate: source.reusableTemplate },
+    risksBoundaries: { risks: source.risks },
+  });
 }
 
 function detail(): TaskDetailRecord {
@@ -59,6 +59,7 @@ test("StandaloneAnalysisService persists only the formal content-analysis docume
   const provider: AiProvider = {
     generate: async (request) => {
       const content = analysisModuleContent(request);
+      await request.onEvent?.({ type: "reasoning_delta", delta: "internal reasoning" });
       await request.onEvent?.({ type: "content_delta", delta: content });
       await request.onEvent?.({ type: "completed" });
       return { content, reasoning: "internal reasoning" };
@@ -91,7 +92,8 @@ test("StandaloneAnalysisService persists only the formal content-analysis docume
   assert.equal(events.some((event) => (event as { readonly type?: string }).type === "completed"), true);
   assert.match(JSON.stringify(events), /"moduleId":"overview"/);
   assert.match(JSON.stringify(events), /从真实证据中拆解/);
-  assert.doesNotMatch(JSON.stringify(events), /internal reasoning|真实转写证据/);
+  assert.match(JSON.stringify(events), /internal reasoning/);
+  assert.doesNotMatch(JSON.stringify(events), /真实转写证据/);
 });
 
 test("StandaloneAnalysisService recovers a running analysis and synchronizes its task projection", async () => {
@@ -180,7 +182,7 @@ test("StandaloneAnalysisService registers the real analysis promise lifetime", a
   assert.deepEqual(operations.list(), []);
 });
 
-test("StandaloneAnalysisService single-flights by task id and replays validated progress to late subscribers", async () => {
+test("StandaloneAnalysisService single-flights by task id and replays runtime-only reasoning to late subscribers", async () => {
   const values = new Map<string, string>();
   const entered = deferred();
   const release = deferred();
@@ -200,10 +202,14 @@ test("StandaloneAnalysisService single-flights by task id and replays validated 
       generate: async (request) => {
         calls += 1;
         if (calls === 1) {
+          await request.onEvent?.({ type: "reasoning_delta", delta: "late analysis reasoning" });
           entered.resolve();
           await release.promise;
         }
-        return { content: analysisModuleContent(request), reasoning: "" };
+        const content = analysisModuleContent(request);
+        await request.onEvent?.({ type: "content_delta", delta: content });
+        await request.onEvent?.({ type: "completed" });
+        return { content, reasoning: "late analysis reasoning" };
       },
       transcribe: async () => "",
     }),
@@ -226,14 +232,23 @@ test("StandaloneAnalysisService single-flights by task id and replays validated 
     assert.equal(lateEvents[0].taskId, "task-1");
     assert.equal(lateEvents[0].progress.modules[0]?.moduleId, "overview");
     assert.equal(lateEvents[0].progress.modules[0]?.status, "running");
+    assert.deepEqual(lateEvents[0].progress.thinking, {
+      status: "streaming",
+      text: "late analysis reasoning",
+    });
   }
 
   release.resolve();
   const [left, right] = await Promise.all([first, second]);
   unsubscribe();
   assert.strictEqual(left, right);
-  assert.equal(calls, 5);
+  assert.equal(calls, 1);
   assert.equal(lateEvents.at(-1)?.type, "completed");
+  assert.doesNotMatch(JSON.stringify([...values.values()]), /late analysis reasoning|"thinking"/);
+  const afterCompletion: import("@hongtai/core").ContentAnalysisStreamEvent[] = [];
+  const unsubscribeAfterCompletion = service.subscribe("task-1", (event) => { afterCompletion.push(event); });
+  assert.deepEqual(afterCompletion, [], "terminal runs must clear their runtime-only snapshot");
+  unsubscribeAfterCompletion();
 });
 
 test("StandaloneAnalysisService unsubscribe and listener failures never cancel formal persistence", async () => {
@@ -315,10 +330,15 @@ test("StandaloneAnalysisService keeps three validated modules on module-four fai
       generate: async (request) => {
         const schema = request.jsonSchema?.name ?? "none";
         schemas.push(schema);
-        if (schema === "content_analysis_style_template_v1" && styleAttempts++ < 2) {
-          return { content: "{}", reasoning: "" };
+        let content = analysisModuleContent(request);
+        if (styleAttempts++ < 2) {
+          const invalid = JSON.parse(content) as { styleTemplate: unknown };
+          invalid.styleTemplate = {};
+          content = JSON.stringify(invalid);
         }
-        return { content: analysisModuleContent(request), reasoning: "" };
+        await request.onEvent?.({ type: "content_delta", delta: content });
+        await request.onEvent?.({ type: "completed" });
+        return { content, reasoning: "" };
       },
       transcribe: async () => "",
     }),
@@ -342,16 +362,13 @@ test("StandaloneAnalysisService keeps three validated modules on module-four fai
   const failedRecord = JSON.parse(values.get("task-1/analysis.json") ?? "{}") as Record<string, unknown>;
   assert.equal(failedRecord.status, "failed");
   assert.equal("result" in failedRecord, false);
-  assert.deepEqual(schemas.slice(0, 5), [
-    "content_analysis_overview_v1",
-    "content_analysis_hook_drivers_v1",
-    "content_analysis_structure_claims_v1",
-    "content_analysis_style_template_v1",
-    "content_analysis_style_template_v1",
+  assert.deepEqual(schemas.slice(0, 2), [
+    "content_analysis_single_response_v1",
+    "content_analysis_single_response_v1",
   ]);
 
   assert.equal((await service.run("task-1")).status, "succeeded");
-  assert.equal(schemas[5], "content_analysis_overview_v1");
+  assert.equal(schemas[2], "content_analysis_single_response_v1");
 });
 
 test("StandaloneAnalysisService automatically runs ingest then formal analysis for a picked local video", async () => {

@@ -23,16 +23,17 @@ const report = {
 } as const;
 
 function diagnosisModuleContent(request: AiGenerateRequest): string {
-  const moduleBySchema: Readonly<Record<string, unknown>> = {
-    diagnosis_visual_observations_v1: { imageQuality: report.imageQuality, observations: report.observations },
-    diagnosis_observation_summary_v1: { summary: report.summary },
-    diagnosis_wellness_recommendations_v1: { wellnessReferences: report.wellnessReferences, recommendations: report.recommendations },
-    diagnosis_safety_limitations_v1: { safetyGuidance: report.safetyGuidance, limitations: report.limitations, disclaimer: report.disclaimer },
-    diagnosis_follow_up_questions_v1: { followUpQuestions: report.followUpQuestions },
-  };
-  const value = moduleBySchema[request.jsonSchema?.name ?? ""];
-  if (!value) throw new Error(`unexpected diagnosis schema: ${request.jsonSchema?.name ?? "none"}`);
-  return JSON.stringify(value);
+  if (request.jsonSchema?.name !== "diagnosis_single_response_v1") {
+    throw new Error(`unexpected diagnosis schema: ${request.jsonSchema?.name ?? "none"}`);
+  }
+  return JSON.stringify({
+    quality: report.imageQuality.overallQuality,
+    observation: report.observations[0]?.description ?? "",
+    summary: report.summary.narrative,
+    advice: report.recommendations[0]?.action ?? "",
+    safety: report.safetyGuidance.recommendedAction,
+    followUp: report.followUpQuestions[0] ?? "",
+  });
 }
 
 function memoryFiles() {
@@ -106,7 +107,8 @@ test("StandaloneDiagnosisService saves a formal report and real follow-up histor
   const progressEvents = reportEvents.filter((event) => (event as { readonly type?: string }).type === "progress");
   assert.match(JSON.stringify(progressEvents), /"moduleId":"visual-observations"/);
   assert.match(JSON.stringify(progressEvents), /颜色较均匀/);
-  assert.doesNotMatch(JSON.stringify(progressEvents), /private reasoning|file:\/\//);
+  assert.match(JSON.stringify(progressEvents), /private reasoning/);
+  assert.doesNotMatch(JSON.stringify(progressEvents), /file:\/\//);
   assert.equal((await service.listMessages(session.sessionId)).length, 2);
 });
 
@@ -175,7 +177,7 @@ test("StandaloneDiagnosisService distinguishes external photo work from in-proce
   assert.deepEqual(operations.list(), []);
 });
 
-test("StandaloneDiagnosisService single-flights report generation and replays the active validated snapshot", async () => {
+test("StandaloneDiagnosisService single-flights report generation and replays runtime-only reasoning", async () => {
   const native = memoryFiles();
   const entered = deferred();
   const release = deferred();
@@ -191,10 +193,14 @@ test("StandaloneDiagnosisService single-flights report generation and replays th
       generate: async (request) => {
         calls += 1;
         if (calls === 1) {
+          await request.onEvent?.({ type: "reasoning_delta", delta: "late diagnosis reasoning" });
           entered.resolve();
           await release.promise;
         }
-        return { content: diagnosisModuleContent(request), reasoning: "" };
+        const content = diagnosisModuleContent(request);
+        await request.onEvent?.({ type: "content_delta", delta: content });
+        await request.onEvent?.({ type: "completed" });
+        return { content, reasoning: "late diagnosis reasoning" };
       },
       transcribe: async () => "",
     }),
@@ -220,12 +226,21 @@ test("StandaloneDiagnosisService single-flights report generation and replays th
     assert.equal(lateEvents[0].sessionId, session.sessionId);
     assert.equal(lateEvents[0].progress.modules[0]?.moduleId, "visual-observations");
     assert.equal(lateEvents[0].progress.modules[0]?.status, "running");
+    assert.deepEqual(lateEvents[0].progress.thinking, {
+      status: "streaming",
+      text: "late diagnosis reasoning",
+    });
   }
 
   release.resolve();
   await Promise.all([first, second]);
-  assert.equal(calls, 5);
+  assert.equal(calls, 1);
   assert.equal(lateEvents.at(-1)?.type, "completed");
+  assert.doesNotMatch(JSON.stringify([...native.values.values()]), /late diagnosis reasoning|"thinking"/);
+  const afterCompletion: import("@hongtai/core").DiagnosisReportStreamEvent[] = [];
+  const unsubscribeAfterCompletion = service.subscribeReport(session.sessionId, (event) => { afterCompletion.push(event); });
+  assert.deepEqual(afterCompletion, [], "terminal runs must clear their runtime-only snapshot");
+  unsubscribeAfterCompletion();
 });
 
 test("StandaloneDiagnosisService never lets a slow report listener stall the formal flow", { timeout: 1_000 }, async () => {
@@ -275,10 +290,15 @@ test("StandaloneDiagnosisService keeps three validated modules on module-four fa
       generate: async (request) => {
         const schema = request.jsonSchema?.name ?? "none";
         schemas.push(schema);
-        if (schema === "diagnosis_safety_limitations_v1" && safetyAttempts++ < 2) {
-          return { content: "{}", reasoning: "" };
+        let content = diagnosisModuleContent(request);
+        if (safetyAttempts++ < 2) {
+          const invalid = JSON.parse(content) as { safety: unknown };
+          invalid.safety = "";
+          content = JSON.stringify(invalid);
         }
-        return { content: diagnosisModuleContent(request), reasoning: "" };
+        await request.onEvent?.({ type: "content_delta", delta: content });
+        await request.onEvent?.({ type: "completed" });
+        return { content, reasoning: "" };
       },
       transcribe: async () => "",
     }),
@@ -305,16 +325,13 @@ test("StandaloneDiagnosisService keeps three validated modules on module-four fa
   }
   assert.equal(native.values.has(`${session.sessionId}/report.json`), false);
   assert.equal((await service.getReport(session.sessionId))?.status, "failed");
-  assert.deepEqual(schemas.slice(0, 5), [
-    "diagnosis_visual_observations_v1",
-    "diagnosis_observation_summary_v1",
-    "diagnosis_wellness_recommendations_v1",
-    "diagnosis_safety_limitations_v1",
-    "diagnosis_safety_limitations_v1",
+  assert.deepEqual(schemas.slice(0, 2), [
+    "diagnosis_single_response_v1",
+    "diagnosis_single_response_v1",
   ]);
 
   assert.equal((await service.runReport(session.sessionId)).status, "succeeded");
-  assert.equal(schemas[5], "diagnosis_visual_observations_v1");
+  assert.equal(schemas[2], "diagnosis_single_response_v1");
 });
 
 test("StandaloneDiagnosisService keeps the selected image MIME across private copy and reload", async () => {

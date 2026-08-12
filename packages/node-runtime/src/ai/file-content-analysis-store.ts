@@ -2,7 +2,6 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ContentAnalysisInput, ContentAnalysisResultV1, ContentAnalysisRunRecord, ContentAnalysisStore, ContentEvidenceUnit } from "@hongtai/ai";
 import { TaskError, type ContentType, type SupportedPlatform } from "@hongtai/core";
-import { sanitizeAiArtifactText } from "./sanitize-ai-artifact";
 
 async function readJson(path: string): Promise<Record<string, unknown>> {
   try {
@@ -73,10 +72,10 @@ export class FileContentAnalysisStore implements ContentAnalysisStore {
   }
 
   async #saveRun(root: string, run: ContentAnalysisRunRecord): Promise<void> {
-    await this.#writeJson(join(root, "raw-response.json"), { content: sanitizeAiArtifactText(run.rawResponse) });
-    const reasoning = sanitizeAiArtifactText(run.reasoning).split(/\r?\n/).filter(Boolean)
-      .map((content) => JSON.stringify({ type: "reasoning", content })).join("\n");
-    await writeFile(join(root, "reasoning.jsonl"), reasoning ? `${reasoning}\n` : "", "utf8");
+    // Keep the legacy artifact paths readable, but never persist provider raw
+    // output or reasoning. Live thinking is an in-memory presentation stream.
+    await this.#writeJson(join(root, "raw-response.json"), { content: "" });
+    await writeFile(join(root, "reasoning.jsonl"), "", "utf8");
     await this.#writeJson(join(root, "run.json"), {
       id: run.id, status: run.status, startedAt: run.startedAt, completedAt: run.completedAt,
       errorCode: run.errorCode, promptVersions: run.promptVersions,

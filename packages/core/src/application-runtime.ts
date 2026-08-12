@@ -71,11 +71,18 @@ export interface StructuredGenerationModuleV1 {
   readonly result?: JsonObject;
 }
 
+export interface StructuredGenerationThinkingV1 {
+  readonly status: "waiting" | "streaming" | "completed";
+  readonly text: string;
+}
+
 export interface StructuredGenerationProgressV1 {
   readonly schemaVersion: "structured-generation-progress.v1";
   readonly flow: StructuredGenerationFlow;
   readonly phase: "preparing" | "generating" | "validating" | "saving";
   readonly modules: readonly StructuredGenerationModuleV1[];
+  /** Runtime-only raw provider reasoning. Services must never persist it. */
+  readonly thinking?: StructuredGenerationThinkingV1;
 }
 
 export type StructuredGenerationProgressListener = (

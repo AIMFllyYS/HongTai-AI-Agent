@@ -27,15 +27,14 @@ const validReport: DiagnosisReportV1 = {
   disclaimer: "本报告不是疾病诊断，也不提供患病概率。",
 };
 
-function reportModuleResponses(report: DiagnosisReportV1 = validReport): readonly string[] {
-  return [
-    JSON.stringify({ imageQuality: report.imageQuality, observations: report.observations }),
-    JSON.stringify({ summary: report.summary }),
-    JSON.stringify({ wellnessReferences: report.wellnessReferences, recommendations: report.recommendations }),
-    JSON.stringify({ safetyGuidance: report.safetyGuidance, limitations: report.limitations, disclaimer: report.disclaimer }),
-    JSON.stringify({ followUpQuestions: report.followUpQuestions }),
-  ];
-}
+const validSingleResponse = {
+  quality: "good" as const,
+  observation: "舌体颜色较均匀，当前图片中的舌部区域清晰可见。",
+  summary: "本次图片可用于日常可见状态记录，不代表疾病诊断。",
+  advice: "保持相同光线和角度定期记录，并结合近期作息观察变化。",
+  safety: "单张图片不能替代专业检查；如有持续不适，请咨询专业人员。",
+  followUp: "最近作息是否规律？",
+};
 
 class MemoryRepository implements DiagnosisRepository {
   session: DiagnosisSession | undefined;
@@ -68,7 +67,7 @@ class MemoryRepository implements DiagnosisRepository {
 
 test("诊察流程保留原生图片 URI，不将其转成 React Base64", async () => {
   const repository = new MemoryRepository();
-  const provider = new SequenceProvider(reportModuleResponses());
+  const provider = new SequenceProvider([JSON.stringify(validSingleResponse)], 3);
   const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
 
   await flow.analyze({
@@ -78,16 +77,17 @@ test("诊察流程保留原生图片 URI，不将其转成 React Base64", async 
 
   assert.deepEqual(repository.image, { mimeType: "image/jpeg", uri: "content://media/external/images/72" });
   const content = provider.calls[0]?.messages[1]?.content;
-  assert.deepEqual(content, [
-    { type: "text", text: "请只生成可见观察模块。" },
-    { type: "image_uri", uri: "content://media/external/images/72", mimeType: "image/jpeg" },
-  ]);
+  assert.equal(Array.isArray(content), true);
+  assert.equal(Array.isArray(content) ? content.filter((part) => part.type === "image_uri" || part.type === "image_url").length : 0, 1);
+  assert.deepEqual(Array.isArray(content) ? content.at(-1) : undefined, {
+    type: "image_uri", uri: "content://media/external/images/72", mimeType: "image/jpeg",
+  });
   assert.doesNotMatch(JSON.stringify(content), /base64/);
-  assert.equal(provider.calls.length, 5);
-  assert.deepEqual(provider.calls.map((call) => call.model), ["vision", "text", "text", "text", "text"]);
-  for (const call of provider.calls.slice(1)) {
-    assert.doesNotMatch(JSON.stringify(call.messages), /content:\/\/|image_uri|image_url|base64/u);
-  }
+  assert.equal(provider.calls.length, 1);
+  assert.equal(provider.calls[0]?.model, "vision");
+  assert.equal(provider.calls[0]?.maxOutputTokens, 2_048);
+  assert.equal(provider.calls[0]?.jsonSchema?.name, "diagnosis_single_response_v1");
+  assert.equal(repository.report?.promptVersion, "diagnosis-single-stream.v1");
 });
 
 test("已创建会话可复用私有图片运行正式报告，且会话只暴露安全 MIME 元数据", async () => {
@@ -100,7 +100,7 @@ test("已创建会话可复用私有图片运行正式报告，且会话只暴�
     image: { mimeType: "image/png" },
   };
   repository.sessionImage = { mimeType: "image/png", uri: "content://app.private/diagnosis/session-existing/image" };
-  const provider = new SequenceProvider(["不是JSON", ...reportModuleResponses()]);
+  const provider = new SequenceProvider(["不是JSON", JSON.stringify(validSingleResponse)]);
   const progress: StructuredGenerationProgressV1[] = [];
   const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000, onProgress: (event) => { progress.push(event); } });
 
@@ -111,25 +111,21 @@ test("已创建会话可复用私有图片运行正式报告，且会话只暴�
   assert.deepEqual(result.session.image, { mimeType: "image/png" });
   assert.equal("imagePath" in result.session, false);
   assert.doesNotMatch(JSON.stringify(result.session), /content:\/\/|normalized-image/);
-  assert.equal(provider.calls.length, 6, "only the failed visual module may add one repair call");
-  assert.deepEqual(provider.calls.map((call) => call.jsonSchema?.name), [
-    "diagnosis_visual_observations_v1",
-    "diagnosis_visual_observations_v1",
-    "diagnosis_observation_summary_v1",
-    "diagnosis_wellness_recommendations_v1",
-    "diagnosis_safety_limitations_v1",
-    "diagnosis_follow_up_questions_v1",
-  ]);
-  assert.deepEqual(provider.calls[0]?.messages[1]?.content, [
-    { type: "text", text: "请只生成可见观察模块。" },
-    { type: "image_uri", uri: "content://app.private/diagnosis/session-existing/image", mimeType: "image/png" },
-  ]);
+  assert.equal(provider.calls.length, 2, "one whole-document repair is the only additional call");
+  assert.deepEqual(provider.calls.map((call) => call.model), ["vision", "text"]);
+  assert.deepEqual(provider.calls.map((call) => call.jsonSchema?.name), ["diagnosis_single_response_v1", "diagnosis_single_response_v1"]);
+  assert.match(JSON.stringify(provider.calls[0]?.messages), /content:\/\/app\.private\/diagnosis\/session-existing\/image/u);
+  assert.doesNotMatch(JSON.stringify(provider.calls[1]?.messages), /content:\/\/|image_uri|image_url|base64/u);
   assert.equal(repository.runs[0]?.kind, "diagnosis");
-  assert.equal(repository.runs[0]?.reasoning, Array.from({ length: 6 }, () => "调试思考").join("\n"));
-  assert.equal(repository.runs[0]?.promptVersions?.length, 5);
-  assert.equal(new Set(repository.runs[0]?.promptVersions).size, 5);
+  assert.equal(repository.runs[0]?.reasoning, "");
+  assert.equal(repository.runs[0]?.rawResponse, "");
+  assert.deepEqual(repository.runs[0]?.promptVersions, ["diagnosis-single-stream.v1"]);
   assert.equal(progress.some((snapshot) => snapshot.modules.some((module) => module.status !== "succeeded" && module.result !== undefined)), false);
+  assert.deepEqual(progress.at(-1)?.modules.map((module) => module.status), ["succeeded", "succeeded", "succeeded", "succeeded", "succeeded"]);
+  assert.equal(progress.some((snapshot) => snapshot.thinking?.text === "调试思考"), true);
+  assert.equal(progress.at(-1)?.thinking?.text, "调试思考调试思考");
   assert.doesNotMatch(JSON.stringify(repository.report), /调试思考/);
+  assert.doesNotMatch(JSON.stringify(repository.runs), /调试思考|不是JSON|舌体颜色较均匀/u);
 });
 
 test("会话图片 MIME 与私有图片不一致时不调用视觉模型", async () => {
@@ -155,12 +151,15 @@ test("会话图片 MIME 与私有图片不一致时不调用视觉模型", async
 
 class SequenceProvider implements AiProvider {
   calls: AiGenerateRequest[] = [];
-  constructor(readonly responses: readonly string[]) {}
+  constructor(readonly responses: readonly string[], readonly chunkWidth = Number.POSITIVE_INFINITY) {}
   async generate(request: AiGenerateRequest): Promise<AiGenerateResult> {
     this.calls.push(request);
     const content = this.responses[this.calls.length - 1] ?? "";
     await request.onEvent?.({ type: "reasoning_delta", delta: "调试思考" });
-    await request.onEvent?.({ type: "content_delta", delta: content });
+    const width = Number.isFinite(this.chunkWidth) ? this.chunkWidth : Math.max(1, content.length);
+    for (let offset = 0; offset < content.length; offset += width) {
+      await request.onEvent?.({ type: "content_delta", delta: content.slice(offset, offset + width) });
+    }
     await request.onEvent?.({ type: "completed" });
     return { content, reasoning: "调试思考" };
   }
@@ -177,16 +176,17 @@ class FailingProvider implements AiProvider {
 
 test("舌象报告在首次JSON无效时只修复一次并保存标准结果", async () => {
   const repository = new MemoryRepository();
-  const provider = new SequenceProvider(["不是JSON", ...reportModuleResponses()]);
+  const provider = new SequenceProvider(["不是JSON", JSON.stringify(validSingleResponse)]);
   const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
   const result = await flow.analyze({ mode: "tongue", image: { mimeType: "image/jpeg", data: new Uint8Array([1, 2, 3]) } });
-  assert.equal(result.report.summary.headline, validReport.summary.headline);
-  assert.equal(provider.calls.length, 6);
-  assert.equal(provider.calls[0]?.jsonSchema?.name, "diagnosis_visual_observations_v1");
-  assert.match(String(provider.calls[0]?.messages[0]?.content), /"imageQuality"/);
+  assert.equal(result.report.summary.narrative, validSingleResponse.summary);
+  assert.equal(provider.calls.length, 2);
+  assert.equal(provider.calls[0]?.jsonSchema?.name, "diagnosis_single_response_v1");
+  assert.match(String(provider.calls[0]?.messages[0]?.content), /"quality"/);
   assert.match(String(provider.calls[1]?.messages[0]?.content), /校正/u);
   assert.equal(repository.runs.length, 1);
-  assert.equal(repository.runs[0]?.reasoning, Array.from({ length: 6 }, () => "调试思考").join("\n"));
+  assert.equal(repository.runs[0]?.reasoning, "");
+  assert.equal(repository.runs[0]?.rawResponse, "");
   assert.doesNotMatch(JSON.stringify(repository.report), /调试思考/);
 });
 
@@ -200,6 +200,8 @@ test("后续对话保存文本消息信封且不把reasoning写入上下文", as
   assert.equal(reply.content, "建议结合规律作息继续观察。");
   assert.deepEqual(repository.messages.map((message) => message.role), ["user", "assistant"]);
   assert.doesNotMatch(JSON.stringify(provider.calls[0]?.messages), /调试思考/);
+  assert.equal(repository.runs[0]?.reasoning, "");
+  assert.equal(repository.runs[0]?.rawResponse, "");
 });
 
 test("上下文超过窗口80%时摘要较早消息并保留最近六条", async () => {
@@ -226,12 +228,8 @@ test("上下文超过窗口80%时摘要较早消息并保留最近六条", async
 
 test("图片不可用时Schema拒绝模型虚构可见观察项", async () => {
   const repository = new MemoryRepository();
-  const invalid = {
-    ...validReport,
-    imageQuality: { usable: false, overallQuality: "unusable" as const, limitations: ["图片模糊"], retakeSuggestions: ["重新拍摄"] },
-  };
-  const invalidVisual = JSON.stringify({ imageQuality: invalid.imageQuality, observations: invalid.observations });
-  const provider = new SequenceProvider([invalidVisual, invalidVisual]);
+  const invalid = JSON.stringify({ ...validSingleResponse, quality: "unusable", observation: "虚构观察", advice: "虚构建议" });
+  const provider = new SequenceProvider([invalid, invalid]);
   const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
   await assert.rejects(() => flow.analyze({ mode: "tongue", image: { mimeType: "image/jpeg", data: new Uint8Array([1]) } }), /修复/);
 });
@@ -244,7 +242,6 @@ test("旧 diagnosis-initial.v1 报告仍保持可读取兼容性", async () => {
 
 test("文本模块权限失败不会误报为视觉能力不可用", async () => {
   const repository = new MemoryRepository();
-  const visual = reportModuleResponses()[0]!;
   class TextPermissionProvider extends SequenceProvider {
     override async generate(request: AiGenerateRequest): Promise<AiGenerateResult> {
       if (this.calls.length === 0) return super.generate(request);
@@ -252,7 +249,7 @@ test("文本模块权限失败不会误报为视觉能力不可用", async () =>
       throw new TaskError({ code: "AI_PERMISSION_DENIED", message: "文本模型权限不足", action: "configure_ai" });
     }
   }
-  const provider = new TextPermissionProvider([visual]);
+  const provider = new TextPermissionProvider(["不是JSON"]);
   const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
   await assert.rejects(
     () => flow.analyze({ mode: "tongue", image: { mimeType: "image/jpeg", data: new Uint8Array([1]) } }),

@@ -19,6 +19,7 @@ export interface GenerateStructuredModuleOptions<T> {
   readonly onValidating?: (repairing: boolean) => void | Promise<void>;
   readonly onFailed?: () => void | Promise<void>;
   readonly onAttempt?: (attempt: StructuredModuleAttempt) => void | Promise<void>;
+  readonly mapInitialError?: (error: unknown) => unknown;
   readonly failureMessage: string;
 }
 
@@ -37,7 +38,12 @@ export async function generateStructuredModule<T>(
   options: GenerateStructuredModuleOptions<T>,
 ): Promise<T> {
   try {
-    const initial = await options.provider.generate(options.request);
+    let initial: AiGenerateResult;
+    try {
+      initial = await options.provider.generate(options.request);
+    } catch (error) {
+      throw options.mapInitialError?.(error) ?? error;
+    }
     await options.onAttempt?.({ result: initial, repaired: false });
     try {
       await options.onValidating?.(false);

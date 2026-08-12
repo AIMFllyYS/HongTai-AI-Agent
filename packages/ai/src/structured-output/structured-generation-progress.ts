@@ -6,6 +6,7 @@ import type {
   StructuredGenerationProgressListener,
   StructuredGenerationProgressV1,
 } from "@hongtai/core";
+import { ReasoningProgress } from "./reasoning-progress";
 
 function jsonObject(value: object): JsonObject {
   return JSON.parse(JSON.stringify(value)) as JsonObject;
@@ -15,6 +16,7 @@ export class StructuredGenerationProgressTracker {
   readonly #flow: StructuredGenerationFlow;
   readonly #moduleIds: readonly StructuredGenerationModuleId[];
   readonly #listener: StructuredGenerationProgressListener | undefined;
+  readonly #thinking = new ReasoningProgress();
   readonly #states = new Map<StructuredGenerationModuleId, {
     status: StructuredGenerationModuleStatus;
     result?: JsonObject;
@@ -55,6 +57,26 @@ export class StructuredGenerationProgressTracker {
     return this.#emit();
   }
 
+  restartRepairing(moduleId: StructuredGenerationModuleId): Promise<void> {
+    this.#phase = "generating";
+    for (const id of this.#moduleIds) this.#states.set(id, { status: "pending" });
+    this.#states.set(moduleId, { status: "repairing" });
+    return this.#emit();
+  }
+
+  validatingDocument(): Promise<void> {
+    this.#phase = "validating";
+    return this.#emit();
+  }
+
+  thinkingDelta(delta: string): Promise<void> {
+    return this.#thinking.append(delta) ? this.#emit() : Promise.resolve();
+  }
+
+  completeThinking(): Promise<void> {
+    return this.#thinking.complete() ? this.#emit() : Promise.resolve();
+  }
+
   succeeded(moduleId: StructuredGenerationModuleId, result: object): Promise<void> {
     this.#phase = "validating";
     this.#states.set(moduleId, { status: "succeeded", result: jsonObject(result) });
@@ -77,6 +99,7 @@ export class StructuredGenerationProgressTracker {
       schemaVersion: "structured-generation-progress.v1",
       flow: this.#flow,
       phase: this.#phase,
+      thinking: this.#thinking.snapshot(),
       modules: this.#moduleIds.map((moduleId) => {
         const state = this.#states.get(moduleId) ?? { status: "pending" as const };
         return { moduleId, status: state.status, ...(state.result ? { result: state.result } : {}) };

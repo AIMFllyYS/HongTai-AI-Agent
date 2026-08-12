@@ -6,48 +6,31 @@ import type {
   ContentAnalysisInput,
   ContentAnalysisRunRecord,
 } from "../../contracts/content-analysis";
-import type { AiGenerateRequest, AiStreamEvent } from "../../contracts/provider";
+import type { AiStreamEvent } from "../../contracts/provider";
 import {
-  CONTENT_ANALYSIS_HOOK_DRIVERS_PROMPT_VERSION,
-  contentAnalysisHookDriversPrompt,
-  contentAnalysisHookDriversRepairPrompt,
-} from "../../prompts/content-analysis-hook-drivers";
+  CONTENT_ANALYSIS_SINGLE_PROMPT_VERSION,
+  contentAnalysisSinglePrompt,
+  contentAnalysisSingleRepairPrompt,
+} from "../../prompts/content-analysis-single";
 import {
-  CONTENT_ANALYSIS_OVERVIEW_PROMPT_VERSION,
-  contentAnalysisOverviewPrompt,
-  contentAnalysisOverviewRepairPrompt,
-} from "../../prompts/content-analysis-overview";
-import {
-  CONTENT_ANALYSIS_RISKS_BOUNDARIES_PROMPT_VERSION,
-  contentAnalysisRisksBoundariesPrompt,
-  contentAnalysisRisksBoundariesRepairPrompt,
-} from "../../prompts/content-analysis-risks-boundaries";
-import {
-  CONTENT_ANALYSIS_STRUCTURE_CLAIMS_PROMPT_VERSION,
-  contentAnalysisStructureClaimsPrompt,
-  contentAnalysisStructureClaimsRepairPrompt,
-} from "../../prompts/content-analysis-structure-claims";
-import {
-  CONTENT_ANALYSIS_STYLE_TEMPLATE_PROMPT_VERSION,
-  contentAnalysisStyleTemplatePrompt,
-  contentAnalysisStyleTemplateRepairPrompt,
-} from "../../prompts/content-analysis-style-template";
-import {
-  contentAnalysisHookDriversJsonSchema,
   contentAnalysisHookDriversSchema,
-  contentAnalysisOverviewJsonSchema,
   contentAnalysisOverviewSchema,
   contentAnalysisResultSchema,
-  contentAnalysisRisksBoundariesJsonSchema,
   contentAnalysisRisksBoundariesSchema,
-  contentAnalysisStructureClaimsJsonSchema,
+  contentAnalysisSingleResponseFieldSchemas,
+  contentAnalysisSingleResponseJsonSchema,
+  contentAnalysisSingleResponseSchema,
   contentAnalysisStructureClaimsSchema,
-  contentAnalysisStyleTemplateJsonSchema,
   contentAnalysisStyleTemplateSchema,
+  type ContentAnalysisHookDrivers,
   type ContentAnalysisResultV1,
+  type ContentAnalysisRisksBoundaries,
+  type ContentAnalysisSingleResponse,
+  type ContentAnalysisStructureClaims,
 } from "../../schemas/content-analysis";
-import { generateStructuredModule, type StructuredModuleAttempt } from "../../structured-output/generate-structured-module";
+import { generateStructuredModule } from "../../structured-output/generate-structured-module";
 import { StructuredGenerationProgressTracker } from "../../structured-output/structured-generation-progress";
+import { TopLevelJsonFieldStream, type CompletedTopLevelJsonField } from "../../structured-output/top-level-json-field-stream";
 
 const MODULE_IDS = [
   "overview",
@@ -57,13 +40,8 @@ const MODULE_IDS = [
   "risks-boundaries",
 ] as const satisfies readonly StructuredGenerationModuleId[];
 
-const PROMPT_VERSIONS = [
-  CONTENT_ANALYSIS_OVERVIEW_PROMPT_VERSION,
-  CONTENT_ANALYSIS_HOOK_DRIVERS_PROMPT_VERSION,
-  CONTENT_ANALYSIS_STRUCTURE_CLAIMS_PROMPT_VERSION,
-  CONTENT_ANALYSIS_STYLE_TEMPLATE_PROMPT_VERSION,
-  CONTENT_ANALYSIS_RISKS_BOUNDARIES_PROMPT_VERSION,
-] as const;
+const RESPONSE_KEYS = ["overview", "hookDrivers", "structureClaims", "styleTemplate", "risksBoundaries"] as const;
+const PROMPT_VERSIONS = [CONTENT_ANALYSIS_SINGLE_PROMPT_VERSION] as const;
 
 function sourceFromInput(input: ContentAnalysisInput): ContentAnalysisResultV1["source"] {
   return {
@@ -74,30 +52,58 @@ function sourceFromInput(input: ContentAnalysisInput): ContentAnalysisResultV1["
   };
 }
 
+function structuredIssue(message: string, cause?: unknown): TaskError {
+  return new TaskError({ code: "AI_STRUCTURED_OUTPUT_INVALID", message, action: "retry", ...(cause === undefined ? {} : { cause }) });
+}
+
 function validateEvidenceRefs(references: readonly string[], input: ContentAnalysisInput): void {
   const validIds = new Set(input.evidenceUnits.map((item) => item.id));
   if (references.some((id) => !validIds.has(id))) {
-    throw new TaskError({
-      code: "AI_STRUCTURED_OUTPUT_INVALID",
-      message: "内容拆解引用了不存在的原文证据",
-      action: "retry",
-    });
+    throw structuredIssue("内容拆解引用了不存在的原文证据");
   }
 }
 
-function request(
-  name: string,
-  schema: Readonly<Record<string, unknown>>,
-  prompt: string,
-  onEvent: (event: AiStreamEvent) => Promise<void>,
-): AiGenerateRequest {
-  return {
-    model: "text",
-    output: "json",
-    jsonSchema: { name, schema, strict: true },
-    messages: [{ role: "system", content: prompt }],
-    onEvent,
-  };
+function validateModuleEvidence(
+  moduleId: StructuredGenerationModuleId,
+  value: object,
+  input: ContentAnalysisInput,
+): void {
+  if (moduleId === "hook-drivers") {
+    const module = value as ContentAnalysisHookDrivers;
+    validateEvidenceRefs([
+      ...module.hook.evidenceRefs,
+      ...module.painPoints.flatMap((item) => item.evidenceRefs),
+      ...module.emotionalDrivers.flatMap((item) => item.evidenceRefs),
+    ], input);
+  }
+  if (moduleId === "structure-claims") {
+    const module = value as ContentAnalysisStructureClaims;
+    validateEvidenceRefs([
+      ...module.structure.flatMap((item) => item.evidenceRefs),
+      ...module.coreClaims.flatMap((item) => item.evidenceRefs),
+    ], input);
+  }
+  if (moduleId === "risks-boundaries") {
+    const module = value as ContentAnalysisRisksBoundaries;
+    validateEvidenceRefs(module.risks.flatMap((item) => item.evidenceRefs), input);
+  }
+}
+
+function validatedResult(value: ContentAnalysisSingleResponse, input: ContentAnalysisInput): ContentAnalysisResultV1 {
+  validateModuleEvidence("hook-drivers", value.hookDrivers, input);
+  validateModuleEvidence("structure-claims", value.structureClaims, input);
+  validateModuleEvidence("risks-boundaries", value.risksBoundaries, input);
+  const result = contentAnalysisResultSchema.safeParse({
+    schemaVersion: "content-analysis.v1",
+    source: sourceFromInput(input),
+    overview: value.overview,
+    ...value.hookDrivers,
+    ...value.structureClaims,
+    ...value.styleTemplate,
+    ...value.risksBoundaries,
+  });
+  if (!result.success) throw structuredIssue("内容拆解组装后不符合最终Schema", result.error);
+  return result.data;
 }
 
 export class ContentAnalysisFlow {
@@ -119,158 +125,178 @@ export class ContentAnalysisFlow {
     const runId = createRuntimeId();
     const startedAt = new Date().toISOString();
     const progress = new StructuredGenerationProgressTracker("content-analysis", MODULE_IDS, this.#dependencies.onProgress);
-    let reasoning = "";
-    let rawResponse = "";
-    const onEvent = async (event: AiStreamEvent) => {
-      if (event.type === "reasoning_delta") reasoning += `${reasoning ? "\n" : ""}${event.delta}`;
-      await this.#dependencies.onEvent?.({ ...event, runId });
-    };
-    const capture = (moduleId: StructuredGenerationModuleId) => async (attempt: StructuredModuleAttempt) => {
-      rawResponse += `${rawResponse ? "\n\n" : ""}--- ${moduleId}${attempt.repaired ? " repaired" : ""} ---\n${attempt.result.content}`;
-    };
-    const lifecycle = (moduleId: StructuredGenerationModuleId) => ({
-      onRepairing: () => progress.repairing(moduleId),
-      onValidating: (repairing: boolean) => progress.validating(moduleId, repairing),
-      onFailed: () => progress.failed(moduleId),
-      onAttempt: capture(moduleId),
-    });
 
     try {
-      await progress.preparing();
+      let parser = new TopLevelJsonFieldStream(RESPONSE_KEYS);
+      let fields: Partial<ContentAnalysisSingleResponse> = {};
+      let nextModuleIndex = 0;
+      let repairingAttempt = false;
+      let contentStarted = false;
+      let streamIssue: TaskError | undefined;
+      let failedModuleId: StructuredGenerationModuleId | undefined;
+      let finalResult: ContentAnalysisResultV1 | undefined;
 
-      await progress.running("overview");
-      const overview = await generateStructuredModule({
-        provider: this.#dependencies.provider,
-        request: request(
-          "content_analysis_overview_v1",
-          contentAnalysisOverviewJsonSchema,
-          contentAnalysisOverviewPrompt(input),
-          onEvent,
-        ),
-        schema: contentAnalysisOverviewSchema,
-        repairPrompt: (raw) => contentAnalysisOverviewRepairPrompt(raw, input),
-        failureMessage: "内容概览修复后仍不符合Schema",
-        ...lifecycle("overview"),
-      });
-      await progress.succeeded("overview", overview);
-
-      await progress.running("hook-drivers");
-      const hookDrivers = await generateStructuredModule({
-        provider: this.#dependencies.provider,
-        request: request(
-          "content_analysis_hook_drivers_v1",
-          contentAnalysisHookDriversJsonSchema,
-          contentAnalysisHookDriversPrompt(input, overview),
-          onEvent,
-        ),
-        schema: contentAnalysisHookDriversSchema,
-        validate: (value) => validateEvidenceRefs([
-          ...value.hook.evidenceRefs,
-          ...value.painPoints.flatMap((item) => item.evidenceRefs),
-          ...value.emotionalDrivers.flatMap((item) => item.evidenceRefs),
-        ], input),
-        repairPrompt: (raw) => contentAnalysisHookDriversRepairPrompt(raw, input),
-        failureMessage: "内容钩子与驱动修复后仍不符合Schema或证据约束",
-        ...lifecycle("hook-drivers"),
-      });
-      await progress.succeeded("hook-drivers", hookDrivers);
-
-      await progress.running("structure-claims");
-      const structureClaims = await generateStructuredModule({
-        provider: this.#dependencies.provider,
-        request: request(
-          "content_analysis_structure_claims_v1",
-          contentAnalysisStructureClaimsJsonSchema,
-          contentAnalysisStructureClaimsPrompt(input, overview, hookDrivers),
-          onEvent,
-        ),
-        schema: contentAnalysisStructureClaimsSchema,
-        validate: (value) => validateEvidenceRefs([
-          ...value.structure.flatMap((item) => item.evidenceRefs),
-          ...value.coreClaims.flatMap((item) => item.evidenceRefs),
-        ], input),
-        repairPrompt: (raw) => contentAnalysisStructureClaimsRepairPrompt(raw, input),
-        failureMessage: "内容结构与观点修复后仍不符合Schema或证据约束",
-        ...lifecycle("structure-claims"),
-      });
-      await progress.succeeded("structure-claims", structureClaims);
-
-      await progress.running("style-template");
-      const styleTemplate = await generateStructuredModule({
-        provider: this.#dependencies.provider,
-        request: request(
-          "content_analysis_style_template_v1",
-          contentAnalysisStyleTemplateJsonSchema,
-          contentAnalysisStyleTemplatePrompt(input, { ...overview, ...hookDrivers, ...structureClaims }),
-          onEvent,
-        ),
-        schema: contentAnalysisStyleTemplateSchema,
-        repairPrompt: (raw) => contentAnalysisStyleTemplateRepairPrompt(raw, input),
-        failureMessage: "内容风格与模板修复后仍不符合Schema",
-        ...lifecycle("style-template"),
-      });
-      await progress.succeeded("style-template", styleTemplate);
-
-      await progress.running("risks-boundaries");
-      const risksBoundaries = await generateStructuredModule({
-        provider: this.#dependencies.provider,
-        request: request(
-          "content_analysis_risks_boundaries_v1",
-          contentAnalysisRisksBoundariesJsonSchema,
-          contentAnalysisRisksBoundariesPrompt(input, {
-            ...overview,
-            ...hookDrivers,
-            ...structureClaims,
-            ...styleTemplate,
-          }),
-          onEvent,
-        ),
-        schema: contentAnalysisRisksBoundariesSchema,
-        validate: (value) => validateEvidenceRefs(value.risks.flatMap((item) => item.evidenceRefs), input),
-        repairPrompt: (raw) => contentAnalysisRisksBoundariesRepairPrompt(raw, input),
-        failureMessage: "内容风险与边界修复后仍不符合Schema或证据约束",
-        ...lifecycle("risks-boundaries"),
-      });
-      await progress.succeeded("risks-boundaries", risksBoundaries);
-
-      const assembled: ContentAnalysisResultV1 = {
-        schemaVersion: "content-analysis.v1",
-        source: sourceFromInput(input),
-        ...overview,
-        ...hookDrivers,
-        ...structureClaims,
-        ...styleTemplate,
-        ...risksBoundaries,
+      const acceptField = (field: CompletedTopLevelJsonField): void => {
+        const schema = contentAnalysisSingleResponseFieldSchemas[field.key as keyof typeof contentAnalysisSingleResponseFieldSchemas];
+        if (!schema) return;
+        const parsed = schema.safeParse(field.value);
+        if (!parsed.success) throw structuredIssue(`内容拆解字段${field.key}不符合Schema`, parsed.error);
+        switch (field.key) {
+          case "overview": fields.overview = parsed.data as ContentAnalysisSingleResponse["overview"]; break;
+          case "hookDrivers": fields.hookDrivers = parsed.data as ContentAnalysisSingleResponse["hookDrivers"]; break;
+          case "structureClaims": fields.structureClaims = parsed.data as ContentAnalysisSingleResponse["structureClaims"]; break;
+          case "styleTemplate": fields.styleTemplate = parsed.data as ContentAnalysisSingleResponse["styleTemplate"]; break;
+          case "risksBoundaries": fields.risksBoundaries = parsed.data as ContentAnalysisSingleResponse["risksBoundaries"]; break;
+        }
       };
-      const final = contentAnalysisResultSchema.safeParse(assembled);
-      if (!final.success) {
-        throw new TaskError({
-          code: "AI_STRUCTURED_OUTPUT_INVALID",
-          message: "内容拆解模块组装后不符合最终Schema",
-          action: "retry",
-          cause: final.error,
-        });
-      }
+      const moduleResult = (index: number): object | undefined => {
+        const candidate = [
+          fields.overview === undefined ? undefined : { overview: fields.overview },
+          fields.hookDrivers,
+          fields.structureClaims,
+          fields.styleTemplate,
+          fields.risksBoundaries,
+        ][index];
+        if (!candidate) return undefined;
+        const schema = [
+          contentAnalysisOverviewSchema,
+          contentAnalysisHookDriversSchema,
+          contentAnalysisStructureClaimsSchema,
+          contentAnalysisStyleTemplateSchema,
+          contentAnalysisRisksBoundariesSchema,
+        ][index];
+        const parsed = schema?.safeParse(candidate);
+        if (!parsed?.success) throw structuredIssue("内容拆解板块不符合安全展示Schema", parsed?.error);
+        const value = parsed.data as object;
+        validateModuleEvidence(MODULE_IDS[index]!, value, input);
+        return value;
+      };
+      const publishReadyModules = async (): Promise<void> => {
+        while (nextModuleIndex < MODULE_IDS.length) {
+          let result: object | undefined;
+          try {
+            result = moduleResult(nextModuleIndex);
+          } catch (error) {
+            streamIssue = error instanceof TaskError ? error : structuredIssue("内容拆解板块流式校验失败", error);
+            failedModuleId = MODULE_IDS[nextModuleIndex];
+            return;
+          }
+          if (!result) return;
+          await progress.succeeded(MODULE_IDS[nextModuleIndex]!, result);
+          nextModuleIndex += 1;
+          const nextModuleId = MODULE_IDS[nextModuleIndex];
+          if (nextModuleId) {
+            await (repairingAttempt ? progress.repairing(nextModuleId) : progress.running(nextModuleId));
+          }
+        }
+      };
+      const acceptFields = async (completed: readonly CompletedTopLevelJsonField[]): Promise<void> => {
+        if (streamIssue) return;
+        try {
+          for (const field of completed) {
+            acceptField(field);
+            await publishReadyModules();
+          }
+        } catch (error) {
+          streamIssue = error instanceof TaskError ? error : structuredIssue("内容拆解流式JSON解析失败", error);
+          failedModuleId ??= MODULE_IDS[Math.min(nextModuleIndex, MODULE_IDS.length - 1)];
+        }
+      };
+      const onEvent = async (event: AiStreamEvent): Promise<void> => {
+        if (event.type === "reasoning_delta") await progress.thinkingDelta(event.delta);
+        if (event.type === "content_delta") {
+          if (!contentStarted) {
+            contentStarted = true;
+            await progress.completeThinking();
+          }
+          if (!streamIssue) {
+            try {
+              await acceptFields(parser.push(event.delta));
+            } catch (error) {
+              streamIssue = error instanceof TaskError ? error : structuredIssue("内容拆解流式JSON解析失败", error);
+              failedModuleId ??= MODULE_IDS[Math.min(nextModuleIndex, MODULE_IDS.length - 1)];
+            }
+          }
+        }
+        if (event.type === "completed") {
+          await progress.completeThinking();
+          if (!streamIssue) {
+            try {
+              await acceptFields(parser.finish());
+            } catch (error) {
+              streamIssue = error instanceof TaskError ? error : structuredIssue("内容拆解流式JSON未完整闭合", error);
+              failedModuleId ??= MODULE_IDS[Math.min(nextModuleIndex, MODULE_IDS.length - 1)];
+            }
+          }
+        }
+        await this.#dependencies.onEvent?.({ ...event, runId });
+      };
+
+      await progress.preparing();
+      await progress.running(MODULE_IDS[0]);
+      const compact = await generateStructuredModule({
+        provider: this.#dependencies.provider,
+        request: {
+          model: "text",
+          output: "json",
+          jsonSchema: {
+            name: "content_analysis_single_response_v1",
+            schema: contentAnalysisSingleResponseJsonSchema,
+            strict: true,
+          },
+          maxOutputTokens: 4_096,
+          messages: [{ role: "system", content: contentAnalysisSinglePrompt(input) }],
+          onEvent,
+        },
+        schema: contentAnalysisSingleResponseSchema,
+        validate: (value) => {
+          if (streamIssue) throw streamIssue;
+          finalResult = validatedResult(value, input);
+        },
+        repairPrompt: (raw) => contentAnalysisSingleRepairPrompt(raw, input),
+        failureMessage: "内容拆解修复后仍不符合单对象Schema或证据约束",
+        onRepairing: async () => {
+          repairingAttempt = true;
+          contentStarted = false;
+          parser = new TopLevelJsonFieldStream(RESPONSE_KEYS);
+          fields = {};
+          nextModuleIndex = 0;
+          streamIssue = undefined;
+          failedModuleId = undefined;
+          await progress.restartRepairing(MODULE_IDS[0]);
+        },
+        onValidating: async () => {
+          await progress.completeThinking();
+          await progress.validatingDocument();
+        },
+        onFailed: async () => {
+          await progress.completeThinking();
+          await progress.failed(failedModuleId ?? MODULE_IDS[Math.min(nextModuleIndex, MODULE_IDS.length - 1)]!);
+        },
+      });
+      fields = compact;
+      await publishReadyModules();
+      finalResult ??= validatedResult(compact, input);
       await progress.saving();
       const run: ContentAnalysisRunRecord = {
         id: runId,
         status: "succeeded",
         startedAt,
         completedAt: new Date().toISOString(),
-        rawResponse,
-        reasoning,
+        rawResponse: "",
+        reasoning: "",
         promptVersions: PROMPT_VERSIONS,
       };
-      await this.#dependencies.store.saveResult(taskId, final.data, run);
-      return final.data;
+      await this.#dependencies.store.saveResult(taskId, finalResult, run);
+      return finalResult;
     } catch (error) {
       const run: ContentAnalysisRunRecord = {
         id: runId,
         status: "failed",
         startedAt,
         completedAt: new Date().toISOString(),
-        rawResponse,
-        reasoning,
+        rawResponse: "",
+        reasoning: "",
         promptVersions: PROMPT_VERSIONS,
         errorCode: error instanceof TaskError ? error.code : "INTERNAL_UNKNOWN_ERROR",
       };

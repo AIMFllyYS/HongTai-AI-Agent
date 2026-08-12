@@ -10,47 +10,32 @@ import type {
 } from "../../contracts/diagnosis";
 import { diagnosisConversationPrompt } from "../../prompts/diagnosis-conversation";
 import {
-  DIAGNOSIS_FOLLOW_UP_QUESTIONS_PROMPT_VERSION,
-  diagnosisFollowUpQuestionsPrompt,
-  diagnosisFollowUpQuestionsRepairPrompt,
-} from "../../prompts/diagnosis-follow-up-questions";
+  DIAGNOSIS_SINGLE_PROMPT_VERSION,
+  diagnosisSinglePrompt,
+  diagnosisSingleRepairPrompt,
+} from "../../prompts/diagnosis-report-single";
 import {
-  DIAGNOSIS_OBSERVATION_SUMMARY_PROMPT_VERSION,
-  diagnosisObservationSummaryPrompt,
-  diagnosisObservationSummaryRepairPrompt,
-} from "../../prompts/diagnosis-observation-summary";
-import {
-  DIAGNOSIS_SAFETY_LIMITATIONS_PROMPT_VERSION,
-  diagnosisSafetyLimitationsPrompt,
-  diagnosisSafetyLimitationsRepairPrompt,
-} from "../../prompts/diagnosis-safety-limitations";
-import {
-  DIAGNOSIS_VISUAL_OBSERVATIONS_PROMPT_VERSION,
-  diagnosisVisualObservationsPrompt,
-  diagnosisVisualObservationsRepairPrompt,
-} from "../../prompts/diagnosis-visual-observations";
-import {
-  DIAGNOSIS_WELLNESS_RECOMMENDATIONS_PROMPT_VERSION,
-  diagnosisWellnessRecommendationsPrompt,
-  diagnosisWellnessRecommendationsRepairPrompt,
-} from "../../prompts/diagnosis-wellness-recommendations";
-import {
-  diagnosisFollowUpQuestionsJsonSchema,
   diagnosisFollowUpQuestionsSchema,
-  diagnosisObservationSummaryJsonSchema,
   diagnosisObservationSummarySchema,
   diagnosisReportSchema,
-  diagnosisSafetyLimitationsJsonSchema,
   diagnosisSafetyLimitationsSchema,
-  diagnosisVisualObservationsJsonSchema,
+  diagnosisSingleResponseFieldSchemas,
+  diagnosisSingleResponseJsonSchema,
+  diagnosisSingleResponseSchema,
   diagnosisVisualObservationsSchema,
-  diagnosisWellnessRecommendationsJsonSchema,
   diagnosisWellnessRecommendationsSchema,
+  type DiagnosisFollowUpQuestions,
+  type DiagnosisObservationSummary,
   type DiagnosisReportV1,
+  type DiagnosisSafetyLimitations,
+  type DiagnosisSingleResponse,
+  type DiagnosisVisualObservations,
+  type DiagnosisWellnessRecommendations,
   type ObservationMode,
 } from "../../schemas/diagnosis-report";
-import { generateStructuredModule, type StructuredModuleAttempt } from "../../structured-output/generate-structured-module";
+import { generateStructuredModule } from "../../structured-output/generate-structured-module";
 import { StructuredGenerationProgressTracker } from "../../structured-output/structured-generation-progress";
+import { TopLevelJsonFieldStream, type CompletedTopLevelJsonField } from "../../structured-output/top-level-json-field-stream";
 
 const IMAGE_MIME_TYPE_PATTERN = /^image\/[a-z0-9][a-z0-9.+-]*$/;
 
@@ -133,36 +118,95 @@ const REPORT_MODULE_IDS = [
   "follow-up-questions",
 ] as const satisfies readonly StructuredGenerationModuleId[];
 
-const REPORT_PROMPT_VERSIONS = [
-  DIAGNOSIS_VISUAL_OBSERVATIONS_PROMPT_VERSION,
-  DIAGNOSIS_OBSERVATION_SUMMARY_PROMPT_VERSION,
-  DIAGNOSIS_WELLNESS_RECOMMENDATIONS_PROMPT_VERSION,
-  DIAGNOSIS_SAFETY_LIMITATIONS_PROMPT_VERSION,
-  DIAGNOSIS_FOLLOW_UP_QUESTIONS_PROMPT_VERSION,
-] as const;
+const REPORT_PROMPT_VERSIONS = [DIAGNOSIS_SINGLE_PROMPT_VERSION] as const;
+const SINGLE_RESPONSE_KEYS = ["quality", "observation", "summary", "advice", "safety", "followUp"] as const;
+const FIXED_DISCLAIMER = "本报告仅提供图片中可见状态的日常观察参考，不是疾病诊断，不提供患病概率，也不能替代专业检查。";
 
-function validateVisualMode(value: import("../../schemas/diagnosis-report").DiagnosisVisualObservations, mode: ObservationMode): void {
-  const allowedPrefix = mode === "tongue" ? "tongue_" : "facial_";
-  if (value.observations.some((item) => item.category !== "localized_feature" && !item.category.startsWith(allowedPrefix))) {
-    throw new TaskError({ code: "AI_STRUCTURED_OUTPUT_INVALID", message: "观察分类与用户选择的图片类型不匹配", action: "retry" });
-  }
+interface DiagnosisSections {
+  readonly visual: DiagnosisVisualObservations;
+  readonly summary: DiagnosisObservationSummary;
+  readonly wellness: DiagnosisWellnessRecommendations;
+  readonly safety: DiagnosisSafetyLimitations;
+  readonly followUp: DiagnosisFollowUpQuestions;
 }
 
-function validateWellnessReferences(
-  value: import("../../schemas/diagnosis-report").DiagnosisWellnessRecommendations,
-  visual: import("../../schemas/diagnosis-report").DiagnosisVisualObservations,
-): void {
-  const ids = new Set(visual.observations.map((item) => item.id));
-  const references = [
-    ...value.wellnessReferences.flatMap((item) => item.basisObservationIds),
-    ...value.recommendations.flatMap((item) => item.relatedObservationIds),
-  ];
-  if (references.some((id) => !ids.has(id))) {
-    throw new TaskError({ code: "AI_STRUCTURED_OUTPUT_INVALID", message: "状态参考或建议引用了不存在的观察项", action: "retry" });
-  }
-  if (!visual.imageQuality.usable && (value.wellnessReferences.length > 0 || value.recommendations.length > 0)) {
-    throw new TaskError({ code: "AI_STRUCTURED_OUTPUT_INVALID", message: "图片不可用时不能生成无依据的状态参考或建议", action: "retry" });
-  }
+function diagnosisSections(value: DiagnosisSingleResponse, mode: ObservationMode): DiagnosisSections {
+  const usable = value.quality !== "unusable";
+  const observationText = value.observation.trim();
+  const advice = value.advice.trim();
+  const hasObservation = usable && Boolean(observationText);
+  const visual: DiagnosisVisualObservations = {
+    imageQuality: {
+      usable,
+      overallQuality: value.quality,
+      limitations: value.quality === "good" ? [] : ["当前图片的光线、角度或清晰度限制了可见信息。"],
+      retakeSuggestions: value.quality === "good" ? [] : ["请在自然光、对焦清晰且无遮挡的条件下重新拍摄。"],
+    },
+    observations: hasObservation ? [{
+      id: "obs-1",
+      category: mode === "tongue" ? "tongue_body" : "facial_skin",
+      region: mode === "tongue" ? "舌部可见区域" : "面部可见区域",
+      label: "可见状态",
+      description: observationText,
+      visibility: value.quality === "good" ? "clear" : "limited",
+      evidenceDescription: observationText,
+    }] : [],
+  };
+  const fallbackSummary = usable ? "本次图片未形成更多可确认的可见信息。" : "当前图片质量不足，暂不形成可见状态结论。";
+  const summary: DiagnosisObservationSummary = {
+    summary: {
+      headline: usable ? `${mode === "tongue" ? "舌部" : "面部"}可见状态摘要` : "图片暂不适合观察",
+      keyPoints: [observationText || value.summary || fallbackSummary],
+      narrative: value.summary || fallbackSummary,
+    },
+  };
+  const wellness: DiagnosisWellnessRecommendations = {
+    wellnessReferences: [],
+    recommendations: hasObservation && advice ? [{
+      category: "monitoring",
+      priority: "low",
+      title: "日常记录建议",
+      action: advice,
+      rationale: "基于本次图片中已确认的可见状态，建议只用于日常记录和变化比较。",
+      relatedObservationIds: ["obs-1"],
+    }] : [],
+  };
+  const safety: DiagnosisSafetyLimitations = {
+    safetyGuidance: {
+      level: usable ? "none" : "routine_attention",
+      reasons: usable ? [] : ["当前图片不足以支持可见状态观察。"],
+      recommendedAction: value.safety,
+    },
+    limitations: [
+      "单张图片与拍摄条件会限制可见信息，不能替代专业检查。",
+      ...(value.quality === "good" ? [] : ["建议在更合适的拍摄条件下重新记录。"]),
+    ],
+    disclaimer: FIXED_DISCLAIMER,
+  };
+  const followUp: DiagnosisFollowUpQuestions = {
+    followUpQuestions: value.followUp ? [value.followUp] : [],
+  };
+  return { visual, summary, wellness, safety, followUp };
+}
+
+function structuredIssue(message: string, cause?: unknown): TaskError {
+  return new TaskError({ code: "AI_STRUCTURED_OUTPUT_INVALID", message, action: "retry", ...(cause === undefined ? {} : { cause }) });
+}
+
+function validatedReport(value: DiagnosisSingleResponse, mode: ObservationMode): DiagnosisReportV1 {
+  const sections = diagnosisSections(value, mode);
+  const result = diagnosisReportSchema.safeParse({
+    schemaVersion: "diagnosis-report.v1",
+    mode,
+    promptVersion: DIAGNOSIS_SINGLE_PROMPT_VERSION,
+    ...sections.visual,
+    ...sections.summary,
+    ...sections.wellness,
+    ...sections.safety,
+    ...sections.followUp,
+  });
+  if (!result.success) throw structuredIssue("观察报告组装后不符合最终Schema", result.error);
+  return result.data;
 }
 
 export class DiagnosisFlow {
@@ -192,182 +236,196 @@ export class DiagnosisFlow {
     const runId = createRuntimeId();
     const startedAt = new Date().toISOString();
     const progress = new StructuredGenerationProgressTracker("diagnosis-report", REPORT_MODULE_IDS, this.#dependencies.onProgress);
-    let reasoning = "";
-    let rawResponse = "";
-    const onEvent = async (event: AiStreamEvent) => {
-      if (event.type === "reasoning_delta") reasoning += `${reasoning ? "\n" : ""}${event.delta}`;
-      await this.#dependencies.onEvent?.({ ...event, runId });
-    };
-    const capture = (moduleId: StructuredGenerationModuleId) => async (attempt: StructuredModuleAttempt) => {
-      rawResponse += `${rawResponse ? "\n\n" : ""}--- ${moduleId}${attempt.repaired ? " repaired" : ""} ---\n${attempt.result.content}`;
-    };
-    const lifecycle = (moduleId: StructuredGenerationModuleId) => ({
-      onRepairing: () => progress.repairing(moduleId),
-      onValidating: (repairing: boolean) => progress.validating(moduleId, repairing),
-      onFailed: () => progress.failed(moduleId),
-      onAttempt: capture(moduleId),
-    });
     try {
       const session = safeSession(storedSession, sessionId);
       const image = safeSessionImage(
         await this.#dependencies.repository.loadSessionImage(session.id),
         session.image.mimeType,
       );
-      await progress.preparing();
+      let parser = new TopLevelJsonFieldStream(SINGLE_RESPONSE_KEYS);
+      let fields: Partial<DiagnosisSingleResponse> = {};
+      let nextModuleIndex = 0;
+      let repairingAttempt = false;
+      let contentStarted = false;
+      let streamIssue: TaskError | undefined;
+      let failedModuleId: StructuredGenerationModuleId | undefined;
+      let reportResult: DiagnosisReportV1 | undefined;
 
-      await progress.running("visual-observations");
-      let visual;
-      try {
-        visual = await generateStructuredModule({
-          provider: this.#dependencies.provider,
-          request: {
-            model: "vision",
-            output: "json",
-            jsonSchema: {
-              name: "diagnosis_visual_observations_v1",
-              schema: diagnosisVisualObservationsJsonSchema,
-              strict: true,
-            },
-            messages: [
-              { role: "system", content: diagnosisVisualObservationsPrompt(session.mode) },
-              { role: "user", content: [
-                { type: "text", text: "请只生成可见观察模块。" },
-                imageMessage(image),
-              ] },
-            ],
-            onEvent,
-          },
-          schema: diagnosisVisualObservationsSchema,
-          validate: (value) => validateVisualMode(value, session.mode),
-          repairPrompt: (raw) => diagnosisVisualObservationsRepairPrompt(raw, session.mode),
-          failureMessage: "可见观察模块修复后仍不符合Schema",
-          ...lifecycle("visual-observations"),
-        });
-      } catch (error) {
-        throw diagnosisVisualFailure(error);
-      }
-      await progress.succeeded("visual-observations", visual);
-
-      await progress.running("observation-summary");
-      const summary = await generateStructuredModule({
-        provider: this.#dependencies.provider,
-        request: {
-          model: "text",
-          output: "json",
-          jsonSchema: {
-            name: "diagnosis_observation_summary_v1",
-            schema: diagnosisObservationSummaryJsonSchema,
-            strict: true,
-          },
-          messages: [{ role: "system", content: diagnosisObservationSummaryPrompt(session.mode, visual) }],
-          onEvent,
-        },
-        schema: diagnosisObservationSummarySchema,
-        repairPrompt: diagnosisObservationSummaryRepairPrompt,
-        failureMessage: "观察摘要模块修复后仍不符合Schema",
-        ...lifecycle("observation-summary"),
-      });
-      await progress.succeeded("observation-summary", summary);
-
-      await progress.running("wellness-recommendations");
-      const wellness = await generateStructuredModule({
-        provider: this.#dependencies.provider,
-        request: {
-          model: "text",
-          output: "json",
-          jsonSchema: {
-            name: "diagnosis_wellness_recommendations_v1",
-            schema: diagnosisWellnessRecommendationsJsonSchema,
-            strict: true,
-          },
-          messages: [{ role: "system", content: diagnosisWellnessRecommendationsPrompt(visual, summary) }],
-          onEvent,
-        },
-        schema: diagnosisWellnessRecommendationsSchema,
-        validate: (value) => validateWellnessReferences(value, visual),
-        repairPrompt: (raw) => diagnosisWellnessRecommendationsRepairPrompt(raw, visual.observations.map((item) => item.id)),
-        failureMessage: "状态参考与建议模块修复后仍不符合Schema或引用约束",
-        ...lifecycle("wellness-recommendations"),
-      });
-      await progress.succeeded("wellness-recommendations", wellness);
-
-      await progress.running("safety-limitations");
-      const safety = await generateStructuredModule({
-        provider: this.#dependencies.provider,
-        request: {
-          model: "text",
-          output: "json",
-          jsonSchema: {
-            name: "diagnosis_safety_limitations_v1",
-            schema: diagnosisSafetyLimitationsJsonSchema,
-            strict: true,
-          },
-          messages: [{ role: "system", content: diagnosisSafetyLimitationsPrompt({ ...visual, ...summary, ...wellness }) }],
-          onEvent,
-        },
-        schema: diagnosisSafetyLimitationsSchema,
-        repairPrompt: diagnosisSafetyLimitationsRepairPrompt,
-        failureMessage: "安全与限制模块修复后仍不符合Schema",
-        ...lifecycle("safety-limitations"),
-      });
-      await progress.succeeded("safety-limitations", safety);
-
-      await progress.running("follow-up-questions");
-      const followUp = await generateStructuredModule({
-        provider: this.#dependencies.provider,
-        request: {
-          model: "text",
-          output: "json",
-          jsonSchema: {
-            name: "diagnosis_follow_up_questions_v1",
-            schema: diagnosisFollowUpQuestionsJsonSchema,
-            strict: true,
-          },
-          messages: [{ role: "system", content: diagnosisFollowUpQuestionsPrompt({ ...visual, ...summary, ...wellness, ...safety }) }],
-          onEvent,
-        },
-        schema: diagnosisFollowUpQuestionsSchema,
-        repairPrompt: diagnosisFollowUpQuestionsRepairPrompt,
-        failureMessage: "追问模块修复后仍不符合Schema",
-        ...lifecycle("follow-up-questions"),
-      });
-      await progress.succeeded("follow-up-questions", followUp);
-
-      const assembled: DiagnosisReportV1 = {
-        schemaVersion: "diagnosis-report.v1",
-        mode: session.mode,
-        promptVersion: "diagnosis-modular.v1",
-        ...visual,
-        ...summary,
-        ...wellness,
-        ...safety,
-        ...followUp,
+      const acceptField = (field: CompletedTopLevelJsonField): void => {
+        const schema = diagnosisSingleResponseFieldSchemas[field.key as keyof typeof diagnosisSingleResponseFieldSchemas];
+        if (!schema) return;
+        const parsed = schema.safeParse(field.value);
+        if (!parsed.success) throw structuredIssue(`诊察字段${field.key}不符合Schema`, parsed.error);
+        switch (field.key) {
+          case "quality": fields.quality = parsed.data as DiagnosisSingleResponse["quality"]; break;
+          case "observation": fields.observation = parsed.data as string; break;
+          case "summary": fields.summary = parsed.data as string; break;
+          case "advice": fields.advice = parsed.data as string; break;
+          case "safety": fields.safety = parsed.data as string; break;
+          case "followUp": fields.followUp = parsed.data as string; break;
+        }
       };
-      const report = diagnosisReportSchema.safeParse(assembled);
-      if (!report.success) {
-        throw new TaskError({
-          code: "AI_STRUCTURED_OUTPUT_INVALID",
-          message: "观察报告模块组装后不符合最终Schema",
-          action: "retry",
-          cause: report.error,
-        });
-      }
+      const has = (key: keyof DiagnosisSingleResponse): boolean => fields[key] !== undefined;
+      const moduleResult = (index: number): object | undefined => {
+        const ready = [
+          has("quality") && has("observation"),
+          has("summary"),
+          has("quality") && has("observation") && has("advice"),
+          has("quality") && has("safety"),
+          has("followUp"),
+        ][index];
+        if (!ready) return undefined;
+        if (fields.quality === "unusable" && fields.observation) throw structuredIssue("图片不可用时不能展示可见观察");
+        if (fields.quality === "unusable" && fields.advice) throw structuredIssue("图片不可用时不能展示无依据建议");
+        const sections = diagnosisSections({
+          quality: fields.quality ?? "unusable",
+          observation: fields.observation ?? "",
+          summary: fields.summary ?? "",
+          advice: fields.advice ?? "",
+          safety: fields.safety ?? "安全说明正在生成。",
+          followUp: fields.followUp ?? "",
+        }, session.mode);
+        const candidate = [sections.visual, sections.summary, sections.wellness, sections.safety, sections.followUp][index];
+        const schema = [
+          diagnosisVisualObservationsSchema,
+          diagnosisObservationSummarySchema,
+          diagnosisWellnessRecommendationsSchema,
+          diagnosisSafetyLimitationsSchema,
+          diagnosisFollowUpQuestionsSchema,
+        ][index];
+        const parsed = schema?.safeParse(candidate);
+        if (!parsed?.success) throw structuredIssue("诊察板块不符合安全展示Schema", parsed?.error);
+        return parsed.data as object;
+      };
+      const publishReadyModules = async (): Promise<void> => {
+        while (nextModuleIndex < REPORT_MODULE_IDS.length) {
+          let result: object | undefined;
+          try {
+            result = moduleResult(nextModuleIndex);
+          } catch (error) {
+            streamIssue = error instanceof TaskError ? error : structuredIssue("诊察板块流式校验失败", error);
+            failedModuleId = REPORT_MODULE_IDS[nextModuleIndex];
+            return;
+          }
+          if (!result) return;
+          await progress.succeeded(REPORT_MODULE_IDS[nextModuleIndex]!, result);
+          nextModuleIndex += 1;
+          const nextModuleId = REPORT_MODULE_IDS[nextModuleIndex];
+          if (nextModuleId) {
+            await (repairingAttempt ? progress.repairing(nextModuleId) : progress.running(nextModuleId));
+          }
+        }
+      };
+      const acceptFields = async (completed: readonly CompletedTopLevelJsonField[]): Promise<void> => {
+        if (streamIssue) return;
+        try {
+          for (const field of completed) {
+            acceptField(field);
+            await publishReadyModules();
+          }
+        } catch (error) {
+          streamIssue = error instanceof TaskError ? error : structuredIssue("诊察流式JSON解析失败", error);
+          failedModuleId ??= REPORT_MODULE_IDS[Math.min(nextModuleIndex, REPORT_MODULE_IDS.length - 1)];
+        }
+      };
+      const onEvent = async (event: AiStreamEvent): Promise<void> => {
+        if (event.type === "reasoning_delta") await progress.thinkingDelta(event.delta);
+        if (event.type === "content_delta") {
+          if (!contentStarted) {
+            contentStarted = true;
+            await progress.completeThinking();
+          }
+          if (!streamIssue) {
+            try {
+              await acceptFields(parser.push(event.delta));
+            } catch (error) {
+              streamIssue = error instanceof TaskError ? error : structuredIssue("诊察流式JSON解析失败", error);
+              failedModuleId ??= REPORT_MODULE_IDS[Math.min(nextModuleIndex, REPORT_MODULE_IDS.length - 1)];
+            }
+          }
+        }
+        if (event.type === "completed") {
+          await progress.completeThinking();
+          if (!streamIssue) {
+            try {
+              await acceptFields(parser.finish());
+            } catch (error) {
+              streamIssue = error instanceof TaskError ? error : structuredIssue("诊察流式JSON未完整闭合", error);
+              failedModuleId ??= REPORT_MODULE_IDS[Math.min(nextModuleIndex, REPORT_MODULE_IDS.length - 1)];
+            }
+          }
+        }
+        await this.#dependencies.onEvent?.({ ...event, runId });
+      };
+
+      await progress.preparing();
+      await progress.running("visual-observations");
+      const compact = await generateStructuredModule({
+        provider: this.#dependencies.provider,
+        request: {
+          model: "vision",
+          output: "json",
+          jsonSchema: {
+            name: "diagnosis_single_response_v1",
+            schema: diagnosisSingleResponseJsonSchema,
+            strict: true,
+          },
+          maxOutputTokens: 2_048,
+          messages: [
+            { role: "system", content: diagnosisSinglePrompt(session.mode) },
+            { role: "user", content: [
+              { type: "text", text: "请根据这张图片生成一次紧凑、结构化的可见状态观察。" },
+              imageMessage(image),
+            ] },
+          ],
+          onEvent,
+        },
+        schema: diagnosisSingleResponseSchema,
+        validate: (value) => {
+          if (streamIssue) throw streamIssue;
+          reportResult = validatedReport(value, session.mode);
+        },
+        repairPrompt: (raw) => diagnosisSingleRepairPrompt(raw, session.mode),
+        failureMessage: "诊察报告修复后仍不符合紧凑Schema或安全边界",
+        mapInitialError: diagnosisVisualFailure,
+        onRepairing: async () => {
+          repairingAttempt = true;
+          contentStarted = false;
+          parser = new TopLevelJsonFieldStream(SINGLE_RESPONSE_KEYS);
+          fields = {};
+          nextModuleIndex = 0;
+          streamIssue = undefined;
+          failedModuleId = undefined;
+          await progress.restartRepairing(REPORT_MODULE_IDS[0]);
+        },
+        onValidating: async () => {
+          await progress.completeThinking();
+          await progress.validatingDocument();
+        },
+        onFailed: async () => {
+          await progress.completeThinking();
+          await progress.failed(failedModuleId ?? REPORT_MODULE_IDS[Math.min(nextModuleIndex, REPORT_MODULE_IDS.length - 1)]!);
+        },
+      });
+      fields = compact;
+      await publishReadyModules();
+      reportResult ??= validatedReport(compact, session.mode);
       await progress.saving();
-      await this.#dependencies.repository.saveReport(session.id, report.data);
+      await this.#dependencies.repository.saveReport(session.id, reportResult);
       await this.#dependencies.repository.saveRun(session.id, {
         id: runId,
         kind: "diagnosis",
         status: "succeeded",
         startedAt,
         completedAt: new Date().toISOString(),
-        rawResponse,
-        reasoning,
+        rawResponse: "",
+        reasoning: "",
         promptVersions: REPORT_PROMPT_VERSIONS,
       });
-      return { session, report: report.data };
+      return { session, report: reportResult };
     } catch (error) {
       await this.#dependencies.repository.saveRun(sessionId, {
-        id: runId, kind: "diagnosis", status: "failed", startedAt, completedAt: new Date().toISOString(), rawResponse, reasoning,
+        id: runId, kind: "diagnosis", status: "failed", startedAt, completedAt: new Date().toISOString(), rawResponse: "", reasoning: "",
         promptVersions: REPORT_PROMPT_VERSIONS,
         errorCode: error instanceof TaskError ? error.code : "INTERNAL_UNKNOWN_ERROR",
       });
@@ -382,8 +440,6 @@ export class DiagnosisFlow {
     if (!question.trim()) throw new TaskError({ code: "INPUT_EMPTY", message: "对话内容不能为空", action: "edit_input" });
     const runId = createRuntimeId();
     const startedAt = new Date().toISOString();
-    let reasoning = "";
-    let rawResponse = "";
     try {
       const messages = await this.#conversationMessages(sessionId, report, question.trim());
       const result: AiGenerateResult = await this.#dependencies.provider.generate({
@@ -391,19 +447,17 @@ export class DiagnosisFlow {
         output: "text",
         messages,
         onEvent: async (event) => {
-          if (event.type === "reasoning_delta") reasoning += `${reasoning ? "\n" : ""}${event.delta}`;
           await this.#dependencies.onEvent?.({ ...event, runId });
         },
       });
-      rawResponse = result.content;
       const now = new Date().toISOString();
       const userMessage: AiMessage = { id: messageId(), sessionId, reportId: session.reportId, role: "user", content: question.trim(), status: "completed", createdAt: now };
       const assistantMessage: AiMessage = { id: messageId(), sessionId, reportId: session.reportId, role: "assistant", content: result.content, status: "completed", createdAt: new Date().toISOString() };
       await this.#dependencies.repository.appendMessages(sessionId, [userMessage, assistantMessage]);
-      await this.#dependencies.repository.saveRun(sessionId, { id: runId, kind: "conversation", status: "succeeded", startedAt, completedAt: new Date().toISOString(), rawResponse, reasoning });
+      await this.#dependencies.repository.saveRun(sessionId, { id: runId, kind: "conversation", status: "succeeded", startedAt, completedAt: new Date().toISOString(), rawResponse: "", reasoning: "" });
       return assistantMessage;
     } catch (error) {
-      await this.#dependencies.repository.saveRun(sessionId, { id: runId, kind: "conversation", status: "failed", startedAt, completedAt: new Date().toISOString(), rawResponse, reasoning, errorCode: error instanceof TaskError ? error.code : "INTERNAL_UNKNOWN_ERROR" });
+      await this.#dependencies.repository.saveRun(sessionId, { id: runId, kind: "conversation", status: "failed", startedAt, completedAt: new Date().toISOString(), rawResponse: "", reasoning: "", errorCode: error instanceof TaskError ? error.code : "INTERNAL_UNKNOWN_ERROR" });
       throw error;
     }
   }

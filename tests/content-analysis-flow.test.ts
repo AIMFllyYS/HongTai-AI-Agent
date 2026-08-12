@@ -72,60 +72,57 @@ class SequenceProvider implements AiProvider {
         offset += width;
         widthIndex += 1;
       }
-      await request.onEvent?.({ type: "completed" });
+    } else if (content) {
+      await request.onEvent?.({ type: "content_delta", delta: content });
     }
+    await request.onEvent?.({ type: "completed" });
     return { content, reasoning: "拆解思考" };
   }
   async transcribe(): Promise<string> { return ""; }
 }
 
-function moduleResponses(reference = "segment-0"): readonly string[] {
+function singleResponse(reference = "segment-0") {
   const result = resultWithReference(reference);
-  return [
-    JSON.stringify({ overview: result.overview }),
-    JSON.stringify({ hook: result.hook, painPoints: result.painPoints, emotionalDrivers: result.emotionalDrivers }),
-    JSON.stringify({ structure: result.structure, coreClaims: result.coreClaims }),
-    JSON.stringify({ style: result.style, reusableTemplate: result.reusableTemplate }),
-    JSON.stringify({ risks: result.risks }),
-  ];
+  return {
+    overview: result.overview,
+    hookDrivers: { hook: result.hook, painPoints: result.painPoints, emotionalDrivers: result.emotionalDrivers },
+    structureClaims: { structure: result.structure, coreClaims: result.coreClaims },
+    styleTemplate: { style: result.style, reusableTemplate: result.reusableTemplate },
+    risksBoundaries: { risks: result.risks },
+  };
 }
 
-test("内容拆解固定五个模块并由本地注入真实source", async () => {
+test("内容拆解一次生成五个模块并由本地注入真实source", async () => {
   const store = new MemoryContentStore();
-  const provider = new SequenceProvider(moduleResponses());
+  const provider = new SequenceProvider([JSON.stringify(singleResponse())]);
   const progress: StructuredGenerationProgressV1[] = [];
   const flow = new ContentAnalysisFlow({ provider, store, onProgress: (event) => { progress.push(event); } });
   const result = await flow.run("task-1");
-  assert.equal(provider.calls.length, 5);
-  assert.deepEqual(provider.calls.map((call) => call.model), ["text", "text", "text", "text", "text"]);
-  assert.deepEqual(provider.calls.map((call) => call.jsonSchema?.name), [
-    "content_analysis_overview_v1",
-    "content_analysis_hook_drivers_v1",
-    "content_analysis_structure_claims_v1",
-    "content_analysis_style_template_v1",
-    "content_analysis_risks_boundaries_v1",
-  ]);
-  for (const call of provider.calls) {
-    assert.doesNotMatch(String(call.messages[0]?.content), /测试内容|测试作者/);
-    assert.match(String(call.messages[0]?.content), /segment-0/);
-  }
+  assert.equal(provider.calls.length, 1);
+  assert.equal(provider.calls[0]?.model, "text");
+  assert.equal(provider.calls[0]?.jsonSchema?.name, "content_analysis_single_response_v1");
+  assert.equal(provider.calls[0]?.maxOutputTokens, 4_096);
+  const prompt = String(provider.calls[0]?.messages[0]?.content);
+  assert.doesNotMatch(prompt, /测试内容|测试作者/);
+  assert.equal(prompt.split("segment-0").length - 1, 1, "the real evidence unit must appear only once");
   assert.deepEqual(result.hook.evidenceRefs, ["segment-0"]);
   assert.deepEqual(result.source, { taskId: "task-1", platform: "bilibili", contentType: "video", sourceKind: "asr" });
-  assert.equal(store.run?.reasoning, Array.from({ length: 5 }, () => "拆解思考").join("\n"));
-  assert.equal(store.run?.promptVersions.length, 5);
-  assert.equal(new Set(store.run?.promptVersions).size, 5);
+  assert.equal(store.run?.reasoning, "");
+  assert.equal(store.run?.rawResponse, "");
+  assert.deepEqual(store.run?.promptVersions, ["content-analysis-single-stream.v1"]);
   const succeeded = progress.flatMap((snapshot) => snapshot.modules.filter((module) => module.status === "succeeded"));
   assert.ok(succeeded.length > 0);
   assert.equal(progress.some((snapshot) => snapshot.modules.some((module) => module.status !== "succeeded" && module.result !== undefined)), false);
+  assert.deepEqual(progress.at(-1)?.modules.map((module) => module.status), ["succeeded", "succeeded", "succeeded", "succeeded", "succeeded"]);
+  assert.equal(progress.some((snapshot) => snapshot.thinking?.text === "拆解思考"), true);
+  assert.doesNotMatch(JSON.stringify(store.run), /拆解思考|围绕用户痛点展开/u);
 });
 
 test("任意JSON碎片边界不会把未校验字段暴露为模块结果", async () => {
   const store = new MemoryContentStore();
-  const responses = [...moduleResponses()];
-  const overview = JSON.parse(responses[0]!) as { overview: { summary: string } };
-  overview.overview.summary = "他说\"先看证据，再谈方法\"";
-  responses[0] = JSON.stringify(overview);
-  const provider = new SequenceProvider(responses, true);
+  const response = singleResponse();
+  response.overview.summary = "他说\"先看证据，再谈方法\"";
+  const provider = new SequenceProvider([JSON.stringify(response)], true);
   let latest: StructuredGenerationProgressV1 | undefined;
   let contentDeltaCount = 0;
 
@@ -136,9 +133,11 @@ test("任意JSON碎片边界不会把未校验字段暴露为模块结果", asyn
     onEvent: (event) => {
       if (event.type !== "content_delta") return;
       contentDeltaCount += 1;
-      const active = latest?.modules.find((module) => module.status === "running" || module.status === "repairing");
-      assert.ok(active, "a streamed transport delta must belong to one active module");
-      assert.equal(active.result, undefined, "partial JSON is not a validated module result");
+      assert.equal(
+        latest?.modules.some((module) => module.status !== "succeeded" && module.result !== undefined),
+        false,
+        "partial JSON is not a validated module result",
+      );
     },
   }).run("task-1");
 
@@ -148,24 +147,23 @@ test("任意JSON碎片边界不会把未校验字段暴露为模块结果", asyn
   assert.equal(latest?.modules.every((module) => module.status === "succeeded" && module.result !== undefined), true);
 });
 
-test("内容拆解只修复当前失败模块一次且不会继续调用后续模块", async () => {
+test("内容拆解整文只修复一次且证据错误不会保存正式结果", async () => {
   const store = new MemoryContentStore();
-  const responses = [...moduleResponses()];
-  const invalid = resultWithReference("missing-segment");
-  responses.splice(2, 3,
-    JSON.stringify({ structure: invalid.structure, coreClaims: invalid.coreClaims }),
-    JSON.stringify({ structure: invalid.structure, coreClaims: invalid.coreClaims }),
-  );
-  const provider = new SequenceProvider(responses);
+  const invalid = JSON.stringify(singleResponse("missing-segment"));
+  const provider = new SequenceProvider([invalid, invalid]);
   const flow = new ContentAnalysisFlow({ provider, store });
   await assert.rejects(
     () => flow.run("task-1"),
     (error) => error instanceof TaskError && error.code === "AI_FORMAT_REPAIR_FAILED",
   );
-  assert.equal(provider.calls.length, 4, "modules after structure-claims must remain pending");
-  assert.equal(provider.calls[2]?.jsonSchema?.name, "content_analysis_structure_claims_v1");
-  assert.equal(provider.calls[3]?.jsonSchema?.name, "content_analysis_structure_claims_v1");
+  assert.equal(provider.calls.length, 2);
+  assert.deepEqual(provider.calls.map((call) => call.jsonSchema?.name), [
+    "content_analysis_single_response_v1",
+    "content_analysis_single_response_v1",
+  ]);
   assert.equal(store.failedRun?.status, "failed");
+  assert.equal(store.failedRun?.reasoning, "");
+  assert.equal(store.failedRun?.rawResponse, "");
   assert.equal(store.saved, undefined);
 });
 
@@ -179,11 +177,11 @@ test("证据不足时允许空受众、空结构和空模板步骤而不诱导�
 
 test("本地上传视频使用显式来源并通过正式拆解语义校验", async () => {
   const store = new LocalVideoContentStore();
-  const provider = new SequenceProvider(moduleResponses());
+  const provider = new SequenceProvider([JSON.stringify(singleResponse())]);
 
   const result = await new ContentAnalysisFlow({ provider, store }).run("task-1");
 
   assert.equal(result.source.platform, "local_upload");
   assert.equal(contentAnalysisResultSchema.safeParse(result).success, true);
-  assert.equal(provider.calls.length, 5);
+  assert.equal(provider.calls.length, 1);
 });

@@ -14,7 +14,6 @@ const baseOptions = {
   supportsJsonSchema: false,
   asrTransport: "chat-input-audio" as const,
   contextWindowTokens: 32_000,
-  reasoningMode: "provider-default" as const,
   retryDelaysMs: [0],
 };
 
