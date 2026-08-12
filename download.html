@@ -1059,7 +1059,7 @@
   <footer>
     <div class="shell footer-inner">
       <div><strong>宏泰 AI 智能体</strong> · Pulse Flow</div>
-      <div class="footer-meta">Android 测试版本下载页 · 内容更新于 2026-08-11</div>
+      <div class="footer-meta">Android 测试版本下载页 · 内容更新于 2026-08-13</div>
     </div>
   </footer>
 
@@ -1105,15 +1105,13 @@
     // 更新维护区：时间来自 Git 提交记录，显示时明确使用 UTC+13。
     const CHANGELOG = [
       {
-        iso: "2026-08-12T23:44:16+13:00",
-        date: "2026.08.12",
-        time: "23:44:16 UTC+13",
-        category: "可靠性修复 · v0.1.5 开发批次",
-        title: "后台返回、异常恢复和照片权限完成一轮加固",
-        description: "应用从后台重新打开后，会主动检查尚未完成的采集、拆解、图片观察和视频制作任务：能够安全继续显示的内容会自动刷新，无法可靠续接的任务会明确提示“已中断”，保留已经保存的资料，并引导用户重新操作，不再长期停留在虚假的“处理中”。系统相机和相册选择仍能正常返回，照片只读取用户主动选择的单项内容，不申请整库相册或相机权限。当前安装包内部仍是 0.0.1 / versionCode 3，只适合全新安装测试，不能覆盖升级已经安装的 v0.1.4 / versionCode 11。",
-        referenceLabel: "重要：全新安装测试包 · 包内 0.0.1 / code3",
-        downloadUrl: "https://husteread.com/storage/public/HongTai-AI-Agent-debug-v0.1.5.apk",
-        downloadLabel: "下载生命周期修复测试 APK · 16,491,092 bytes"
+        iso: "2026-08-13",
+        date: "2026.08.13",
+        time: "源码救援候选",
+        category: "已撤回测试包 · v0.1.5 开发批次",
+        title: "后台返回与异常恢复已合并，错误身份 APK 已撤回",
+        description: "应用从后台重新打开后，会主动检查尚未完成的采集、拆解、图片观察和视频制作任务：能够安全重读的内容会自动刷新，无法可靠续接的任务会明确提示“已中断”，保留已保存资料并引导用户重试。系统相机和相册仍只读取用户主动拍摄或选择的单项内容，不申请整库相册或相机危险权限。此前同名 APK 的包内真实身份为 0.0.1 / versionCode 3，且使用 Debug 签名，不能覆盖升级 v0.1.4 / versionCode 11，因此已移除下载入口。真正的源码候选是 0.1.5 / versionCode 12，完成 Release 与物理真机门禁前不标记为已发布。",
+        referenceLabel: "已撤回：包内 0.0.1 / code3，不能升级"
       },
       {
         iso: "2026-08-12",

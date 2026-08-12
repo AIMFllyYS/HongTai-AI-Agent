@@ -157,15 +157,16 @@ git commit -m "test(runtime): lock merged lifecycle and video contracts"
 - Modify: `CHANGELOG.md`
 - Modify: `README.md`
 - Modify: `docs/当前能力与发布状态.md`
-- Modify: `apps/web/src/data/downloads.ts`
+- Modify: `download.html`
+- Modify: `tests/android-webview-compat.test.ts`
 - Create: `docs/验收/2026-08-13-v015-lineage-recovery.md`
 
-- [ ] 先将版本谱系测试更新为 `versionName 0.1.5`、`versionCode 12`，确认旧配置下测试失败。
-- [ ] 更新 Gradle 与 Release 构建脚本，使源配置、脚本断言和产物身份一致。
-- [ ] 更新活文档：明确公开的同名 v0.1.5 debug 文件身份错误、不得作为升级包；不得伪造新 Release 下载地址或哈希。
-- [ ] 下载页继续以已验证事实为准；错误身份的同名文件标记为已撤回/不可升级，正式候选未发布前不得升为顶部推荐。
-- [ ] 验收记录分别列出代码合并、自动测试、模拟器、真机、签名、升级路径和发布状态，未验证项必须明确标为未验证。
-- [ ] 运行版本谱系及下载页定向测试、Web build、UTF-8/U+FFFD 扫描。
+- [x] 先将版本谱系测试更新为 `versionName 0.1.5`、`versionCode 12`，确认旧配置下测试失败。
+- [x] 更新 Gradle 与 Release 构建脚本，使源配置、脚本断言和产物身份一致。
+- [x] 更新活文档：明确公开的同名 v0.1.5 debug 文件身份错误、不得作为升级包；不得伪造新 Release 下载地址或哈希。
+- [x] 下载页继续以已验证事实为准；错误身份的同名文件标记为已撤回/不可升级，正式候选未发布前不得升为顶部推荐。
+- [x] 验收记录分别列出代码合并、自动测试、模拟器、真机、签名、升级路径和发布状态，未验证项必须明确标为未验证。
+- [x] 运行版本谱系及下载页定向测试、Web build、UTF-8/U+FFFD 扫描。
 - [ ] 精确提交：
 
 ```powershell
