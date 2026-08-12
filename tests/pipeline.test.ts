@@ -120,6 +120,87 @@ test("完整流水线覆盖七个阶段、保留两种文稿并清理日志URL",
   );
 });
 
+test("任务事件先持久化投影和事件日志再通知页面", async () => {
+  const setup = dependencies(true);
+  const callbackSnapshots: Array<{
+    readonly event: ProgressEvent;
+    readonly persistedEvent?: ProgressEvent;
+    readonly persistedTask?: { readonly currentStage?: string; readonly status?: string };
+  }> = [];
+  const pipeline = new IngestPipeline({
+    ...setup.dependencies,
+    reporter: {
+      report: (event) => {
+        const persistedEvents = (setup.store.values.get(paths.log) ?? "")
+          .split(/\r?\n/u)
+          .filter(Boolean)
+          .map((line) => JSON.parse(line) as ProgressEvent);
+        const taskValue = setup.store.values.get(paths.task);
+        callbackSnapshots.push({
+          event,
+          persistedEvent: persistedEvents.at(-1),
+          persistedTask: taskValue
+            ? JSON.parse(taskValue) as { readonly currentStage?: string; readonly status?: string }
+            : undefined,
+        });
+      },
+    },
+  });
+
+  const result = await pipeline.run({ input: "https://www.douyin.com/video/1" });
+
+  assert.equal(result.status, "succeeded");
+  assert.ok(callbackSnapshots.length > 0);
+  for (const snapshot of callbackSnapshots) {
+    assert.deepEqual(
+      snapshot.persistedEvent,
+      JSON.parse(JSON.stringify(snapshot.event)) as ProgressEvent,
+      "events.jsonl must already contain the event visible to the page",
+    );
+    assert.equal(snapshot.persistedTask?.currentStage, snapshot.event.stage, "task.json must already expose the notified stage");
+  }
+  const terminal = callbackSnapshots.at(-1);
+  assert.equal(terminal?.event.stage, "save-artifacts");
+  assert.equal(terminal?.event.status, "succeeded");
+  assert.equal(terminal?.persistedTask?.status, "succeeded", "the terminal callback must not observe a stale running task");
+});
+
+test("失败事件通知前已经持久化失败终态", async () => {
+  const setup = dependencies(true);
+  const base = setup.dependencies.adapters[0]!;
+  const failedSnapshots: Array<{ readonly logContainsEvent: boolean; readonly taskStatus?: string }> = [];
+  const pipeline = new IngestPipeline({
+    ...setup.dependencies,
+    adapters: [{
+      ...base,
+      resolve: async () => {
+        throw new TaskError({ code: "LINK_TIMEOUT", message: "页面抓取超时，请检查网络后重试", action: "check_network" });
+      },
+    }],
+    reporter: {
+      report: (event) => {
+        if (event.status !== "failed") return;
+        const persistedEvents = (setup.store.values.get(paths.log) ?? "")
+          .split(/\r?\n/u)
+          .filter(Boolean)
+          .map((line) => JSON.parse(line) as ProgressEvent);
+        const taskValue = setup.store.values.get(paths.task);
+        failedSnapshots.push({
+          logContainsEvent: persistedEvents.some((item) => item.sequence === event.sequence),
+          taskStatus: taskValue
+            ? (JSON.parse(taskValue) as { readonly status?: string }).status
+            : undefined,
+        });
+      },
+    },
+  });
+
+  const result = await pipeline.run({ input: "https://www.douyin.com/video/1" });
+
+  assert.equal(result.status, "failed");
+  assert.deepEqual(failedSnapshots, [{ logContainsEvent: true, taskStatus: "failed" }]);
+});
+
 test("已创建的本地任务可把固定任务ID交给共享流水线而不重新生成记录", async () => {
   const setup = dependencies(true);
 

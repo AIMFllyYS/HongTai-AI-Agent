@@ -253,6 +253,25 @@ export interface AppTaskRecord extends Omit<TaskRecord, "paths" | "analysisStatu
 }
 
 /**
+ * A deliberately narrow invalidation stream for task lists and detail views.
+ * It is emitted only after the authoritative task projection has changed; raw
+ * download/SSE progress remains on its existing per-task channel.
+ */
+export type TaskChangeEventV1 =
+  | {
+      readonly schemaVersion: "task-change.v1";
+      readonly type: "upsert";
+      readonly task: AppTaskRecord;
+    }
+  | {
+      readonly schemaVersion: "task-change.v1";
+      readonly type: "deleted";
+      readonly taskId: string;
+    };
+
+export type TaskChangeListener = (event: TaskChangeEventV1) => void | Promise<void>;
+
+/**
  * Safe projection for the detail view. Every optional value originates from a
  * persisted task artifact; an absent value is intentionally rendered as an
  * empty state rather than replaced with a fixture or a fabricated metric.
@@ -331,6 +350,7 @@ export interface TaskService {
   list(options?: TaskListOptions): Promise<readonly AppTaskRecord[]>;
   listEvents(taskId: string, options?: { readonly afterSequence?: number }): Promise<readonly TaskEventRecord[]>;
   subscribe(taskId: string, listener: TaskEventListener): Unsubscribe;
+  subscribeChanges(listener: TaskChangeListener): Unsubscribe;
   /** Reads the native one-time startup recovery projection without replaying it. */
   getStartupRecovery(): Promise<TaskRecoveryProjection>;
   cancel(taskId: string): Promise<AppTaskRecord>;

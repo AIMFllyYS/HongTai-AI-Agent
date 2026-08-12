@@ -104,6 +104,72 @@ test("StandaloneTaskService runs the existing IngestPipeline and persists its se
   assert.deepEqual(detail?.evidenceUnits.map((item) => item.text), ["真实图文标题", "真实正文第一段", "真实正文第二段"]);
 });
 
+test("StandaloneTaskService emits finite task changes only after the persisted projection is readable", async () => {
+  const native = memoryFiles();
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    adapters: [imageTextAdapter()],
+    http: {
+      get: async () => ({ url: "", status: 200, headers: {}, body: "" }),
+      post: async () => ({ url: "", status: 200, headers: {}, body: "" }),
+    },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 0, extractAudio: async () => undefined, splitAudio: async () => [] },
+    createTaskId: () => "task-change-1",
+    toDisplayUri: (value) => `display:${value}`,
+  });
+  const changes: Array<{ readonly type: string; readonly status?: string; readonly persistedStatus?: string }> = [];
+  service.subscribeChanges(async (event) => {
+    if (event.type === "deleted") {
+      changes.push({ type: event.type, persistedStatus: (await service.get(event.taskId))?.status });
+      return;
+    }
+    changes.push({
+      type: event.type,
+      status: event.task.status,
+      persistedStatus: (await service.get(event.task.id))?.status,
+    });
+  });
+
+  const queued = await service.create({ input: "https://www.xiaohongshu.com/discovery/item/abc123" });
+  const completed = await (await service.start(queued.id)).completion;
+  await service.setAnalysisStatus(queued.id, "succeeded");
+  await service.delete(queued.id);
+
+  assert.equal(completed.status, "degraded");
+  assert.deepEqual(changes, [
+    { type: "upsert", status: "queued", persistedStatus: "queued" },
+    { type: "upsert", status: "running", persistedStatus: "running" },
+    { type: "upsert", status: "degraded", persistedStatus: "degraded" },
+    { type: "upsert", status: "degraded", persistedStatus: "degraded" },
+    { type: "deleted", persistedStatus: undefined },
+  ]);
+});
+
+test("StandaloneTaskService isolates page listener failures from persisted task outcomes", async () => {
+  const native = memoryFiles();
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    adapters: [imageTextAdapter()],
+    http: {
+      get: async () => ({ url: "", status: 200, headers: {}, body: "" }),
+      post: async () => ({ url: "", status: 200, headers: {}, body: "" }),
+    },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 0, extractAudio: async () => undefined, splitAudio: async () => [] },
+    createTaskId: () => "task-listener-failure",
+    toDisplayUri: (value) => value,
+  });
+  service.subscribeChanges(() => { throw new Error("broken task list view"); });
+
+  const task = await service.create({ input: "https://www.xiaohongshu.com/discovery/item/abc123" });
+  service.subscribe(task.id, () => { throw new Error("broken processing view"); });
+  const completed = await (await service.start(task.id)).completion;
+
+  assert.equal(completed.status, "degraded");
+  assert.equal((await service.get(task.id))?.status, "degraded");
+});
+
 test("StandaloneTaskService writes the minimal running projection before the shared pipeline completes", async () => {
   const native = memoryFiles();
   const operations = new RuntimeOperationRegistry();

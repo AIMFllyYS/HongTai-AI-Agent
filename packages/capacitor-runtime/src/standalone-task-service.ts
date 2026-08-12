@@ -10,6 +10,8 @@ import type {
   PlatformAdapter,
   ProgressEvent,
   TaskCreateRequest,
+  TaskChangeEventV1,
+  TaskChangeListener,
   TaskDetailRecord,
   TaskEventListener,
   TaskEventRecord,
@@ -189,6 +191,7 @@ export class StandaloneTaskService implements TaskService {
   readonly #active = new Map<string, CancellableTask>();
   readonly #deletions = new Map<string, Promise<void>>();
   readonly #listeners = new Map<string, Set<TaskEventListener>>();
+  readonly #changeListeners = new Set<TaskChangeListener>();
 
   constructor(options: StandaloneTaskServiceOptions) {
     this.#files = options.files;
@@ -233,7 +236,9 @@ export class StandaloneTaskService implements TaskService {
       this.#artifactStore.writeJson(paths.task, task),
       this.#artifactStore.writeJson(`task://${taskId}/${TASK_REQUEST_PATH}`, { kind: "public_link", normalizedUrl: inspection.value.normalizedUrl } satisfies StoredTaskRequest),
     ]);
-    return toAppTask(task);
+    const projection = toAppTask(task);
+    await this.#emitChange({ schemaVersion: "task-change.v1", type: "upsert", task: projection });
+    return projection;
   }
 
   async importVideo(): Promise<AppTaskRecord> {
@@ -273,7 +278,7 @@ export class StandaloneTaskService implements TaskService {
           displayName: selected.displayName.trim(),
         } satisfies StoredTaskRequest),
       ]);
-      return toAppTask(pending, [{
+      const projection = toAppTask(pending, [{
         uri: this.#toDisplayUri(selected.uri),
         kind: "video",
         origin: "imported",
@@ -282,6 +287,8 @@ export class StandaloneTaskService implements TaskService {
         durationSeconds: selected.durationSeconds,
         displayName: selected.displayName.trim(),
       }]);
+      await this.#emitChange({ schemaVersion: "task-change.v1", type: "upsert", task: projection });
+      return projection;
     } catch (error) {
       await this.#files.deleteTask({ taskId }).catch(() => undefined);
       throw videoImportError(error);
@@ -434,6 +441,11 @@ export class StandaloneTaskService implements TaskService {
     };
   }
 
+  subscribeChanges(listener: TaskChangeListener): () => void {
+    this.#changeListeners.add(listener);
+    return () => { this.#changeListeners.delete(listener); };
+  }
+
   async inspectUnfinishedWork(): Promise<readonly RuntimeUnfinishedWork[]> {
     const tasks = await this.list();
     return tasks
@@ -454,12 +466,18 @@ export class StandaloneTaskService implements TaskService {
       if (!task || (task.status !== "running" && !(task.status === "queued" && task.sourceKind === "local_video"))) continue;
       const paths = await this.#artifactStore.initializeTask(task.id);
       const now = currentIso(this.#now);
-      await this.#artifactStore.writeJson(paths.task, {
+      const updated: TaskRecord = {
         ...task,
         status: "interrupted",
         interruptedAt: now,
         updatedAt: now,
         issues: [...task.issues, issueForInterrupted(task.sourceKind)],
+      };
+      await this.#artifactStore.writeJson(paths.task, updated);
+      await this.#emitChange({
+        schemaVersion: "task-change.v1",
+        type: "upsert",
+        task: toAppTask(updated, await this.#taskMedia(updated)),
       });
       recovered.push(work);
     }
@@ -494,13 +512,37 @@ export class StandaloneTaskService implements TaskService {
     const task = await this.#readTask(taskId);
     if (!task) throw taskError("TASK_ARTIFACT_MISSING", "未找到内容拆解对应的任务", "view_partial_result");
     const paths = await this.#artifactStore.initializeTask(taskId);
-    await this.#artifactStore.writeJson(paths.task, { ...task, analysisStatus, updatedAt: currentIso(this.#now) });
+    const updated: TaskRecord = { ...task, analysisStatus, updatedAt: currentIso(this.#now) };
+    await this.#artifactStore.writeJson(paths.task, updated);
+    await this.#emitChange({
+      schemaVersion: "task-change.v1",
+      type: "upsert",
+      task: toAppTask(updated, await this.#taskMedia(updated)),
+    });
   }
 
   async #report(event: ProgressEvent): Promise<void> {
     const listeners = this.#listeners.get(event.taskId);
-    if (!listeners) return;
-    await Promise.all([...listeners].map(async (listener) => { await listener(event); }));
+    if (listeners) {
+      await Promise.allSettled([...listeners].map(async (listener) => { await listener(event); }));
+    }
+    const lifecycleChanged = event.sequence === 1 ||
+      event.status === "failed" ||
+      (event.stage === "save-artifacts" && event.status === "succeeded");
+    if (!lifecycleChanged) return;
+    try {
+      const task = await this.get(event.taskId);
+      if (task && (task.status === "running" || isTerminalTaskStatus(task.status))) {
+        await this.#emitChange({ schemaVersion: "task-change.v1", type: "upsert", task });
+      }
+    } catch {
+      // A view notification is best-effort and can never change a persisted
+      // pipeline result. The next explicit read/app-resume remains the fallback.
+    }
+  }
+
+  async #emitChange(event: TaskChangeEventV1): Promise<void> {
+    await Promise.allSettled([...this.#changeListeners].map(async (listener) => { await listener(event); }));
   }
 
   async #readTask(taskId: string): Promise<TaskRecord | undefined> {
@@ -600,5 +642,6 @@ export class StandaloneTaskService implements TaskService {
     }
     await this.#files.deleteTask({ taskId });
     this.#listeners.delete(taskId);
+    await this.#emitChange({ schemaVersion: "task-change.v1", type: "deleted", taskId });
   }
 }

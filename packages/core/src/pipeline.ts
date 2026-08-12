@@ -152,7 +152,9 @@ export class IngestPipeline {
       extra: Partial<Pick<ProgressEvent, "progress" | "detail">> = {},
       issue?: import("./models").TaskIssue,
     ): Promise<void> => {
+      const stageChanged = currentStage !== stage;
       currentStage = stage;
+      if (stageChanged) await writeTask("running");
       const event: ProgressEvent = {
         taskId,
         sequence: ++progressSequence,
@@ -164,8 +166,8 @@ export class IngestPipeline {
         issue,
         timestamp: new Date().toISOString(),
       };
-      await this.#dependencies.reporter.report(event);
       await this.#dependencies.store.appendText(paths.log, `${JSON.stringify(event)}\n`);
+      await this.#dependencies.reporter.report(event);
     };
 
     const complete = async <T>(
@@ -179,7 +181,6 @@ export class IngestPipeline {
       await report(stage, "running", startMessage);
       const value = await operation();
       await report(stage, "succeeded", finishMessage(value, Date.now() - started), finishExtra?.(value));
-      await writeTask("running");
       return value;
     };
 
@@ -503,7 +504,6 @@ export class IngestPipeline {
       const failureStage = currentStage as TaskStage;
       const issue = issueFromError(error, failureStage, platform);
       issues.push(issue);
-      await report(failureStage, "failed", `失败：${issue.userMessage}`, {}, issue);
       if (failureStage === "resolve-link" || failureStage === "parse-content") {
         await this.#dependencies.store.writeJson(paths.rawResponse, {
           stage: failureStage,
@@ -522,6 +522,7 @@ export class IngestPipeline {
         });
       }
       await writeTask("failed");
+      await report(failureStage, "failed", `失败：${issue.userMessage}`, {}, issue);
       return {
         taskId,
         status: "failed",
