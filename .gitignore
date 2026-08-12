@@ -29,3 +29,6 @@ android/capacitor-cordova-android-plugins/src/main/res/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Superpowers 隔离开发工作区
+.worktrees/
