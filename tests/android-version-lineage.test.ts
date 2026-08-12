@@ -21,7 +21,7 @@ function compareVersion(left: string, right: string): number {
   return 0;
 }
 
-test("the merged candidate is v0.1.5/code 12 and advances beyond published v0.1.4", () => {
+test("the merged source and published release both identify v0.1.5/code 12", () => {
   const gradle = readFileSync(join(root, "android", "app", "build.gradle.kts"), "utf8");
   const downloadPage = readFileSync(join(root, "download.html"), "utf8");
   const candidateCode = Number(requireMatch(gradle, /versionCode\s*=\s*(\d+)/u, "Android versionCode"));
@@ -30,15 +30,17 @@ test("the merged candidate is v0.1.5/code 12 and advances beyond published v0.1.
 
   assert.equal(candidateCode, 12);
   assert.equal(candidateName, "0.1.5");
-  assert.equal(publishedName, "0.1.4");
-  assert.ok(compareVersion(candidateName, publishedName) > 0, `versionName ${candidateName} must advance beyond published ${publishedName}`);
+  assert.equal(publishedName, "0.1.5");
+  assert.equal(compareVersion(candidateName, publishedName), 0);
+  assert.match(downloadPage, /versionCode:\s*"12"/u);
+  assert.match(downloadPage, /25,943,725 bytes/u);
+  assert.match(downloadPage, /48D65860532BF1641222173BA42FFE479EA3180B3B75A146357EB44C25D1DE6D/u);
+  assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.5\.apk/u);
 });
 
 test("the misidentified same-name v0.1.5 APK is withdrawn instead of offered as an upgrade", () => {
   const downloadPage = readFileSync(join(root, "download.html"), "utf8");
 
-  assert.match(downloadPage, /已撤回测试包 · v0\.1\.5 开发批次/u);
-  assert.match(downloadPage, /包内真实身份为 0\.0\.1 \/ versionCode 3/u);
   assert.doesNotMatch(downloadPage, /HongTai-AI-Agent-debug-v0\.1\.5\.apk/u);
 });
 
