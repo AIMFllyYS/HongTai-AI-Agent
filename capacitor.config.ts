@@ -15,8 +15,9 @@ const config: CapacitorConfig = {
     androidScheme: "https",
   },
   android: {
-    // Native plugins are explicitly registered from MainActivity.
-    includePlugins: [],
+    // Custom native plugins stay explicitly registered from MainActivity;
+    // package discovery is restricted to the official lifecycle bridge.
+    includePlugins: ["@capacitor/app"],
   },
 };
 

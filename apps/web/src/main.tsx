@@ -1,5 +1,6 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { createStandaloneAppRuntime, registerStandaloneNativePlugins } from "@hongtai/capacitor-runtime";
 import type { AppRuntime } from "@hongtai/core";
@@ -9,6 +10,7 @@ import { AppShell } from "./components/AppShell";
 import { Button } from "./components/Buttons";
 import { ErrorState, LoadingState } from "./components/StatePanels";
 import { NotificationProvider } from "./notifications/NotificationProvider";
+import { installAppLifecycleCoordinator } from "./runtime/app-lifecycle";
 import "./styles/tokens.css";
 import "./styles/global.css";
 
@@ -25,8 +27,15 @@ function initializeRuntime(): Promise<AppRuntime> {
     plugins: registerStandaloneNativePlugins(registerPlugin),
     convertFileSrc: Capacitor.convertFileSrc,
   }).then(async (runtime) => {
-    // Mark snapshots left active by a terminated process; never resume work.
-    await runtime.tasks.getStartupRecovery().catch(() => undefined);
+    // Every state owner terminates snapshots left active by a prior WebView;
+    // startup never attempts to replay a partially completed workflow.
+    await runtime.recovery.recoverInterruptedWork();
+    await installAppLifecycleCoordinator({
+      subscribe: (listener) => CapacitorApp.addListener("appStateChange", listener),
+      inspectUnfinishedWork: () => runtime.recovery.inspectUnfinishedWork(),
+      reload: () => window.location.reload(),
+      notifyResume: () => window.dispatchEvent(new Event("hongtai:app-resumed")),
+    });
     return runtime;
   });
   return runtimePromise;

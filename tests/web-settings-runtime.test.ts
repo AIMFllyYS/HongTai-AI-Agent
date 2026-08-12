@@ -18,10 +18,11 @@ test("the application shell initializes the Capacitor AppRuntime instead of a de
   assert.match(main, /Capacitor\.convertFileSrc/);
 });
 
-test("APK startup marks unfinished file snapshots interrupted without resuming their pipeline", () => {
+test("APK startup reconciles every unfinished file snapshot without resuming its pipeline", () => {
   const main = read("main.tsx");
 
-  assert.match(main, /tasks\.getStartupRecovery\(\)/);
+  assert.match(main, /recovery\.recoverInterruptedWork\(\)/);
+  assert.doesNotMatch(main, /tasks\.getStartupRecovery\(\)/);
   assert.doesNotMatch(main, /tasks\.start\(/);
 });
 
