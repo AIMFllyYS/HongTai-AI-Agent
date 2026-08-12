@@ -312,7 +312,7 @@ try {
   $packageName = $packageMatch.Groups[1].Value
   $versionCode = $packageMatch.Groups[2].Value
   $versionName = $packageMatch.Groups[3].Value
-  if ($packageName -ne "com.hongtai.aiagent" -or $versionCode -ne "13" -or $versionName -ne "0.1.6") {
+  if ($packageName -ne "com.hongtai.aiagent" -or $versionCode -ne "14" -or $versionName -ne "0.1.6") {
     throw "Release APK package or version metadata is unexpected"
   }
 
