@@ -11,6 +11,7 @@ import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { ProductionProjectCard } from "../components/ProductionProjectCard";
 import { EmptyState, LoadingState } from "../components/StatePanels";
+import { useAppResume } from "../hooks/useAppResume";
 import { aiSettingsPath } from "../router";
 
 type CreateShellViewModel = Pick<CreateViewModel, "title">;
@@ -71,7 +72,9 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
       setSources(available);
       setProjects(savedProjects);
       setSourceId((current) => current || available[0]?.task.id || "");
-      setProject((current) => current ?? savedProjects[0]);
+      setProject((current) => current
+        ? savedProjects.find((candidate) => candidate.projectId === current.projectId) ?? savedProjects[0]
+        : savedProjects[0]);
       setIssue(undefined);
     } catch (error) {
       setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "本地制作数据暂时无法读取", action: "none" }));
@@ -79,6 +82,8 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
       setLoading(false);
     }
   }, [runtime]);
+
+  useAppResume(load);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {

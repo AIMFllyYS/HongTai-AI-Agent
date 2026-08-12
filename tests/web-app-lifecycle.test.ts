@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -90,4 +90,14 @@ test("the APK bootstrap uses only the official App signal and unified recovery b
   assert.match(main, /runtime\.recovery\.recoverInterruptedWork\(\)/);
   assert.match(main, /installAppLifecycleCoordinator/);
   assert.doesNotMatch(main, /runtime\.tasks\.getStartupRecovery\(\)/);
+});
+
+test("the shared resume hook owns one exact add and remove event pair", () => {
+  const hookPath = join(webRoot, "hooks", "useAppResume.ts");
+  assert.equal(existsSync(hookPath), true);
+  const hook = readFileSync(hookPath, "utf8");
+
+  assert.match(hook, /window\.addEventListener\("hongtai:app-resumed", handle\)/);
+  assert.match(hook, /window\.removeEventListener\("hongtai:app-resumed", handle\)/);
+  assert.doesNotMatch(hook, /@capacitor\/app/);
 });

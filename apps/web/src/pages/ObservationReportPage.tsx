@@ -16,6 +16,7 @@ import {
   safetyLabel,
   visibilityLabel,
 } from "../features/diagnosis/diagnosis-presenters";
+import { useAppResume } from "../hooks/useAppResume";
 import { observationNewPath, type Navigate } from "../router";
 
 export interface ObservationReportPageProps {
@@ -72,6 +73,8 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
       setLoading(false);
     }
   }, [runtime, sessionId]);
+
+  useAppResume(load);
 
   useEffect(() => {
     void load();

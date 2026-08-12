@@ -183,6 +183,21 @@ test("runtime task pages are wired to AppRuntime and static fixtures remain outs
   assert.match(read("pages/TaskAnalysisPage.tsx"), /runtime\.analysis\.get/);
 });
 
+test("every live task page re-reads its safe persisted DTOs after app resume", () => {
+  const pages = new Map([
+    ["pages/TaskHomePage.tsx", "loadHistory"],
+    ["pages/TaskProcessingPage.tsx", "load"],
+    ["pages/TaskDetailPage.tsx", "load"],
+    ["pages/TaskAnalysisPage.tsx", "load"],
+  ]);
+  for (const [relativePath, loader] of pages) {
+    const source = read(relativePath);
+    assert.match(source, /from "\.\.\/hooks\/useAppResume"/);
+    assert.match(source, new RegExp(`useAppResume\\(${loader}\\)`));
+    assert.doesNotMatch(source, /@capacitor\/app/);
+  }
+});
+
 test("task pages keep real events but never offer stop or lineage-retry controls", () => {
   const home = read("pages/TaskHomePage.tsx");
   const processing = read("pages/TaskProcessingPage.tsx");

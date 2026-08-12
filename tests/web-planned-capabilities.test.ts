@@ -35,6 +35,8 @@ test("assets and publishing remain planned while creation uses the real producti
   assert.match(create, /IssueNotice/);
   assert.match(create, /content-analysis\.v1/);
   assert.match(create, /production-plan\.v1/);
+  assert.match(create, /useAppResume\(load\)/);
+  assert.doesNotMatch(create, /@capacitor\/app/);
   assert.doesNotMatch(create, /viewModel\.(templates|profileTags|materialFilters|generationEta|actionLabel)/);
   assert.doesNotMatch(create, /is-selected|template-tile__selected/);
 

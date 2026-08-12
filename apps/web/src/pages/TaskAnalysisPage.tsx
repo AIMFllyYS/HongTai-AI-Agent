@@ -11,6 +11,7 @@ import { IssueNotice } from "../components/IssueNotice";
 import { EmptyState, ErrorState, LoadingState } from "../components/StatePanels";
 import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
 import { platformLabel, readContentAnalysis } from "../features/tasks/task-presenters";
+import { useAppResume } from "../hooks/useAppResume";
 import { aiSettingsPath, taskDetailPath, type Navigate } from "../router";
 
 export interface TaskAnalysisPageProps {
@@ -40,6 +41,8 @@ export function TaskAnalysisPage({ runtime, taskId, navigate }: TaskAnalysisPage
       setLoading(false);
     }
   }, [runtime, taskId]);
+
+  useAppResume(load);
 
   useEffect(() => {
     void load();

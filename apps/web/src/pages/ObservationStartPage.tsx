@@ -10,6 +10,7 @@ import { IssueNotice } from "../components/IssueNotice";
 import { RuntimeMediaFrame } from "../components/RuntimeMediaFrame";
 import { EmptyState, LoadingState } from "../components/StatePanels";
 import { observationModeLabel } from "../features/diagnosis/diagnosis-presenters";
+import { useAppResume } from "../hooks/useAppResume";
 import { observationReportPath, type Navigate } from "../router";
 
 export interface ObservationStartPageProps {
@@ -58,6 +59,8 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
       setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "本地观察历史暂时无法读取", action: "none" }));
     }
   }, [runtime]);
+
+  useAppResume(loadSessions);
 
   useEffect(() => {
     void loadSessions();

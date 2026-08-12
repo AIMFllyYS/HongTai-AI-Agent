@@ -11,6 +11,7 @@ import { ErrorState, LoadingState, EmptyState } from "../components/StatePanels"
 import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
 import { formatTaskTime, platformLabel } from "../features/tasks/task-presenters";
+import { useAppResume } from "../hooks/useAppResume";
 import { aiSettingsPath, taskDetailPath, taskProcessingPath, type Navigate } from "../router";
 
 export interface TaskHomePageProps {
@@ -108,6 +109,8 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
       setHistoryIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "本地任务历史暂时无法读取", action: "none" }));
     }
   }, [runtime]);
+
+  useAppResume(loadHistory);
 
   useEffect(() => {
     void loadHistory();

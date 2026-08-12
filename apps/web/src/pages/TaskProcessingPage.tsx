@@ -12,6 +12,7 @@ import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
 import { TaskProgressSteps } from "../components/TaskProgressSteps";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
 import { buildTaskStagePresentations, platformLabel } from "../features/tasks/task-presenters";
+import { useAppResume } from "../hooks/useAppResume";
 import { aiSettingsPath, pathForRoute, taskDetailPath, type Navigate } from "../router";
 
 export interface TaskProcessingPageProps {
@@ -55,6 +56,8 @@ export function TaskProcessingPage({ runtime, taskId, navigate }: TaskProcessing
       setLoading(false);
     }
   }, [runtime, taskId]);
+
+  useAppResume(load);
 
   useEffect(() => {
     void load();

@@ -81,6 +81,19 @@ test("observation photo selection and capture own an importing state with every 
   assert.match(start, /disabled=\{!diagnosisAvailable \|\| !image \|\| loading \|\| importing\}/);
 });
 
+test("observation pages refresh persisted records on resume without remounting photo recovery", () => {
+  const start = read("pages/ObservationStartPage.tsx");
+  const report = read("pages/ObservationReportPage.tsx");
+
+  assert.match(start, /useAppResume\(loadSessions\)/);
+  assert.match(report, /useAppResume\(load\)/);
+  assert.doesNotMatch(start, /useAppResume\([^)]*consumeImageRecovery/);
+  for (const source of [start, report]) {
+    assert.match(source, /from "\.\.\/hooks\/useAppResume"/);
+    assert.doesNotMatch(source, /@capacitor\/app/);
+  }
+});
+
 test("observation presentation only recognizes diagnosis-report.v1 and never turns it into a score", async () => {
   const subject = await import("../apps/web/src/features/diagnosis/diagnosis-presenters");
 

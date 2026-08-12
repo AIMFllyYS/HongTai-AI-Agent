@@ -12,6 +12,7 @@ import { EmptyState, ErrorState, LoadingState } from "../components/StatePanels"
 import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
 import { contentTypeLabel, formatTaskTime, platformLabel } from "../features/tasks/task-presenters";
+import { useAppResume } from "../hooks/useAppResume";
 import { aiSettingsPath, pathForRoute, taskAnalysisPath, type Navigate } from "../router";
 
 export interface TaskDetailPageProps {
@@ -47,6 +48,8 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
       setLoading(false);
     }
   }, [runtime, taskId]);
+
+  useAppResume(load);
 
   useEffect(() => {
     void load();
