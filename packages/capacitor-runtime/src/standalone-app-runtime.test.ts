@@ -4,6 +4,11 @@ import test from "node:test";
 import { createStandaloneAppRuntime } from "./standalone-app-runtime.js";
 import type { StandaloneAiConnection, StandaloneLocalProfile } from "./standalone-bridge.js";
 
+function deferred(): { readonly promise: Promise<void>; resolve(): void } {
+  let resolve!: () => void;
+  return { promise: new Promise<void>((done) => { resolve = done; }), resolve };
+}
+
 test("standalone runtime exposes local profile and write-only AI settings without initializing a database", async () => {
   let profile: StandaloneLocalProfile | undefined;
   let connection: StandaloneAiConnection | undefined;
@@ -22,7 +27,11 @@ test("standalone runtime exposes local profile and write-only AI settings withou
         saveAiConnection: async (value) => { connection = value; },
         compareAndSetAiProbeResults: async () => ({ applied: true }),
       },
-      localFiles: {} as never,
+      localFiles: {
+        listTaskIds: async () => ({ taskIds: [] }),
+        listObservationIds: async () => ({ sessionIds: [] }),
+        listProductionIds: async () => ({ projectIds: [] }),
+      } as never,
       nativeNetwork: {} as never,
       fileMedia: { pickPhoto: async () => ({ uri: "file:///private/avatar.jpg", mimeType: "image/jpeg", sizeBytes: 1 }), capturePhoto: async () => ({ uri: "file:///private/avatar.jpg", mimeType: "image/jpeg", sizeBytes: 1 }), consumePhotoOperation: async () => ({ status: "none" }), copyFromUri: async () => ({ uri: "file:///private/avatar.jpg", mimeType: "image/jpeg", sizeBytes: 1 }) },
       mediaRuntime: {} as never,
@@ -50,6 +59,7 @@ test("standalone runtime exposes local profile and write-only AI settings withou
   assert.equal(secret, "not-returned-to-react");
   assert.equal(JSON.stringify(connection).includes("not-returned-to-react"), false);
   assert.equal(runtime.features.ingest, "available");
+  assert.deepEqual(await runtime.recovery.inspectUnfinishedWork(), []);
 });
 
 test("profile saves the private avatar URI once and returns a display URI to the page", async () => {
@@ -92,6 +102,48 @@ test("profile saves the private avatar URI once and returns a display URI to the
   assert.equal(loaded?.avatarUri, "capacitor://localhost/private/avatar.jpg");
   await runtime.profile.update({ displayName: "Avatar user", avatarUri: loaded?.avatarUri ?? null });
   assert.equal(profile?.avatarUri, "file:///private/avatar.jpg");
+});
+
+test("profile picker is visible to unified recovery only while its external Activity is active", async () => {
+  const entered = deferred();
+  const release = deferred();
+  const runtime = await createStandaloneAppRuntime({
+    plugins: {
+      secureSettings: { writeSecret: async () => undefined, hasSecret: async () => ({ exists: false }), removeSecret: async () => undefined },
+      localData: {
+        getProfile: async () => ({}), saveProfile: async () => undefined,
+        getAiConnection: async () => ({}), saveAiConnection: async () => undefined,
+        compareAndSetAiProbeResults: async () => ({ applied: true }),
+      },
+      localFiles: {
+        listTaskIds: async () => ({ taskIds: [] }),
+        listObservationIds: async () => ({ sessionIds: [] }),
+        listProductionIds: async () => ({ projectIds: [] }),
+      } as never,
+      nativeNetwork: {} as never,
+      fileMedia: {
+        pickPhoto: async () => {
+          entered.resolve();
+          await release.promise;
+          return { uri: "file:///private/avatar.jpg", mimeType: "image/jpeg", sizeBytes: 1 };
+        },
+      } as never,
+      mediaRuntime: {} as never,
+    },
+    convertFileSrc: (uri) => `capacitor://localhost/${uri.slice("file:///".length)}`,
+  });
+
+  const picking = runtime.profile.pickAvatar();
+  await entered.promise;
+  assert.deepEqual(await runtime.recovery.inspectUnfinishedWork(), [{
+    kind: "transient-operation",
+    id: "profile-avatar",
+    source: "memory",
+    execution: "external-activity",
+  }]);
+  release.resolve();
+  await picking;
+  assert.deepEqual(await runtime.recovery.inspectUnfinishedWork(), []);
 });
 
 test("ASR probe sends a structurally valid WAV fixture through the native transport", async () => {

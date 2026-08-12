@@ -20,6 +20,8 @@ import { CapacitorAiTransport } from "./capacitor-ai-transport.js";
 import { StandaloneAnalysisService } from "./standalone-analysis-service.js";
 import { StandaloneDiagnosisService } from "./standalone-diagnosis-service.js";
 import { StandaloneProductionService } from "./standalone-production-service.js";
+import { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
+import { StandaloneRuntimeRecovery } from "./standalone-runtime-recovery.js";
 import { NativeIngestPorts } from "./thin-ingest-ports.js";
 import { StandaloneTaskService } from "./standalone-task-service.js";
 import type { StandaloneAiConnection, StandaloneLocalProfile, StandaloneNativePlugins } from "./standalone-bridge.js";
@@ -160,6 +162,7 @@ function safeDisplayUri(convertFileSrc: (uri: string) => string, uri: string): s
  */
 export async function createStandaloneAppRuntime(options: CreateStandaloneAppRuntimeOptions): Promise<AppRuntime> {
   const now = options.now ?? (() => new Date());
+  const operations = new RuntimeOperationRegistry();
   const display = (uri: string) => safeDisplayUri(options.convertFileSrc, uri);
   // FileMedia returns an app-private URI; React only gets its display form.
   // Keep this tiny in-memory correspondence so save never persists a WebView URL.
@@ -255,8 +258,9 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
     toDisplayUri: display,
     ...(options.createTaskId ? { createTaskId: options.createTaskId } : {}),
     now,
+    operations,
   });
-  const analysis = new StandaloneAnalysisService({ files: options.plugins.localFiles, tasks, getProvider: requireProvider, now });
+  const analysis = new StandaloneAnalysisService({ files: options.plugins.localFiles, tasks, getProvider: requireProvider, now, operations });
   const diagnosis = new StandaloneDiagnosisService({
     files: options.plugins.localFiles,
     fileMedia: options.plugins.fileMedia,
@@ -264,6 +268,7 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
     toDisplayUri: display,
     ...(options.createSessionId ? { createSessionId: options.createSessionId } : {}),
     now,
+    operations,
   });
   const unavailableProduction = {
     pickAssets: async () => { throw taskError("APP_RUNTIME_UNAVAILABLE", "本地制作插件尚未加载", "retry"); },
@@ -276,7 +281,9 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
     getProvider: requireProvider,
     toDisplayUri: display,
     now,
+    operations,
   });
+  const recovery = new StandaloneRuntimeRecovery({ operations, sources: [tasks, analysis, diagnosis, production] });
 
   return {
     profile: {
@@ -308,13 +315,17 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
         await options.plugins.localData.saveProfile(native);
         return profileFromNative(native, displayAvatar);
       },
-      pickAvatar: async (): Promise<MediaReference> => {
+      pickAvatar: (): Promise<MediaReference> => operations.track({
+        kind: "transient-operation",
+        id: "profile-avatar",
+        execution: "external-activity",
+      }, async () => {
         const image = await options.plugins.fileMedia.pickPhoto();
         if (!image.uri || !image.mimeType?.startsWith("image/") || image.sizeBytes <= 0) {
           throw taskError("MEDIA_IMPORT_FAILED", "头像导入没有返回有效图片", "select_media");
         }
         return { uri: displayAvatar(image.uri), kind: "image", origin: "imported", mimeType: image.mimeType, byteLength: image.sizeBytes, displayName: "本地头像" };
-      },
+      }),
     },
     aiSettings: {
       getPublic: getConnection,
@@ -346,7 +357,11 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
         if (!await readConnection()) throw taskError("AI_SETTINGS_INVALID", "请先保存公开 AI 配置", "configure_ai");
         await options.plugins.secureSettings.writeSecret({ slot: "active-ai-connection", value: apiKey.trim() });
       },
-      probe: async (capability: AiCapability): Promise<AiCapabilityProbeResult> => {
+      probe: (capability: AiCapability): Promise<AiCapabilityProbeResult> => operations.track({
+        kind: "transient-operation",
+        id: `ai-probe:${capability}`,
+        execution: "in-process",
+      }, async () => {
         const startedAt = nowIso(now);
         const config = await getConnection();
         if (!config) throw taskError("AI_NOT_CONFIGURED", "请先保存 AI 连接", "configure_ai");
@@ -376,7 +391,7 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
           probeResultsJson: JSON.stringify(next),
         });
         return result;
-      },
+      }),
       getProbeResults: async () => {
         const connection = await readConnection();
         return connection ? [...parseProbeResults(connection.probeResultsJson)].sort((left, right) => PROBE_ORDER.indexOf(left.capability) - PROBE_ORDER.indexOf(right.capability)) : [];
@@ -386,6 +401,7 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
     analysis,
     diagnosis,
     production,
+    recovery,
     features: FEATURES,
   };
 }
