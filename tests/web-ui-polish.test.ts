@@ -13,6 +13,8 @@ test("observation image choice centers each placeholder item and keeps the repor
   assert.match(css, /\.observation-capture-card__empty\s+svg\s*\{[^}]*justify-self:\s*center/s);
   assert.match(css, /\.observation-capture-card__actions\s+\.button--primary\s*\{[^}]*color:\s*#000/s);
   assert.match(css, /\.observation-capture-card__actions\s+\.button--primary:disabled\s*\{[^}]*color:\s*#000/s);
+  assert.match(css, /\.observation-capture-card__actions\s+\.button--primary\.is-busy:disabled\s*\{[^}]*linear-gradient/s);
+  assert.match(css, /\.observation-question-composer\s+\.button\.is-busy:disabled\s*\{[^}]*color:\s*#000[^}]*linear-gradient/s);
 });
 
 test("Android edge-to-edge keeps header content below status icons without reintroducing a separate page spacer", () => {
@@ -59,10 +61,11 @@ test("Android device settings bridge exposes build identity without creating a s
   assert.doesNotMatch(bridge, /openTextToSpeechSettings/);
 });
 
-test("application information describes v0.1.6 module progress and automatic updates", () => {
+test("application information describes v0.1.6 single-call progress and automatic updates", () => {
   const page = read("apps/web/src/pages/ApplicationInfoPage.tsx");
 
-  assert.match(page, /舌象与面部观察.*五个板块/u);
-  assert.match(page, /内容拆解.*五个板块/u);
+  assert.match(page, /舌象与面部观察.*一次紧凑结构化生成.*深度思考.*五个展示板块/u);
+  assert.match(page, /内容拆解.*一次完整生成.*真实证据只发送一次/u);
   assert.match(page, /任务和报告.*自动更新.*无需手动刷新/u);
+  assert.match(page, /深度思考.*当前运行内存.*不写入任务、报告、模板或历史/u);
 });

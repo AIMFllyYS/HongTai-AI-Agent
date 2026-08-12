@@ -6,6 +6,7 @@ import {
   type ValidatedModuleDefinition,
   type ValidatedModuleRow,
 } from "../features/generation/validated-module-progress";
+import { DeepThinkingPanel } from "./DeepThinkingPanel";
 import { GlassCard } from "./GlassCard";
 import { Icon, type IconName } from "./Icon";
 
@@ -19,10 +20,12 @@ export interface ValidatedModuleProgressProps {
 
 const phaseCopy: Readonly<Record<StructuredGenerationProgressV1["phase"], string>> = {
   preparing: "正在准备本次生成所需的真实资料",
-  generating: "正在按顺序生成当前板块",
-  validating: "正在校验当前板块的结构与业务约束",
-  saving: "五个板块已校验，正在保存正式结果",
+  generating: "AI 正在一次生成完整的结构化结果",
+  validating: "正在校验已经闭合的字段与业务约束",
+  saving: "五个展示板块已校验，正在保存正式结果",
 };
+
+const waitingThinking = { status: "waiting", text: "" } as const;
 
 function statusIcon(row: ValidatedModuleRow): IconName {
   if (row.status === "succeeded") return "check_circle";
@@ -75,6 +78,8 @@ export function ValidatedModuleProgress({ title, failedTitle, definitions, progr
 
       <p aria-atomic="true" aria-live="polite" className="validated-module-progress__announcement" role="status">{active ? `${active.title}：${active.statusLabel}` : description}</p>
 
+      <DeepThinkingPanel thinking={progress?.thinking ?? waitingThinking} />
+
       <ol className="validated-module-progress__list">
         {rows.map((row, index) => (
           <li
@@ -114,7 +119,7 @@ export function ValidatedModuleProgress({ title, failedTitle, definitions, progr
 
       <footer className="validated-module-progress__footer">
         <Icon name="info" size={16} />
-        <span>这里展示的是已通过模块校验的安全内容；正式文档仍须完整校验并保存后才成立。</span>
+        <span>深度思考只在本次运行中显示；板块内容通过校验后才渐显，正式文档仍须完整校验并保存后才成立。</span>
       </footer>
     </GlassCard>
   );

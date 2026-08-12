@@ -234,3 +234,28 @@ test("live generation pages use narrow subscriptions with no healthy-state manua
   assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.validated-module-progress__skeleton-bar[\s\S]*animation:\s*none/);
   assert.match(css, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.validated-module-progress/);
 });
+
+test("live generation renders runtime-only deep thinking and keeps busy primary actions green", () => {
+  const component = read("components/ValidatedModuleProgress.tsx");
+  const thinking = read("components/DeepThinkingPanel.tsx");
+  const css = read("styles/components.css");
+  const home = read("pages/TaskHomePage.tsx");
+  const detail = read("pages/TaskDetailPage.tsx");
+  const observationStart = read("pages/ObservationStartPage.tsx");
+  const observationReport = read("pages/ObservationReportPage.tsx");
+
+  assert.match(component, /DeepThinkingPanel/);
+  assert.match(component, /progress\?\.thinking/);
+  assert.match(thinking, /<details[\s\S]*深度思考[\s\S]*<pre/);
+  assert.match(thinking, /thinking\.status === "streaming"[\s\S]*setOpen\(true\)/);
+  assert.match(thinking, /thinking\.status === "completed"[\s\S]*setOpen\(false\)/);
+  assert.match(thinking, /本次生成期间[\s\S]*不会保存/);
+  assert.doesNotMatch(thinking, /dangerouslySetInnerHTML|localStorage|sessionStorage/);
+  assert.match(css, /\.deep-thinking-panel/);
+  assert.match(css, /\.button--primary\.is-busy:disabled[\s\S]*color:\s*#000[\s\S]*opacity:\s*1/);
+  assert.match(observationStart, /className=\{loading \? "is-busy" : ""\}/);
+  assert.match(detail, /className=\{pendingAction === "analysis" \? "is-busy" : ""\}/);
+  assert.match(home, /className=\{videoImporting \? "is-busy" : ""\}/);
+  assert.match(observationReport, /className=\{chatPending \? "is-busy" : ""\}/);
+  assert.doesNotMatch([component, home, detail, observationStart].join("\n"), /正在生成五个板块|正在按顺序生成当前板块/);
+});

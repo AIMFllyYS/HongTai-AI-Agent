@@ -127,7 +127,7 @@ export function TaskAnalysisPage({ runtime, taskId, navigate }: TaskAnalysisPage
         {record?.status === "succeeded" && analysis?.available ? <Button icon={<Icon name="bookmark" size={17} />} onClick={() => navigate(pathForRoute("templates"))} variant="secondary">前往模板管理保存结构</Button> : null}
 
         <GlassCard className="task-analysis-footer">
-          <span><Icon name="info" size={18} />只展示正式结果和真实证据；不展示供应商 reasoning、原始响应或平台私有请求数据。</span>
+          <span><Icon name="info" size={18} />深度思考只在当前生成期间显示且不会保存；正式页面只保留结果、真实证据和安全字段。</span>
           {readIssue ? <Button onClick={() => void load()} variant="quiet">重新读取本地结果</Button> : null}
         </GlassCard>
       </div>

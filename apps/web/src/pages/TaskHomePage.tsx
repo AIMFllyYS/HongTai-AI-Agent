@@ -215,7 +215,7 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
         <GlassCard className="task-local-upload-card">
           <span className="task-source-index">01</span>
           <div><strong>上传本地 MP4 并自动拆解</strong><p>系统选择器会把视频复制到应用私有目录，再提取音频、生成真实文稿并自动进入正式拆解。</p><small>单个 MP4，最大 250MB；取消选择不会留下空任务。</small></div>
-          <Button disabled={!ingestAvailable || runtime.features.contentAnalysis !== "available" || submitting || videoImporting} icon={<Icon name={videoImporting ? "sync" : "upload_file"} size={19} />} onClick={() => void importVideo()} size="lg">
+          <Button className={videoImporting ? "is-busy" : ""} disabled={!ingestAvailable || runtime.features.contentAnalysis !== "available" || submitting || videoImporting} icon={<Icon name={videoImporting ? "sync" : "upload_file"} size={19} />} onClick={() => void importVideo()} size="lg">
             {videoImporting ? "正在处理并拆解视频" : "上传本地视频并自动拆解"}
           </Button>
           {videoImporting || videoProgress ? <ValidatedModuleProgress definitions={contentAnalysisModuleDefinitions} failedTitle="本地视频内容拆解未完成" issue={submitIssue} progress={videoProgress} title="本地视频正在生成内容拆解" /> : null}
@@ -248,7 +248,7 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
           ) : inspection ? <IssueNotice issue={inspection.issue} /> : null}
           {submitIssue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()) }} issue={submitIssue} /> : null}
 
-          <Button className="task-input-card__submit" disabled={!ingestAvailable || !inspection?.ok || submitting || videoImporting} icon={<Icon name={submitting ? "sync" : "bolt"} size={19} />} onClick={() => void submit()} size="lg">
+          <Button className={`task-input-card__submit ${submitting ? "is-busy" : ""}`.trim()} disabled={!ingestAvailable || !inspection?.ok || submitting || videoImporting} icon={<Icon name={submitting ? "sync" : "bolt"} size={19} />} onClick={() => void submit()} size="lg">
             {submitting ? "正在创建本地任务" : "开始采集"}
           </Button>
         </GlassCard>

@@ -15,10 +15,10 @@ export interface ApplicationInfoPageProps {
 }
 
 const latestUpdates = [
-  "舌象与面部观察会依次显示五个板块：当前生成到哪里、是否正在校正、哪些内容已经通过校验都清晰可见。",
-  "内容拆解会依次显示五个板块，只有通过模块校验的真实内容才会渐显，正式结果仍须完整校验并保存。",
+  "舌象与面部观察改为一次紧凑结构化生成，深度思考实时可见，五个展示板块在字段校验后逐步渐显。",
+  "内容拆解改为一次完整生成，真实证据只发送一次；格式异常时最多进行一次整文校正。",
   "任务和报告状态会自动更新，无需手动刷新；只有本地读取或订阅异常时才提供重新读取。",
-  "页面不会展示半截 JSON、字符数、模型 reasoning、私有图片地址或未校验的医疗相关内容。",
+  "深度思考只保留在当前运行内存中，结束后不写入任务、报告、模板或历史；半截 JSON 与私有地址仍不会展示。",
 ] as const;
 
 export function ApplicationInfoPage({ runtime, navigate }: ApplicationInfoPageProps) {
