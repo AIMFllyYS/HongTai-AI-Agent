@@ -38,8 +38,6 @@ function initializeRuntime(): Promise<AppRuntime> {
     await runtime.recovery.recoverInterruptedWork();
     await installAppLifecycleCoordinator({
       subscribe: (listener) => CapacitorApp.addListener("appStateChange", listener),
-      inspectUnfinishedWork: () => runtime.recovery.inspectUnfinishedWork(),
-      reload: () => window.location.reload(),
       notifyResume: () => window.dispatchEvent(new Event("hongtai:app-resumed")),
     });
     return runtime;

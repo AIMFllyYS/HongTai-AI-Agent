@@ -261,6 +261,7 @@ test("StandaloneTaskService recovers a persisted running task exactly once", asy
 test("StandaloneTaskService imports one private MP4 through the shared pipeline and deletes only its terminal task", async () => {
   const native = memoryFiles();
   let picked = 0;
+  const taskIds = ["task-existing-1", "task-local-1"];
   const service = new StandaloneTaskService({
     files: native.plugin,
     fileMedia: {
@@ -270,7 +271,7 @@ test("StandaloneTaskService imports one private MP4 through the shared pipeline 
         return { uri: `file:///private/tasks/${taskId}/media/video.mp4`, mimeType: "video/mp4", displayName: "真实口播.mp4", sizeBytes: 128, durationSeconds: 8 };
       },
     },
-    adapters: [],
+    adapters: [imageTextAdapter()],
     http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
     downloader: { download: async () => { throw new Error("local video must not download"); } },
     mediaTools: {
@@ -286,10 +287,11 @@ test("StandaloneTaskService imports one private MP4 through the shared pipeline 
         segments: [{ index: 0, startSeconds: 0, endSeconds: 8, text: "真实本地视频文稿", status: "succeeded" }],
       }),
     },
-    createTaskId: () => "task-local-1",
+    createTaskId: () => taskIds.shift() ?? "task-unexpected",
     toDisplayUri: (value) => `display:${value}`,
   });
 
+  const existing = await service.create({ input: "复制内容 https://www.xiaohongshu.com/discovery/item/existing" });
   const imported = await service.importVideo();
   assert.equal(imported.sourceKind, "local_video");
   assert.equal(imported.sourceUrl, "");
@@ -300,6 +302,7 @@ test("StandaloneTaskService imports one private MP4 through the shared pipeline 
   await assert.rejects(() => service.delete(imported.id), /尚未完成/u);
   const completed = await (await service.start(imported.id)).completion;
   assert.equal(completed.status, "succeeded");
+  assert.equal((await service.get(existing.id))?.status, "queued", "picker return must not interrupt an unrelated task");
   await service.delete(imported.id);
   assert.equal(await service.get(imported.id), undefined);
 });
