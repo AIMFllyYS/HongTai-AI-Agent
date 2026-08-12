@@ -19,8 +19,8 @@ import java.util.UUID
 import java.util.concurrent.Executors
 
 /**
- * Fixed app-private file bridge for standalone task, observation and production artifacts.
- * It exposes neither arbitrary paths nor directory listing outside the two
+ * Fixed app-private file bridge for standalone task, observation, production and template artifacts.
+ * It exposes neither arbitrary paths nor directory listing outside the
  * owned roots. Structured task state is atomically replaced; task events are
  * append-only.
  */
@@ -32,6 +32,9 @@ class LocalFilesPlugin : Plugin() {
   }
   private val productions by lazy {
     PrivateScopedFiles(context, "productions", "production", LocalFilesPolicy::projectId, 2L * 1024L * 1024L)
+  }
+  private val templates by lazy {
+    PrivateScopedFiles(context, "templates", "template", LocalFilesPolicy::templateId, 1L * 1024L * 1024L)
   }
 
   @PluginMethod
@@ -71,6 +74,12 @@ class LocalFilesPlugin : Plugin() {
   @PluginMethod
   fun listTaskIds(call: PluginCall) = execute(call) {
     call.resolve(JSObject().put("taskIds", JSArray(tasks.listTaskIds())))
+  }
+
+  @PluginMethod
+  fun deleteTask(call: PluginCall) = execute(call) {
+    tasks.deleteTask(call.requiredTaskId())
+    call.resolve()
   }
 
   @PluginMethod
@@ -156,6 +165,51 @@ class LocalFilesPlugin : Plugin() {
     call.resolve(JSObject().put("projectIds", JSArray(productions.listIdentifiers())))
   }
 
+  @PluginMethod
+  fun deleteProductionFile(call: PluginCall) = execute(call) {
+    productions.deleteFile(call.requiredProjectId(), LocalFilesPolicy.productionDeletablePath(call.requiredRelativePath()))
+    call.resolve()
+  }
+
+  @PluginMethod
+  fun deleteProduction(call: PluginCall) = execute(call) {
+    productions.delete(call.requiredProjectId())
+    call.resolve()
+  }
+
+  @PluginMethod
+  fun ensureTemplate(call: PluginCall) = execute(call) {
+    templates.ensure(call.requiredTemplateId())
+    call.resolve()
+  }
+
+  @PluginMethod
+  fun writeTemplateText(call: PluginCall) = execute(call) {
+    templates.writeText(
+      call.requiredTemplateId(),
+      call.requiredRelativePath(),
+      call.requiredValue(),
+      call.getBoolean("replace", false) ?: false,
+    )
+    call.resolve()
+  }
+
+  @PluginMethod
+  fun readTemplateText(call: PluginCall) = execute(call) {
+    call.resolve(JSObject().putOptional("value", templates.readTextOrNull(call.requiredTemplateId(), call.requiredRelativePath())))
+  }
+
+  @PluginMethod
+  fun listTemplateIds(call: PluginCall) = execute(call) {
+    call.resolve(JSObject().put("templateIds", JSArray(templates.listIdentifiers())))
+  }
+
+  @PluginMethod
+  fun deleteTemplate(call: PluginCall) = execute(call) {
+    templates.delete(call.requiredTemplateId())
+    call.resolve()
+  }
+
   private fun execute(call: PluginCall, action: () -> Unit) {
     FILE_EXECUTOR.execute {
       try {
@@ -173,6 +227,8 @@ class LocalFilesPlugin : Plugin() {
   private fun PluginCall.requiredSessionId(): String = LocalFilesPolicy.sessionId(requiredString("sessionId"))
 
   private fun PluginCall.requiredProjectId(): String = LocalFilesPolicy.projectId(requiredString("projectId"))
+
+  private fun PluginCall.requiredTemplateId(): String = LocalFilesPolicy.templateId(requiredString("templateId"))
 
   private fun PluginCall.requiredRelativePath(): String = LocalFilesPolicy.relativePath(requiredString("relativePath"))
 
@@ -211,6 +267,22 @@ internal object LocalFilesPolicy {
 
   fun projectId(value: String): String = identifierValue(value, "Production project identifier")
 
+  fun templateId(value: String): String = identifierValue(value, "Template identifier")
+
+  fun productionDeletablePath(value: String): String {
+    val normalized = relativePath(value)
+    if (normalized == "output.mp4") return normalized
+    val parts = normalized.split('/')
+    require(parts.size == 2 && parts[0] == "inputs") { "Production deletion path is not allowed." }
+    val fileName = parts[1]
+    val assetId = fileName.substringBeforeLast('.', "")
+    val extension = fileName.substringAfterLast('.', "").lowercase()
+    require(identifier.matches(assetId) && extension in PRODUCTION_ASSET_EXTENSIONS) {
+      "Production deletion path is not allowed."
+    }
+    return normalized
+  }
+
   fun relativePath(value: String): String {
     val normalized = value.trim().replace('\\', '/')
     require(normalized.isNotBlank() && !normalized.startsWith('/')) { "Artifact path must be relative." }
@@ -223,6 +295,8 @@ internal object LocalFilesPolicy {
 
   private fun identifierValue(value: String, label: String): String = value.takeIf(identifier::matches)
     ?: throw IllegalArgumentException("$label is invalid.")
+
+  private val PRODUCTION_ASSET_EXTENSIONS = setOf("jpg", "png", "webp", "mp4", "mp3", "m4a", "wav")
 }
 
 private class PrivateScopedFiles(
@@ -239,7 +313,7 @@ private class PrivateScopedFiles(
 
   fun writeText(sessionId: String, relativePath: String, value: String, replace: Boolean): PrivateArtifactFile {
     val bytes = value.toByteArray(Charsets.UTF_8)
-    require(bytes.size <= MAX_TEXT_BYTES) { "The observation text artifact exceeds its storage limit." }
+    require(bytes.size <= MAX_TEXT_BYTES) { "The $label text artifact exceeds its storage limit." }
     return ByteArrayInputStream(bytes).use { input ->
       writeStream(sessionId, relativePath, input, MAX_TEXT_BYTES.toLong(), replace, mimeTypeFor(relativePath))
     }
@@ -247,7 +321,7 @@ private class PrivateScopedFiles(
 
   fun readTextOrNull(sessionId: String, relativePath: String): String? {
     val target = fileOrNull(sessionId, relativePath) ?: return null
-    require(target.length() <= MAX_TEXT_BYTES) { "The observation text artifact exceeds its storage limit." }
+    require(target.length() <= MAX_TEXT_BYTES) { "The $label text artifact exceeds its storage limit." }
     return FileInputStream(target).use { input -> input.readBytes().toString(Charsets.UTF_8) }
   }
 
@@ -267,6 +341,24 @@ private class PrivateScopedFiles(
     }
   }
 
+  fun deleteFile(sessionId: String, relativePath: String) {
+    val directory = File(root, validateIdentifier(sessionId))
+    if (!directory.isDirectory) return
+    val target = File(directory, LocalFilesPolicy.relativePath(relativePath)).canonicalFile
+    requireInsideRoot(target)
+    if (target.exists() && (!target.isFile || !target.delete())) {
+      throw IllegalStateException("Could not delete the private $label file.")
+    }
+  }
+
+  fun delete(sessionId: String) {
+    val directory = File(root, validateIdentifier(sessionId)).canonicalFile
+    requireInsideRoot(directory)
+    if (directory.exists() && (!directory.deleteRecursively() || directory.exists())) {
+      throw IllegalStateException("Could not delete the private $label directory.")
+    }
+  }
+
   fun fileInfo(sessionId: String, relativePath: String): PrivateArtifactFile? {
     val target = fileOrNull(sessionId, relativePath) ?: return null
     return PrivateArtifactFile(Uri.fromFile(target).toString(), target.length(), mimeTypeFor(relativePath))
@@ -281,7 +373,7 @@ private class PrivateScopedFiles(
     mimeType: String?,
   ): PrivateArtifactFile {
     val target = targetFile(sessionId, relativePath)
-    if (!replace) require(!target.exists()) { "A private observation artifact already exists at this path." }
+    if (!replace) require(!target.exists()) { "A private $label artifact already exists at this path." }
     val temporary = File(target.parentFile, ".${target.name}.${UUID.randomUUID()}.part")
     var written = 0L
     try {
@@ -292,12 +384,12 @@ private class PrivateScopedFiles(
           val count = input.read(buffer)
           if (count < 0) break
           written += count
-          require(written <= maxBytes) { "The observation artifact exceeds its storage limit." }
+          require(written <= maxBytes) { "The $label artifact exceeds its storage limit." }
           output.write(buffer, 0, count)
         }
         output.fd.sync()
       }
-      if (!temporary.renameTo(target)) throw IllegalStateException("Could not finalize the private observation artifact.")
+      if (!temporary.renameTo(target)) throw IllegalStateException("Could not finalize the private $label artifact.")
       return PrivateArtifactFile(Uri.fromFile(target).toString(), written, mimeType)
     } catch (error: Exception) {
       if (temporary.exists()) temporary.delete()
@@ -317,17 +409,17 @@ private class PrivateScopedFiles(
     val directory = directory(sessionId)
     val target = File(directory, LocalFilesPolicy.relativePath(relativePath)).canonicalFile
     requireInsideRoot(target)
-    val parent = target.parentFile ?: throw IllegalStateException("The private observation directory is unavailable.")
-    if (!parent.exists() && !parent.mkdirs()) throw IllegalStateException("Could not create the private observation directory.")
+    val parent = target.parentFile ?: throw IllegalStateException("The private $label directory is unavailable.")
+    if (!parent.exists() && !parent.mkdirs()) throw IllegalStateException("Could not create the private $label directory.")
     return target
   }
 
   private fun directory(sessionId: String): File {
     val normalized = validateIdentifier(sessionId)
-    if (!root.exists() && !root.mkdirs()) throw IllegalStateException("Could not create the private observation root.")
+    if (!root.exists() && !root.mkdirs()) throw IllegalStateException("Could not create the private $label root.")
     val directory = File(root, normalized).canonicalFile
     requireInsideRoot(directory)
-    if (!directory.exists() && !directory.mkdirs()) throw IllegalStateException("Could not create the private observation directory.")
+    if (!directory.exists() && !directory.mkdirs()) throw IllegalStateException("Could not create the private $label directory.")
     return directory
   }
 
@@ -347,7 +439,7 @@ private class PrivateScopedFiles(
     val resolvedRoot = root.canonicalFile
     val resolved = file.canonicalFile
     require(resolved.path.startsWith("${resolvedRoot.path}${File.separator}")) {
-      "The observation artifact path is outside private storage."
+      "The $label artifact path is outside private storage."
     }
   }
 

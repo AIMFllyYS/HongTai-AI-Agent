@@ -108,7 +108,7 @@ export interface StandaloneLocalDataPlugin {
   }): Promise<{ readonly applied: boolean }>;
 }
 
-export type LocalFilesArea = "task" | "observation";
+export type LocalFilesArea = "task" | "observation" | "production" | "template";
 
 /**
  * Fixed, app-private file operations only. React never receives a native path
@@ -120,6 +120,7 @@ export interface StandaloneLocalFilesPlugin extends LocalTaskFilesPlugin, Native
   readText(options: { readonly taskId: string; readonly relativePath: string }): Promise<{ readonly value?: string }>;
   exists(options: { readonly taskId: string; readonly relativePath: string }): Promise<{ readonly exists: boolean }>;
   listTaskIds(): Promise<{ readonly taskIds: readonly string[] }>;
+  deleteTask(options: { readonly taskId: string }): Promise<void>;
   getUri(options: { readonly taskId: string; readonly relativePath: string }): Promise<{
     readonly uri?: NativeUri;
     readonly sizeBytes?: number;
@@ -154,6 +155,18 @@ export interface StandaloneLocalFilesPlugin extends LocalTaskFilesPlugin, Native
   }): Promise<void>;
   readProductionText(options: { readonly projectId: string; readonly relativePath: string }): Promise<{ readonly value?: string }>;
   listProductionIds(): Promise<{ readonly projectIds: readonly string[] }>;
+  deleteProductionFile(options: { readonly projectId: string; readonly relativePath: string }): Promise<void>;
+  deleteProduction(options: { readonly projectId: string }): Promise<void>;
+  ensureTemplate(options: { readonly templateId: string }): Promise<void>;
+  writeTemplateText(options: {
+    readonly templateId: string;
+    readonly relativePath: string;
+    readonly value: string;
+    readonly replace: boolean;
+  }): Promise<void>;
+  readTemplateText(options: { readonly templateId: string; readonly relativePath: string }): Promise<{ readonly value?: string }>;
+  listTemplateIds(): Promise<{ readonly templateIds: readonly string[] }>;
+  deleteTemplate(options: { readonly templateId: string }): Promise<void>;
 }
 
 export interface NativeProductionAsset {
@@ -202,6 +215,13 @@ export interface StandaloneNativeNetworkPlugin extends NativeTextFetchPort, Nati
 
 export interface StandaloneFileMediaPlugin {
   pickPhoto(): Promise<{ readonly uri: NativeUri; readonly mimeType?: string; readonly sizeBytes: number }>;
+  pickVideo(options: { readonly taskId: string }): Promise<{
+    readonly uri: NativeUri;
+    readonly mimeType: "video/mp4";
+    readonly displayName: string;
+    readonly sizeBytes: number;
+    readonly durationSeconds: number;
+  }>;
   capturePhoto(): Promise<{ readonly uri: NativeUri; readonly mimeType?: string; readonly sizeBytes: number }>;
   consumePhotoOperation(): Promise<NativePhotoOperationResult>;
   copyFromUri(options: { readonly sourceUri: NativeUri; readonly displayName?: string }): Promise<{

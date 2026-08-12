@@ -26,6 +26,7 @@ import com.hongtai.aiagent.media.PrivateMediaFile
 import com.hongtai.aiagent.media.PrivateMediaReadException
 import com.hongtai.aiagent.media.PrivateMediaStore
 import com.hongtai.aiagent.media.PrivateMediaTooLargeException
+import com.hongtai.aiagent.media.TaskVideoImportStore
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
@@ -34,6 +35,7 @@ import java.util.concurrent.RejectedExecutionException
 class FileMediaPlugin : Plugin() {
   private val mediaStore: PrivateMediaStore by lazy { PrivateMediaStore(context) }
   private val photoOperations: PhotoOperationStateStore by lazy { PhotoOperationStateStore(context) }
+  private val taskVideos: TaskVideoImportStore by lazy { TaskVideoImportStore(context) }
   private val scheduledOperations = ConcurrentHashMap.newKeySet<String>()
   private var recoveryConsumerCall: PluginCall? = null
 
@@ -104,6 +106,67 @@ class FileMediaPlugin : Plugin() {
     } catch (error: Exception) {
       mediaStore.discardCapture(capture)
       finishFailure(call, operation.operationId, NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
+    }
+  }
+
+  @PluginMethod
+  fun pickVideo(call: PluginCall) {
+    if (call.getString("taskId").isNullOrBlank()) {
+      call.reject("taskId is required.", NativeIssueCode.INVALID_ARGUMENT)
+      return
+    }
+    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+      .addCategory(Intent.CATEGORY_OPENABLE)
+      .setType("video/mp4")
+      .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    try {
+      startActivityForResult(call, intent, "onVideoPicked")
+    } catch (error: ActivityNotFoundException) {
+      call.reject("No system video picker is available.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
+    } catch (error: Exception) {
+      call.reject("Could not open the system video picker.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
+    }
+  }
+
+  @ActivityCallback
+  private fun onVideoPicked(call: PluginCall?, result: ActivityResult) {
+    if (call == null) return
+    if (result.resultCode != Activity.RESULT_OK) {
+      call.reject("The video selection was cancelled.", NativeIssueCode.MEDIA_SELECTION_CANCELLED)
+      return
+    }
+    val sourceUri = result.data?.data
+    if (sourceUri == null) {
+      call.reject("The selected video did not provide a URI.", NativeIssueCode.MEDIA_SOURCE_MISSING)
+      return
+    }
+    val taskId = call.getString("taskId")
+    if (taskId.isNullOrBlank()) {
+      call.reject("taskId is required.", NativeIssueCode.INVALID_ARGUMENT)
+      return
+    }
+    try {
+      VIDEO_IMPORT_EXECUTOR.execute {
+        try {
+          val imported = taskVideos.import(taskId, sourceUri)
+          call.resolve(
+            JSObject()
+              .put("uri", imported.uri)
+              .put("mimeType", imported.mimeType)
+              .put("displayName", imported.displayName)
+              .put("sizeBytes", imported.sizeBytes)
+              .put("durationSeconds", imported.durationSeconds),
+          )
+        } catch (error: PrivateMediaReadException) {
+          call.reject("The selected video could not be read.", NativeIssueCode.MEDIA_READ_FAILED, error)
+        } catch (error: IllegalArgumentException) {
+          call.reject("The selected video is not a supported MP4.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
+        } catch (error: Exception) {
+          call.reject("Could not import the selected video into private storage.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
+        }
+      }
+    } catch (error: RejectedExecutionException) {
+      call.reject("The private video import queue is unavailable.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
     }
   }
 
@@ -357,6 +420,9 @@ class FileMediaPlugin : Plugin() {
   private companion object {
     val PHOTO_IMPORT_EXECUTOR = Executors.newSingleThreadExecutor { runnable ->
       Thread(runnable, "hongtai-photo-import").apply { isDaemon = true }
+    }
+    val VIDEO_IMPORT_EXECUTOR = Executors.newSingleThreadExecutor { runnable ->
+      Thread(runnable, "hongtai-video-import").apply { isDaemon = true }
     }
   }
 }
