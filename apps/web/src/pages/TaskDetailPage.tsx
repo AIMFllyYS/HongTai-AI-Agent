@@ -34,7 +34,8 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
   const [loading, setLoading] = useState(true);
   const [issue, setIssue] = useState<TaskIssue>();
   const [confirmationOpen, setConfirmationOpen] = useState(false);
-  const [pendingAction, setPendingAction] = useState<"analysis">();
+  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"analysis" | "delete">();
 
   const load = useCallback(async () => {
     try {
@@ -66,6 +67,20 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
     }
   };
 
+  const deleteTask = async () => {
+    setPendingAction("delete");
+    setIssue(undefined);
+    try {
+      await runtime.tasks.delete(taskId);
+      navigate(pathForRoute("home"));
+    } catch (error) {
+      setIssue(issueFromAppError(error, { code: "STORAGE_WRITE_FAILED", message: "任务和视频没有删除完成", action: "retry" }));
+    } finally {
+      setPendingAction(undefined);
+      setDeleteConfirmationOpen(false);
+    }
+  };
+
   const imageMedia = useMemo(() => detail ? uniqueMedia([
     ...detail.media.filter((item) => item.kind === "image"),
     ...(detail.content.cover ? [detail.content.cover] : []),
@@ -81,12 +96,14 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
   }
 
   const task = detail.task;
-  const platform = platformLabel(task.platform);
+  const localVideo = task.sourceKind === "local_video";
+  const platform = localVideo ? "本地上传" : platformLabel(task.platform);
   const contentType = contentTypeLabel(task.contentType);
   const activeIssue = issue ?? task.issues.at(-1);
   const needsNewSubmission = task.status === "failed" || task.status === "interrupted" || task.status === "cancelled";
   const hasEvidence = detail.evidenceUnits.length > 0;
   const terminalWithOutput = task.status === "succeeded" || task.status === "degraded";
+  const terminalTask = task.status !== "queued" && task.status !== "running";
   const analysisAvailable = runtime.features.contentAnalysis === "available";
   const canRequestAnalysis = analysisAvailable && terminalWithOutput && hasEvidence && task.analysisStatus === "not_started";
   const issueActions = {
@@ -100,8 +117,8 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
         {activeIssue ? <IssueNotice actions={issueActions} issue={activeIssue} /> : null}
 
         <GlassCard className="task-detail-summary">
-          <div className="task-detail-summary__heading"><div><span className="eyebrow">LOCAL TASK</span><h2>{detail.content.title ?? "未提供标题"}</h2></div><TaskStatusBadge status={task.status} /></div>
-          <p className="technical-value">{safeUrlForDisplay(detail.content.canonicalUrl ?? task.sourceUrl)}</p>
+          <div className="task-detail-summary__heading"><div><span className="eyebrow">LOCAL TASK</span><h2>{detail.content.title ?? (localVideo ? "本地上传视频" : "未提供标题")}</h2></div><TaskStatusBadge status={task.status} /></div>
+          <p className="technical-value">{localVideo ? "本地上传 · 私有任务文件" : safeUrlForDisplay(detail.content.canonicalUrl ?? task.sourceUrl)}</p>
           <div className="task-detail-summary__facts">
             {platform ? <span><Icon name="language" size={15} />{platform}</span> : null}
             {contentType ? <span><Icon name={task.contentType === "image_text" ? "grid" : "video_file"} size={15} />{contentType}</span> : null}
@@ -152,6 +169,13 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
         </section>
 
         {needsNewSubmission ? <GlassCard className="analysis-request-card"><Icon name="sync" size={22} /><p>本版本不会继续或复制旧任务。若需再次处理，请返回首页重新提交链接。</p><Button icon={<Icon name="arrow_back" size={18} />} onClick={() => navigate(pathForRoute("home"))} variant="secondary">重新提交链接</Button></GlassCard> : null}
+        {terminalTask ? deleteConfirmationOpen ? (
+          <GlassCard className="task-delete-confirm" role="alert">
+            <strong>确认删除这个任务{localVideo ? "及上传视频" : "及全部产物"}？</strong>
+            <p>将永久删除本机任务目录中的媒体、文稿、拆解与事件；已经复制保存的模板不会级联删除。</p>
+            <div className="mobile-action-group"><Button disabled={pendingAction !== undefined} onClick={() => void deleteTask()}>{pendingAction === "delete" ? "正在删除" : "确认删除任务"}</Button><Button disabled={pendingAction !== undefined} onClick={() => setDeleteConfirmationOpen(false)} variant="quiet">取消</Button></div>
+          </GlassCard>
+        ) : <Button aria-label={localVideo ? "删除本地上传视频任务" : "删除任务"} disabled={pendingAction !== undefined} icon={<Icon name="close" size={17} />} onClick={() => setDeleteConfirmationOpen(true)} variant="quiet">删除任务</Button> : null}
         <Button icon={<Icon name="update" size={18} />} onClick={() => void load()} variant="quiet">刷新本地详情</Button>
       </div>
     </AppShell>

@@ -81,6 +81,38 @@
   padding: var(--space-5);
 }
 
+.task-local-upload-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-5);
+  background:
+    radial-gradient(circle at 92% 12%, rgba(38, 166, 154, 0.16), transparent 38%),
+    var(--color-surface-card);
+  border-color: rgba(0, 105, 92, 0.22);
+}
+
+.task-source-index {
+  display: grid;
+  width: 2.35rem;
+  height: 2.35rem;
+  place-items: center;
+  color: var(--color-primary-strong);
+  background: var(--color-accent-soft);
+  border-radius: 0.8rem;
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  font-weight: 700;
+}
+
+.task-input-card > .task-source-index { justify-self: start; }
+.task-local-upload-card > div { display: grid; gap: var(--space-2); }
+.task-local-upload-card strong { color: var(--color-primary); font-family: var(--font-display); font-size: var(--text-label); }
+.task-local-upload-card p { color: var(--color-text-subtle); font-size: var(--text-caption); line-height: 1.55; }
+.task-local-upload-card small { color: var(--color-text-muted); font-size: var(--text-meta); line-height: 1.45; }
+.task-local-upload-card > .button { grid-column: 1 / -1; width: 100%; }
+
 .task-input-card textarea {
   width: 100%;
   min-height: 8.25rem;
@@ -452,6 +484,19 @@
 .analysis-confirm-card strong { color: var(--color-primary); font-size: var(--text-label); }
 .analysis-confirm-card__actions { width: 100%; }
 
+.task-delete-confirm {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: linear-gradient(135deg, rgba(255, 244, 238, 0.96), var(--color-surface-card));
+  border-color: rgba(186, 26, 26, 0.22);
+}
+
+.task-delete-confirm strong { color: var(--color-error); font-size: var(--text-label); }
+.task-delete-confirm p { color: var(--color-text-muted); font-size: var(--text-caption); line-height: 1.55; }
+.task-delete-confirm > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.task-delete-confirm .button { width: 100%; }
+
 .task-analysis-heading > span {
   display: inline-flex;
   align-items: center;
@@ -600,6 +645,7 @@
 
 @media (max-width: 26.875rem) {
   .task-input-card,
+  .task-local-upload-card,
   .task-stage-card,
   .task-detail-summary,
   .runtime-transcript-card,
@@ -612,6 +658,10 @@
   }
 
   .task-page-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .task-delete-confirm > div {
     grid-template-columns: 1fr;
   }
 

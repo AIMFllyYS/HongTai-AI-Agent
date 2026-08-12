@@ -11,7 +11,7 @@ import { IssueNotice } from "../components/IssueNotice";
 import { EmptyState, ErrorState, LoadingState } from "../components/StatePanels";
 import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
 import { platformLabel, readContentAnalysis } from "../features/tasks/task-presenters";
-import { aiSettingsPath, taskDetailPath, type Navigate } from "../router";
+import { aiSettingsPath, pathForRoute, taskDetailPath, type Navigate } from "../router";
 
 export interface TaskAnalysisPageProps {
   readonly runtime: AppRuntime;
@@ -58,9 +58,10 @@ export function TaskAnalysisPage({ runtime, taskId, navigate }: TaskAnalysisPage
   const issueActions = {
     configureAi: () => navigate(aiSettingsPath()),
   };
-  const sourceTitle = detail.content.title ?? "内容拆解";
-  const sourceUrl = safeUrlForDisplay(detail.content.canonicalUrl ?? detail.task.sourceUrl);
-  const platform = platformLabel(detail.task.platform);
+  const localVideo = detail.task.sourceKind === "local_video";
+  const sourceTitle = detail.content.title ?? (localVideo ? "本地上传视频拆解" : "内容拆解");
+  const sourceUrl = localVideo ? "本地上传 · 仅使用已保存文稿证据" : safeUrlForDisplay(detail.content.canonicalUrl ?? detail.task.sourceUrl);
+  const platform = localVideo ? "本地上传" : platformLabel(detail.task.platform);
 
   return (
     <AppShell activeNav="home" backPath={taskDetailPath(taskId)} navigate={navigate} title="内容拆解">
@@ -82,6 +83,7 @@ export function TaskAnalysisPage({ runtime, taskId, navigate }: TaskAnalysisPage
         {record?.status === "failed" ? <ErrorState action={<Button icon={<Icon name="arrow_back" size={17} />} onClick={() => navigate(taskDetailPath(taskId))} variant="secondary">返回任务详情</Button>} description="上一次拆解没有生成可展示的正式结果。请查看上方稳定错误代码后，由你确认是否再次运行。" title="内容拆解未完成" /> : null}
         {record?.status === "succeeded" && !analysis?.available ? <ErrorState description="已保存的结果不符合 content-analysis.v1 展示契约，应用不会猜测或补写字段。" title="无法安全展示拆解结果" /> : null}
         {record?.status === "succeeded" && analysis?.available ? <ContentAnalysisDocument analysis={analysis} evidenceUnits={detail.evidenceUnits} /> : null}
+        {record?.status === "succeeded" && analysis?.available ? <Button icon={<Icon name="bookmark" size={17} />} onClick={() => navigate(pathForRoute("templates"))} variant="secondary">前往模板管理保存结构</Button> : null}
 
         <GlassCard className="task-analysis-footer">
           <span><Icon name="info" size={18} />只展示正式结果和真实证据；不展示供应商 reasoning、原始响应或平台私有请求数据。</span>

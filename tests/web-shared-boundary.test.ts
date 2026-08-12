@@ -54,9 +54,9 @@ test("page blocks and visual fixtures are split by responsibility", () => {
     assert.match(source, /tabPanelId/);
   }
 
-  const plannedAssets = read("pages/AssetsPage.tsx");
-  assert.match(plannedAssets, /FeatureUnavailablePanel/);
-  assert.doesNotMatch(plannedAssets, /TabPanel/);
+  const templates = read("pages/TemplatesPage.tsx");
+  assert.match(templates, /runtime\.templates/);
+  assert.doesNotMatch(templates, /TabPanel|FeatureUnavailablePanel/);
 });
 
 test("App accepts an explicit visual fixture while the production entry uses AppRuntime", () => {

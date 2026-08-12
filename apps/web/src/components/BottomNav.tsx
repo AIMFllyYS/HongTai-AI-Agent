@@ -7,7 +7,7 @@ import { primaryNavItems } from "../navigation/primary-nav";
 export type BottomNavVisualTheme = "workbench" | "warm-soft-tech";
 
 export interface BottomNavProps {
-  readonly active?: "ai" | "home" | "create" | "assets" | "settings";
+  readonly active?: "ai" | "home" | "create" | "templates" | "settings";
   readonly navigate: Navigate;
   readonly visualTheme?: BottomNavVisualTheme;
 }
@@ -44,7 +44,7 @@ export function BottomNav({ active, navigate, visualTheme = "workbench" }: Botto
 export function activeNavForRoute(route: RouteKey): BottomNavProps["active"] {
   if (route === "vitality-scan" || route === "vitality-result" || route === "observation-new" || route === "observation-report") return "ai";
   if (route === "create") return "create";
-  if (route === "assets") return "assets";
+  if (route === "templates") return "templates";
   if (route === "settings" || route === "settings-profile" || route === "settings-ai") return "settings";
   if (route === "home" || route === "task-processing" || route === "task-detail" || route === "task-analysis" || route === "processing" || route === "analysis-result" || route === "video-detail" || route === "gallery-detail") return "home";
   return undefined;

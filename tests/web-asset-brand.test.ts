@@ -38,7 +38,7 @@ test("the design logo is shared by brand headers while AI navigation uses a medi
 
 test("page shells do not repeat the same title as the top app bar", () => {
   for (const relativePath of [
-    "pages/AssetsPage.tsx",
+    "pages/TemplatesPage.tsx",
     "pages/CreatePage.tsx",
     "pages/PublishPage.tsx",
     "pages/SettingsPage.tsx",
@@ -61,11 +61,10 @@ test("the browser audit checks the asset thumbnail boundary and shared logo", ()
   assert.match(audit, /external runtime media/);
 });
 
-test("planned assets do not use a fake media status treatment", () => {
-  const page = read("pages/AssetsPage.tsx");
+test("template management uses runtime DTOs without fake media status", () => {
+  const page = read("pages/TemplatesPage.tsx");
 
-  assert.match(page, /FeatureUnavailablePanel/);
-  assert.match(page, /feature="assets"/);
-  assert.match(page, /disabled/);
-  assert.doesNotMatch(page, /asset\.kind|asset-row__media--failed|StatusBadge/);
+  assert.match(page, /runtime\.templates\.list/);
+  assert.match(page, /runtime\.templates\.delete/);
+  assert.doesNotMatch(page, /asset\.kind|asset-row__media--failed|StatusBadge|FeatureUnavailablePanel/);
 });

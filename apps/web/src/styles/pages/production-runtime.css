@@ -21,12 +21,30 @@
 .production-assets { display: grid; grid-auto-columns: minmax(6.4rem, 30%); grid-auto-flow: column; gap: var(--space-2); overflow-x: auto; padding-bottom: var(--space-1); }
 .production-assets article,
 .production-add-asset { display: grid; grid-template-rows: 5.6rem auto auto; gap: 0.25rem; min-width: 0; padding: var(--space-2); text-align: left; background: var(--color-surface-low); border: 1px solid var(--color-outline-soft); border-radius: var(--radius-control); }
+.production-assets article { position: relative; }
 .production-assets article > div { display: grid; overflow: hidden; place-items: center; color: var(--color-primary-strong); background: var(--color-accent-soft); border-radius: 0.7rem; }
 .production-assets img { width: 100%; height: 100%; object-fit: cover; }
 .production-assets span { overflow: hidden; color: var(--color-text-subtle); font-size: var(--text-meta); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .production-assets small { color: var(--color-text-muted); font-size: var(--text-caption); }
 .production-add-asset { align-items: center; justify-items: center; color: var(--color-primary-strong); border-style: dashed; }
 .production-add-asset:disabled { color: var(--color-text-muted); }
+
+.production-asset-delete {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  place-items: center;
+  color: #fff;
+  background: rgba(0, 52, 43, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 0.2rem 0.7rem rgba(0, 52, 43, 0.2);
+}
+
+.production-asset-delete:disabled { opacity: 0.45; }
 
 .production-hint { display: flex; gap: var(--space-2); align-items: flex-start; color: var(--color-text-muted); font-size: var(--text-meta); line-height: 1.5; }
 .production-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
@@ -48,9 +66,25 @@
 
 .production-output { display: grid; gap: var(--space-3); overflow: hidden; background: var(--color-surface-low); border-radius: var(--radius-control); }
 .production-output video { width: 100%; max-height: 32rem; background: #071c18; aspect-ratio: 9 / 16; object-fit: contain; }
-.production-output > div { display: flex; justify-content: space-between; gap: var(--space-2); align-items: center; padding: 0 var(--space-3) var(--space-3); }
+.production-output > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-2); align-items: center; padding: 0 var(--space-3) var(--space-3); }
 .production-output strong { display: inline-flex; gap: 0.35rem; align-items: center; color: var(--color-success); font-size: var(--text-meta); }
 .production-output small { color: var(--color-text-muted); font-size: var(--text-caption); }
+
+.production-delete-confirm {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: linear-gradient(135deg, rgba(255, 244, 238, 0.96), var(--color-surface-card));
+  border: 1px solid rgba(186, 26, 26, 0.22);
+  border-radius: var(--radius-control);
+}
+
+.production-delete-confirm > div:first-child { display: grid; gap: var(--space-2); }
+.production-delete-confirm strong { color: var(--color-error); font-size: var(--text-label); }
+.production-delete-confirm p { color: var(--color-text-muted); font-size: var(--text-caption); line-height: 1.55; }
+.production-delete-confirm > div:last-child { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.production-delete-confirm .button { width: 100%; }
+.production-delete-project { justify-self: end; color: var(--color-error); }
 
 .production-history { display: grid; gap: var(--space-2); }
 .production-history > div { display: grid; gap: var(--space-2); }
@@ -63,4 +97,5 @@
   .production-actions { grid-template-columns: 1fr; }
   .production-assets { grid-auto-columns: minmax(6rem, 42%); }
   .production-output > div { align-items: flex-start; flex-direction: column; }
+  .production-delete-confirm > div:last-child { grid-template-columns: 1fr; }
 }

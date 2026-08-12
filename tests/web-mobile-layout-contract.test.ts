@@ -9,11 +9,13 @@ const read = (path: string) => readFileSync(join(root, path), "utf8");
 test("mobile controls stay readable between 360 and 430 pixels", () => {
   const components = read("styles/components.css");
   const responsive = read("styles/responsive.css");
+  const library = read("styles/pages/library.css");
 
   assert.match(components, /\.button\s*\{[^}]*white-space:\s*nowrap/s);
   assert.match(components, /\.technical-value[^}]*overflow-wrap:\s*anywhere/s);
   assert.match(responsive, /@media\s*\(max-width:\s*26\.875rem\)/);
   assert.match(responsive, /\.mobile-action-group\s*\{[^}]*grid-template-columns:\s*1fr/s);
+  assert.match(library, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.template-editor__actions[^}]*grid-template-columns:\s*1fr/);
 });
 
 test("approved gesture shell and compact navigation remain mounted", () => {

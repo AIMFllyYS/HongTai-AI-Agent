@@ -34,7 +34,6 @@ const FEATURES: FeatureCapabilityRegistry = Object.freeze({
   contentAnalysis: "available",
   diagnosis: "available",
   create: "available",
-  assets: "planned",
   templates: "available",
   publish: "planned",
 });

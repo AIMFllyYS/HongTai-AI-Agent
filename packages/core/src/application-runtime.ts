@@ -389,7 +389,6 @@ export type AppFeature =
   | "contentAnalysis"
   | "diagnosis"
   | "create"
-  | "assets"
   | "templates"
   | "publish";
 export type FeatureCapabilityRegistry = Readonly<Record<AppFeature, FeatureCapability>>;
