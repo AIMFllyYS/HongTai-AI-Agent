@@ -166,12 +166,32 @@ function Invoke-CheckedCommand {
   }
 }
 
+function Get-AndroidSourceIdentity {
+  param([Parameter(Mandatory = $true)][string] $BuildFile)
+
+  $buildSource = Get-Content -LiteralPath $BuildFile -Raw -Encoding UTF8
+  $applicationIdMatch = [regex]::Match($buildSource, '(?m)^\s*applicationId\s*=\s*"([^"]+)"\s*$')
+  $versionCodeMatch = [regex]::Match($buildSource, '(?m)^\s*versionCode\s*=\s*([1-9][0-9]*)\s*$')
+  $versionNameMatch = [regex]::Match($buildSource, '(?m)^\s*versionName\s*=\s*"([0-9]+[.][0-9]+[.][0-9]+)"\s*$')
+  if (!$applicationIdMatch.Success -or !$versionCodeMatch.Success -or !$versionNameMatch.Success) {
+    throw "Android source package or version metadata is missing"
+  }
+
+  return [PSCustomObject] @{
+    PackageName = $applicationIdMatch.Groups[1].Value
+    VersionCode = $versionCodeMatch.Groups[1].Value
+    VersionName = $versionNameMatch.Groups[1].Value
+  }
+}
+
 $rawRepositoryRoot = Join-Path $PSScriptRoot ".."
 Assert-NoReparsePoint -Path $rawRepositoryRoot `
   -FailureMessage "Repository path must not traverse a reparse point"
 $repositoryRoot = Resolve-CanonicalPath -Path $rawRepositoryRoot
 $apkPath = Join-Path $repositoryRoot "android\app\build\outputs\apk\release\app-release.apk"
 $anchorPath = Join-Path $repositoryRoot "android\release-certificate.sha256"
+$sourceIdentity = Get-AndroidSourceIdentity `
+  -BuildFile (Join-Path $repositoryRoot "android\app\build.gradle.kts")
 $jdkHome = Get-Jdk21Home
 $androidSdk = Get-AndroidSdkHome
 $buildTools = Get-CompleteBuildTools -AndroidSdk $androidSdk
@@ -312,8 +332,10 @@ try {
   $packageName = $packageMatch.Groups[1].Value
   $versionCode = $packageMatch.Groups[2].Value
   $versionName = $packageMatch.Groups[3].Value
-  if ($packageName -ne "com.hongtai.aiagent" -or $versionCode -ne "14" -or $versionName -ne "0.1.6") {
-    throw "Release APK package or version metadata is unexpected"
+  if ($packageName -ne $sourceIdentity.PackageName -or
+      $versionCode -ne $sourceIdentity.VersionCode -or
+      $versionName -ne $sourceIdentity.VersionName) {
+    throw "Release APK package or version metadata does not match Android source"
   }
 
   $apkSha256 = (Get-FileHash -LiteralPath $apkPath -Algorithm SHA256).Hash.ToLowerInvariant()

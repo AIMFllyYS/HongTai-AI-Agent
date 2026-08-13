@@ -38,5 +38,4 @@ keystore.properties
 .DS_Store
 Thumbs.db
 
-# Superpowers 隔离开发工作区
-.worktrees/
+# 本仓库只在根项目目录工作；不要忽略误建的附加工作区。

@@ -27,7 +27,7 @@ HONGTAI_MAX_DURATION_SECONDS=1200
 
 仅当供应商明确支持`response_format=json_schema`时启用`HONGTAI_AI_JSON_SCHEMA=true`。不支持时系统依次使用JSON Object或Prompt字段契约，并始终执行相同的Zod运行时校验。
 
-`HONGTAI_AI_ASR_TRANSPORT`也可配置为`chat-input-audio`，用于以聊天音频消息提供转写能力的兼容服务。例如MiMo V2.5 ASR使用`chat-input-audio`，而不是`audio/transcriptions`。API Key不得写进源码、文档、日志或提交记录。
+`HONGTAI_AI_ASR_TRANSPORT`也可配置为`chat-input-audio`，用于以聊天音频消息提供转写能力的兼容服务。例如MiMo V2.5 ASR使用`chat-input-audio`，而不是`audio/transcriptions`。小米、阶跃的公开地址、模型名和脱敏回归样例见[本地端测配置](本地端测配置.md)。API Key不得写进源码、文档、日志或提交记录。
 
 不同命令只校验自身所需模型：`ingest`按已配置能力启用ASR和整理稿，`analyze-content`要求文本模型，`diagnosis serve`要求文本和视觉模型。
 

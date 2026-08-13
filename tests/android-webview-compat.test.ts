@@ -64,6 +64,9 @@ test("release packaging verifies the v0.1.6 monotonic candidate version", () => 
 
   assert.match(appBuild, /versionCode\s*=\s*14\b/);
   assert.match(appBuild, /versionName\s*=\s*"0\.1\.6"/);
-  assert.match(releaseBuilder, /\$versionCode\s+-ne\s+"14"/);
-  assert.match(releaseBuilder, /\$versionName\s+-ne\s+"0\.1\.6"/);
+  assert.match(releaseBuilder, /Get-AndroidSourceIdentity/);
+  assert.match(releaseBuilder, /\$versionCode\s+-ne\s+\$sourceIdentity\.VersionCode/);
+  assert.match(releaseBuilder, /\$versionName\s+-ne\s+\$sourceIdentity\.VersionName/);
+  assert.doesNotMatch(releaseBuilder, /\$versionCode\s+-ne\s+"14"/);
+  assert.doesNotMatch(releaseBuilder, /\$versionName\s+-ne\s+"0\.1\.6"/);
 });

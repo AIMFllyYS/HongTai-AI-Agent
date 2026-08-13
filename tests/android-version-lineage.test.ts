@@ -57,3 +57,13 @@ test("the repository maintains a changelog and a patch-only default version poli
   assert.match(changelog, /默认只递增第三位补丁版本/u);
   assert.match(changelog, /第一位或第二位版本号.*明确授权/u);
 });
+
+test("the repository exposes Release as its only APK delivery path", () => {
+  const readme = readFileSync(join(root, "README.md"), "utf8");
+  const agents = readFileSync(join(root, "AGENTS.md"), "utf8");
+
+  assert.equal(existsSync(join(root, "scripts", "build-android-debug.ps1")), false);
+  assert.match(readme, /唯一 APK 构建与交付入口/u);
+  assert.doesNotMatch(readme, /^## 构建 Debug APK$/mu);
+  assert.match(agents, /不构建、不交付、不归档 Debug APK/u);
+});

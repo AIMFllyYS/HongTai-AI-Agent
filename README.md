@@ -2,7 +2,7 @@
 
 面向大健康门店老板的本地优先 Android AI 应用。交付形态是独立 APK：React 是**应用界面层**，共享 TypeScript 是**本地应用逻辑层**，Capacitor/Kotlin 是**平台运行时与原生能力层**；本项目没有传统远程 Web 后端。
 
-> 当前能力、发布边界和修复优先级见[当前能力与发布状态](docs/当前能力与发布状态.md)，版本变更与递增规则见[更新日志](CHANGELOG.md)。当前 `v0.1.6`（`versionCode=13`）已从提交 `f39d409` 构建为正式签名候选，并通过主机与 API 35 模拟器门禁；当前公开推荐仍是已验证哈希的 `v0.1.5`（`versionCode=12`）。物理设备完整验收、人工上传和公开下载页回验完成前，v0.1.6 不是正式发布版本；公开 v0.1.4 Debug→正式证书的数据迁移边界仍然存在。
+> 当前能力、发布边界和修复优先级见[当前能力与发布状态](docs/当前能力与发布状态.md)，版本与构建规则见[版本与发布流程](docs/版本与发布流程.md)。Android 源码候选当前为 `v0.1.6`（`versionCode=14`），公开推荐仍是已验证哈希的 `v0.1.5`（`versionCode=12`）。物理设备完整验收、人工上传和公开下载页回验完成前，v0.1.6 不是正式发布版本。
 
 ## 当前能力
 
@@ -65,20 +65,9 @@ CLI 的 `.env` 只用于开发机回归，不能进入 APK、Git、日志或 ADB
 
 CLI 图片回归由 `packages/node-runtime` 中精确锁定的 sharp 负责解码；该 Node 原生依赖不会进入 Web、Capacitor Runtime 或 Android APK。
 
-## 构建 Debug APK
+## 构建 APK
 
-```powershell
-pnpm --filter @hongtai/web build
-pnpm exec cap sync android
-$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
-Push-Location android
-.\gradlew.bat :app:assembleDebug --no-daemon
-Pop-Location
-```
-
-输出为 `android/app/build/outputs/apk/debug/app-debug.apk`。它使用 Android debug 签名，仅用于开发和 QA。
-
-## 构建正式候选 APK
+Release 是本项目唯一 APK 构建与交付入口。项目不再生成、传递或保存 Debug APK。
 
 首次由签名材料保管人初始化仓库外签名身份，之后使用同一身份构建：
 
@@ -94,9 +83,7 @@ Pop-Location
 ```powershell
 pnpm check
 pnpm --filter @hongtai/web build
-Push-Location android
-.\gradlew.bat :app:lintDebug --no-daemon
-Pop-Location
+.\scripts\build-android-release.ps1
 ```
 
 按改动类型选择完整验证，不以“能编译”代替真机或发布验收；见[任务执行模板](docs/任务执行模板.md)。
@@ -111,4 +98,5 @@ Pop-Location
 - [AI应用能力层架构](docs/AI应用能力层架构.md)
 - [任务执行模板](docs/任务执行模板.md)
 - [Android 发布签名与升级指南](docs/Android发布签名与升级指南.md)
+- [版本与发布流程](docs/版本与发布流程.md)
 - [Android 旧系统 HEIF 兼容与依赖指南](docs/Android旧系统HEIF兼容与依赖指南.md)

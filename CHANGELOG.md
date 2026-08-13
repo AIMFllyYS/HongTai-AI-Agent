@@ -20,6 +20,8 @@
 
 ### 变更
 
+- 仓库开发统一回到根项目目录，不再使用 Git worktree 或复制式隔离工作区；Android 只保留 Release APK 产品和交付路径。
+- `android/app/build.gradle.kts` 成为 `versionName` 与 `versionCode` 的唯一源码权威，Release 构建脚本动态读取并核对 APK，不再硬编码第二份版本号。
 - 正式 `diagnosis-report.v1` 与 `content-analysis.v1` 仍是唯一可保存结果；板块进度与深度思考仅存在于活动运行内存中，退出后不恢复，重试会重新生成完整文档。
 - 页面不猜测未闭合 JSON 字段，也不接触供应商响应对象；Provider 仅把推理增量投影成版本化 `thinking` DTO，正式结果、运行审计与本地文件均不保存推理文本或模型原文。
 - 正常生成每条 Flow 只调用一次模型；完整文档无效时最多进行一次文本格式修复，诊察修复不会再次携带私有图片。

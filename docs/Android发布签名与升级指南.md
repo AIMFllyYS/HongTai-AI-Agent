@@ -2,6 +2,8 @@
 
 本文是 release 签名身份的操作指南。它不替代[当前能力与发布状态](当前能力与发布状态.md)中的发布门禁，也不把主机构建成功表述为物理设备验收或正式分发完成。
 
+Release 是当前唯一 APK 产品与交付路径；不再构建、传递或归档 Debug APK。历史 Debug 安装只作为签名迁移事实保留。
+
 ## 首次初始化
 
 签名材料保管人在可信 Windows 主机的仓库根目录执行：
@@ -48,12 +50,12 @@ properties 文件由初始化脚本写成 UTF-8 无 BOM，Gradle 也显式按 UT
 构建脚本每次都依次执行 Web production build、Capacitor Android sync、`:app:testReleaseUnitTest`、`:app:lintRelease` 和 `:app:assembleRelease`，不提供跳过构建并验收旧 APK 的参数。Capacitor sync 后会立即对已知生成文件 `android/app/src/main/res/xml/config.xml` 做窄范围确定性格式规范化：保留所有非空语义行，只移除空白行和行尾空白，写回 UTF-8 无 BOM、LF 与单个 EOF newline；不会恢复整个文件或隐藏 Capacitor 的内容变化。它只接受本次流程产生的 `android/app/build/outputs/apk/release/app-release.apk`，并自动执行以下主机门禁：
 
 - `zipalign -c -P 16 -v 4`；
-- `aapt2 dump badging`，要求包名 `com.hongtai.aiagent`、当前源码候选 `versionCode=14`、`versionName=0.1.6`；
+- `aapt2 dump badging`，要求包名和版本与 `android/app/build.gradle.kts` 的源码权威完全一致；
 - `apksigner verify --verbose --print-certs`，要求 v2/v3 均为 `true`，且 DN 不含 `Android Debug`；
 - signer SHA-256 必须与 `android/release-certificate.sha256` 的公开证书锚点完全一致；
 - 计算并打印 APK SHA-256。
 
-当前 AGP 实际 task inventory 中，`assembleRelease`、`bundleRelease`、`packageRelease`、`packageReleaseBundle`、`packageReleaseUniversalApk`、`signReleaseBundle`、`installRelease` 与 `validateSigningRelease` 都属于受控 release 产物/签名入口；实际 task graph 包含其中任一项而未提供有效外部配置时就会 fail-closed。因此聚合 `:app:assemble`、`:app:bundle` 和 `:app:build` 也不能产生 unsigned release。`testReleaseUnitTest`、`assembleUnitTest`、`lintRelease`、`packageReleaseResources` 等非终端检查/资源任务不会被签名门禁误伤；显式 Debug 构建、JVM 测试和普通同步同样不依赖 release 私钥。升级 AGP 后必须重新运行 `:app:tasks --all` 与本仓库 Windows 行为测试，核对新增产物入口。
+当前 AGP 实际 task inventory 中，`assembleRelease`、`bundleRelease`、`packageRelease`、`packageReleaseBundle`、`packageReleaseUniversalApk`、`signReleaseBundle`、`installRelease` 与 `validateSigningRelease` 都属于受控 release 产物/签名入口；实际 task graph 包含其中任一项而未提供有效外部配置时就会 fail-closed。因此聚合 `:app:assemble`、`:app:bundle` 和 `:app:build` 也不能产生 unsigned release。`testReleaseUnitTest`、`assembleUnitTest`、`lintRelease`、`packageReleaseResources` 等非终端检查/资源任务不会被签名门禁误伤。升级 AGP 后必须重新运行 `:app:tasks --all` 与本仓库 Windows 行为测试，核对新增产物入口。
 
 ## 身份备份责任
 

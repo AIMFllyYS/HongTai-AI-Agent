@@ -38,15 +38,13 @@ fallback 只接受一个静态 HEVC primary image，并拒绝序列、外部 `il
 ## 构建与静态核验
 
 ```powershell
-Push-Location android
-.\gradlew.bat :app:externalNativeBuildDebug :app:assembleDebug --no-daemon
-Pop-Location
+.\scripts\build-android-release.ps1
 ```
 
 构建固定包含 `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64`。每个 ABI 必须各有动态 `libde265.so`、`libheif.so`、`libhongtai_heif.so`，不得出现 x265、encoder、AV1/AVIF codec 或不透明 AAR。用对应 NDK 的 `llvm-readelf -lW` 确认所有 `LOAD` alignment 为 `0x4000`，用 `llvm-readelf -dW` 确认 `libheif.so` 动态依赖 `libde265.so`、第一方 JNI 动态依赖二者。APK 使用已安装 build-tools 核验：
 
 ```powershell
-zipalign -c -P 16 4 android/app/build/outputs/apk/debug/app-debug.apk
+zipalign -c -P 16 4 android/app/build/outputs/apk/release/app-release.apk
 ```
 
 ## Fixture 与测试
