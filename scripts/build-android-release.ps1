@@ -189,6 +189,7 @@ Assert-NoReparsePoint -Path $rawRepositoryRoot `
   -FailureMessage "Repository path must not traverse a reparse point"
 $repositoryRoot = Resolve-CanonicalPath -Path $rawRepositoryRoot
 $apkPath = Join-Path $repositoryRoot "android\app\build\outputs\apk\release\app-release.apk"
+$archiveRoot = Join-Path $repositoryRoot "output\apk-archive"
 $anchorPath = Join-Path $repositoryRoot "android\release-certificate.sha256"
 $sourceIdentity = Get-AndroidSourceIdentity `
   -BuildFile (Join-Path $repositoryRoot "android\app\build.gradle.kts")
@@ -339,6 +340,10 @@ try {
   }
 
   $apkSha256 = (Get-FileHash -LiteralPath $apkPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  & (Join-Path $PSScriptRoot "archive-android-release.ps1") `
+    -SourceApk $apkPath `
+    -VersionName $versionName `
+    -ArchiveRoot $archiveRoot
   Write-Output "Release APK: $apkPath"
   Write-Output "Package: $packageName"
   Write-Output "Version: $versionName ($versionCode)"
