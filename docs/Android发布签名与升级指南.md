@@ -55,6 +55,8 @@ properties 文件由初始化脚本写成 UTF-8 无 BOM，Gradle 也显式按 UT
 - signer SHA-256 必须与 `android/release-certificate.sha256` 的公开证书锚点完全一致；
 - 计算并打印 APK SHA-256。
 
+全部门禁通过后，脚本才把同一字节的 APK 归档为 `output/apk-archive/HongTai-AI-Agent-release-v<versionName>.apk`。同版本已有相同字节时直接复用；同版本出现不同字节时拒绝覆盖，发布维护者必须推进版本号后重新构建。Debug APK 不进入这条交付链。
+
 当前 AGP 实际 task inventory 中，`assembleRelease`、`bundleRelease`、`packageRelease`、`packageReleaseBundle`、`packageReleaseUniversalApk`、`signReleaseBundle`、`installRelease` 与 `validateSigningRelease` 都属于受控 release 产物/签名入口；实际 task graph 包含其中任一项而未提供有效外部配置时就会 fail-closed。因此聚合 `:app:assemble`、`:app:bundle` 和 `:app:build` 也不能产生 unsigned release。`testReleaseUnitTest`、`assembleUnitTest`、`lintRelease`、`packageReleaseResources` 等非终端检查/资源任务不会被签名门禁误伤。升级 AGP 后必须重新运行 `:app:tasks --all` 与本仓库 Windows 行为测试，核对新增产物入口。
 
 ## 身份备份责任
@@ -70,7 +72,7 @@ Android Debug 证书与本 release 证书不是同一身份。已有 Debug/QA �
 进入 release 谱系后，后续候选必须使用同一 release 证书并递增 `versionCode`。普通升级命令是：
 
 ```powershell
-adb install -r android\app\build\outputs\apk\release\app-release.apk
+adb install -r output\apk-archive\HongTai-AI-Agent-release-v<versionName>.apk
 ```
 
 验收时不得使用 `-d`，也不得在升级前卸载；应核对安装前后证书指纹、版本、`firstInstallTime` 和受控本地数据。2026-08-10 已在 API 35 read-only 模拟器上以同一 release 证书完成 v3→v4 普通升级：`firstInstallTime` 保持、本地档案标记保留，升级后冷启动通过。2026-08-13 又以同一正式证书完成 v3→v0.1.5/code12 普通升级，`firstInstallTime` 保持；同一轮把公开 v0.1.4 Debug 覆盖为 v0.1.5 Release 时，系统按预期返回 `INSTALL_FAILED_UPDATE_INCOMPATIBLE` 并保留旧安装。两者都只是模拟器证据；物理真机、公开用户的数据迁移方案与其他发布门禁仍未完成，整体仍不可正式分发。详细数值见[签名链验收](验收/2026-08-10-android-release-signing.md)与[v0.1.5 救援验收](验收/2026-08-13-v015-lineage-recovery.md)。

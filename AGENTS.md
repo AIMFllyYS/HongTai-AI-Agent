@@ -65,6 +65,7 @@
 - 本项目只在仓库根目录工作；禁止为本仓库创建 Git worktree 或复制式隔离工作区。普通功能直接在当前分支推进，阶段完成后合并回 `main`。
 - Android 只保留 Release 产品交付路径：不构建、不交付、不归档 Debug APK。Gradle 内部为单元测试或 instrumentation 生成的测试变体不属于产品版本。
 - `android/app/build.gradle.kts` 是 Android `versionName` 与 `versionCode` 的唯一源码权威；脚本、README 和活文档只能读取或引用，不得再维护第二份硬编码版本。
+- Release 构建成功后必须按 `HongTai-AI-Agent-release-v<versionName>.apk` 保存到 `output/apk-archive/`；历史版本不得覆盖，同版本出现不同字节时必须停止并推进版本号。
 - 所有源代码、文档、资源清单和 JSON 保持 UTF-8；不得引入 U+FFFD 或错误编码的中文。
 - TypeScript 变更至少运行定向测试与 `pnpm check`；Web 变更还运行 `pnpm --filter @hongtai/web build`，视觉变更做桌面和约 390px 移动端检查。
 - Android 变更运行相关 Gradle 测试/lint/build；涉及相册、相机、外部 Activity、网络或 Media3 时，未经真机验证不得声称真机通过。
