@@ -39,3 +39,7 @@ keystore.properties
 Thumbs.db
 
 # 本仓库只在根项目目录工作；不要忽略误建的附加工作区。
+
+# 本地 APK 与端测证据保留在主项目目录，但不进入 Git。
+output/apk-archive/*.apk
+output/local-evidence/
