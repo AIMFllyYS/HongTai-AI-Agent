@@ -97,7 +97,7 @@ function TaskHistory({ tasks, navigate }: { readonly tasks: readonly AppTaskReco
           <button className="runtime-task-history__item" key={task.id} onClick={() => navigate(taskPath(task))} type="button">
             <span className="runtime-task-history__icon"><Icon name={task.contentType === "image_text" ? "grid" : "video_file"} size={19} /></span>
             <span className="runtime-task-history__body">
-              <strong className="technical-value">{localVideo ? "本地上传视频" : safeUrlForDisplay(task.sourceUrl)}</strong>
+              <strong className={localVideo ? undefined : "technical-value"}>{localVideo ? "我上传的视频" : safeUrlForDisplay(task.sourceUrl)}</strong>
               <span>{[platform, updatedAt].filter(Boolean).join(" · ") || `任务 ${task.id}`}</span>
             </span>
             <TaskStatusBadge compact status={task.status} />
@@ -205,20 +205,20 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
     <AppShell activeNav="home" navigate={navigate} title="宏泰AI智能体">
       <div className="page-stack page-task-home">
         <section className="task-page-heading">
-          <span className="eyebrow">TWO REAL SOURCES</span>
-          <h2>链接拆解，或上传自己的视频</h2>
-          <p>两种入口共用同一套七阶段、ASR 证据和 content-analysis.v1；本地视频不会被伪装成任何平台作品。</p>
+          <span className="eyebrow">内容拆解</span>
+          <h2>粘贴作品链接，或上传自己的视频</h2>
+          <p>应用会提取作品内容，帮你梳理主题、开场方式、内容结构和可复用的创作思路。</p>
         </section>
 
         <TaskCapabilityNotice capability={runtime.features.ingest} feature="ingest" />
 
         <GlassCard className="task-local-upload-card">
           <span className="task-source-index">01</span>
-          <div><strong>上传本地 MP4 并自动拆解</strong><p>系统选择器会把视频复制到应用私有目录，再提取音频、生成真实文稿并自动进入正式拆解。</p><small>单个 MP4，最大 250MB；取消选择不会留下空任务。</small></div>
+          <div><strong>上传视频并开始拆解</strong><p>请选择一段带有清晰人声的 MP4 视频，应用会先识别口播内容，再生成拆解结果。</p><small>单个 MP4，最大 250MB。视频只保存在本机。</small></div>
           <Button className={videoImporting ? "is-busy" : ""} disabled={!ingestAvailable || runtime.features.contentAnalysis !== "available" || submitting || videoImporting} icon={<Icon name={videoImporting ? "sync" : "upload_file"} size={19} />} onClick={() => void importVideo()} size="lg">
-            {videoImporting ? "正在处理并拆解视频" : "上传本地视频并自动拆解"}
+            {videoImporting ? "正在识别视频内容" : "选择本地视频"}
           </Button>
-          {videoImporting || videoProgress ? <ValidatedModuleProgress definitions={contentAnalysisModuleDefinitions} failedTitle="本地视频内容拆解未完成" issue={submitIssue} progress={videoProgress} title="本地视频正在生成内容拆解" /> : null}
+          {videoImporting || videoProgress ? <ValidatedModuleProgress definitions={contentAnalysisModuleDefinitions} failedTitle="这次拆解没有完成" issue={submitIssue} progress={videoProgress} title="正在整理视频内容" /> : null}
         </GlassCard>
 
         <GlassCard className="task-input-card">

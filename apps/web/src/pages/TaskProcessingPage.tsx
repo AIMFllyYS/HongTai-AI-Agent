@@ -104,7 +104,7 @@ export function TaskProcessingPage({ runtime, taskId, navigate }: TaskProcessing
   }
 
   const localVideo = task.sourceKind === "local_video";
-  const source = localVideo ? "本地上传视频 · 已复制到应用私有目录" : safeUrlForDisplay(task.sourceUrl);
+  const source = localVideo ? "我上传的视频 · 已安全保存在本机" : safeUrlForDisplay(task.sourceUrl);
   const platform = localVideo ? "本地上传" : platformLabel(task.platform);
   const needsNewSubmission = task.status === "failed" || task.status === "interrupted" || task.status === "cancelled";
 
@@ -123,13 +123,13 @@ export function TaskProcessingPage({ runtime, taskId, navigate }: TaskProcessing
         {activeIssue ? <IssueNotice actions={issueActions} issue={activeIssue} /> : null}
 
         <GlassCard className="task-stage-card">
-          <div className="section-heading"><div><span className="eyebrow">PERSISTED EVENTS</span><h3>真实处理进度</h3></div><span className="task-stage-card__count">{events.length} 条事件</span></div>
+          <div className="section-heading"><div><span className="eyebrow">处理进度</span><h3>正在处理内容</h3></div><span className="task-stage-card__count">{events.length} 条进度</span></div>
           <TaskProgressSteps steps={steps} />
         </GlassCard>
 
         {task.status === "queued" ? <EmptyState description="任务已经创建，但尚未开始。点击下方按钮才会启动本地执行。" icon="pending" title="等待开始" /> : null}
         {task.status === "cancelled" ? <EmptyState description="这是历史停止任务。本版本不会从这里继续运行；如需再次处理，请返回首页重新提交链接。" icon="pending" title="任务已停止" /> : null}
-        {task.status === "failed" || task.status === "interrupted" ? <EmptyState description="本次任务未能完成。系统保留已保存的真实结果；如需再次处理，请返回首页重新提交链接。" icon="error" title={task.status === "interrupted" ? "任务已中断" : "任务未完成"} /> : null}
+        {task.status === "failed" || task.status === "interrupted" ? <EmptyState description={localVideo ? "视频仍保存在本机。请查看上方提示，处理后重新选择视频。" : "已经获取到的内容仍会保留。请查看上方提示，处理后重新提交链接。"} icon="error" title={task.status === "interrupted" ? "处理已中断" : "这次处理没有完成"} /> : null}
 
         <div className="task-page-actions mobile-action-group">
           {task.status === "queued" ? <Button disabled={!ingestAvailable || actionPending !== undefined} icon={<Icon name="bolt" size={18} />} onClick={() => void start()}>{actionPending === "start" ? "正在启动" : "开始执行"}</Button> : null}

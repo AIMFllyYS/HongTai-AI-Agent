@@ -9,6 +9,7 @@ import {
 import { DeepThinkingPanel } from "./DeepThinkingPanel";
 import { GlassCard } from "./GlassCard";
 import { Icon, type IconName } from "./Icon";
+import { issueTitle } from "./IssueNotice";
 
 export interface ValidatedModuleProgressProps {
   readonly title: string;
@@ -19,10 +20,10 @@ export interface ValidatedModuleProgressProps {
 }
 
 const phaseCopy: Readonly<Record<StructuredGenerationProgressV1["phase"], string>> = {
-  preparing: "正在准备本次生成所需的真实资料",
-  generating: "AI 正在一次生成完整的结构化结果",
-  validating: "正在校验已经闭合的字段与业务约束",
-  saving: "五个展示板块已校验，正在保存正式结果",
+  preparing: "正在准备内容",
+  generating: "AI 正在整理和分析",
+  validating: "正在检查结果是否完整",
+  saving: "正在保存结果",
 };
 
 const waitingThinking = { status: "waiting", text: "" } as const;
@@ -56,8 +57,8 @@ export function ValidatedModuleProgress({ title, failedTitle, definitions, progr
   const active = rows.find((row) => row.active);
   const failed = rows.find((row) => row.status === "failed");
   const description = failed
-    ? `${failed.title}未通过校验，后续板块未开始`
-    : progress ? phaseCopy[progress.phase] : "正在连接 AI，并准备第一个板块";
+    ? `${failed.title}没有完成，后续内容暂未开始`
+    : progress ? phaseCopy[progress.phase] : "正在连接 AI，请稍候";
   const busy = rows.some((row) => row.showSkeleton) || progress?.phase === "saving";
 
   return (
@@ -73,7 +74,7 @@ export function ValidatedModuleProgress({ title, failedTitle, definitions, progr
           <strong>{failed ? failedTitle ?? "本次生成未完成" : title}</strong>
           <p>{description}</p>
         </div>
-        <span className="validated-module-progress__count">{completed}/{rows.length} 个板块已校验</span>
+        <span className="validated-module-progress__count">{completed}/{rows.length} 项已完成</span>
       </header>
 
       <p aria-atomic="true" aria-live="polite" className="validated-module-progress__announcement" role="status">{active ? `${active.title}：${active.statusLabel}` : description}</p>
@@ -108,8 +109,7 @@ export function ValidatedModuleProgress({ title, failedTitle, definitions, progr
 
               {row.status === "failed" ? (
                 <div className="validated-module-progress__failure">
-                  {row.issue ? <code>{row.issue.code}</code> : null}
-                  <p>{row.issue?.userMessage ?? "本板块没有形成通过校验的结果，后续板块未开始。"}</p>
+                  <p>{row.issue ? issueTitle(row.issue) : "这一部分没有完成，后续内容暂未开始。"}</p>
                 </div>
               ) : null}
             </div>
@@ -119,7 +119,7 @@ export function ValidatedModuleProgress({ title, failedTitle, definitions, progr
 
       <footer className="validated-module-progress__footer">
         <Icon name="info" size={16} />
-        <span>深度思考只在本次运行中显示；板块内容通过校验后才渐显，正式文档仍须完整校验并保存后才成立。</span>
+        <span>分析过程只在本次运行中显示，完成后的结果会自动保存在本机。</span>
       </footer>
     </GlassCard>
   );

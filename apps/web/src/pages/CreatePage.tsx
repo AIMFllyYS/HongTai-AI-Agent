@@ -150,9 +150,9 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
         {issue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), selectMedia: project ? () => void perform(() => runtime.production.importAssets(project.projectId)) : undefined }} issue={issue} /> : null}
 
         <section className="production-hero">
-          <span className="eyebrow">LOCAL VIDEO STUDIO</span>
+          <span className="eyebrow">视频制作</span>
           <h2>从爆款结构到你的本地成片</h2>
-          <p>复用 content-analysis.v1 的结构方法，生成 production-plan.v1；只使用你主动上传的素材，并在手机本地合成。素材剪辑模式会使用 AI 连接页配置的 TTS 配音与字幕；数字人口播保留原视频声音。</p>
+          <p>根据已经完成的内容拆解安排镜头，只使用你主动选择的素材，并在手机本地合成。素材剪辑模式会自动生成旁白和字幕；数字人口播会保留原视频声音。</p>
         </section>
 
         <GlassCard className="production-setup">

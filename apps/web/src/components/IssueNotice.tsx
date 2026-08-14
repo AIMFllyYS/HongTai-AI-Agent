@@ -31,39 +31,39 @@ interface IssueActionDescriptor {
 
 const actionDescriptors: Readonly<Record<TaskIssue["action"], IssueActionDescriptor>> = {
   edit_input: {
-    guidance: "请检查输入内容后重新提交；应用不会替你修改或补全输入。",
+    guidance: "请检查刚才填写的内容，再重新提交。",
   },
   retry: {
     label: "重试",
-    guidance: "仅在当前页面提供真实重试操作时才会显示此按钮。",
+    guidance: "可以再试一次；已保存的内容不会丢失。",
     handler: "retry",
   },
   wait_and_retry: {
-    guidance: "请稍后刷新真实状态；应用不会自动重试。",
+    guidance: "请求有些频繁，请稍后再试。",
   },
   check_network: {
-    guidance: "请检查网络后刷新此页；应用不会伪造网络结果。",
+    guidance: "请确认手机可以正常上网，然后再试一次。",
   },
   configure_ai: {
     label: "前往 AI 设置",
-    guidance: "请检查本地 AI 连接配置；只有页面提供跳转时才会显示此按钮。",
+    guidance: "请到 AI 连接中检查密钥和所需能力是否可用。",
     handler: "configureAi",
   },
   free_storage: {
-    guidance: "请释放本机存储空间后再手动重试。",
+    guidance: "手机存储空间可能不足，请释放一些空间后再试。",
   },
   select_media: {
     label: "重新选择",
-    guidance: "请重新选择所需媒体；应用不会构造替代文件。",
+    guidance: "请重新选择一个可正常播放的文件。",
     handler: "selectMedia",
   },
   view_partial_result: {
     label: "查看部分结果",
-    guidance: "仅当页面有已保存的真实产物时才会打开详情。",
+    guidance: "已经保存的内容仍可查看。",
     handler: "partialResult",
   },
   none: {
-    guidance: "当前页面没有可安全自动执行的操作。",
+    guidance: "如果问题持续出现，请返回上一页后再试。",
   },
 };
 
@@ -181,26 +181,50 @@ export function issueTechnicalCode(issue: Pick<TaskIssue, "code" | "details">): 
     : issue.code;
 }
 
+const issueTitles: Partial<Readonly<Record<TaskIssue["code"], string>>> = {
+  AI_NOT_CONFIGURED: "还没有连接 AI 服务",
+  AI_SETTINGS_INVALID: "AI 连接设置需要检查",
+  AI_AUTH_INVALID: "AI 密钥无法使用",
+  AI_PERMISSION_DENIED: "当前账号没有所需能力",
+  AI_QUOTA_EXHAUSTED: "AI 账户额度不足",
+  AI_RATE_LIMITED: "请求太频繁了",
+  AI_NETWORK_FAILED: "暂时无法连接 AI 服务",
+  AI_TIMEOUT: "AI 服务响应超时",
+  AI_EMPTY_RESPONSE: "没有获得可用内容",
+  ASR_PARTIAL_FAILURE: "部分语音没有识别成功",
+  MEDIA_SELECTION_CANCELLED: "已取消选择",
+  MEDIA_SOURCE_NOT_FOUND: "没有找到可用的媒体",
+  MEDIA_IMPORT_FAILED: "视频导入没有完成",
+  MEDIA_READ_FAILED: "无法读取这个文件",
+  MEDIA_PROBE_FAILED: "无法处理这个视频",
+  TASK_ARTIFACT_MISSING: "所需内容不完整",
+  TASK_INTERRUPTED: "上次处理已中断",
+  STORAGE_WRITE_FAILED: "内容保存失败",
+  APP_RUNTIME_UNAVAILABLE: "应用暂时无法完成操作",
+};
+
+export function issueTitle(issue: Pick<TaskIssue, "code" | "userMessage">): string {
+  return issueTitles[issue.code] ?? issue.userMessage;
+}
+
 /** Shared presentation mapping for stable application issue codes/actions. */
 export function IssueNotice({ issue, actions }: IssueNoticeProps) {
   const { show } = useNotification();
   const actionsRef = useRef(actions);
   actionsRef.current = actions;
-  const technicalCode = issueTechnicalCode(issue);
   const diagnosticSummary = issueDiagnosticSummary(issue);
 
   useEffect(() => {
     const presentation = issueActionPresentation(issue.action, actionsRef.current);
     show({
       level: issue.severity === "error" ? "error" : "warning",
-      title: issue.userMessage,
+      title: issueTitle(issue),
       message: diagnosticSummary ? `${presentation.guidance}\n${diagnosticSummary}` : presentation.guidance,
-      technicalCode,
       ...(presentation.label && presentation.onAction
         ? { action: { label: presentation.label, onPress: presentation.onAction } }
         : {}),
     });
-  }, [diagnosticSummary, issue.action, issue.severity, issue.userMessage, show, technicalCode]);
+  }, [diagnosticSummary, issue.action, issue.code, issue.severity, issue.userMessage, show]);
 
   return null;
 }

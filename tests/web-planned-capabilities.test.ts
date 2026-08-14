@@ -31,8 +31,9 @@ test("templates and production use real runtimes while publishing remains planne
   assert.match(create, /runtime\.production\.(create|importAssets|generatePlan|render)/);
   assert.match(create, /runtime\.production\.(removeAsset|removeOutput|delete)/);
   assert.match(create, /IssueNotice/);
-  assert.match(create, /content-analysis\.v1/);
-  assert.match(create, /production-plan\.v1/);
+  assert.match(create, /爆款拆解来源/);
+  assert.match(create, /从爆款结构到你的本地成片/);
+  assert.doesNotMatch(create, />(?:content-analysis\.v1|production-plan\.v1)</u);
   assert.match(create, /useAppResume\(load\)/);
   assert.doesNotMatch(create, /@capacitor\/app/);
   assert.doesNotMatch(create, /viewModel\.(templates|profileTags|materialFilters|generationEta|actionLabel)/);

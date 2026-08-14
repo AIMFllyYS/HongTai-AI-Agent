@@ -151,7 +151,7 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
     try {
       setImage(await runtime.diagnosis.pickImage());
     } catch (error) {
-      setIssue(issueFromAppError(error, { code: "MEDIA_IMPORT_FAILED", message: "无法将图片安全导入本地私有目录", action: "select_media" }));
+      setIssue(issueFromAppError(error, { code: "MEDIA_IMPORT_FAILED", message: "图片没有保存成功，请重新选择", action: "select_media" }));
     } finally {
       setImporting(false);
     }
@@ -164,7 +164,7 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
     try {
       setImage(await runtime.diagnosis.captureImage());
     } catch (error) {
-      setIssue(issueFromAppError(error, { code: "MEDIA_IMPORT_FAILED", message: "无法将拍摄图片安全导入本地私有目录", action: "select_media" }));
+      setIssue(issueFromAppError(error, { code: "MEDIA_IMPORT_FAILED", message: "拍摄的图片没有保存成功，请重新拍摄", action: "select_media" }));
     } finally {
       setImporting(false);
     }
@@ -242,7 +242,7 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
           {importing ? <div aria-live="polite" className="observation-capture-card__empty" role="status"><Icon name="sync" size={30} /><span>正在导入图片</span></div> : image ? <RuntimeMediaFrame className="observation-capture-card__image" label={`${observationModeLabel(mode)}图片`} media={image} /> : <div className="observation-capture-card__empty"><Icon name="camera" size={30} /><span>尚未选择图片</span></div>}
           <div className="observation-capture-card__actions mobile-action-group"><Button disabled={!diagnosisAvailable || loading || importing} icon={<Icon name="camera" size={18} />} onClick={() => void captureImage()} variant="secondary">拍摄图片</Button><Button disabled={!diagnosisAvailable || loading || importing} icon={<Icon name="upload_file" size={18} />} onClick={() => void pickImage()} variant="secondary">选择图片</Button><Button className={loading ? "is-busy" : ""} disabled={!diagnosisAvailable || !image || loading || importing} icon={<Icon name="auto_awesome" size={18} />} onClick={() => void createReport()}>{loading ? "AI 正在分析图片" : "生成观察报告"}</Button></div>
           {loading || reportProgress ? <ValidatedModuleProgress definitions={diagnosisModuleDefinitions} failedTitle="观察报告未完成" issue={issue} progress={reportProgress} title="正在生成真实观察报告" /> : null}
-          <small className="observation-privacy-note"><Icon name="folder_special" size={15} />图片会复制到应用私有目录；不会作为公开素材或自动发布内容。</small>
+          <small className="observation-privacy-note"><Icon name="folder_special" size={15} />图片只保存在本机，不会自动上传或公开发布。</small>
         </GlassCard>
 
         <section className="page-section">

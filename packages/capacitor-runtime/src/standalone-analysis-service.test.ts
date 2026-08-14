@@ -5,7 +5,7 @@ import type { AiGenerateRequest, AiProvider } from "@hongtai/ai";
 import type { TaskDetailRecord } from "@hongtai/core";
 
 import { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
-import { StandaloneAnalysisService } from "./standalone-analysis-service.js";
+import { localVideoFailureIssue, StandaloneAnalysisService } from "./standalone-analysis-service.js";
 
 const result = {
   schemaVersion: "content-analysis.v1",
@@ -405,4 +405,40 @@ test("StandaloneAnalysisService automatically runs ingest then formal analysis f
   assert.equal(record.status, "succeeded");
   assert.deepEqual(calls, ["pick", "ingest", "analysis:running", "analysis:succeeded"]);
   assert.equal(record.result?.document.source && (record.result.document.source as { readonly platform?: string }).platform, "local_upload");
+});
+
+test("local video failure keeps the actionable ASR cause instead of its summary warning", () => {
+  const selected = localVideoFailureIssue([
+    { code: "AI_AUTH_INVALID", severity: "warning", stage: "obtain-transcript", userMessage: "AI API Key无效", retryable: false, action: "configure_ai" },
+    { code: "ASR_PARTIAL_FAILURE", severity: "warning", stage: "obtain-transcript", userMessage: "语音转写部分失败", retryable: false, action: "view_partial_result" },
+  ]);
+  assert.equal(selected?.code, "AI_AUTH_INVALID");
+  assert.equal(selected?.action, "configure_ai");
+});
+
+test("StandaloneAnalysisService stops a no-speech upload before starting a text-only analysis", async () => {
+  let analysisRuns = 0;
+  const noSpeechTask = {
+    ...detail().task,
+    id: "task-no-speech",
+    sourceUrl: "",
+    sourceKind: "local_video" as const,
+    speechStatus: "no_speech" as const,
+  };
+  const service = new StandaloneAnalysisService({
+    files: {} as never,
+    tasks: {
+      importVideo: async () => noSpeechTask,
+      start: async () => ({ taskId: noSpeechTask.id, completion: Promise.resolve(noSpeechTask), cancel: async () => undefined }),
+      getDetail: async () => undefined,
+      setAnalysisStatus: async () => { analysisRuns += 1; },
+    },
+    getProvider: async () => ({ generate: async () => { analysisRuns += 1; return { content: "", reasoning: "" }; }, transcribe: async () => "" }),
+  });
+
+  await assert.rejects(
+    () => service.importVideo(),
+    (error: unknown) => error instanceof Error && "code" in error && error.code === "AI_EMPTY_RESPONSE" && "action" in error && error.action === "select_media",
+  );
+  assert.equal(analysisRuns, 0);
 });

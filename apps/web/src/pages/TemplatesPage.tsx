@@ -155,7 +155,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
         {issue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), retry: () => void load() }} issue={issue} /> : null}
 
         <GlassCard className="template-import-card">
-          <div className="production-section-title"><span>01</span><div><strong>从正式拆解保存</strong><small>复用 content-analysis.v1 中经过校验的 reusableTemplate</small></div></div>
+          <div className="production-section-title"><span>01</span><div><strong>从拆解结果保存</strong><small>把内容结构保存成以后可以继续使用的模板</small></div></div>
           {sources.length > 0 ? (
             <div className="template-import-card__controls">
               <label className="field-label" htmlFor="template-source">拆解来源</label>

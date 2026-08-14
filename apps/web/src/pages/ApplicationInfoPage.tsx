@@ -15,11 +15,11 @@ export interface ApplicationInfoPageProps {
 }
 
 const latestUpdates = [
-  "安装包统一为 Release，并按版本号分别保存；新版本不再覆盖旧版本，方便端测、回退和留档。",
-  "舌象与面部观察改为一次紧凑结构化生成，深度思考实时可见，五个展示板块在字段校验后逐步渐显。",
-  "内容拆解改为一次完整生成，真实证据只发送一次；格式异常时最多进行一次整文校正。",
-  "任务和报告状态会自动更新，无需手动刷新；只有本地读取或订阅异常时才提供重新读取。",
-  "深度思考只保留在当前运行内存中，结束后不写入任务、报告、模板或历史；半截 JSON 与私有地址仍不会展示。",
+  "每个安装版本都会单独保留，更新时不会覆盖以前的安装包。",
+  "舌象与面部观察会边生成边显示内容，让等待过程更清楚。",
+  "内容拆解会一次整理完整结果，遇到格式问题时会自动尝试修正。",
+  "任务和报告会自动更新，一般不需要手动刷新页面。",
+  "生成过程中的临时思考不会保存到任务、报告、模板或历史记录中。",
 ] as const;
 
 export function ApplicationInfoPage({ runtime, navigate }: ApplicationInfoPageProps) {
@@ -40,7 +40,7 @@ export function ApplicationInfoPage({ runtime, navigate }: ApplicationInfoPagePr
   }, [load]);
 
   if (!info && !issue) {
-    return <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="应用信息"><LoadingState description="正在读取此 APK 的本机构建信息" title="加载应用信息" /></AppShell>;
+    return <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="应用信息"><LoadingState description="正在读取版本信息" title="加载应用信息" /></AppShell>;
   }
 
   return (

@@ -12,7 +12,7 @@ const copy: Readonly<Record<TaskFeature, { readonly title: string; readonly desc
   },
   contentAnalysis: {
     title: "内容拆解尚未接入",
-    description: "当前 APK 运行时还不能运行 content-analysis.v1，因此不会生成示例结论或模板。",
+    description: "当前版本暂时不能生成内容拆解和模板。",
   },
 };
 

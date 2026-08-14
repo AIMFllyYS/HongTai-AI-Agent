@@ -228,7 +228,8 @@ test("live generation pages use narrow subscriptions with no healthy-state manua
   }
   assert.doesNotMatch([home, detail, analysis, observationStart, observationReport, component].join("\n"), /StructuredStreamProgress|已接收\s*\d*\s*个字符/);
   assert.match(component, /aria-atomic="true" aria-live="polite"[\s\S]*role="status"/);
-  assert.match(component, /未通过校验，后续板块未开始/);
+  assert.match(component, /没有完成，后续内容暂未开始/);
+  assert.doesNotMatch(component, /<code>\{row\.issue\?\.code\}<\/code>/);
   assert.doesNotMatch(component, /JSON\.stringify/);
   assert.match(css, /validated-module-result-reveal[\s\S]*600ms/);
   assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.validated-module-progress__skeleton-bar[\s\S]*animation:\s*none/);

@@ -86,7 +86,7 @@ export function TaskAnalysisPage({ runtime, taskId, navigate }: TaskAnalysisPage
   }, [load, runtime, taskId]);
 
   if (loading) {
-    return <AppShell activeNav="home" backPath={taskDetailPath(taskId)} navigate={navigate} title="内容拆解"><LoadingState description="正在读取已保存的拆解状态和真实证据" title="读取内容拆解" /></AppShell>;
+    return <AppShell activeNav="home" backPath={taskDetailPath(taskId)} navigate={navigate} title="内容拆解"><LoadingState description="正在读取已保存的内容" title="加载拆解结果" /></AppShell>;
   }
   if (!detail) {
     const unavailableIssue = readIssue ?? issue;
@@ -118,16 +118,16 @@ export function TaskAnalysisPage({ runtime, taskId, navigate }: TaskAnalysisPage
         {!analysisAvailable && record?.status !== "succeeded" ? <TaskCapabilityNotice capability={runtime.features.contentAnalysis} feature="contentAnalysis" /> : null}
 
         {!record || record.status === "not_started" ? (
-          <EmptyState action={<Button icon={<Icon name="arrow_back" size={17} />} onClick={() => navigate(taskDetailPath(taskId))} variant="secondary">返回任务详情确认拆解</Button>} description="内容拆解不会自动开始。请在任务详情确认后，才会基于真实证据运行 AI 自动拆解。" icon="analytics" title="尚未开始拆解" />
+          <EmptyState action={<Button icon={<Icon name="arrow_back" size={17} />} onClick={() => navigate(taskDetailPath(taskId))} variant="secondary">返回任务详情</Button>} description="请返回任务详情，确认后开始分析。" icon="analytics" title="还没有开始拆解" />
         ) : null}
-        {record?.status === "running" || progress ? <ValidatedModuleProgress definitions={contentAnalysisModuleDefinitions} failedTitle="内容拆解未完成" issue={issue ?? record?.issue} progress={progress} title="AI 正在拆解真实证据" /> : null}
-        {record?.status === "failed" ? <ErrorState action={<Button icon={<Icon name="arrow_back" size={17} />} onClick={() => navigate(taskDetailPath(taskId))} variant="secondary">返回任务详情</Button>} description="上一次拆解没有生成可展示的正式结果。请查看上方稳定错误代码后，由你确认是否再次运行。" title="内容拆解未完成" /> : null}
-        {record?.status === "succeeded" && !analysis?.available ? <ErrorState description="已保存的结果不符合 content-analysis.v1 展示契约，应用不会猜测或补写字段。" title="无法安全展示拆解结果" /> : null}
+        {record?.status === "running" || progress ? <ValidatedModuleProgress definitions={contentAnalysisModuleDefinitions} failedTitle="这次拆解没有完成" issue={issue ?? record?.issue} progress={progress} title="AI 正在整理内容" /> : null}
+        {record?.status === "failed" ? <ErrorState action={<Button icon={<Icon name="arrow_back" size={17} />} onClick={() => navigate(taskDetailPath(taskId))} variant="secondary">返回任务详情</Button>} description="上一次拆解没有生成完整结果。请按上方提示处理后，再决定是否重新运行。" title="这次拆解没有完成" /> : null}
+        {record?.status === "succeeded" && !analysis?.available ? <ErrorState description="保存的结果不完整，请重新拆解。" title="暂时无法展示结果" /> : null}
         {record?.status === "succeeded" && analysis?.available ? <ContentAnalysisDocument analysis={analysis} evidenceUnits={detail.evidenceUnits} /> : null}
         {record?.status === "succeeded" && analysis?.available ? <Button icon={<Icon name="bookmark" size={17} />} onClick={() => navigate(pathForRoute("templates"))} variant="secondary">前往模板管理保存结构</Button> : null}
 
         <GlassCard className="task-analysis-footer">
-          <span><Icon name="info" size={18} />深度思考只在当前生成期间显示且不会保存；正式页面只保留结果、真实证据和安全字段。</span>
+          <span><Icon name="info" size={18} />分析过程不会保留；页面只保存最终结果和对应的原始内容。</span>
           {readIssue ? <Button onClick={() => void load()} variant="quiet">重新读取本地结果</Button> : null}
         </GlassCard>
       </div>

@@ -61,11 +61,12 @@ test("Android device settings bridge exposes build identity without creating a s
   assert.doesNotMatch(bridge, /openTextToSpeechSettings/);
 });
 
-test("application information describes v0.1.6 single-call progress and automatic updates", () => {
+test("application information explains recent improvements in product language", () => {
   const page = read("apps/web/src/pages/ApplicationInfoPage.tsx");
 
-  assert.match(page, /舌象与面部观察.*一次紧凑结构化生成.*深度思考.*五个展示板块/u);
-  assert.match(page, /内容拆解.*一次完整生成.*真实证据只发送一次/u);
-  assert.match(page, /任务和报告.*自动更新.*无需手动刷新/u);
-  assert.match(page, /深度思考.*当前运行内存.*不写入任务、报告、模板或历史/u);
+  assert.match(page, /舌象与面部观察.*边生成边显示内容/u);
+  assert.match(page, /内容拆解.*一次整理完整结果/u);
+  assert.match(page, /任务和报告.*自动更新.*不需要手动刷新/u);
+  assert.match(page, /临时思考.*不会保存到任务、报告、模板或历史记录/u);
+  assert.doesNotMatch(page, /紧凑结构化生成|字段校验|整文校正|半截 JSON|私有地址/u);
 });

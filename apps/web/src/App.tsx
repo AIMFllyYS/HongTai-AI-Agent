@@ -51,41 +51,41 @@ export function App({ runtime, visualData }: AppProps = {}) {
     if (renderedRoute.key === "settings") {
       return runtime
         ? <SettingsPage navigate={navigate} runtime={runtime} />
-        : <RuntimePendingPage description="请在已启动本地应用运行时的 APK 中打开设置。" navigate={navigate} title="本地运行时未初始化" />;
+        : <RuntimePendingPage description="设置暂时无法读取，请重新打开已安装的应用。" navigate={navigate} title="设置暂时不可用" />;
     }
     if (renderedRoute.key === "settings-profile") {
       return runtime
         ? <ProfileSettingsPage navigate={navigate} runtime={runtime} />
-        : <RuntimePendingPage description="本地档案需要通过应用运行时读取。" navigate={navigate} title="本地运行时未初始化" />;
+        : <RuntimePendingPage description="个人资料暂时无法读取，请重新打开应用。" navigate={navigate} title="个人资料暂时不可用" />;
     }
     if (renderedRoute.key === "settings-ai") {
       return runtime
         ? <AiSettingsPage navigate={navigate} runtime={runtime} />
-        : <RuntimePendingPage description="AI 设置需要通过应用运行时读取。" navigate={navigate} title="本地运行时未初始化" />;
+        : <RuntimePendingPage description="AI 设置暂时无法读取，请重新打开应用。" navigate={navigate} title="AI 设置暂时不可用" />;
     }
     if (renderedRoute.key === "settings-app-info") {
       return runtime
         ? <ApplicationInfoPage navigate={navigate} runtime={runtime} />
-        : <RuntimePendingPage description="应用信息需要通过本机运行时读取。" navigate={navigate} title="本地运行时未初始化" />;
+        : <RuntimePendingPage description="版本信息暂时无法读取，请重新打开应用。" navigate={navigate} title="应用信息暂时不可用" />;
     }
     if (runtime && renderedRoute.key === "home") return <TaskHomePage navigate={navigate} runtime={runtime} />;
     if (runtime && renderedRoute.key === "task-processing") {
       const taskId = renderedRoute.params.taskId;
       return taskId
         ? <TaskProcessingPage key={taskId} navigate={navigate} runtime={runtime} taskId={taskId} />
-        : <RuntimePendingPage description="任务路由缺少有效标识。" navigate={navigate} title="无法读取任务" />;
+        : <RuntimePendingPage description="这个任务链接不完整，请返回任务列表重新进入。" navigate={navigate} title="无法打开任务" />;
     }
     if (runtime && renderedRoute.key === "task-detail") {
       const taskId = renderedRoute.params.taskId;
       return taskId
         ? <TaskDetailPage key={taskId} navigate={navigate} runtime={runtime} taskId={taskId} />
-        : <RuntimePendingPage description="任务路由缺少有效标识。" navigate={navigate} title="无法读取任务" />;
+        : <RuntimePendingPage description="这个任务链接不完整，请返回任务列表重新进入。" navigate={navigate} title="无法打开任务" />;
     }
     if (runtime && renderedRoute.key === "task-analysis") {
       const taskId = renderedRoute.params.taskId;
       return taskId
         ? <TaskAnalysisPage key={taskId} navigate={navigate} runtime={runtime} taskId={taskId} />
-        : <RuntimePendingPage description="任务路由缺少有效标识。" navigate={navigate} title="无法读取任务" />;
+        : <RuntimePendingPage description="这个任务链接不完整，请返回任务列表重新进入。" navigate={navigate} title="无法打开任务" />;
     }
     if (runtime && renderedRoute.key === "observation-new") {
       return <ObservationStartPage navigate={navigate} runtime={runtime} />;
@@ -94,7 +94,7 @@ export function App({ runtime, visualData }: AppProps = {}) {
       const sessionId = renderedRoute.params.sessionId;
       return sessionId
         ? <ObservationReportPage key={sessionId} navigate={navigate} runtime={runtime} sessionId={sessionId} />
-        : <RuntimePendingPage description="观察路由缺少有效标识。" navigate={navigate} title="无法读取观察会话" />;
+        : <RuntimePendingPage description="这个报告链接不完整，请返回观察记录重新进入。" navigate={navigate} title="无法打开观察报告" />;
     }
     if (runtime && renderedRoute.key === "create") {
       return <CreatePage navigate={navigate} runtime={runtime} />;
@@ -119,7 +119,7 @@ export function App({ runtime, visualData }: AppProps = {}) {
 
     const unsupported = renderedRoute.key === "not-found"
       ? `没有找到页面：${renderedRoute.path}`
-      : "该界面正在等待对应的本地应用能力接入，不会展示伪造的任务、媒体或结果。";
+      : "这项功能还没有开放，请返回使用其他功能。";
     return <RuntimePendingPage description={unsupported} navigate={navigate} title={renderedRoute.key === "not-found" ? "页面不存在" : "能力尚未接入"} />;
   };
 

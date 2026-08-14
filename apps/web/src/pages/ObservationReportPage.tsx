@@ -187,7 +187,7 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
     <AppShell activeNav="ai" backPath={observationNewPath()} navigate={navigate} title={observationModeLabel(session.mode)} visualTheme="warm-soft-tech">
       <div className="page-stack page-observation-report">
         <section className="observation-report-hero">
-          <div><span className="eyebrow">DIAGNOSIS-REPORT.V1</span><h2>{report?.summary?.headline ?? reportStatusTitle(record)}</h2><p>单模式图片观察 · 本地保存 · 日常参考</p></div>
+          <div><span className="eyebrow">图片观察报告</span><h2>{report?.summary?.headline ?? reportStatusTitle(record)}</h2><p>单张图片观察 · 本地保存 · 日常参考</p></div>
           <span className={`observation-report-hero__status is-${record?.status ?? "pending"}`}><Icon name={record?.status === "succeeded" ? "check_circle" : record?.status === "failed" ? "error" : "sync"} size={18} />{reportStatusTitle(record)}</span>
         </section>
 
@@ -195,14 +195,14 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
 
         <GlassCard className="observation-source-card">
           <RuntimeMediaFrame className="observation-source-card__image" label={`${observationModeLabel(session.mode)}原图`} media={session.image} />
-          <div><span className="eyebrow">PRIVATE IMAGE</span><strong>{observationModeLabel(session.mode)}图片</strong><p>这张图片位于应用私有目录，仅用于此会话的正式报告与追问上下文。</p></div>
+          <div><span className="eyebrow">本次观察图片</span><strong>{observationModeLabel(session.mode)}图片</strong><p>图片只保存在本机，仅用于生成本次报告和回答后续问题。</p></div>
         </GlassCard>
 
         {!diagnosisAvailable && record?.status !== "succeeded" ? <GlassCard className="observation-capability-notice" data-feature-capability="planned" tone="soft"><Icon name="pending" size={22} /><div><span>尚未接入</span><strong>本地 AI 报告能力尚未可用</strong><p>应用不会用示例结论替代真实报告。</p></div></GlassCard> : null}
-        {reportWaitingForStart ? <EmptyState action={<Button disabled={!diagnosisAvailable} icon={<Icon name="auto_awesome" size={17} />} onClick={() => void runReport()}>开始生成报告</Button>} description="图片与会话已经安全保存。一次结构化生成中会逐步显示五个已校验板块，不需要手动刷新。" icon="pending" title="报告尚未开始生成" /> : null}
+        {reportWaitingForStart ? <EmptyState action={<Button disabled={!diagnosisAvailable} icon={<Icon name="auto_awesome" size={17} />} onClick={() => void runReport()}>开始生成报告</Button>} description="图片已经安全保存。报告内容会逐步显示，不需要手动刷新。" icon="pending" title="报告尚未开始生成" /> : null}
         {reportIsActive ? <ValidatedModuleProgress definitions={diagnosisModuleDefinitions} failedTitle="观察报告未完成" issue={issue ?? record?.issue} progress={reportProgress} title={reportPending && record?.status === "failed" ? "正在重新生成观察报告" : "正在生成观察报告"} /> : null}
-        {record?.status === "failed" ? <ErrorState action={reportRetryAllowed ? <Button disabled={reportPending} icon={<Icon name="sync" size={17} />} onClick={() => void runReport()} variant="secondary">{reportPending ? "正在重试" : "重新生成报告"}</Button> : undefined} description="上一次报告没有生成可展示的正式文档。请查看上方稳定错误代码后，再由你决定下一步。" title="观察报告未完成" /> : null}
-        {record?.status === "succeeded" && !canShowReport ? <ErrorState description="已保存的报告不符合 diagnosis-report.v1 展示契约，应用不会猜测或补写字段。" title="无法安全展示报告" /> : null}
+        {record?.status === "failed" ? <ErrorState action={reportRetryAllowed ? <Button disabled={reportPending} icon={<Icon name="sync" size={17} />} onClick={() => void runReport()} variant="secondary">{reportPending ? "正在重试" : "重新生成报告"}</Button> : undefined} description="上一次报告没有生成完整内容。请根据上方提示检查后重试。" title="观察报告未完成" /> : null}
+        {record?.status === "succeeded" && !canShowReport ? <ErrorState description="这份报告内容不完整，应用不会自行猜测或补写。请重新生成报告。" title="报告暂时无法展示" /> : null}
 
         {canShowReport && report ? <>
           <GlassCard className={`observation-quality-card is-${report.imageQuality?.overallQuality ?? "limited"}`}>

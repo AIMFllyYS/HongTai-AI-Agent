@@ -71,10 +71,10 @@ function RuntimeBootstrap() {
       {failed ? (
         <ErrorState
           action={<Button onClick={() => window.location.reload()} variant="secondary">重新打开应用</Button>}
-          description="本地应用运行时未能启动。请在已安装的 Android APK 中重试；系统不会用临时或静态数据替代本地记录。"
-          title="本地运行时不可用"
+          description="应用暂时没有正常启动，请重新打开。如果仍然失败，请保留当前页面并联系维护人员。"
+          title="应用启动失败"
         />
-      ) : <LoadingState description="正在启动本地应用运行时" title="启动本地应用运行时" />}
+      ) : <LoadingState description="正在准备你的本地内容" title="正在启动应用" />}
     </AppShell>
   );
 }

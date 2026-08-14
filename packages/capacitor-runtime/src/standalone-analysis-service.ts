@@ -95,6 +95,20 @@ function analysisInput(taskId: string, detail: TaskDetailRecord | undefined): Co
   };
 }
 
+/** Keep the actionable ASR cause ahead of its trailing partial-failure summary. */
+export function localVideoFailureIssue(issues: readonly TaskIssue[]): TaskIssue | undefined {
+  let original: TaskIssue | undefined;
+  for (let index = issues.length - 1; index >= 0; index -= 1) {
+    const issue = issues[index];
+    if (!issue || issue.code === "ASR_PARTIAL_FAILURE") continue;
+    original ??= issue;
+    if (issue.action === "configure_ai" || issue.action === "check_network" || issue.action === "wait_and_retry") {
+      return issue;
+    }
+  }
+  return original ?? issues.at(-1);
+}
+
 /**
  * Content analysis persistence is one formal `content-analysis.v1` document
  * per task. Raw provider output and reasoning deliberately stay out of the
@@ -148,8 +162,11 @@ export class StandaloneAnalysisService implements AnalysisService {
     const ingest = await this.#tasks.start(imported.id);
     const completed = await ingest.completion;
     if (completed.status !== "succeeded" && completed.status !== "degraded") {
-      const issue = completed.issues.at(-1);
+      const issue = localVideoFailureIssue(completed.issues);
       throw taskError(issue?.code ?? "MEDIA_IMPORT_FAILED", issue?.userMessage ?? "本地视频处理没有完成", issue?.action ?? "retry");
+    }
+    if (completed.speechStatus === "no_speech") {
+      throw taskError("AI_EMPTY_RESPONSE", "没有听清可供拆解的口播内容，请换一段人声清晰的视频", "select_media");
     }
     return this.run(imported.id, onEvent);
   }

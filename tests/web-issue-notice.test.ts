@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { issueActionPresentation, issueDiagnosticSummary, issueTechnicalCode } from "../apps/web/src/components/IssueNotice";
+import { issueActionPresentation, issueDiagnosticSummary, issueTechnicalCode, issueTitle } from "../apps/web/src/components/IssueNotice";
 
 const webRoot = join(process.cwd(), "apps", "web", "src");
 const read = (relativePath: string) => readFileSync(join(webRoot, relativePath), "utf8");
@@ -44,6 +44,16 @@ test("IssueNotice combines the stable application code with a safe native code",
     issueTechnicalCode({ code: "AI_NETWORK_FAILED", details: { nativeCode: "not-safe" } }),
     "AI_NETWORK_FAILED",
   );
+});
+
+test("IssueNotice presents product language while keeping technical codes out of the visible notification", () => {
+  assert.equal(issueTitle({ code: "AI_NETWORK_FAILED", userMessage: "文稿生成失败" }), "暂时无法连接 AI 服务");
+  assert.equal(issueTitle({ code: "MEDIA_PROBE_FAILED", userMessage: "本地转写音频目标无效" }), "无法处理这个视频");
+
+  const notice = read("components/IssueNotice.tsx");
+  const top = read("components/TopNotification.tsx");
+  assert.match(notice, /issueTitle\(issue\)/);
+  assert.doesNotMatch(top, /technicalCode|top-notification__technical-code|data-technical-code/);
 });
 
 test("IssueNotice formats only allowlisted native link diagnostics", () => {

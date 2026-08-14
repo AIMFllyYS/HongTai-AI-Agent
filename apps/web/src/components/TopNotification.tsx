@@ -64,7 +64,6 @@ export function TopNotification({ notification, onDismiss }: TopNotificationProp
           <motion.aside
             aria-live={notification.level === "error" ? "assertive" : "polite"}
             className={`top-notification top-notification--${notification.level}`}
-            data-technical-code={notification.technicalCode}
             drag="y"
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 1, bottom: 0.12 }}
@@ -86,7 +85,6 @@ export function TopNotification({ notification, onDismiss }: TopNotificationProp
             <span className="top-notification__copy">
               <strong>{notification.title}</strong>
               {notification.message ? <small>{notification.message}</small> : null}
-              {notification.technicalCode ? <code className="top-notification__technical-code">{notification.technicalCode}</code> : null}
             </span>
             {notification.action ? (
               <button

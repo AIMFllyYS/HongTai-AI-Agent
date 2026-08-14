@@ -215,7 +215,7 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
     const failures = probeCapabilities.length - results.filter((result) => result.status === "succeeded").length;
     setSavedMessage(failures
       ? `已保存 ${preset.label} 的公开配置与受保护 API Key；${failures} 项真实能力检测未通过，请查看对应结果。`
-      : "已保存公开配置与受保护 API Key，文本、视觉、ASR 与视频配音检测均已完成。");
+      : "设置与密钥已经安全保存，文字、图片、语音识别和视频配音检测均已完成。");
   };
 
   const saveManual = async (event: FormEvent<HTMLFormElement>) => {
@@ -255,13 +255,13 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
             <div className="ai-preset-card__heading">
               <span className="settings-overline">一键配置</span>
               <h2>选择供应商，只填 API Key</h2>
-              <p>系统会写入准确的 URL、文本、视觉、ASR 和视频配音模型，并自动做四项小型真实请求检测。</p>
+              <p>系统会自动填好服务地址和各项模型，并实际检测文字、图片、语音识别与视频配音是否可用。</p>
             </div>
             <label className="settings-field" htmlFor="ai-preset-provider"><span>供应商 <em>必填</em></span><select id="ai-preset-provider" onChange={(event) => setSelectedPreset(event.target.value as AiProviderPreset["id"])} value={selectedPreset}>{AI_PROVIDER_PRESETS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
             <div className="ai-preset-models" aria-label={`${preset.label} 自动配置模型`}>
               <span><small>文本</small><strong>{preset.textModel}</strong></span>
               <span><small>视觉</small><strong>{preset.visionModel}</strong></span>
-              <span><small>ASR</small><strong>{preset.asrModel}</strong></span>
+              <span><small>语音识别</small><strong>{preset.asrModel}</strong></span>
               <span><small>视频配音</small><strong>{preset.ttsModel}</strong></span>
             </div>
             <label className="settings-field" htmlFor="ai-preset-key"><span>API Key <small>仅写入，不会回显</small></span><input autoCapitalize="none" autoComplete="off" id="ai-preset-key" onChange={(event) => setApiKey(event.target.value)} placeholder={connection?.hasApiKey ? "已设置；留空则保持不变" : "输入后写入设备安全存储"} required={!connection?.hasApiKey} spellCheck={false} type="password" value={apiKey} /></label>
@@ -295,7 +295,7 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
         </details>
 
         <section className="settings-probes" aria-labelledby="ai-probe-title">
-          <div className="settings-probes__heading"><div><span className="settings-overline">独立能力探测</span><h2 id="ai-probe-title">文本、视觉、ASR 与视频配音</h2></div><Button disabled={connectionBusy} onClick={() => void load()} size="md" variant="quiet"><Icon name="sync" size={16} />刷新</Button></div>
+          <div className="settings-probes__heading"><div><span className="settings-overline">连接检测</span><h2 id="ai-probe-title">文字、图片、语音识别与视频配音</h2></div><Button disabled={connectionBusy} onClick={() => void load()} size="md" variant="quiet"><Icon name="sync" size={16} />刷新</Button></div>
           {probeBlocked && !connectionBusy ? <p className="field-hint"><Icon name="info" size={15} />请先保存当前 AI 设置后再测试；测试只会使用已写入本机安全存储的连接。</p> : null}
           <div className="probe-list">
             {probeCapabilities.map((capability) => {

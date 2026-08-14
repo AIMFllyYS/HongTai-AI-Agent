@@ -9,7 +9,6 @@ export interface NotificationInput {
   readonly level: NotificationLevel;
   readonly title: string;
   readonly message?: string;
-  readonly technicalCode?: string;
   readonly action?: NotificationAction;
 }
 

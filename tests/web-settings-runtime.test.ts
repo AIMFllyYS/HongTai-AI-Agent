@@ -73,7 +73,8 @@ test("UI copy describes local app storage and Keystore without promising an encr
   for (const source of [app, main, settings, profile, ai]) {
     assert.doesNotMatch(source, /SQLCipher|加密数据库|本地加密存储|加密档案|DATABASE_OPEN_FAILED/);
   }
-  assert.match(main, /本地应用运行时/);
+  assert.match(main, /正在准备你的本地内容/);
+  assert.doesNotMatch(main, /title="本地运行时|description="[^"]*运行时/u);
   assert.match(settings, /本机应用数据/);
   assert.match(settings, /Android Keystore/);
 });
