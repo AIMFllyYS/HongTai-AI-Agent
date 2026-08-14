@@ -146,10 +146,35 @@ internal class ProductionRenderer(private val context: Context, private val stor
         plan.width, plan.height,
         if (shot.fit == "cover") Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP else Presentation.LAYOUT_SCALE_TO_FIT,
       )
-      val overlay = OverlayEffect(captionOverlays(shot.caption))
+      val overlay = OverlayEffect(headlineOverlays(plan.textOverlay) + captionOverlays(shot.caption))
       EditedMediaItem.Builder(media).setRemoveAudio(plan.renderMode == ProductionRenderMode.MONTAGE)
         .apply { if (shot.input.kind == ProductionAssetKind.IMAGE) setFrameRate(plan.fps) }
         .setEffects(Effects(emptyList(), listOf(presentation, overlay))).build()
+    }
+  }
+
+  private fun headlineOverlays(value: ProductionTextOverlay): List<TextOverlay> {
+    if (value.primaryText.isBlank()) return emptyList()
+    val combined = listOfNotNull(value.primaryText, value.secondaryText).joinToString("\n")
+    val secondaryStart = value.secondaryText?.let { value.primaryText.length + 1 }
+    fun styledText(foreground: Int, background: Int?): SpannableString = SpannableString(combined).apply {
+      setSpan(ForegroundColorSpan(foreground), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+      background?.let { setSpan(BackgroundColorSpan(it), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+      setSpan(StyleSpan(Typeface.BOLD), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+      setSpan(AbsoluteSizeSpan(54), 0, secondaryStart ?: length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+      secondaryStart?.let { setSpan(AbsoluteSizeSpan(34), it, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+    }
+    val mainSettings = StaticOverlaySettings.Builder().setBackgroundFrameAnchor(0f, 0.72f).setOverlayFrameAnchor(0f, 0f).build()
+    return when (value.preset) {
+      "clean_card" -> listOf(TextOverlay.createStaticTextOverlay(styledText(Color.rgb(18, 34, 31), Color.argb(224, 255, 255, 255)), mainSettings))
+      "aqua_accent" -> listOf(TextOverlay.createStaticTextOverlay(styledText(Color.rgb(100, 244, 218), Color.argb(205, 0, 37, 34)), mainSettings))
+      else -> {
+        val shadowSettings = StaticOverlaySettings.Builder().setBackgroundFrameAnchor(0.014f, 0.706f).setOverlayFrameAnchor(0f, 0f).build()
+        listOf(
+          TextOverlay.createStaticTextOverlay(styledText(Color.argb(225, 0, 0, 0), null), shadowSettings),
+          TextOverlay.createStaticTextOverlay(styledText(Color.WHITE, null), mainSettings),
+        )
+      }
     }
   }
 

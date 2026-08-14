@@ -435,6 +435,7 @@ export interface AnalysisService {
 export type ProductionStatus = "draft" | "planning" | "ready" | "rendering" | "succeeded" | "failed";
 export type ProductionMode = "montage" | "avatar";
 export type ProductionAssetRole = "visual" | "avatar" | "music";
+export type ProductionTextPreset = "classic_top" | "clean_card" | "aqua_accent";
 
 export interface ProductionAsset extends MediaReference {
   readonly id: string;
@@ -446,6 +447,8 @@ export interface ProductionProjectRecord {
   readonly analysisTaskId: string;
   readonly brief: string;
   readonly mode: ProductionMode;
+  readonly headlineText?: string;
+  readonly textPreset: ProductionTextPreset;
   /** Required only for avatar mode and used as the caption source. */
   readonly avatarScript?: string;
   readonly targetDurationSeconds: number;
@@ -469,6 +472,8 @@ export interface ProductionService {
     readonly targetDurationSeconds: number;
     readonly mode?: ProductionMode;
     readonly avatarScript?: string;
+    readonly headlineText?: string;
+    readonly textPreset?: ProductionTextPreset;
   }): Promise<ProductionProjectRecord>;
   get(projectId: string): Promise<ProductionProjectRecord | undefined>;
   list(): Promise<readonly ProductionProjectRecord[]>;

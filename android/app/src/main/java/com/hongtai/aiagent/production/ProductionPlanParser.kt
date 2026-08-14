@@ -22,6 +22,12 @@ internal data class ProductionShot(
   val fit: String,
 )
 
+internal data class ProductionTextOverlay(
+  val primaryText: String,
+  val secondaryText: String?,
+  val preset: String,
+)
+
 internal data class NativeProductionPlan(
   val width: Int,
   val height: Int,
@@ -32,6 +38,7 @@ internal data class NativeProductionPlan(
   val backgroundMusic: ProductionInput?,
   val backgroundMusicVolume: Float,
   val shots: List<ProductionShot>,
+  val textOverlay: ProductionTextOverlay = ProductionTextOverlay("", null, "classic_top"),
   val renderMode: ProductionRenderMode = ProductionRenderMode.MONTAGE,
 )
 
@@ -44,7 +51,8 @@ internal object ProductionPlanParser {
   ): NativeProductionPlan {
     require(json.toByteArray(Charsets.UTF_8).size <= MAX_PLAN_BYTES) { "The production plan is too large." }
     val root = JSONObject(json)
-    require(root.getString("schemaVersion") == "production-plan.v1") { "Unsupported production plan version." }
+    val schemaVersion = root.getString("schemaVersion")
+    require(schemaVersion == "production-plan.v1" || schemaVersion == "production-plan.v2") { "Unsupported production plan version." }
     val settings = root.getJSONObject("settings")
     val width = settings.getInt("width")
     val height = settings.getInt("height")
@@ -82,6 +90,18 @@ internal object ProductionPlanParser {
       ProductionShot(order, input, shotDurationMs, narration, caption, fit)
     }
     require(shots.sumOf(ProductionShot::durationMs) == durationMs) { "Production shot durations do not match the total duration." }
+    val textOverlay = if (schemaVersion == "production-plan.v2") {
+      val value = root.getJSONObject("textOverlay")
+      val primaryText = value.getString("primaryText").trim()
+      val secondaryText = value.optString("secondaryText").trim().takeIf { it.isNotEmpty() && it != "null" }
+      val preset = value.getString("preset")
+      require(primaryText.isNotEmpty() && primaryText.length <= 24) { "The production primary text is invalid." }
+      require(secondaryText == null || secondaryText.length <= 32) { "The production secondary text is invalid." }
+      require(preset in setOf("classic_top", "clean_card", "aqua_accent")) { "The production text preset is invalid." }
+      ProductionTextOverlay(primaryText, secondaryText, preset)
+    } else {
+      ProductionTextOverlay(root.getString("title").trim().take(24), null, "classic_top")
+    }
     if (renderMode == ProductionRenderMode.AVATAR) {
       if (music != null || musicVolume != 0f) throw ProductionException(ProductionFailureKind.MEDIA_SOURCE_INVALID, "Avatar production cannot mix background music.")
       if (shots.any { it.input.kind != ProductionAssetKind.VIDEO || !it.input.hasAudio }) {
@@ -95,7 +115,7 @@ internal object ProductionPlanParser {
         throw ProductionException(ProductionFailureKind.MEDIA_SOURCE_INVALID, "Avatar production duration exceeds the selected source video.")
       }
     }
-    return NativeProductionPlan(width, height, fps, durationMs, locale, speechRate, music, musicVolume, shots, renderMode)
+    return NativeProductionPlan(width, height, fps, durationMs, locale, speechRate, music, musicVolume, shots, textOverlay, renderMode)
   }
 
   private fun secondsToMs(value: Double): Long {

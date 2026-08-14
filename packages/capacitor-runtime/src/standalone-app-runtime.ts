@@ -304,6 +304,7 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
     files: options.plugins.localFiles,
     native: options.plugins.productionRuntime ?? unavailableProduction,
     analysis,
+    tasks,
     getProvider: requireProvider,
     getNarrationMode: narrationMode,
     toDisplayUri: display,

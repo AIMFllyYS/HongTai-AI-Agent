@@ -1,4 +1,4 @@
-import { contentAnalysisResultSchema, createAvatarCaptionPlan, ProductionPlanningFlow, productionPlanResultSchema, type AiProvider, type ProductionPlanResultV1 } from "@hongtai/ai";
+import { contentAnalysisResultSchema, createAvatarCaptionPlan, ProductionPlanningFlow, productionPlanResultSchema, type AiProvider, type ProductionPlanResult } from "@hongtai/ai";
 import { createRuntimeId, issueFromAppError, TaskError } from "@hongtai/core";
 import type {
   AnalysisService,
@@ -9,8 +9,10 @@ import type {
   ProductionMode,
   ProductionProjectRecord,
   ProductionService,
+  ProductionTextPreset,
   RuntimeUnfinishedWork,
   TaskIssue,
+  TaskService,
 } from "@hongtai/core";
 
 import { persistedRuntimeWork, runtimeInterruptedIssue } from "./runtime-interruption.js";
@@ -34,11 +36,13 @@ interface PersistedProject {
   readonly analysisTaskId: string;
   readonly brief: string;
   readonly mode: ProductionMode;
+  readonly headlineText?: string;
+  readonly textPreset: ProductionTextPreset;
   readonly avatarScript?: string;
   readonly targetDurationSeconds: number;
   readonly status: ProductionProjectRecord["status"];
   readonly assets: readonly NativeProductionAsset[];
-  readonly plan?: ProductionPlanResultV1;
+  readonly plan?: ProductionPlanResult;
   readonly output?: NativeProductionResult;
   readonly issue?: TaskIssue;
   readonly createdAt: string;
@@ -49,6 +53,7 @@ export interface StandaloneProductionServiceOptions {
   readonly files: ProductionFilesPort;
   readonly native: StandaloneProductionRuntimePlugin;
   readonly analysis: AnalysisService;
+  readonly tasks: Pick<TaskService, "getDetail">;
   readonly getProvider: () => Promise<AiProvider>;
   /** App logic decides whether a saved connection has an executable cloud narration path. */
   readonly getNarrationMode: () => Promise<"system" | "provider">;
@@ -64,6 +69,15 @@ function taskError(message: string, action: "retry" | "select_media" = "retry"):
 
 function defaultAssetRole(value: Pick<NativeProductionAsset, "kind">): ProductionAssetRole {
   return value.kind === "audio" ? "music" : "visual";
+}
+
+const TEXT_PRESETS = ["classic_top", "clean_card", "aqua_accent"] as const;
+
+function originalSourceText(detail: Awaited<ReturnType<TaskService["getDetail"]>>): string | undefined {
+  const direct = detail?.transcript?.text?.trim() || detail?.imageText?.text?.trim();
+  const evidence = detail?.evidenceUnits.map((unit) => unit.text.trim()).filter(Boolean).join("\n");
+  const value = (direct || evidence)?.replace(/\s+/gu, " ").trim();
+  return value ? value.slice(0, 12_000) : undefined;
 }
 
 function nativeAsset(value: NativeProductionAsset): NativeProductionAsset | undefined {
@@ -101,11 +115,15 @@ function parseProject(value: string, projectId: string): PersistedProject | unde
     if (mode !== "montage" && mode !== "avatar") return undefined;
     const avatarScript = parsed.avatarScript?.trim();
     if (parsed.avatarScript !== undefined && !avatarScript) return undefined;
+    const headlineText = parsed.headlineText?.trim();
+    if (parsed.headlineText !== undefined && (!headlineText || headlineText.length > 24)) return undefined;
+    const textPreset = parsed.textPreset ?? "classic_top";
+    if (!TEXT_PRESETS.includes(textPreset)) return undefined;
     const assets = parsed.assets.map(nativeAsset);
     if (assets.some((asset) => !asset)) return undefined;
     const plan = parsed.plan ? productionPlanResultSchema.safeParse(parsed.plan) : undefined;
     if (parsed.plan && !plan?.success) return undefined;
-    return { ...parsed, mode, ...(avatarScript ? { avatarScript } : {}), assets: assets as readonly NativeProductionAsset[], ...(plan?.success ? { plan: plan.data } : {}) };
+    return { ...parsed, mode, textPreset, ...(headlineText ? { headlineText } : {}), ...(avatarScript ? { avatarScript } : {}), assets: assets as readonly NativeProductionAsset[], ...(plan?.success ? { plan: plan.data } : {}) };
   } catch {
     return undefined;
   }
@@ -154,14 +172,18 @@ export class StandaloneProductionService implements ProductionService {
 
   constructor(options: StandaloneProductionServiceOptions) { this.#options = options; }
 
-  async create(input: { readonly analysisTaskId: string; readonly brief: string; readonly targetDurationSeconds: number; readonly mode?: ProductionMode; readonly avatarScript?: string }): Promise<ProductionProjectRecord> {
+  async create(input: { readonly analysisTaskId: string; readonly brief: string; readonly targetDurationSeconds: number; readonly mode?: ProductionMode; readonly avatarScript?: string; readonly headlineText?: string; readonly textPreset?: ProductionTextPreset }): Promise<ProductionProjectRecord> {
     const brief = input.brief.trim();
     if (!brief) throw taskError("请填写制作需求");
     if (input.targetDurationSeconds < 15 || input.targetDurationSeconds > 60) throw taskError("制作时长必须在15到60秒之间");
     const mode = input.mode ?? "montage";
     const avatarScript = input.avatarScript?.trim();
+    const headlineText = input.headlineText?.trim();
+    const textPreset = input.textPreset ?? "classic_top";
     if (mode !== "montage" && mode !== "avatar") throw taskError("制作模式无效");
     if (mode === "avatar" && !avatarScript) throw taskError("请填写与数字人口播视频一致的口播稿");
+    if (input.headlineText !== undefined && (!headlineText || headlineText.length > 24)) throw taskError("主文字必须在1到24个字符之间");
+    if (!TEXT_PRESETS.includes(textPreset)) throw taskError("文字预设无效");
     const projectId = this.#options.createProjectId?.() ?? createRuntimeId();
     const timestamp = (this.#options.now ?? (() => new Date()))().toISOString();
     const project: PersistedProject = {
@@ -169,6 +191,8 @@ export class StandaloneProductionService implements ProductionService {
       analysisTaskId: input.analysisTaskId,
       brief,
       mode,
+      textPreset,
+      ...(headlineText ? { headlineText } : {}),
       ...(mode === "avatar" ? { avatarScript } : {}),
       targetDurationSeconds: input.targetDurationSeconds,
       status: "draft",
@@ -255,18 +279,25 @@ export class StandaloneProductionService implements ProductionService {
       const parsed = record?.status === "succeeded" && record.result?.schemaVersion === "content-analysis.v1"
         ? contentAnalysisResultSchema.safeParse(record.result.document) : undefined;
       if (!parsed?.success) throw taskError("来源任务尚无可用的正式拆解结果");
+      const sourceText = originalSourceText(await this.#options.tasks.getDetail(project.analysisTaskId));
+      if (!sourceText) throw taskError("来源任务没有可用于参考的原始文稿");
       const plan = project.mode === "avatar"
         ? createAvatarCaptionPlan({
           analysisTaskId: project.analysisTaskId,
           brief: project.brief,
           targetDurationSeconds: project.targetDurationSeconds,
           avatarScript: project.avatarScript ?? "",
+          headlineText: project.headlineText,
+          textPreset: project.textPreset,
           avatarAsset: avatarAssets[0]!,
         })
         : await new ProductionPlanningFlow({ provider: await this.#options.getProvider() }).run({
           analysisTaskId: project.analysisTaskId,
           brief: project.brief,
           mode: project.mode,
+          originalSourceText: sourceText,
+          headlineText: project.headlineText,
+          textPreset: project.textPreset,
           targetDurationSeconds: project.targetDurationSeconds,
           analysis: parsed.data,
           assets: project.assets.map((asset) => ({ ...asset, role: roleOf(asset) })),
@@ -438,7 +469,7 @@ export class StandaloneProductionService implements ProductionService {
   #project(project: PersistedProject): ProductionProjectRecord {
     const asset = (value: NativeProductionAsset): ProductionAsset => ({ id: value.id, role: value.role ?? defaultAssetRole(value), uri: this.#options.toDisplayUri(value.uri), kind: value.kind, origin: "imported", mimeType: value.mimeType, displayName: value.displayName, byteLength: value.sizeBytes, ...(value.durationSeconds === undefined ? {} : { durationSeconds: value.durationSeconds }) });
     return {
-      projectId: project.projectId, analysisTaskId: project.analysisTaskId, brief: project.brief, mode: project.mode, ...(project.avatarScript ? { avatarScript: project.avatarScript } : {}), targetDurationSeconds: project.targetDurationSeconds,
+      projectId: project.projectId, analysisTaskId: project.analysisTaskId, brief: project.brief, mode: project.mode, textPreset: project.textPreset, ...(project.headlineText ? { headlineText: project.headlineText } : {}), ...(project.avatarScript ? { avatarScript: project.avatarScript } : {}), targetDurationSeconds: project.targetDurationSeconds,
       status: project.status, assets: project.assets.map(asset),
       ...(project.plan ? { plan: { schemaVersion: project.plan.schemaVersion, document: project.plan as unknown as JsonObject } } : {}),
       ...(project.output ? { output: { uri: this.#options.toDisplayUri(project.output.uri), kind: "video", origin: "imported", mimeType: project.output.mimeType, byteLength: project.output.sizeBytes, durationSeconds: project.output.durationSeconds, displayName: "本地成片.mp4" } } : {}),

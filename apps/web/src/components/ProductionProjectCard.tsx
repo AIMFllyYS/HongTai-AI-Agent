@@ -58,7 +58,7 @@ export function ProductionProjectCard({ project, progress, progressMessage, busy
         <button className="production-add-asset" disabled={busy || project.assets.length >= 12 || avatarMode && usableVisualAssets >= 1} onClick={onImport} type="button"><Icon name="upload_file" size={24} /><span>{avatarMode ? "上传数字人视频" : "上传素材"}</span><small>{avatarMode ? `${usableVisualAssets}/1` : `${project.assets.length}/12`}</small></button>
       </div>
 
-      {!canGeneratePlan ? <p className="production-hint"><Icon name="info" size={16} />{avatarMode ? !avatarDurationFits && avatarAsset ? `该数字人视频不足 ${project.targetDurationSeconds} 秒，请上传更长视频或新建较短时长项目。` : "请上传一个带原声的 MP4 数字人口播视频，并确认已填写与它一致的口播稿。" : "至少上传 3 个图片或视频素材，才能生成 production-plan.v1。"}</p> : null}
+      {!canGeneratePlan ? <p className="production-hint"><Icon name="info" size={16} />{avatarMode ? !avatarDurationFits && avatarAsset ? `该数字人视频不足 ${project.targetDurationSeconds} 秒，请上传更长视频或新建较短时长项目。` : "请上传一个带原声的 MP4 数字人口播视频，并确认已填写与它一致的口播稿。" : "至少上传 3 个图片或视频素材，才能生成制作计划。"}</p> : null}
       <div className="production-actions">
         <Button disabled={busy || !canGeneratePlan || rendering} onClick={onGeneratePlan} variant="secondary"><Icon name="auto_awesome" size={18} />AI 生成制作计划</Button>
         <Button disabled={busy || !project.plan || rendering} onClick={onRender}><Icon name="movie_edit" size={18} />本地合成视频</Button>

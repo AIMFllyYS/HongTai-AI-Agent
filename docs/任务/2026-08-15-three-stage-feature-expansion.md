@@ -32,7 +32,7 @@
 ## 权威状态与数据
 
 - 观察会话以 `sessionId` 和完整 `diagnosis-report.v1` 为唯一权威；知识上下文与运行期增量不持久化。
-- 制作项目以 `projectId` 和 `production-plan.v1` 为唯一权威；原始文稿只在规划调用的受控输入中使用，不复制到项目 JSON 或 UI。
+- 制作项目以 `projectId` 和新生成的 `production-plan.v2` 为唯一权威，旧 `production-plan.v1` 只做兼容读取；原始文稿只在规划调用的受控输入中使用，不复制到项目 JSON 或 UI。
 - 每阶段 Android 版本只修改 `android/app/build.gradle.kts`，依次为 `0.1.9/code17`、`0.1.10/code18`、`0.1.11/code19`。
 - 同版本不同字节禁止覆盖；计划或渲染失败保留已有成功产物并进入明确失败态。
 
