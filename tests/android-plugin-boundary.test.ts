@@ -237,15 +237,16 @@ test("client APK builds are identifiable and never log bridge payloads", () => {
   assert.doesNotMatch(appBuild, /versionName\s*=\s*"0\.1\.0"/);
 });
 
-test("release candidate v0.1.9 advances to versionCode 17 and keeps the supplied Pulse Flow design icon", () => {
+test("release candidate v0.1.10 advances to versionCode 18 and packages the dedicated HongTai launcher icon", () => {
   const appBuild = read("android/app/build.gradle.kts");
   const manifest = read("android/app/src/main/AndroidManifest.xml");
-  const sourcePath = join(root, "apps/web/public/brand/pulse-flow-source.png");
-  const iconPath = join(root, "android/app/src/main/res/drawable-nodpi/pulse_flow_launcher.png");
+  const sourcePath = join(root, "apps/web/public/brand/hongtai-app-icon.png");
+  const iconPath = join(root, "android/app/src/main/res/drawable-nodpi/hongtai_launcher.png");
 
-  assert.match(appBuild, /versionCode\s*=\s*17\b/);
-  assert.match(appBuild, /versionName\s*=\s*"0\.1\.9"/);
-  assert.match(manifest, /android:icon="@drawable\/pulse_flow_launcher"/);
+  assert.match(appBuild, /versionCode\s*=\s*18\b/);
+  assert.match(appBuild, /versionName\s*=\s*"0\.1\.10"/);
+  assert.match(manifest, /android:icon="@drawable\/hongtai_launcher"/);
+  assert.match(manifest, /android:roundIcon="@drawable\/hongtai_launcher"/);
   assert.equal(existsSync(iconPath), true, "the Android launcher icon must be packaged from the design asset");
-  assert.deepEqual(readFileSync(iconPath), readFileSync(sourcePath), "the launcher icon must remain the supplied design asset");
+  assert.deepEqual(readFileSync(iconPath), readFileSync(sourcePath), "the launcher icon must match the public cropped source");
 });

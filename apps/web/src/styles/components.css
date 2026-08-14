@@ -170,7 +170,7 @@
   left: 0;
   z-index: 30;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   min-height: var(--nav-height);
   padding: var(--space-2) var(--space-2) env(safe-area-inset-bottom);
   background: rgba(248, 250, 247, 0.9);
@@ -194,6 +194,13 @@
   font-size: var(--text-caption);
   line-height: 1rem;
   transition: transform var(--motion-duration-fast) var(--motion-ease-emphasized), color var(--motion-duration-standard) var(--motion-ease-standard);
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.bottom-nav__item--materials {
+  font-size: clamp(0.625rem, 2.4vw, var(--text-caption));
 }
 
 .bottom-nav__icon-wrap {
@@ -236,6 +243,56 @@
 
 .bottom-nav__item--ai .bottom-nav__icon-wrap {
   color: var(--color-primary-strong);
+}
+
+.material-library-dialog__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  padding: max(var(--space-4), env(safe-area-inset-top)) var(--space-4) max(var(--space-4), env(safe-area-inset-bottom));
+  background: rgba(13, 25, 22, 0.68);
+  backdrop-filter: blur(0.35rem);
+}
+
+.material-library-dialog {
+  display: grid;
+  width: min(100%, 28rem);
+  max-height: 100%;
+  overflow: hidden;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-large);
+  box-shadow: var(--shadow-floating);
+}
+
+.material-library-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.material-library-dialog__header button {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  padding: 0;
+  color: var(--color-text-subtle);
+  background: var(--color-surface-container);
+  border: 0;
+  border-radius: var(--radius-pill);
+}
+
+.material-library-dialog__image {
+  display: block;
+  width: 100%;
+  max-height: calc(100vh - 8rem);
+  object-fit: contain;
+  background: #fff;
 }
 
 .status-badge {

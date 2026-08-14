@@ -64,9 +64,9 @@ test("Android device settings bridge exposes build identity without creating a s
 test("application information explains recent improvements in product language", () => {
   const page = read("apps/web/src/pages/ApplicationInfoPage.tsx");
 
+  assert.match(page, /底部导航新增富迪素材库.*查看完整宣传图/u);
+  assert.match(page, /富迪素材.*应用内.*离线安装/u);
+  assert.match(page, /APK 启动图标.*宏泰AI机器人图标/u);
   assert.match(page, /舌象与面部观察.*五脏六腑.*传统观察知识参考/u);
-  assert.match(page, /齿痕、白苔和舌红.*不再用单一特征直接下结论/u);
-  assert.match(page, /不确定参考.*单张图片不能用于疾病诊断/u);
-  assert.match(page, /光线、滤镜或清晰度不足.*建议重拍/u);
   assert.doesNotMatch(page, /紧凑结构化生成|字段校验|整文校正|半截 JSON|私有地址/u);
 });

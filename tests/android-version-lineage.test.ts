@@ -21,17 +21,17 @@ function compareVersion(left: string, right: string): number {
   return 0;
 }
 
-test("the v0.1.9/code 17 source candidate advances beyond the published v0.1.8/code 16", () => {
+test("the v0.1.10/code 18 source candidate advances beyond the published v0.1.8/code 16", () => {
   const gradle = readFileSync(join(root, "android", "app", "build.gradle.kts"), "utf8");
   const downloadPage = readFileSync(join(root, "download.html"), "utf8");
   const candidateCode = Number(requireMatch(gradle, /versionCode\s*=\s*(\d+)/u, "Android versionCode"));
   const candidateName = requireMatch(gradle, /versionName\s*=\s*"([^"]+)"/u, "Android versionName");
   const publishedName = requireMatch(downloadPage, /aria-label="当前推荐版本 v([0-9.]+)"/u, "published download version");
 
-  assert.equal(candidateCode, 17);
-  assert.equal(candidateName, "0.1.9");
+  assert.equal(candidateCode, 18);
+  assert.equal(candidateName, "0.1.10");
   assert.equal(publishedName, "0.1.8");
-  assert.equal(compareVersion(candidateName, publishedName), 1);
+  assert.ok(compareVersion(candidateName, publishedName) > 0);
   assert.match(downloadPage, /versionCode:\s*"16"/u);
   assert.match(downloadPage, /25,955,845 bytes/u);
   assert.match(downloadPage, /92CF32EE71174FA6941FBD6B765EE5BB1FE8C6DC87F24BD59ED967E05B9CAB17/iu);
@@ -55,7 +55,8 @@ test("the repository maintains a changelog and a patch-only default version poli
   assert.match(changelog, /^## \[0\.1\.4\] - 2026-08-12/mu);
   assert.match(changelog, /^## \[0\.1\.8\] - 2026-08-15/mu);
   assert.match(changelog, /^## \[0\.1\.9\] - 2026-08-15/mu);
-  assert.match(changelog, /Android 源码候选.*`0\.1\.9`.*`versionCode=17`/u);
+  assert.match(changelog, /^## \[0\.1\.10\] - 2026-08-15/mu);
+  assert.match(changelog, /Android 源码候选.*`0\.1\.10`.*`versionCode=18`/u);
   assert.match(changelog, /默认只递增第三位补丁版本/u);
   assert.match(changelog, /第一位或第二位版本号.*明确授权/u);
 });
