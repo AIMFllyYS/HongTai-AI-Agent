@@ -31,6 +31,7 @@ class HarnessProvider implements AiProvider {
           quality: "good",
           observation: "图片中的舌部区域清晰可见。",
           summary: report.summary.narrative,
+          wellnessReference: "传统观察中，这组特征可能作为日常记录线索；单张图片不能据此诊断。",
           advice: "保持相近光线继续记录。",
           safety: report.safetyGuidance.recommendedAction,
           followUp: report.followUpQuestions[0],

@@ -82,6 +82,7 @@ export const diagnosisSingleResponseFieldSchemas = {
   quality: z.enum(["good", "limited", "unusable"]),
   observation: z.string().trim().max(2000),
   summary: z.string().trim().max(2000),
+  wellnessReference: z.string().trim().max(2000),
   advice: z.string().trim().max(2000),
   safety: z.string().trim().min(1).max(2000),
   followUp: z.string().trim().max(500),
@@ -94,6 +95,15 @@ export const diagnosisSingleResponseSchema = z.object(diagnosisSingleResponseFie
   if (value.quality === "unusable" && value.advice) {
     context.addIssue({ code: "custom", path: ["advice"], message: "图片不可用时不能输出无依据建议" });
   }
+  if (value.quality === "unusable" && value.wellnessReference) {
+    context.addIssue({ code: "custom", path: ["wellnessReference"], message: "图片不可用时不能输出传统状态参考" });
+  }
+  if (value.wellnessReference && !/(可能|有时|不确定)/u.test(value.wellnessReference)) {
+    context.addIssue({ code: "custom", path: ["wellnessReference"], message: "传统状态参考必须明确表达不确定性" });
+  }
+  if (value.wellnessReference && !/(单张图片|仅凭图片).*(不能|不可|不足以).*(诊断|判断)/u.test(value.wellnessReference)) {
+    context.addIssue({ code: "custom", path: ["wellnessReference"], message: "传统状态参考必须明确单张图片不能用于诊断" });
+  }
 });
 
 const diagnosisReportBaseSchema = z.object({
@@ -103,6 +113,7 @@ const diagnosisReportBaseSchema = z.object({
     z.literal("diagnosis-initial.v1"),
     z.literal("diagnosis-modular.v1"),
     z.literal("diagnosis-single-stream.v1"),
+    z.literal("diagnosis-single-stream.v2"),
   ]),
   imageQuality: diagnosisVisualObservationsSchema.shape.imageQuality,
   observations: diagnosisVisualObservationsSchema.shape.observations,

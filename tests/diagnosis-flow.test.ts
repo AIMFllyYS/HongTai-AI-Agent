@@ -31,6 +31,7 @@ const validSingleResponse = {
   quality: "good" as const,
   observation: "舌体颜色较均匀，当前图片中的舌部区域清晰可见。",
   summary: "本次图片可用于日常可见状态记录，不代表疾病诊断。",
+  wellnessReference: "传统观察中，这组可见特征可能作为日常状态记录线索；单张图片不能据此诊断。",
   advice: "保持相同光线和角度定期记录，并结合近期作息观察变化。",
   safety: "单张图片不能替代专业检查；如有持续不适，请咨询专业人员。",
   followUp: "最近作息是否规律？",
@@ -87,7 +88,7 @@ test("诊察流程保留原生图片 URI，不将其转成 React Base64", async 
   assert.equal(provider.calls[0]?.model, "vision");
   assert.equal(provider.calls[0]?.maxOutputTokens, 2_048);
   assert.equal(provider.calls[0]?.jsonSchema?.name, "diagnosis_single_response_v1");
-  assert.equal(repository.report?.promptVersion, "diagnosis-single-stream.v1");
+  assert.equal(repository.report?.promptVersion, "diagnosis-single-stream.v2");
 });
 
 test("已创建会话可复用私有图片运行正式报告，且会话只暴露安全 MIME 元数据", async () => {
@@ -119,7 +120,7 @@ test("已创建会话可复用私有图片运行正式报告，且会话只暴�
   assert.equal(repository.runs[0]?.kind, "diagnosis");
   assert.equal(repository.runs[0]?.reasoning, "");
   assert.equal(repository.runs[0]?.rawResponse, "");
-  assert.deepEqual(repository.runs[0]?.promptVersions, ["diagnosis-single-stream.v1"]);
+  assert.deepEqual(repository.runs[0]?.promptVersions, ["diagnosis-single-stream.v2"]);
   assert.equal(progress.some((snapshot) => snapshot.modules.some((module) => module.status !== "succeeded" && module.result !== undefined)), false);
   assert.deepEqual(progress.at(-1)?.modules.map((module) => module.status), ["succeeded", "succeeded", "succeeded", "succeeded", "succeeded"]);
   assert.equal(progress.some((snapshot) => snapshot.thinking?.text === "调试思考"), true);
@@ -180,6 +181,8 @@ test("舌象报告在首次JSON无效时只修复一次并保存标准结果", a
   const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
   const result = await flow.analyze({ mode: "tongue", image: { mimeType: "image/jpeg", data: new Uint8Array([1, 2, 3]) } });
   assert.equal(result.report.summary.narrative, validSingleResponse.summary);
+  assert.equal(result.report.wellnessReferences[0]?.certainty, "uncertain");
+  assert.equal(result.report.wellnessReferences[0]?.notADiagnosis, true);
   assert.equal(provider.calls.length, 2);
   assert.equal(provider.calls[0]?.jsonSchema?.name, "diagnosis_single_response_v1");
   assert.match(String(provider.calls[0]?.messages[0]?.content), /"quality"/);

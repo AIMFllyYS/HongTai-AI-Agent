@@ -119,7 +119,7 @@ const REPORT_MODULE_IDS = [
 ] as const satisfies readonly StructuredGenerationModuleId[];
 
 const REPORT_PROMPT_VERSIONS = [DIAGNOSIS_SINGLE_PROMPT_VERSION] as const;
-const SINGLE_RESPONSE_KEYS = ["quality", "observation", "summary", "advice", "safety", "followUp"] as const;
+const SINGLE_RESPONSE_KEYS = ["quality", "observation", "summary", "wellnessReference", "advice", "safety", "followUp"] as const;
 const FIXED_DISCLAIMER = "本报告仅提供图片中可见状态的日常观察参考，不是疾病诊断，不提供患病概率，也不能替代专业检查。";
 
 interface DiagnosisSections {
@@ -134,6 +134,7 @@ function diagnosisSections(value: DiagnosisSingleResponse, mode: ObservationMode
   const usable = value.quality !== "unusable";
   const observationText = value.observation.trim();
   const advice = value.advice.trim();
+  const wellnessReference = value.wellnessReference.trim();
   const hasObservation = usable && Boolean(observationText);
   const visual: DiagnosisVisualObservations = {
     imageQuality: {
@@ -161,7 +162,13 @@ function diagnosisSections(value: DiagnosisSingleResponse, mode: ObservationMode
     },
   };
   const wellness: DiagnosisWellnessRecommendations = {
-    wellnessReferences: [],
+    wellnessReferences: hasObservation && wellnessReference ? [{
+      title: "传统望诊参考",
+      basisObservationIds: ["obs-1"],
+      statement: wellnessReference,
+      certainty: "uncertain",
+      notADiagnosis: true,
+    }] : [],
     recommendations: hasObservation && advice ? [{
       category: "monitoring",
       priority: "low",
@@ -260,6 +267,7 @@ export class DiagnosisFlow {
           case "quality": fields.quality = parsed.data as DiagnosisSingleResponse["quality"]; break;
           case "observation": fields.observation = parsed.data as string; break;
           case "summary": fields.summary = parsed.data as string; break;
+          case "wellnessReference": fields.wellnessReference = parsed.data as string; break;
           case "advice": fields.advice = parsed.data as string; break;
           case "safety": fields.safety = parsed.data as string; break;
           case "followUp": fields.followUp = parsed.data as string; break;
@@ -270,17 +278,19 @@ export class DiagnosisFlow {
         const ready = [
           has("quality") && has("observation"),
           has("summary"),
-          has("quality") && has("observation") && has("advice"),
+          has("quality") && has("observation") && has("wellnessReference") && has("advice"),
           has("quality") && has("safety"),
           has("followUp"),
         ][index];
         if (!ready) return undefined;
         if (fields.quality === "unusable" && fields.observation) throw structuredIssue("图片不可用时不能展示可见观察");
         if (fields.quality === "unusable" && fields.advice) throw structuredIssue("图片不可用时不能展示无依据建议");
+        if (fields.quality === "unusable" && fields.wellnessReference) throw structuredIssue("图片不可用时不能展示传统状态参考");
         const sections = diagnosisSections({
           quality: fields.quality ?? "unusable",
           observation: fields.observation ?? "",
           summary: fields.summary ?? "",
+          wellnessReference: fields.wellnessReference ?? "",
           advice: fields.advice ?? "",
           safety: fields.safety ?? "安全说明正在生成。",
           followUp: fields.followUp ?? "",

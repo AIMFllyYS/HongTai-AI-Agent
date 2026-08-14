@@ -64,9 +64,9 @@ test("Android device settings bridge exposes build identity without creating a s
 test("application information explains recent improvements in product language", () => {
   const page = read("apps/web/src/pages/ApplicationInfoPage.tsx");
 
-  assert.match(page, /舌象与面部观察.*边生成边显示内容/u);
-  assert.match(page, /内容拆解.*一次整理完整结果/u);
-  assert.match(page, /任务和报告.*自动更新.*不需要手动刷新/u);
-  assert.match(page, /临时思考.*不会保存到任务、报告、模板或历史记录/u);
+  assert.match(page, /舌象与面部观察.*五脏六腑.*传统观察知识参考/u);
+  assert.match(page, /齿痕、白苔和舌红.*不再用单一特征直接下结论/u);
+  assert.match(page, /不确定参考.*单张图片不能用于疾病诊断/u);
+  assert.match(page, /光线、滤镜或清晰度不足.*建议重拍/u);
   assert.doesNotMatch(page, /紧凑结构化生成|字段校验|整文校正|半截 JSON|私有地址/u);
 });
