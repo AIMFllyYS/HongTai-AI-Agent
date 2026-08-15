@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { resolve } from "node:path";
 
-import { diagnosisSinglePrompt } from "../packages/ai/src/prompts/diagnosis-report-single";
+import { diagnosisSinglePrompt, diagnosisSingleRepairPrompt } from "../packages/ai/src/prompts/diagnosis-report-single";
+import { diagnosisConversationPrompt } from "../packages/ai/src/prompts/diagnosis-conversation";
 import { FIVE_ORGANS_OBSERVATION_KNOWLEDGE } from "../packages/ai/src/knowledge/five-organs-observation.generated";
 import { diagnosisSingleResponseSchema } from "../packages/ai/src/schemas/diagnosis-report";
 
@@ -23,19 +24,38 @@ test("五脏六腑观察知识库以独立 Markdown 为唯一权威并完整注�
 
   const tonguePrompt = diagnosisSinglePrompt("tongue");
   const facePrompt = diagnosisSinglePrompt("face");
-  assert.match(tonguePrompt, /以下 Markdown 是本次唯一允许使用的传统观察知识上下文/u);
+  assert.match(tonguePrompt, /以下Markdown只约束五脏六腑/u);
   assert.ok(tonguePrompt.includes(markdown));
   assert.ok(facePrompt.includes(markdown));
-  assert.match(tonguePrompt, /不能把齿痕直接等同于湿气重/u);
-  assert.match(tonguePrompt, /wellnessReference/u);
+  assert.equal(tonguePrompt.split(markdown).length, 2, "知识库只注入一次");
+  assert.match(tonguePrompt, /单一齿痕、白苔或舌红直接等同于湿气重、胃寒或心火旺/u);
+  assert.match(tonguePrompt, /wellnessReferences/u);
+  assert.match(tonguePrompt, /舌诊专属观察重点/u);
+  assert.doesNotMatch(tonguePrompt, /面诊专属观察重点/u);
+  assert.match(facePrompt, /面诊专属观察重点/u);
+  assert.doesNotMatch(facePrompt, /舌诊专属观察重点/u);
+  assert.ok(tonguePrompt.indexOf("思考基础规范") < tonguePrompt.indexOf("舌诊专属观察重点"));
+  assert.ok(tonguePrompt.indexOf("舌诊专属观察重点") < tonguePrompt.indexOf(markdown));
+  assert.ok(tonguePrompt.indexOf(markdown) < tonguePrompt.indexOf("最高优先级再次确认"));
+  assert.doesNotMatch(tonguePrompt, /\$schema|additionalProperties|definitions/u);
+  assert.match(tonguePrompt, /不得讨论JSON字段、括号、引号、转义、Schema、格式修复或Token/u);
+
+  const repairPrompt = diagnosisSingleRepairPrompt("不是JSON", "tongue");
+  assert.doesNotMatch(repairPrompt, /全国标准信息公共服务平台|五脏六腑观察知识库/u);
+  assert.match(repairPrompt, /八个字段齐全/u);
 });
 
 test("紧凑诊察响应只允许把传统关联作为不确定的日常参考", () => {
   const valid = diagnosisSingleResponseSchema.safeParse({
     quality: "good",
-    observation: "舌边可见浅齿痕，舌体略显胖。",
+    qualityNote: "目标完整清晰。",
+    observations: [
+      { category: "tongue_shape", region: "舌边", label: "浅齿痕", description: "舌边可见数处浅齿痕。" },
+      { category: "tongue_body", region: "舌体", label: "形态", description: "舌体在画面中略显胖。" },
+      { category: "tongue_coating", region: "舌中", label: "薄白苔", description: "舌中可见薄白苔。" },
+    ],
     summary: "当前图片可用于记录舌形变化。",
-    wellnessReference: "传统观察中，这组可见特征可能与脾气不足、津液运化失常一类状态同时出现；单张图片不能据此诊断。",
+    wellnessReferences: [{ title: "传统观察方向", statement: "传统观察中，这组特征可能与脾气不足、津液运化失常一类状态同时出现。" }],
     advice: "在相同光线下记录变化，如有持续不适请咨询专业人员。",
     safety: "这不是疾病诊断，也不能替代四诊合参。",
     followUp: "近期是否同时有食欲、腹胀或大便变化？",
@@ -44,9 +64,10 @@ test("紧凑诊察响应只允许把传统关联作为不确定的日常参考",
 
   const unusable = diagnosisSingleResponseSchema.safeParse({
     quality: "unusable",
-    observation: "",
+    qualityNote: "图片严重失焦。",
+    observations: [],
     summary: "图片不可用。",
-    wellnessReference: "湿气重。",
+    wellnessReferences: [{ title: "错误结论", statement: "可能是湿气重。" }],
     advice: "",
     safety: "请重新拍摄。",
     followUp: "",
@@ -55,12 +76,51 @@ test("紧凑诊察响应只允许把传统关联作为不确定的日常参考",
 
   const overconfident = diagnosisSingleResponseSchema.safeParse({
     quality: "good",
-    observation: "舌边可见齿痕。",
+    qualityNote: "目标清晰。",
+    observations: [
+      { category: "tongue_shape", region: "舌边", label: "齿痕", description: "舌边可见齿痕。" },
+      { category: "tongue_body", region: "舌体", label: "颜色", description: "舌体颜色可辨。" },
+      { category: "tongue_coating", region: "舌中", label: "舌苔", description: "舌苔分布可辨。" },
+    ],
     summary: "记录舌形。",
-    wellnessReference: "齿痕说明湿气重。",
+    wellnessReferences: [{ title: "错误结论", statement: "齿痕说明湿气重。" }],
     advice: "保持相同光线记录。",
     safety: "如有不适请咨询专业人员。",
     followUp: "",
   });
   assert.equal(overconfident.success, false);
+});
+
+test("清晰、有限和不可用图片遵守各自的观察数量边界", () => {
+  const base = {
+    summary: "图片可用于记录。",
+    wellnessReferences: [],
+    advice: "保持相同条件记录。",
+    safety: "单张图片不能替代专业检查。",
+    followUp: "",
+  };
+  const observation = { category: "facial_color" as const, region: "面部", label: "色泽", description: "整体色泽可辨。" };
+  assert.equal(diagnosisSingleResponseSchema.safeParse({ ...base, quality: "good", qualityNote: "清晰。", observations: [observation, observation, observation] }).success, true);
+  assert.equal(diagnosisSingleResponseSchema.safeParse({ ...base, quality: "good", qualityNote: "清晰。", observations: [observation, observation] }).success, false);
+  assert.equal(diagnosisSingleResponseSchema.safeParse({ ...base, quality: "limited", qualityNote: "略偏暗但可辨。", observations: [observation] }).success, true);
+  assert.equal(diagnosisSingleResponseSchema.safeParse({ ...base, quality: "limited", qualityNote: "略偏暗但可辨。", observations: [] }).success, false);
+});
+
+test("后续对话只继承安全边界而不继承JSON输出约束", () => {
+  const prompt = diagnosisConversationPrompt({
+    schemaVersion: "diagnosis-report.v1",
+    mode: "face",
+    promptVersion: "diagnosis-single-stream.v3",
+    imageQuality: { usable: true, overallQuality: "good", limitations: [], retakeSuggestions: [] },
+    observations: [{ id: "obs-1", category: "facial_color", region: "面部", label: "色泽", description: "色泽较均匀", visibility: "clear", evidenceDescription: "色泽较均匀" }],
+    summary: { headline: "面部可见状态摘要", keyPoints: ["色泽较均匀"], narrative: "用于日常记录。" },
+    wellnessReferences: [],
+    recommendations: [],
+    safetyGuidance: { level: "none", reasons: [], recommendedAction: "如有持续不适请咨询专业人员。" },
+    limitations: ["单张图片不能替代专业检查。"],
+    disclaimer: "本报告不是疾病诊断。",
+    followUpQuestions: [],
+  });
+  assert.match(prompt, /回复自然中文文本，不输出JSON/u);
+  assert.doesNotMatch(prompt, /八个顶层字段|最终结果只输出一个JSON对象/u);
 });

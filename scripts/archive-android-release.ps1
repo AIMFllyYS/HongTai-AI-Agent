@@ -7,6 +7,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version 2.0
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 
 if ($VersionName -notmatch '^[0-9]+[.][0-9]+[.][0-9]+$') {
   throw "VersionName must use MAJOR.MINOR.PATCH"

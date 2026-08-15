@@ -29,9 +29,14 @@ class HarnessProvider implements AiProvider {
     const content = request.output === "json"
       ? JSON.stringify({
           quality: "good",
-          observation: "图片中的舌部区域清晰可见。",
+          qualityNote: "目标完整清晰。",
+          observations: [
+            { category: "tongue_body", region: "舌体", label: "舌色", description: "图片中的舌体颜色清晰可见。" },
+            { category: "tongue_coating", region: "舌中", label: "舌苔", description: "舌中舌苔分布清晰可见。" },
+            { category: "tongue_moisture", region: "舌面", label: "润泽", description: "舌面润泽状态清晰可见。" },
+          ],
           summary: report.summary.narrative,
-          wellnessReference: "传统观察中，这组特征可能作为日常记录线索；单张图片不能据此诊断。",
+          wellnessReferences: [{ title: "传统观察参考", statement: "传统观察中，这组特征可能作为日常记录线索。" }],
           advice: "保持相近光线继续记录。",
           safety: report.safetyGuidance.recommendedAction,
           followUp: report.followUpQuestions[0],

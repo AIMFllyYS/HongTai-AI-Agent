@@ -43,19 +43,19 @@ test("archiving is idempotent for identical bytes and rejects a conflicting over
   const temporaryRoot = mkdtempSync(join(tmpdir(), "hongtai-release-archive-"));
   const sourceApk = join(temporaryRoot, "app-release.apk");
   const archiveRoot = join(temporaryRoot, "archive");
-  const expectedApk = join(archiveRoot, "HongTai-AI-Agent-release-v0.1.11.apk");
+  const expectedApk = join(archiveRoot, "HongTai-AI-Agent-release-v0.1.12.apk");
 
   try {
     writeFileSync(sourceApk, "first-release-bytes", "utf8");
-    invokeArchive(sourceApk, "0.1.11", archiveRoot);
+    invokeArchive(sourceApk, "0.1.12", archiveRoot);
     assert.equal(readFileSync(expectedApk, "utf8"), "first-release-bytes");
 
-    invokeArchive(sourceApk, "0.1.11", archiveRoot);
+    invokeArchive(sourceApk, "0.1.12", archiveRoot);
     assert.equal(readFileSync(expectedApk, "utf8"), "first-release-bytes");
 
     writeFileSync(sourceApk, "different-release-bytes", "utf8");
     assert.throws(
-      () => invokeArchive(sourceApk, "0.1.11", archiveRoot),
+      () => invokeArchive(sourceApk, "0.1.12", archiveRoot),
       /Refusing to overwrite archived APK with different bytes/u,
     );
     assert.equal(readFileSync(expectedApk, "utf8"), "first-release-bytes");
