@@ -82,13 +82,15 @@ android {
   namespace = "com.hongtai.aiagent"
   compileSdk = 36
   ndkVersion = "28.2.13676358"
+  // Instrumentation targets the same signed Release variant as the only product path.
+  testBuildType = "release"
 
   defaultConfig {
     applicationId = "com.hongtai.aiagent"
     minSdk = 24
     targetSdk = 36
-    versionCode = 16
-    versionName = "0.1.8"
+    versionCode = 20
+    versionName = "0.1.12"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     ndk {

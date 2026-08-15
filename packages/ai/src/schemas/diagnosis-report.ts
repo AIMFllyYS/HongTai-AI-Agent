@@ -80,19 +80,49 @@ export const diagnosisFollowUpQuestionsSchema = z.object({
 
 export const diagnosisSingleResponseFieldSchemas = {
   quality: z.enum(["good", "limited", "unusable"]),
-  observation: z.string().trim().max(2000),
+  qualityNote: z.string().trim().max(1000),
+  observations: z.array(z.object({
+    category: observationCategorySchema,
+    region: z.string().trim().min(1).max(200),
+    label: z.string().trim().min(1).max(200),
+    description: z.string().trim().min(1).max(1000),
+  }).strict()).max(6),
   summary: z.string().trim().max(2000),
+  wellnessReferences: z.array(z.object({
+    title: z.string().trim().min(1).max(200),
+    statement: z.string().trim().min(1).max(2000),
+  }).strict()).max(3),
   advice: z.string().trim().max(2000),
   safety: z.string().trim().min(1).max(2000),
   followUp: z.string().trim().max(500),
 } as const;
 
 export const diagnosisSingleResponseSchema = z.object(diagnosisSingleResponseFieldSchemas).strict().superRefine((value, context) => {
-  if (value.quality === "unusable" && value.observation) {
-    context.addIssue({ code: "custom", path: ["observation"], message: "图片不可用时不能输出可见观察" });
+  if (value.quality === "good" && value.observations.length < 3) {
+    context.addIssue({ code: "custom", path: ["observations"], message: "清晰图片应输出3至6条独立观察" });
+  }
+  if (value.quality === "limited" && value.observations.length < 1) {
+    context.addIssue({ code: "custom", path: ["observations"], message: "有限可用图片应保留至少一条可见观察" });
+  }
+  if (value.quality !== "good" && !value.qualityNote) {
+    context.addIssue({ code: "custom", path: ["qualityNote"], message: "有限或不可用图片必须说明具体质量限制" });
+  }
+  if (value.quality === "unusable" && value.observations.length > 0) {
+    context.addIssue({ code: "custom", path: ["observations"], message: "图片不可用时不能输出可见观察" });
   }
   if (value.quality === "unusable" && value.advice) {
     context.addIssue({ code: "custom", path: ["advice"], message: "图片不可用时不能输出无依据建议" });
+  }
+  if (value.quality === "unusable" && value.wellnessReferences.length > 0) {
+    context.addIssue({ code: "custom", path: ["wellnessReferences"], message: "图片不可用时不能输出传统状态参考" });
+  }
+  value.wellnessReferences.forEach((item, index) => {
+    if (!/(可能|有时|不确定)/u.test(item.statement)) {
+      context.addIssue({ code: "custom", path: ["wellnessReferences", index, "statement"], message: "传统状态参考必须明确表达不确定性" });
+    }
+  });
+  if (value.quality === "unusable" && value.summary && !/(不可用|无法|重拍|不足)/u.test(value.summary)) {
+    context.addIssue({ code: "custom", path: ["summary"], message: "图片不可用时摘要只能说明限制与重拍" });
   }
 });
 
@@ -103,6 +133,8 @@ const diagnosisReportBaseSchema = z.object({
     z.literal("diagnosis-initial.v1"),
     z.literal("diagnosis-modular.v1"),
     z.literal("diagnosis-single-stream.v1"),
+    z.literal("diagnosis-single-stream.v2"),
+    z.literal("diagnosis-single-stream.v3"),
   ]),
   imageQuality: diagnosisVisualObservationsSchema.shape.imageQuality,
   observations: diagnosisVisualObservationsSchema.shape.observations,

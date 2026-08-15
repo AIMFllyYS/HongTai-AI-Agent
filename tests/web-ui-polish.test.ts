@@ -64,9 +64,10 @@ test("Android device settings bridge exposes build identity without creating a s
 test("application information explains recent improvements in product language", () => {
   const page = read("apps/web/src/pages/ApplicationInfoPage.tsx");
 
-  assert.match(page, /舌象与面部观察.*边生成边显示内容/u);
-  assert.match(page, /内容拆解.*一次整理完整结果/u);
-  assert.match(page, /任务和报告.*自动更新.*不需要手动刷新/u);
-  assert.match(page, /临时思考.*不会保存到任务、报告、模板或历史记录/u);
+  assert.match(page, /优化清晰图片的识别与质量判断.*继续分析可见部分/u);
+  assert.match(page, /舌象与面部报告.*多条独立观察/u);
+  assert.match(page, /深度思考.*图片证据、知识组合和拍摄干扰/u);
+  assert.match(page, /湿气、胃寒、心火.*多个条件/u);
+  assert.match(page, /后续追问.*自然回答/u);
   assert.doesNotMatch(page, /紧凑结构化生成|字段校验|整文校正|半截 JSON|私有地址/u);
 });

@@ -5,6 +5,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version 2.0
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 
 function Resolve-CanonicalPath {
   param([Parameter(Mandatory = $true)][string] $Path)

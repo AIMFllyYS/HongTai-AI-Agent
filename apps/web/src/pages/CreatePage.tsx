@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { issueFromAppError, TaskError } from "@hongtai/core";
-import type { AppRuntime, AppTaskRecord, ProductionMode, ProductionProjectRecord, TaskIssue } from "@hongtai/core";
+import type { AppRuntime, AppTaskRecord, ProductionMode, ProductionProjectRecord, ProductionTextPreset, TaskIssue } from "@hongtai/core";
 
 import type { CreateViewModel } from "../data/visual-types";
 import { AppShell } from "../components/AppShell";
@@ -55,6 +55,8 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
   const [brief, setBrief] = useState("");
   const [mode, setMode] = useState<ProductionMode>("montage");
   const [avatarScript, setAvatarScript] = useState("");
+  const [headlineText, setHeadlineText] = useState("");
+  const [textPreset, setTextPreset] = useState<ProductionTextPreset>("classic_top");
   const [duration, setDuration] = useState(30);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState("");
@@ -121,6 +123,8 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
       brief,
       targetDurationSeconds: duration,
       mode,
+      headlineText: headlineText || undefined,
+      textPreset,
       ...(mode === "avatar" ? { avatarScript } : {}),
     }));
   };
@@ -170,6 +174,15 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
               </div>
               <label className="field-label" htmlFor="production-brief">{mode === "avatar" ? "视频标题与制作需求" : "你的经营需求"}</label>
               <textarea id="production-brief" onChange={(event) => setBrief(event.target.value)} placeholder={mode === "avatar" ? "例如：介绍门店的新服务，语气自然可信，不夸大承诺。" : "例如：面向附近上班族，突出真实环境、服务过程和到店体验，不夸大承诺。"} rows={4} value={brief} />
+              <label className="field-label" htmlFor="production-headline">主文字（可选）</label>
+              <input id="production-headline" maxLength={24} onChange={(event) => setHeadlineText(event.target.value)} placeholder="例如：你出时间，我出货" value={headlineText} />
+              <small className="production-field-help">留空时由 AI 根据你的真实需求生成；填写后成片会逐字使用。</small>
+              <label className="field-label" htmlFor="production-text-preset">文字预设</label>
+              <select id="production-text-preset" onChange={(event) => setTextPreset(event.target.value as ProductionTextPreset)} value={textPreset}>
+                <option value="classic_top">经典顶部白字</option>
+                <option value="clean_card">简洁白底卡片</option>
+                <option value="aqua_accent">青绿色强调</option>
+              </select>
               {mode === "avatar" ? <><label className="field-label" htmlFor="production-avatar-script">数字人口播稿</label><textarea id="production-avatar-script" maxLength={360} onChange={(event) => setAvatarScript(event.target.value)} placeholder="请粘贴与上传数字人视频原声一致的口播稿。它会在本地切分为短字幕，不会替换原视频声音。" rows={5} value={avatarScript} /></> : null}
               <label className="field-label" htmlFor="production-duration">目标时长</label>
               <select id="production-duration" onChange={(event) => setDuration(Number(event.target.value))} value={duration}>

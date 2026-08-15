@@ -20,6 +20,8 @@ class ProductionPlanParserTest {
     assertEquals(20_000L, plan.durationMs)
     assertEquals(8_000L, plan.shots.first().durationMs)
     assertEquals(ProductionAssetKind.IMAGE, plan.shots.first().input.kind)
+    assertEquals("看得见的真实服务", plan.textOverlay.primaryText)
+    assertEquals("aqua_accent", plan.textOverlay.preset)
   }
 
   @Test
@@ -54,11 +56,12 @@ class ProductionPlanParserTest {
 
   private fun validPlan(): String = """
     {
-      "schemaVersion":"production-plan.v1",
+      "schemaVersion":"production-plan.v2",
       "source":{"analysisTaskId":"task-1"},
       "title":"门店真实体验",
       "settings":{"width":720,"height":1280,"fps":30,"durationSeconds":20},
       "audio":{"voiceLocale":"zh-CN","speechRate":1,"backgroundMusicAssetId":null,"backgroundMusicVolume":0},
+      "textOverlay":{"primaryText":"看得见的真实服务","secondaryText":"先看环境，再看过程","preset":"aqua_accent"},
       "shots":[
         {"order":1,"assetId":"image-1","durationSeconds":8,"narration":"先看环境。","caption":"真实环境","fit":"cover"},
         {"order":2,"assetId":"video-1","durationSeconds":12,"narration":"再看服务。","caption":"服务过程","fit":"contain"}

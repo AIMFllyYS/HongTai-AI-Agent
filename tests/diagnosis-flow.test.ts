@@ -29,8 +29,14 @@ const validReport: DiagnosisReportV1 = {
 
 const validSingleResponse = {
   quality: "good" as const,
-  observation: "舌体颜色较均匀，当前图片中的舌部区域清晰可见。",
+  qualityNote: "目标完整、对焦清晰，颜色与形态基本可辨。",
+  observations: [
+    { category: "tongue_body" as const, region: "舌体", label: "舌色", description: "舌体整体颜色较均匀。" },
+    { category: "tongue_coating" as const, region: "舌中", label: "舌苔", description: "舌中可见薄白苔，分布较均匀。" },
+    { category: "tongue_moisture" as const, region: "舌面", label: "润泽", description: "舌面可见轻度润泽感。" },
+  ],
   summary: "本次图片可用于日常可见状态记录，不代表疾病诊断。",
+  wellnessReferences: [{ title: "传统望诊参考", statement: "传统观察中，这组可见特征可能作为日常状态记录线索。" }],
   advice: "保持相同光线和角度定期记录，并结合近期作息观察变化。",
   safety: "单张图片不能替代专业检查；如有持续不适，请咨询专业人员。",
   followUp: "最近作息是否规律？",
@@ -85,9 +91,10 @@ test("诊察流程保留原生图片 URI，不将其转成 React Base64", async 
   assert.doesNotMatch(JSON.stringify(content), /base64/);
   assert.equal(provider.calls.length, 1);
   assert.equal(provider.calls[0]?.model, "vision");
-  assert.equal(provider.calls[0]?.maxOutputTokens, 2_048);
-  assert.equal(provider.calls[0]?.jsonSchema?.name, "diagnosis_single_response_v1");
-  assert.equal(repository.report?.promptVersion, "diagnosis-single-stream.v1");
+  assert.equal(provider.calls[0]?.maxOutputTokens, 4_096);
+  assert.equal(provider.calls[0]?.jsonSchema?.name, "diagnosis_single_response_v2");
+  assert.equal(repository.report?.promptVersion, "diagnosis-single-stream.v3");
+  assert.deepEqual(repository.report?.observations.map((item) => item.id), ["obs-1", "obs-2", "obs-3"]);
 });
 
 test("已创建会话可复用私有图片运行正式报告，且会话只暴露安全 MIME 元数据", async () => {
@@ -113,19 +120,20 @@ test("已创建会话可复用私有图片运行正式报告，且会话只暴�
   assert.doesNotMatch(JSON.stringify(result.session), /content:\/\/|normalized-image/);
   assert.equal(provider.calls.length, 2, "one whole-document repair is the only additional call");
   assert.deepEqual(provider.calls.map((call) => call.model), ["vision", "text"]);
-  assert.deepEqual(provider.calls.map((call) => call.jsonSchema?.name), ["diagnosis_single_response_v1", "diagnosis_single_response_v1"]);
+  assert.deepEqual(provider.calls.map((call) => call.jsonSchema?.name), ["diagnosis_single_response_v2", "diagnosis_single_response_v2"]);
   assert.match(JSON.stringify(provider.calls[0]?.messages), /content:\/\/app\.private\/diagnosis\/session-existing\/image/u);
   assert.doesNotMatch(JSON.stringify(provider.calls[1]?.messages), /content:\/\/|image_uri|image_url|base64/u);
+  assert.doesNotMatch(JSON.stringify(provider.calls[1]?.messages), /全国标准信息公共服务平台|五脏六腑观察知识库/u);
   assert.equal(repository.runs[0]?.kind, "diagnosis");
   assert.equal(repository.runs[0]?.reasoning, "");
   assert.equal(repository.runs[0]?.rawResponse, "");
-  assert.deepEqual(repository.runs[0]?.promptVersions, ["diagnosis-single-stream.v1"]);
+  assert.deepEqual(repository.runs[0]?.promptVersions, ["diagnosis-single-stream.v3"]);
   assert.equal(progress.some((snapshot) => snapshot.modules.some((module) => module.status !== "succeeded" && module.result !== undefined)), false);
   assert.deepEqual(progress.at(-1)?.modules.map((module) => module.status), ["succeeded", "succeeded", "succeeded", "succeeded", "succeeded"]);
   assert.equal(progress.some((snapshot) => snapshot.thinking?.text === "调试思考"), true);
   assert.equal(progress.at(-1)?.thinking?.text, "调试思考调试思考");
   assert.doesNotMatch(JSON.stringify(repository.report), /调试思考/);
-  assert.doesNotMatch(JSON.stringify(repository.runs), /调试思考|不是JSON|舌体颜色较均匀/u);
+  assert.doesNotMatch(JSON.stringify(repository.runs), /调试思考|不是JSON|舌体整体颜色较均匀/u);
 });
 
 test("会话图片 MIME 与私有图片不一致时不调用视觉模型", async () => {
@@ -180,8 +188,12 @@ test("舌象报告在首次JSON无效时只修复一次并保存标准结果", a
   const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
   const result = await flow.analyze({ mode: "tongue", image: { mimeType: "image/jpeg", data: new Uint8Array([1, 2, 3]) } });
   assert.equal(result.report.summary.narrative, validSingleResponse.summary);
+  assert.equal(result.report.wellnessReferences[0]?.certainty, "uncertain");
+  assert.equal(result.report.wellnessReferences[0]?.notADiagnosis, true);
+  assert.match(result.report.wellnessReferences[0]?.statement ?? "", /单张图片不能据此诊断/u);
+  assert.equal(result.report.observations.length, 3);
   assert.equal(provider.calls.length, 2);
-  assert.equal(provider.calls[0]?.jsonSchema?.name, "diagnosis_single_response_v1");
+  assert.equal(provider.calls[0]?.jsonSchema?.name, "diagnosis_single_response_v2");
   assert.match(String(provider.calls[0]?.messages[0]?.content), /"quality"/);
   assert.match(String(provider.calls[1]?.messages[0]?.content), /校正/u);
   assert.equal(repository.runs.length, 1);
@@ -200,6 +212,7 @@ test("后续对话保存文本消息信封且不把reasoning写入上下文", as
   assert.equal(reply.content, "建议结合规律作息继续观察。");
   assert.deepEqual(repository.messages.map((message) => message.role), ["user", "assistant"]);
   assert.doesNotMatch(JSON.stringify(provider.calls[0]?.messages), /调试思考/);
+  assert.doesNotMatch(String(provider.calls[0]?.messages[0]?.content), /最终结果只输出一个JSON对象|八个顶层字段/u);
   assert.equal(repository.runs[0]?.reasoning, "");
   assert.equal(repository.runs[0]?.rawResponse, "");
 });
@@ -228,10 +241,58 @@ test("上下文超过窗口80%时摘要较早消息并保留最近六条", async
 
 test("图片不可用时Schema拒绝模型虚构可见观察项", async () => {
   const repository = new MemoryRepository();
-  const invalid = JSON.stringify({ ...validSingleResponse, quality: "unusable", observation: "虚构观察", advice: "虚构建议" });
+  const invalid = JSON.stringify({ ...validSingleResponse, quality: "unusable", qualityNote: "严重失焦。", advice: "虚构建议" });
   const provider = new SequenceProvider([invalid, invalid]);
   const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
   await assert.rejects(() => flow.analyze({ mode: "tongue", image: { mimeType: "image/jpeg", data: new Uint8Array([1]) } }), /修复/);
+});
+
+test("有限可用图片继续输出可见观察并展示具体质量限制", async () => {
+  const repository = new MemoryRepository();
+  const limited = {
+    ...validSingleResponse,
+    quality: "limited" as const,
+    qualityNote: "画面略偏暗，但舌体轮廓和舌苔仍可辨。",
+    observations: [validSingleResponse.observations[0]],
+    wellnessReferences: [],
+  };
+  const flow = new DiagnosisFlow({ provider: new SequenceProvider([JSON.stringify(limited)]), repository, contextWindowTokens: 32_000 });
+  const result = await flow.analyze({ mode: "tongue", image: { mimeType: "image/jpeg", data: new Uint8Array([1]) } });
+  assert.equal(result.report.imageQuality.overallQuality, "limited");
+  assert.deepEqual(result.report.imageQuality.limitations, [limited.qualityNote]);
+  assert.equal(result.report.observations.length, 1);
+  assert.equal(result.report.observations[0]?.visibility, "limited");
+});
+
+test("图片真正不可用时不生成观察、传统参考或建议", async () => {
+  const repository = new MemoryRepository();
+  const unusable = {
+    quality: "unusable" as const,
+    qualityNote: "目标区域严重失焦，无法辨认颜色和形态。",
+    observations: [],
+    summary: "当前图片不可用，请重新拍摄。",
+    wellnessReferences: [],
+    advice: "",
+    safety: "请在自然光下重新拍摄；如有持续不适请咨询专业人员。",
+    followUp: "能否重新拍摄一张对焦清晰的图片？",
+  };
+  const flow = new DiagnosisFlow({ provider: new SequenceProvider([JSON.stringify(unusable)]), repository, contextWindowTokens: 32_000 });
+  const result = await flow.analyze({ mode: "face", image: { mimeType: "image/jpeg", data: new Uint8Array([1]) } });
+  assert.equal(result.report.imageQuality.usable, false);
+  assert.deepEqual(result.report.observations, []);
+  assert.deepEqual(result.report.wellnessReferences, []);
+  assert.deepEqual(result.report.recommendations, []);
+});
+
+test("面诊响应不能夹带舌诊观察分类", async () => {
+  const repository = new MemoryRepository();
+  const provider = new SequenceProvider([JSON.stringify(validSingleResponse), JSON.stringify(validSingleResponse)]);
+  const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
+  await assert.rejects(
+    () => flow.analyze({ mode: "face", image: { mimeType: "image/jpeg", data: new Uint8Array([1]) } }),
+    /修复/u,
+  );
+  assert.equal(provider.calls.length, 2);
 });
 
 test("旧 diagnosis-initial.v1 报告仍保持可读取兼容性", async () => {

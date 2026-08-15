@@ -6,13 +6,16 @@ import {
   type AiGenerateRequest,
   type AiProvider,
   type ProductionPlanInput,
-  type ProductionPlanResultV1,
+  type ProductionPlanResultV2,
 } from "../packages/ai/src/index";
 
 const input: ProductionPlanInput = {
   analysisTaskId: "task-1",
   brief: "为社区门店制作一条可信、克制的到店介绍视频",
   mode: "montage",
+  originalSourceText: "我在济南寻找三到五位伙伴一起合作，我提供场地和货品，你负责投入时间。",
+  headlineText: "看得见的真实服务",
+  textPreset: "classic_top",
   targetDurationSeconds: 20,
   analysis: {
     schemaVersion: "content-analysis.v1",
@@ -34,13 +37,14 @@ const input: ProductionPlanInput = {
   ],
 };
 
-function plan(assetId = "asset-image"): ProductionPlanResultV1 {
+function plan(assetId = "asset-image"): ProductionPlanResultV2 {
   return {
-    schemaVersion: "production-plan.v1",
+    schemaVersion: "production-plan.v2",
     source: { analysisTaskId: "task-1" },
     title: "看得见的门店服务",
     settings: { width: 720, height: 1280, fps: 30, durationSeconds: 20 },
     audio: { voiceLocale: "zh-CN", speechRate: 1, backgroundMusicAssetId: null, backgroundMusicVolume: 0 },
+    textOverlay: { primaryText: "看得见的真实服务", secondaryText: "过程透明，表达克制", preset: "classic_top" },
     shots: [
       { order: 1, assetId, durationSeconds: 8, narration: "第一次到店，不知道服务过程是否适合自己？", caption: "先看清服务过程", fit: "cover" },
       { order: 2, assetId: "asset-video", durationSeconds: 12, narration: "我们把真实步骤逐一呈现，欢迎到店进一步了解。", caption: "真实步骤逐一呈现", fit: "cover" },
@@ -71,9 +75,23 @@ test("制作规划发现虚构素材时只修复一次并返回可执行计划",
   const result = await flow.run(input);
 
   assert.equal(provider.calls.length, 2);
-  assert.equal(provider.calls[0]?.jsonSchema?.name, "production_plan_v1");
-  assert.match(String(provider.calls[0]?.messages[0]?.content), /production-plan\.v1/u);
+  assert.equal(provider.calls[0]?.jsonSchema?.name, "production_plan_v2");
+  assert.match(String(provider.calls[0]?.messages[0]?.content), /production-plan\.v2/u);
+  assert.match(String(provider.calls[0]?.messages[0]?.content), /爆款原文（参考，不可作为口播）/u);
+  assert.match(String(provider.calls[0]?.messages[0]?.content), /正式爆款拆解（参考，不可照抄）/u);
   assert.equal(result.shots[0]?.assetId, "asset-image");
+});
+
+test("制作规划发现连续照抄参考原文时会修复为原创口播", async () => {
+  const copied = plan();
+  copied.shots[0]!.narration = "我在济南寻找三到五位伙伴一起合作。";
+  const provider = new SequenceProvider([JSON.stringify(copied), JSON.stringify(plan())]);
+
+  const result = await new ProductionPlanningFlow({ provider }).run(input);
+
+  assert.equal(provider.calls.length, 2);
+  assert.equal(result.shots[0]?.narration, plan().shots[0]?.narration);
+  assert.match(String(provider.calls[1]?.messages[0]?.content), /原创性/u);
 });
 
 test("制作规划拒绝来源、镜头顺序或总时长不一致的计划", async () => {

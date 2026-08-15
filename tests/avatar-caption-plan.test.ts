@@ -10,6 +10,8 @@ test("数字人口播计划只使用原视频，并从用户口播稿生成连�
     brief: "自然介绍门店服务",
     targetDurationSeconds: 15,
     avatarScript: script,
+    headlineText: "门店真实介绍",
+    textPreset: "classic_top" as const,
     avatarAsset: { id: "avatar-1", durationSeconds: 18 },
   });
 
@@ -28,6 +30,8 @@ test("数字人口播不会把短视频拉长重播，也不会接受无法阅�
     brief: "自然介绍门店服务",
     targetDurationSeconds: 30,
     avatarScript: "欢迎来到我们的门店。这里展示真实服务过程，欢迎你安心了解。",
+    headlineText: "门店真实介绍",
+    textPreset: "classic_top" as const,
   } as const;
 
   assert.throws(

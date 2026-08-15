@@ -1,18 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { AiProvider, ProductionPlanResultV1 } from "@hongtai/ai";
-import type { ContentAnalysisRecord } from "@hongtai/core";
+import type { AiProvider, ProductionPlanResultV2 } from "@hongtai/ai";
+import type { ContentAnalysisRecord, TaskDetailRecord } from "@hongtai/core";
 
 import { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
 import { StandaloneProductionService } from "./standalone-production-service.js";
 
-const plan: ProductionPlanResultV1 = {
-  schemaVersion: "production-plan.v1",
+const plan: ProductionPlanResultV2 = {
+  schemaVersion: "production-plan.v2",
   source: { analysisTaskId: "task-1" },
   title: "门店真实体验",
   settings: { width: 720, height: 1280, fps: 30, durationSeconds: 20 },
   audio: { voiceLocale: "zh-CN", speechRate: 1, backgroundMusicAssetId: null, backgroundMusicVolume: 0 },
+  textOverlay: { primaryText: "真实门店", secondaryText: "看环境，也看过程", preset: "classic_top" },
   shots: [
     { order: 1, assetId: "asset-1", durationSeconds: 8, narration: "先看看真实环境。", caption: "真实环境", fit: "cover" },
     { order: 2, assetId: "asset-2", durationSeconds: 12, narration: "再了解完整服务过程。", caption: "服务过程", fit: "cover" },
@@ -38,6 +39,15 @@ const analysis: ContentAnalysisRecord = {
   updatedAt: "2026-08-08T00:00:00.000Z",
 };
 
+const taskDetail = {
+  task: { id: "task-1" },
+  content: {},
+  media: [],
+  transcript: { source: "asr", text: "原视频介绍了门店场地与合作方式，只作为创作结构参考。", segments: [] },
+  evidenceUnits: [],
+} as unknown as TaskDetailRecord;
+const tasks = { getDetail: async () => taskDetail };
+
 function deferred(): { readonly promise: Promise<void>; resolve(): void } {
   let resolve!: () => void;
   return { promise: new Promise<void>((done) => { resolve = done; }), resolve };
@@ -48,6 +58,7 @@ function harness(narration: "system" | "provider" = "system") {
   const ids = new Set<string>();
   const pickCalls: Array<{ readonly projectId: string; readonly maxItems: number; readonly selection?: "visual" | "avatar" }> = [];
   const renderCalls: Array<{ readonly projectId: string; readonly planJson: string; readonly mode?: "montage" | "avatar"; readonly narration?: "system" | "provider" }> = [];
+  const planningPrompts: string[] = [];
   const files = {
     ensureProduction: async ({ projectId }: { readonly projectId: string }) => { ids.add(projectId); },
     writeProductionText: async ({ projectId, relativePath, value }: { readonly projectId: string; readonly relativePath: string; readonly value: string; readonly replace: boolean }) => { values.set(`${projectId}/${relativePath}`, value); },
@@ -60,7 +71,10 @@ function harness(narration: "system" | "provider" = "system") {
     },
   };
   const provider: AiProvider = {
-    generate: async () => ({ content: JSON.stringify(plan), reasoning: "" }),
+    generate: async (request) => {
+      planningPrompts.push(String(request.messages[0]?.content ?? ""));
+      return { content: JSON.stringify(plan), reasoning: "" };
+    },
     transcribe: async () => "",
   };
   const native = {
@@ -84,17 +98,18 @@ function harness(narration: "system" | "provider" = "system") {
     files,
     native,
     analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, subscribe: () => () => undefined },
+    tasks,
     getProvider: async () => provider,
     getNarrationMode: async () => narration,
     toDisplayUri: (uri: string) => uri.replace("file:///private/", "capacitor://localhost/private/"),
     createProjectId: () => "project-1",
     now: () => new Date("2026-08-08T00:00:00.000Z"),
   });
-  return { create, values, ids, files, pickCalls, renderCalls };
+  return { create, values, ids, files, pickCalls, renderCalls, planningPrompts };
 }
 
 test("制作项目导入素材、生成计划和渲染结果后可在重启后恢复", async () => {
-  const { create, renderCalls } = harness();
+  const { create, renderCalls, planningPrompts } = harness();
   const service = create();
   await service.create({ analysisTaskId: "task-1", brief: "突出真实服务", targetDurationSeconds: 20 });
   const imported = await service.importAssets("project-1");
@@ -102,7 +117,9 @@ test("制作项目导入素材、生成计划和渲染结果后可在重启后�
 
   const ready = await service.generatePlan("project-1");
   assert.equal(ready.status, "ready");
-  assert.equal(ready.plan?.schemaVersion, "production-plan.v1");
+  assert.equal(ready.plan?.schemaVersion, "production-plan.v2");
+  assert.match(planningPrompts[0] ?? "", /原视频介绍了门店场地与合作方式/u);
+  assert.match(planningPrompts[0] ?? "", /仅供创作参考/u);
 
   const completed = await service.render("project-1");
   assert.equal(completed.status, "succeeded");
@@ -144,6 +161,7 @@ test("制作计划失败时保留项目和已导入素材", async () => {
     },
     native: { pickAssets: async () => ({ assets: [] }), render: async () => { throw new Error("unused"); }, probeTts: async () => undefined },
     analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, subscribe: () => () => undefined },
+    tasks,
     getProvider: async () => ({ generate: async () => { throw new Error("provider down"); }, transcribe: async () => "" }),
     getNarrationMode: async () => "system",
     toDisplayUri: (uri) => uri,
@@ -199,7 +217,7 @@ test("制作项目恢复中断的渲染状态并保留正式计划", async () =>
 
   const recovered = await service.get("project-1");
   assert.equal(recovered?.status, "failed");
-  assert.equal(recovered?.plan?.schemaVersion, "production-plan.v1");
+  assert.equal(recovered?.plan?.schemaVersion, "production-plan.v2");
   assert.equal(recovered?.issue?.code, "TASK_INTERRUPTED");
 });
 
@@ -241,6 +259,7 @@ test("制作服务按真实 Promise 区分系统素材选择、计划与渲染",
       probeTts: async () => undefined,
     },
     analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, subscribe: () => () => undefined },
+    tasks,
     getProvider: async () => ({
       generate: async () => {
         planEntered.resolve();
@@ -369,6 +388,7 @@ test("制作服务将原生媒体和 TTS 失败转换为可行动的稳定错误
       probeTts: async () => undefined,
     },
     analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, subscribe: () => () => undefined },
+    tasks,
     getProvider: async () => ({ generate: async () => ({ content: JSON.stringify(plan), reasoning: "" }), transcribe: async () => "" }),
     getNarrationMode: async () => "system",
     toDisplayUri: (uri) => uri,

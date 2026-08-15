@@ -50,6 +50,7 @@ class ProductionRendererInstrumentationTest {
       speechRate = 1f,
       backgroundMusic = null,
       backgroundMusicVolume = 0f,
+      textOverlay = ProductionTextOverlay("3-5人合伙", "你出时间，我出内容", "classic_top"),
       shots = narrations.mapIndexed { index, narration ->
         ProductionShot(index + 1, inputs[index % inputs.size], durations[index], narration, "真实镜头 ${index + 1}", "cover")
       },
@@ -79,6 +80,9 @@ class ProductionRendererInstrumentationTest {
     assertTrue(mimes.contains("audio/mp4a-latm"))
     assertEquals(720, displayWidth)
     assertEquals(1280, displayHeight)
+    val evidence = File(requireNotNull(context.getExternalFilesDir(null)), "instrumentation-production-output.mp4")
+    File(requireNotNull(android.net.Uri.parse(result.uri).path)).copyTo(evidence, overwrite = true)
+    assertEquals(result.sizeBytes, evidence.length())
   }
 }
 

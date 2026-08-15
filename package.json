@@ -9,6 +9,7 @@
   },
   "scripts": {
     "cli": "pnpm --filter @hongtai/cli dev",
+    "knowledge:generate": "node scripts/generate-diagnosis-knowledge-module.mjs",
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
