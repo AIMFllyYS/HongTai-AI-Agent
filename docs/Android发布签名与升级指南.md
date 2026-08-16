@@ -67,7 +67,7 @@ properties 文件由初始化脚本写成 UTF-8 无 BOM，Gradle 也显式按 UT
 
 ## 安装与升级边界
 
-Android Debug 证书与本 release 证书不是同一身份。已有 Debug/QA 安装不能直接升级为 release；当前公开推荐的 v0.1.4/code11 就属于 Debug 谱系。进入 release 谱系前需要先备份允许导出的数据、卸载 Debug 包，再安装 release，卸载会清除应用私有数据。不得把更高 `versionCode` 当作跨证书升级手段；Android 会先校验签名并拒绝不兼容覆盖。
+Android Debug 证书与本 release 证书不是同一身份。已有 Debug/QA 安装不能直接升级为 release。下载页当前推荐的版本以[当前能力与发布状态](当前能力与发布状态.md)为准，本文不复制版本号；早期的 v0.1.4 及更早公开包属于 Debug 谱系，从 v0.1.5 起进入 release 谱系。仍停留在 Debug 谱系的用户需要先备份允许导出的数据、卸载 Debug 包，再安装 release，卸载会清除应用私有数据。不得把更高 `versionCode` 当作跨证书升级手段；Android 会先校验签名并拒绝不兼容覆盖。
 
 进入 release 谱系后，后续候选必须使用同一 release 证书并递增 `versionCode`。普通升级命令是：
 
