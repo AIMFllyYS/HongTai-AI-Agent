@@ -149,6 +149,74 @@ test("制作项目导入素材、生成计划和渲染结果后可在重启后�
   assert.equal((await create().list()).length, 1);
 });
 
+test("渲染进度只转发原生 stage 和百分比，不补文案也不回传 message", async () => {
+  const values = new Map<string, string>();
+  const ids = new Set<string>();
+  let progressListener: ((event: {
+    readonly projectId: string;
+    readonly progress: number;
+    readonly stage: string;
+    readonly message?: string;
+  }) => void) | undefined;
+  const service = new StandaloneProductionService({
+    files: {
+      ensureProduction: async ({ projectId }) => { ids.add(projectId); },
+      writeProductionText: async ({ projectId, relativePath, value }) => { values.set(`${projectId}/${relativePath}`, value); },
+      readProductionText: async ({ projectId, relativePath }) => ({ value: values.get(`${projectId}/${relativePath}`) }),
+      listProductionIds: async () => ({ projectIds: [...ids] }),
+      deleteProductionFile: async () => undefined,
+      deleteProduction: async () => undefined,
+    },
+    native: {
+      pickAssets: async () => ({
+        assets: [
+          { id: "asset-1", uri: "file:///private/productions/project-1/inputs/asset-1.jpg", kind: "image", mimeType: "image/jpeg", displayName: "门店.jpg", sizeBytes: 100 },
+          { id: "asset-2", uri: "file:///private/productions/project-1/inputs/asset-2.mp4", kind: "video", mimeType: "video/mp4", displayName: "服务.mp4", sizeBytes: 200, durationSeconds: 12 },
+          { id: "asset-3", uri: "file:///private/productions/project-1/inputs/asset-3.png", kind: "image", mimeType: "image/png", displayName: "细节.png", sizeBytes: 50 },
+        ],
+      }),
+      consumeAssetOperation: async () => ({ status: "none" as const }),
+      probeTts: async () => undefined,
+      addListener: async (_eventName, listener) => {
+        progressListener = listener;
+        return { remove: async () => { progressListener = undefined; } };
+      },
+      render: async ({ projectId }) => {
+        progressListener?.({ projectId, progress: 5, stage: "synthesize_narration" });
+        progressListener?.({ projectId, progress: 35, stage: "export", message: "正在本地合成" });
+        progressListener?.({ projectId, progress: 40, stage: "unknown_future_stage" });
+        progressListener?.({ projectId: "other-project", progress: 99, stage: "saved" });
+        return { uri: "file:///private/productions/project-1/output.mp4", mimeType: "video/mp4", sizeBytes: 1_024, durationSeconds: 20 };
+      },
+    },
+    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
+    tasks,
+    getProvider: async () => ({ generate: async () => ({ content: JSON.stringify(plan), reasoning: "" }), transcribe: async () => "" }),
+    getNarrationMode: async () => "system",
+    toDisplayUri: (uri) => uri,
+    createProjectId: () => "project-1",
+    now: () => new Date("2026-08-08T00:00:00.000Z"),
+  });
+
+  await service.create({ analysisTaskId: "task-1", brief: "突出真实服务", targetDurationSeconds: 20 });
+  await service.importAssets("project-1");
+  await service.generatePlan("project-1");
+  const events: unknown[] = [];
+  const unsubscribe = service.subscribe("project-1", (event) => { events.push(event); });
+  await service.render("project-1");
+  unsubscribe();
+
+  const progress = events.filter((event): event is { readonly type: "render-progress"; readonly projectId: string; readonly progress: number; readonly stage: string } =>
+    Boolean(event && typeof event === "object" && "type" in event && event.type === "render-progress"));
+  assert.deepEqual(progress, [
+    { type: "render-progress", projectId: "project-1", progress: 5, stage: "synthesize_narration" },
+    { type: "render-progress", projectId: "project-1", progress: 35, stage: "export" },
+    { type: "render-progress", projectId: "project-1", progress: 40, stage: "unknown_future_stage" },
+  ]);
+  assert.equal(progress.every((event) => !("message" in event)), true);
+  assert.equal(JSON.stringify(progress).includes("正在"), false);
+});
+
 test("已配置的云端 TTS 会明确交给原生渲染器合成旁白", async () => {
   const { create, renderCalls } = harness("provider");
   const service = create();

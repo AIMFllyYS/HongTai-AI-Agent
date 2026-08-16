@@ -198,7 +198,7 @@ export interface NativeProductionResult {
 export interface NativeProductionProgressEvent {
   readonly projectId: string;
   readonly progress: number;
-  readonly message: string;
+  readonly stage: string;
 }
 
 export type NativeAssetOperationResult =

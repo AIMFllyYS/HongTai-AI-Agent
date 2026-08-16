@@ -12,6 +12,18 @@ import org.junit.Test
 
 class ProductionRenderWatchdogTest {
   @Test
+  fun `render stages are stable wire names without Chinese copy`() {
+    assertEquals("validate_avatar_audio", ProductionRenderStage.VALIDATE_AVATAR_AUDIO.wireName)
+    assertEquals("synthesize_narration", ProductionRenderStage.SYNTHESIZE_NARRATION.wireName)
+    assertEquals("compile_shots", ProductionRenderStage.COMPILE_SHOTS.wireName)
+    assertEquals("export", ProductionRenderStage.EXPORT.wireName)
+    assertEquals("saved", ProductionRenderStage.SAVED.wireName)
+    for (stage in ProductionRenderStage.entries) {
+      assertTrue(stage.wireName.all { it.code <= 127 })
+    }
+  }
+
+  @Test
   fun `timeout waits for cancel then stays MEDIA_RENDER_TIMEOUT even if export fails`() {
     val finished = CountDownLatch(1)
     val cancelInvoked = AtomicBoolean(false)

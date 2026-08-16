@@ -118,7 +118,7 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
     if (!project) return undefined;
     return runtime.production.subscribe(project.projectId, (event) => {
       if (event.type === "state") setProject(event.project);
-      else { setProgress(event.progress); setProgressMessage(event.message); }
+      else { setProgress(event.progress); setProgressMessage(productionRenderStageCopy(event.stage)); }
     });
   }, [project?.projectId, runtime.production]);
 
@@ -250,4 +250,18 @@ function platformName(platform: AppTaskRecord["platform"], sourceKind: AppTaskRe
 
 function statusLabel(status: ProductionProjectRecord["status"]): string {
   return ({ draft: "待准备", planning: "规划中", ready: "计划就绪", rendering: "合成中", succeeded: "已完成", failed: "未完成" } as const)[status];
+}
+
+const PRODUCTION_RENDER_STAGE_COPY = {
+  validate_avatar_audio: "正在校验数字人口播原声",
+  synthesize_narration: "正在生成旁白",
+  compile_shots: "正在编排镜头",
+  export: "正在本地合成",
+  saved: "成片已保存",
+} as const;
+
+export function productionRenderStageCopy(stage: string): string {
+  return Object.hasOwn(PRODUCTION_RENDER_STAGE_COPY, stage)
+    ? PRODUCTION_RENDER_STAGE_COPY[stage as keyof typeof PRODUCTION_RENDER_STAGE_COPY]
+    : "正在本地合成";
 }

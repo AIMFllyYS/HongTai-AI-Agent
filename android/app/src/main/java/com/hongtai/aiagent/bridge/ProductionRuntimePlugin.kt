@@ -180,8 +180,8 @@ class ProductionRuntimePlugin : Plugin() {
         } else {
           SystemNarrationSynthesizer(context, store)
         }
-        val output = renderer.render(projectId, plan, synthesizer) { progress, message ->
-          notifyListeners("productionProgress", JSObject().put("projectId", projectId).put("progress", progress).put("message", message))
+        val output = renderer.render(projectId, plan, synthesizer) { progress, stage ->
+          notifyListeners("productionProgress", JSObject().put("projectId", projectId).put("progress", progress).put("stage", stage))
         }
         call.resolve(
           JSObject().put("uri", output.uri).put("mimeType", "video/mp4")

@@ -48,6 +48,14 @@ internal object ProductionRenderTimeoutPolicy {
  * Progress samples may be offered from the main-thread getProgress poll.
  * Emission is a single serial channel and is dropped after timeout/terminal.
  */
+internal enum class ProductionRenderStage(val wireName: String) {
+  VALIDATE_AVATAR_AUDIO("validate_avatar_audio"),
+  SYNTHESIZE_NARRATION("synthesize_narration"),
+  COMPILE_SHOTS("compile_shots"),
+  EXPORT("export"),
+  SAVED("saved"),
+}
+
 internal class ProductionRenderProgressGate(
   private val onProgress: (Int, String) -> Unit,
 ) {
@@ -56,16 +64,16 @@ internal class ProductionRenderProgressGate(
   private val pending = AtomicReference<Pair<Int, String>?>()
   private val gate = Any()
 
-  fun emit(progress: Int, message: String) {
+  fun emit(progress: Int, stage: String) {
     synchronized(gate) {
       if (closed.get()) return
-      onProgress(progress, message)
+      onProgress(progress, stage)
     }
   }
 
-  fun offerSample(progress: Int, message: String) {
+  fun offerSample(progress: Int, stage: String) {
     if (!sampling.get() || closed.get()) return
-    pending.set(progress to message)
+    pending.set(progress to stage)
   }
 
   fun flushPending() {
