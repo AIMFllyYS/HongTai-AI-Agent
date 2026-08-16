@@ -31,6 +31,10 @@ interface AnalysisSource {
 
 const EMPTY_DRAFT: TemplateDraft = { name: "", summary: "", formula: "", steps: "", variableSlots: "" };
 
+function focusTemplateName(): void {
+  if (typeof document !== "undefined") document.getElementById("template-name")?.focus();
+}
+
 function draftFrom(record: ContentTemplateRecord): TemplateDraft {
   return { ...record, steps: record.steps.join("\n"), variableSlots: record.variableSlots.join("\n") };
 }
@@ -152,7 +156,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
           <p>这里只保存公式、步骤与变量槽，不复制原视频、供应商响应或推理内容。保存后可独立编辑和删除。</p>
         </section>
 
-        {issue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), retry: () => void load() }} issue={issue} /> : null}
+        {issue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), retry: () => void load(), editInput: focusTemplateName }} issue={issue} /> : null}
 
         <GlassCard className="template-import-card">
           <div className="production-section-title"><span>01</span><div><strong>从拆解结果保存</strong><small>把内容结构保存成以后可以继续使用的模板</small></div></div>

@@ -98,6 +98,7 @@ export function TaskAnalysisPage({ runtime, taskId, navigate }: TaskAnalysisPage
   const recordIssue = readIssue ?? issue ?? record?.issue;
   const issueActions = {
     configureAi: () => navigate(aiSettingsPath()),
+    ...(detail.evidenceUnits.length > 0 ? { partialResult: () => navigate(taskDetailPath(taskId)) } : {}),
   };
   const localVideo = detail.task.sourceKind === "local_video";
   const sourceTitle = detail.content.title ?? (localVideo ? "本地上传视频拆解" : "内容拆解");

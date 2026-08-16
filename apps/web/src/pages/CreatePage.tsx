@@ -32,6 +32,13 @@ export function CreatePage({ viewModel, navigate, runtime }: CreatePageProps) {
   return <ProductionWorkbenchPage navigate={navigate} runtime={runtime} />;
 }
 
+function focusProductionInput(): void {
+  if (typeof document === "undefined") return;
+  const brief = document.getElementById("production-brief");
+  const script = document.getElementById("production-avatar-script");
+  (brief ?? script)?.focus();
+}
+
 function PlannedCreatePage({ navigate, title = "制作" }: { readonly navigate: (path: string) => void; readonly title?: string }) {
   return (
     <AppShell activeNav="create" leadingAction={<span className="page-header-icon"><Icon name="movie_edit" size={25} /></span>} navigate={navigate} title={title}>
@@ -175,7 +182,7 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
   return (
     <AppShell activeNav="create" leadingAction={<span className="page-header-icon"><Icon name="movie_edit" size={24} /></span>} navigate={navigate} title="制作">
       <div className="page-stack page-create production-workbench">
-        {issue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), selectMedia: project ? () => void perform(() => runtime.production.importAssets(project.projectId)) : undefined }} issue={issue} /> : null}
+        {issue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), selectMedia: project ? () => void perform(() => runtime.production.importAssets(project.projectId)) : undefined, editInput: focusProductionInput }} issue={issue} /> : null}
 
         <section className="production-hero">
           <span className="eyebrow">视频制作</span>

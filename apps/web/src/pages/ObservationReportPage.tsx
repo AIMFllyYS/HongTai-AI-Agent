@@ -181,6 +181,7 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
     retry: failedQuestion
       ? () => void askQuestion(failedQuestion)
       : reportRetryAllowed ? () => void runReport() : undefined,
+    editInput: focusQuestion,
   };
 
   return (

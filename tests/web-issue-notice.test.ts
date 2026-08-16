@@ -3,7 +3,14 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { issueActionPresentation, issueDiagnosticSummary, issueTechnicalCode, issueTitle } from "../apps/web/src/components/IssueNotice";
+import {
+  defaultEditInputFocus,
+  isInlineIssueAction,
+  issueActionPresentation,
+  issueDiagnosticSummary,
+  issueTechnicalCode,
+  issueTitle,
+} from "../apps/web/src/components/IssueNotice";
 
 const webRoot = join(process.cwd(), "apps", "web", "src");
 const read = (relativePath: string) => readFileSync(join(webRoot, relativePath), "utf8");
@@ -26,12 +33,54 @@ test("IssueNotice maps TaskIssue.action to explicit safe callbacks without branc
   assert.equal(noOp.onAction, undefined);
   assert.match(noOp.guidance, /释放/);
 
+  let focused = 0;
+  const editInput = issueActionPresentation("edit_input", { editInput: () => { focused += 1; } });
+  assert.equal(editInput.available, true);
+  assert.equal(editInput.label, undefined);
+  editInput.onAction?.();
+  assert.equal(focused, 1);
+
+  const missingEditInput = issueActionPresentation("edit_input");
+  assert.equal(missingEditInput.available, false);
+  assert.equal(missingEditInput.onAction, undefined);
+
   const source = read("components/IssueNotice.tsx");
   assert.match(source, /TaskIssueActionHandlers/);
   assert.match(source, /useNotification/);
-  assert.match(source, /return null/);
+  assert.match(source, /editInput\?:/);
   assert.doesNotMatch(source, /GlassCard/);
   assert.doesNotMatch(source, /issue\.code\s*===/);
+});
+
+test("edit_input stays inline and focuses the page-owned input without a top notice", () => {
+  assert.equal(isInlineIssueAction("edit_input"), true);
+  assert.equal(isInlineIssueAction("retry"), false);
+  assert.equal(isInlineIssueAction("view_partial_result"), false);
+
+  const source = read("components/IssueNotice.tsx");
+  assert.match(source, /isInlineIssueAction\(issue\.action\)/);
+  assert.match(source, /className=\{`issue-notice/);
+  assert.match(source, /const \{ show, dismiss \} = useNotification\(\)/);
+  assert.match(source, /if \(inline\) \{\s*dismiss\(\);/s);
+  assert.match(source, /dismiss\(\);\s*\(actionsRef\.current\?\.editInput \?\? defaultEditInputFocus\)\(\);/s);
+  assert.match(source, /return;\s*\n\s*\}/s);
+  assert.match(source, /show\(/);
+  assert.doesNotMatch(source, /issue\.code\s*===/);
+
+  const focused: string[] = [];
+  const previous = globalThis.document;
+  (globalThis as { document?: { getElementById: (id: string) => { focus: () => void } | null } }).document = {
+    getElementById(id) {
+      return id === "task-share-input" ? { focus: () => { focused.push(id); } } : null;
+    },
+  };
+  try {
+    defaultEditInputFocus();
+    assert.deepEqual(focused, ["task-share-input"]);
+  } finally {
+    if (previous === undefined) delete (globalThis as { document?: unknown }).document;
+    else (globalThis as { document?: unknown }).document = previous;
+  }
 });
 
 test("IssueNotice combines the stable application code with a safe native code", () => {
@@ -108,6 +157,8 @@ test("IssueNotice diagnostic copy wraps on desktop and about 390px instead of hi
   assert.match(styles, /\.top-notification__copy small\s*\{[^}]*overflow-wrap:\s*anywhere/s);
   assert.match(styles, /\.top-notification__copy small\s*\{[^}]*white-space:\s*pre-line/s);
   assert.doesNotMatch(styles, /\.top-notification__copy small\s*\{[^}]*text-overflow:\s*ellipsis/s);
+  assert.match(styles, /\.issue-notice small\s*\{[^}]*overflow-wrap:\s*anywhere/s);
+  assert.match(styles, /\.issue-notice small\s*\{[^}]*white-space:\s*pre-line/s);
 });
 
 test("task, observation, and settings pages use the one IssueNotice action boundary", () => {
@@ -134,11 +185,51 @@ test("task, observation, and settings pages use the one IssueNotice action bound
   assert.doesNotMatch(read("pages/TaskProcessingPage.tsx"), /runtime\.tasks\.(cancel|retry)/);
   assert.doesNotMatch(read("pages/TaskDetailPage.tsx"), /runtime\.tasks\.retry/);
   assert.match(read("pages/TaskProcessingPage.tsx"), /configureAi:/);
-  assert.doesNotMatch(read("pages/TaskProcessingPage.tsx"), /partialResult:/);
   assert.match(read("pages/ObservationStartPage.tsx"), /selectMedia:/);
   assert.match(read("pages/ObservationReportPage.tsx"), /retry:/);
   assert.match(read("pages/AiSettingsPage.tsx"), /configureAi:/);
   assert.match(read("pages/ProfileSettingsPage.tsx"), /selectMedia:/);
+
+  const home = read("pages/TaskHomePage.tsx");
+  const create = read("pages/CreatePage.tsx");
+  const templates = read("pages/TemplatesPage.tsx");
+  const observation = read("pages/ObservationReportPage.tsx");
+  const processing = read("pages/TaskProcessingPage.tsx");
+  const detail = read("pages/TaskDetailPage.tsx");
+  const analysis = read("pages/TaskAnalysisPage.tsx");
+
+  assert.match(home, /editInput:\s*focusTaskShareInput/);
+  assert.match(create, /editInput:\s*focusProductionInput/);
+  assert.match(templates, /editInput:\s*focusTemplateName/);
+  assert.match(observation, /editInput:\s*focusQuestion/);
+  assert.doesNotMatch(processing, /editInput:/);
+  assert.doesNotMatch(detail, /editInput:/);
+  assert.doesNotMatch(processing, />回首页</);
+  assert.doesNotMatch(detail, />回首页</);
+
+  assert.match(processing, /partialResult:/);
+  assert.match(processing, /task\.media\.length > 0/);
+  assert.match(processing, /task\.speechStatus/);
+  assert.match(processing, /task\.status === "degraded"/);
+  assert.match(processing, /task\.status === "succeeded"/);
+  assert.match(processing, /taskDetailPath\(task\.id\)/);
+  assert.match(detail, /partialResult:/);
+  assert.match(detail, /id="task-detail-media"/);
+  assert.match(detail, /id="task-detail-transcript"/);
+  assert.match(detail, /id="task-detail-image-text"/);
+  assert.match(detail, /id="task-detail-summary"/);
+  assert.match(detail, /scrollIntoView/);
+  assert.match(analysis, /partialResult:/);
+  assert.match(analysis, /detail\.evidenceUnits\.length > 0/);
+  assert.match(analysis, /taskDetailPath\(taskId\)/);
+  assert.doesNotMatch(home, /partialResult:/);
+  assert.doesNotMatch(create, /partialResult:/);
+  assert.doesNotMatch(templates, /partialResult:/);
+  assert.doesNotMatch(observation, /partialResult:/);
+  assert.doesNotMatch(read("pages/ObservationStartPage.tsx"), /partialResult:/);
+  assert.doesNotMatch(read("pages/SettingsPage.tsx"), /partialResult:/);
+  assert.doesNotMatch(read("pages/ProfileSettingsPage.tsx"), /partialResult:/);
+  assert.doesNotMatch(read("pages/AiSettingsPage.tsx"), /partialResult:/);
 });
 
 test("publishing remains disabled while templates, observation and production use native runtimes", () => {

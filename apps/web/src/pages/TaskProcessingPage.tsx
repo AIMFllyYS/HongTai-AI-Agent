@@ -93,6 +93,9 @@ export function TaskProcessingPage({ runtime, taskId, navigate }: TaskProcessing
 
   const issueActions = {
     configureAi: () => navigate(aiSettingsPath()),
+    ...(task && (task.media.length > 0 || Boolean(task.speechStatus) || task.status === "degraded" || task.status === "succeeded")
+      ? { partialResult: () => navigate(taskDetailPath(task.id)) }
+      : {}),
   };
 
   if (loading) {

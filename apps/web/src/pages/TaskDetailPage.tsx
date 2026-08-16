@@ -23,6 +23,23 @@ export interface TaskDetailPageProps {
   readonly navigate: Navigate;
 }
 
+function hasPersistedPartial(detail: TaskDetailRecord): boolean {
+  return detail.media.length > 0
+    || Boolean(detail.transcript && (detail.transcript.text || detail.transcript.segments.length > 0))
+    || Boolean(detail.imageText && (detail.imageText.text || detail.imageText.paragraphs.length > 0))
+    || Boolean(detail.content.title || detail.content.description);
+}
+
+function scrollToPersistedPartial(detail: TaskDetailRecord): void {
+  if (typeof document === "undefined") return;
+  const target = detail.media.length > 0 ? "task-detail-media"
+    : detail.transcript && (detail.transcript.text || detail.transcript.segments.length > 0) ? "task-detail-transcript"
+    : detail.imageText && (detail.imageText.text || detail.imageText.paragraphs.length > 0) ? "task-detail-image-text"
+    : (detail.content.title || detail.content.description) ? "task-detail-summary"
+    : undefined;
+  if (target) document.getElementById(target)?.scrollIntoView({ block: "start" });
+}
+
 function uniqueMedia(media: readonly MediaReference[]): readonly MediaReference[] {
   const seen = new Set<string>();
   return media.filter((item) => {
@@ -149,6 +166,7 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
   const canRequestAnalysis = analysisAvailable && terminalWithOutput && hasEvidence && (task.analysisStatus === "not_started" || task.analysisStatus === "failed");
   const issueActions = {
     configureAi: () => navigate(aiSettingsPath()),
+    ...(hasPersistedPartial(detail) ? { partialResult: () => scrollToPersistedPartial(detail) } : {}),
   };
 
   return (
@@ -157,7 +175,7 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
         <TaskCapabilityNotice capability={runtime.features.ingest} feature="ingest" />
         {activeIssue ? <IssueNotice actions={issueActions} issue={activeIssue} /> : null}
 
-        <GlassCard className="task-detail-summary">
+        <GlassCard className="task-detail-summary" id="task-detail-summary">
           <div className="task-detail-summary__heading"><div><span className="eyebrow">LOCAL TASK</span><h2>{detail.content.title ?? (localVideo ? "本地上传视频" : "未提供标题")}</h2></div><TaskStatusBadge status={task.status} /></div>
           <p className="technical-value">{localVideo ? "本地上传 · 私有任务文件" : safeUrlForDisplay(detail.content.canonicalUrl ?? task.sourceUrl)}</p>
           <div className="task-detail-summary__facts">
@@ -170,7 +188,7 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
           {detail.content.description ? <div className="task-detail-summary__description">{detail.content.description}</div> : null}
         </GlassCard>
 
-        <section className="page-section">
+        <section className="page-section" id="task-detail-media">
           <div className="section-heading"><h3>{task.contentType === "image_text" ? "已保存图片" : "已保存媒体"}</h3><span className="analysis-count">{detail.media.length} 个文件</span></div>
           {task.contentType === "image_text" ? (
             imageMedia.length === 0 ? <EmptyState description="任务没有可展示的已保存图片。" icon="folder_open" title="暂无图片" /> : <div className="runtime-image-gallery">{imageMedia.map((media) => <RuntimeMediaFrame className="runtime-image-gallery__item" key={media.uri} label={media.displayName ?? "已保存图片"} media={media} />)}</div>
@@ -179,7 +197,7 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
         </section>
 
         {task.contentType === "video" ? (
-          <section className="page-section">
+          <section className="page-section" id="task-detail-transcript">
             <div className="section-heading"><h3>原始文稿</h3>{task.speechStatus ? <span className="analysis-count">{task.speechStatus === "transcribed" ? "已转写" : task.speechStatus === "no_speech" ? "未检测到口播" : "转写未完成"}</span> : null}</div>
             {task.speechStatus === "no_speech" ? <EmptyState description="本次媒体没有检测到有效口播。这是正常结果，不会用平台描述伪装成语音转写。" icon="voice" title="未检测到有效口播" /> : detail.transcript && (detail.transcript.text || detail.transcript.segments.length > 0) ? (
               <GlassCard className="runtime-transcript-card">
@@ -191,7 +209,7 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
         ) : null}
 
         {task.contentType === "image_text" ? (
-          <section className="page-section">
+          <section className="page-section" id="task-detail-image-text">
             <div className="section-heading"><h3>图文正文</h3><span className="analysis-count">{detail.imageText?.paragraphs.length ?? 0} 段</span></div>
             {detail.imageText?.text || detail.imageText?.paragraphs.length ? <GlassCard className="runtime-transcript-card"><p className="runtime-transcript-card__full">{detail.imageText?.text}</p>{detail.imageText?.paragraphs.length ? <ol>{detail.imageText.paragraphs.map((paragraph) => <li key={paragraph.id}><p>{paragraph.text}</p></li>)}</ol> : null}</GlassCard> : <EmptyState description="任务没有保存可展示的图文正文。" icon="file" title="暂无正文" />}
           </section>
