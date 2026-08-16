@@ -125,6 +125,7 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [probing, setProbing] = useState<AiCapability>();
+  const [readIssue, setReadIssue] = useState<TaskIssue>();
   const [issue, setIssue] = useState<TaskIssue>();
   const [savedMessage, setSavedMessage] = useState<string>();
   const connectionBusy = saving || probing !== undefined;
@@ -134,7 +135,7 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    setIssue(undefined);
+    setReadIssue(undefined);
     try {
       const [config, results] = await Promise.all([
         runtime.aiSettings.getPublic(),
@@ -148,7 +149,7 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
       setProbes(results);
     } catch (error) {
       if (!mountedRef.current) return;
-      setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "AI 设置暂时无法读取", action: "none" }));
+      setReadIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "AI 设置暂时无法读取", action: "none" }));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -167,8 +168,10 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
     if (apiKey.trim()) {
       await runtime.aiSettings.replaceApiKey(apiKey);
       setApiKey("");
+      setReadIssue(undefined);
       return { ...saved, hasApiKey: true };
     }
+    setReadIssue(undefined);
     return saved;
   };
 
@@ -253,6 +256,7 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
   return (
     <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="AI 连接">
       <div className="page-stack page-settings settings-form">
+        {readIssue ? <IssueNotice issue={readIssue} /> : null}
         {issue ? <IssueNotice actions={{ configureAi: focusAiConnectionForm }} issue={issue} /> : null}
 
         <GlassCard className="settings-security-note" tone="soft">
@@ -305,7 +309,7 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
         </details>
 
         <section className="settings-probes" aria-labelledby="ai-probe-title">
-          <div className="settings-probes__heading"><div><span className="settings-overline">连接检测</span><h2 id="ai-probe-title">文字、图片、语音识别与视频配音</h2></div><Button disabled={connectionBusy} onClick={() => void load()} size="md" variant="quiet"><Icon name="sync" size={16} />刷新</Button></div>
+          <div className="settings-probes__heading"><div><span className="settings-overline">连接检测</span><h2 id="ai-probe-title">文字、图片、语音识别与视频配音</h2></div>{readIssue ? <Button disabled={connectionBusy} onClick={() => void load()} size="md" variant="quiet"><Icon name="sync" size={16} />刷新</Button> : null}</div>
           {probeBlocked && !connectionBusy ? <p className="field-hint"><Icon name="info" size={15} />请先保存当前 AI 设置后再测试；测试只会使用已写入本机安全存储的连接。</p> : null}
           <div className="probe-list">
             {probeCapabilities.map((capability) => {

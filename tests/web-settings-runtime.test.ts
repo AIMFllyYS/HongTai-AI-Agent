@@ -90,6 +90,43 @@ test("AI capability probes cannot run against a saved connection while the visib
   assert.match(ai, /请先保存当前 AI 设置后再测试/);
 });
 
+test("settings, templates, and AI connection refresh actions appear only after a dedicated read failure", () => {
+  const settings = read("pages/SettingsPage.tsx");
+  const templates = read("pages/TemplatesPage.tsx");
+  const ai = read("pages/AiSettingsPage.tsx");
+
+  assert.match(settings, /\{issue \? <Button onClick=\{\(\) => void load\(\)\} variant="quiet">[\s\S]*重新读取<\/Button> : null\}/);
+  assert.doesNotMatch(settings, /subscribe/);
+
+  assert.match(templates, /const \[readIssue, setReadIssue\] = useState<TaskIssue>\(\)/);
+  assert.match(templates, /setReadIssue\(issueFromAppError\(error, \{ code: "APP_RUNTIME_UNAVAILABLE"/);
+  assert.match(templates, /\{readIssue \? <button className="text-action" onClick=\{\(\) => void load\(\)\} type="button">刷新<\/button> : null\}/);
+  assert.match(templates, /\{issue \? <IssueNotice/);
+  assert.match(templates, /setIssue\(issueFromAppError\(error, \{ code: "STORAGE_WRITE_FAILED"/);
+  assert.match(templates, /setIssue\(issueFromAppError\(error, \{ code: "INTERNAL_UNKNOWN_ERROR"/);
+  assert.doesNotMatch(templates, /setIssue\(issueFromAppError\(error, \{ code: "APP_RUNTIME_UNAVAILABLE"/);
+  assert.doesNotMatch(templates, /\{issue \?[\s\S]{0,160}刷新/);
+  assert.doesNotMatch(templates, /subscribe/);
+  const templatesSave = templates.match(/const save = async \(\) => \{[\s\S]*?\n  \};/)?.[0];
+  assert.ok(templatesSave, "templates save should be present");
+  assert.match(templatesSave, /await load\(\)/);
+  assert.match(templates, /setTemplates\(saved\);[\s\S]*?setReadIssue\(undefined\)/);
+
+  assert.match(ai, /const \[readIssue, setReadIssue\] = useState<TaskIssue>\(\)/);
+  assert.match(ai, /setReadIssue\(issueFromAppError\(error, \{ code: "APP_RUNTIME_UNAVAILABLE"/);
+  assert.match(ai, /\{readIssue \? <Button disabled=\{connectionBusy\} onClick=\{\(\) => void load\(\)\} size="md" variant="quiet">[\s\S]*刷新<\/Button> : null\}/);
+  assert.match(ai, /\{issue \? <IssueNotice/);
+  assert.match(ai, /setIssue\(issueFromAppError\(error, \{ code: "AI_CAPABILITY_PROBE_FAILED"/);
+  assert.match(ai, /setIssue\(issueFromAppError\(error, \{ code: "AI_SETTINGS_INVALID"/);
+  assert.doesNotMatch(ai, /setIssue\(issueFromAppError\(error, \{ code: "APP_RUNTIME_UNAVAILABLE"/);
+  assert.doesNotMatch(ai, /\{issue \?[\s\S]{0,200}刷新/);
+  assert.doesNotMatch(ai, /subscribe/);
+  const persistFn = ai.match(/const persist = async \(nextDraft: AiDraft\): Promise<PublicAiConnectionConfig> => \{[\s\S]*?\n  \};/)?.[0];
+  assert.ok(persistFn, "AI persist helper should be present");
+  assert.match(persistFn, /setReadIssue\(undefined\)/);
+  assert.doesNotMatch(persistFn, /setReadIssue\(issueFromAppError/);
+});
+
 test("settings keep cloud TTS inside AI connection and expose app information through AppRuntime", () => {
   const app = read("App.tsx");
   const settings = read("pages/SettingsPage.tsx");
