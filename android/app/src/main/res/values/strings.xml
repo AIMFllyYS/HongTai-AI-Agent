@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <string name="app_name">宏泰 AI</string>
-  <string name="foreground_task_channel_name">本地任务</string>
-  <string name="foreground_task_channel_description">用于显示仍在设备上执行的采集任务。</string>
 </resources>
