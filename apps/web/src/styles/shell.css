@@ -61,6 +61,11 @@
   display: none;
 }
 
+.route-swipe-preview {
+  min-height: 100vh;
+  background: var(--color-background);
+}
+
 .app-shell--with-nav {
   padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom));
 }

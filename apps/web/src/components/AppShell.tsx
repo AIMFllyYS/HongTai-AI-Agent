@@ -4,9 +4,13 @@ import { BottomNav, type BottomNavProps } from "./BottomNav";
 import { BrandLogo } from "./BrandLogo";
 import { Icon } from "./Icon";
 import { useScrollMotion } from "../hooks/useScrollMotion";
-import type { Navigate } from "../router";
+import type { Navigate, RouteKey } from "../router";
 
 export type AppShellVisualTheme = "workbench" | "warm-soft-tech";
+
+export function visualThemeForRoute(routeKey: RouteKey): AppShellVisualTheme {
+  return routeKey === "observation-new" || routeKey === "observation-report" ? "warm-soft-tech" : "workbench";
+}
 
 const externalNavigationContext = createContext(false);
 

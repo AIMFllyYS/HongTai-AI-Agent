@@ -2,7 +2,7 @@ import type { AppRuntime } from "@hongtai/core";
 
 import { EmptyState } from "./components/StatePanels";
 import { activeNavForRoute, BottomNav } from "./components/BottomNav";
-import { AppShell, AppShellNavigationProvider } from "./components/AppShell";
+import { AppShell, AppShellNavigationProvider, visualThemeForRoute } from "./components/AppShell";
 import { RouteTransition } from "./components/RouteTransition";
 import { SwipeRouteViewport } from "./components/SwipeRouteViewport";
 import type { VisualDataAdapter } from "./data/visual-adapter";
@@ -125,11 +125,11 @@ export function App({ runtime, visualData }: AppProps = {}) {
 
   const route = matchRoute(pathname);
   const activeNav = activeNavForRoute(route.key);
-  const visualTheme = route.key === "observation-new" || route.key === "observation-report" ? "warm-soft-tech" : "workbench";
+  const visualTheme = visualThemeForRoute(route.key);
 
   return (
     <AppShellNavigationProvider>
-      <SwipeRouteViewport active={activeNav} currentPath={pathname} navigate={navigate} renderRoute={renderRoute}>
+      <SwipeRouteViewport active={activeNav} currentPath={pathname} navigate={navigate}>
         <RouteTransition direction={direction} pathname={pathname} transitionMode={transitionMode}>{renderRoute(pathname)}</RouteTransition>
       </SwipeRouteViewport>
       <BottomNav active={activeNav} navigate={navigate} visualTheme={visualTheme} />
