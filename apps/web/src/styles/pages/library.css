@@ -317,7 +317,7 @@
 
 .template-library-section,
 .template-list { display: grid; gap: var(--space-3); }
-.template-card { display: grid; gap: var(--space-2); padding: var(--space-2); overflow: hidden; }
+.template-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); padding: var(--space-2); overflow: hidden; }
 .template-card.is-active { border-color: var(--color-primary-soft); box-shadow: var(--shadow-card); }
 .template-card__open { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-3); align-items: center; width: 100%; min-width: 0; padding: var(--space-2); text-align: left; background: transparent; }
 .template-card__open > span { display: grid; width: 2.5rem; height: 2.5rem; place-items: center; color: var(--color-primary-strong); background: var(--color-accent-soft); border-radius: 0.8rem; }
@@ -325,12 +325,11 @@
 .template-card__open strong { overflow: hidden; color: var(--color-primary); font-size: var(--text-label); text-overflow: ellipsis; white-space: nowrap; }
 .template-card__open p { display: -webkit-box; overflow: hidden; color: var(--color-text-subtle); font-size: var(--text-caption); line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .template-card__open small { color: var(--color-text-muted); font-size: var(--text-meta); }
-.template-card > .button { justify-self: end; }
+.template-card > .button { align-self: start; justify-self: end; height: auto; max-height: var(--button-height-md); }
 
-.template-delete-confirm { display: grid; gap: var(--space-2); padding: var(--space-3); background: rgba(255, 244, 238, 0.86); border: 1px solid rgba(186, 26, 26, 0.18); border-radius: var(--radius-control); }
+.template-delete-confirm { display: grid; grid-column: 1 / -1; gap: var(--space-2); padding: var(--space-3); background: rgba(255, 244, 238, 0.86); border: 1px solid rgba(186, 26, 26, 0.18); border-radius: var(--radius-control); }
 .template-delete-confirm strong { color: var(--color-error); font-size: var(--text-caption); }
 .template-delete-confirm p { color: var(--color-text-muted); font-size: var(--text-meta); line-height: 1.45; }
-.template-delete-confirm > div { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 
 .template-editor__rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .template-editor__rows label { display: grid; gap: var(--space-2); }

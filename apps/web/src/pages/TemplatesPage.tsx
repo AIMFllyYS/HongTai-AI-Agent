@@ -189,7 +189,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
                     <div className="template-delete-confirm" role="alert">
                       <strong>确认删除模板“{record.name}”？</strong>
                       <p>只删除这份本地模板，不会级联删除来源任务。</p>
-                      <div><Button disabled={busy} onClick={() => void remove(record.templateId)}>确认删除模板</Button><Button disabled={busy} onClick={() => setDeletingId(undefined)} variant="quiet">取消</Button></div>
+                      <div className="mobile-action-group"><Button disabled={busy} onClick={() => void remove(record.templateId)}>确认删除模板</Button><Button disabled={busy} onClick={() => setDeletingId(undefined)} variant="quiet">取消</Button></div>
                     </div>
                   ) : <Button aria-label={`删除模板 ${record.name}`} disabled={busy} onClick={() => setDeletingId(record.templateId)} variant="quiet"><Icon name="close" size={16} />删除</Button>}
                 </GlassCard>

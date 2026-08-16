@@ -307,55 +307,6 @@ button.chip:hover,
   border-color: rgba(38, 166, 154, 0.3);
 }
 
-.template-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-3);
-  padding: var(--space-4);
-}
-
-.template-card__icon {
-  display: grid;
-  width: 2.5rem;
-  height: 2.5rem;
-  place-items: center;
-  color: var(--color-primary-strong);
-  background: var(--color-accent-soft);
-  border-radius: var(--radius-control);
-}
-
-.template-card__body {
-  display: grid;
-  gap: 0.25rem;
-}
-
-.template-card__body h3 {
-  color: var(--color-primary);
-  font-family: var(--font-display);
-  font-size: 0.93rem;
-}
-
-.template-card__body p {
-  color: var(--color-text-muted);
-  font-size: 0.7rem;
-  line-height: 1.25rem;
-}
-
-.template-meta {
-  color: var(--color-text-subtle);
-  font-size: var(--text-meta);
-}
-
-.template-meta b {
-  margin-right: 0.4rem;
-  color: var(--color-text-muted);
-  font-weight: 500;
-}
-
-.template-card .wide-action {
-  grid-column: 1 / -1;
-}
-
 .detail-media-card__body {
   display: grid;
   gap: var(--space-2);
