@@ -237,14 +237,14 @@ test("client APK builds are identifiable and never log bridge payloads", () => {
   assert.doesNotMatch(appBuild, /versionName\s*=\s*"0\.1\.0"/);
 });
 
-test("release candidate v0.1.12 advances to versionCode 20 and packages the dedicated HongTai launcher icon", () => {
+test("release candidate v0.1.13 advances to versionCode 21 and packages the dedicated HongTai launcher icon", () => {
   const appBuild = read("android/app/build.gradle.kts");
   const manifest = read("android/app/src/main/AndroidManifest.xml");
   const sourcePath = join(root, "apps/web/public/brand/hongtai-app-icon.png");
   const iconPath = join(root, "android/app/src/main/res/drawable-nodpi/hongtai_launcher.png");
 
-  assert.match(appBuild, /versionCode\s*=\s*20\b/);
-  assert.match(appBuild, /versionName\s*=\s*"0\.1\.12"/);
+  assert.match(appBuild, /versionCode\s*=\s*21\b/);
+  assert.match(appBuild, /versionName\s*=\s*"0\.1\.13"/);
   assert.match(manifest, /android:icon="@drawable\/hongtai_launcher"/);
   assert.match(manifest, /android:roundIcon="@drawable\/hongtai_launcher"/);
   assert.equal(existsSync(iconPath), true, "the Android launcher icon must be packaged from the design asset");
