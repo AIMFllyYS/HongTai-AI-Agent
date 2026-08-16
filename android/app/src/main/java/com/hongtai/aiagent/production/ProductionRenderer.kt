@@ -34,7 +34,6 @@ import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
 import java.io.File
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 internal data class ProductionRenderResult(val uri: String, val sizeBytes: Long, val durationSeconds: Double)
@@ -47,9 +46,10 @@ internal class ProductionRenderer(private val context: Context, private val stor
     narrationSynthesizer: NarrationSynthesizer = SystemNarrationSynthesizer(context, store),
     onProgress: (Int, String) -> Unit,
   ): ProductionRenderResult {
-    onProgress(5, if (plan.renderMode == ProductionRenderMode.AVATAR) "正在校验数字人口播原声" else "正在生成旁白")
+    val progress = ProductionRenderProgressGate(onProgress)
+    progress.emit(5, if (plan.renderMode == ProductionRenderMode.AVATAR) "正在校验数字人口播原声" else "正在生成旁白")
     val narration = if (plan.renderMode == ProductionRenderMode.MONTAGE) narrationSynthesizer.synthesize(projectId, plan) else emptyList()
-    onProgress(25, "正在编排镜头")
+    progress.emit(25, "正在编排镜头")
     val composition = compile(plan, narration)
     val (temporary, output) = store.outputTarget(projectId)
     temporary.delete()
@@ -76,30 +76,49 @@ internal class ProductionRenderer(private val context: Context, private val stor
         finished.countDown()
       }
     }
-    onProgress(35, "正在本地合成")
-    var elapsedMs = 0L
-    while (!finished.await(500, TimeUnit.MILLISECONDS)) {
-      elapsedMs += 500L
-      if (elapsedMs >= RENDER_TIMEOUT_MS) {
-        handler.post { transformerRef.get()?.cancel() }
+    progress.emit(35, "正在本地合成")
+    val watch = ProductionExportWatchdog(progress).awaitExport(
+      finished,
+      onPoll = {
+        progress.flushPending()
+        val transformer = transformerRef.get()
+        if (transformer != null) {
+          handler.post {
+            val holder = ProgressHolder()
+            if (transformer.getProgress(holder) == Transformer.PROGRESS_STATE_AVAILABLE) {
+              progress.offerSample(35 + (holder.progress * 0.64f).toInt(), "正在本地合成")
+            }
+          }
+        }
+      },
+      onTimeout = {
+        awaitExportStopAfterCancel(
+          postCancel = { action -> handler.post(action) },
+          cancel = { transformerRef.get()?.cancel() },
+          finished = finished,
+        )
+      },
+    )
+    when (ProductionRenderTimeoutPolicy.resolve(watch, failure.get(), temporary.isFile && temporary.length() > 0L)) {
+      ProductionExportResolution.Timeout -> {
+        val stopped = (watch as? ProductionExportWatchResult.TimedOut)?.exportStopped == true
+        ProductionRenderTimeoutPolicy.discardIncompletePart(temporary, stopped)
         throw ProductionException(ProductionFailureKind.MEDIA_RENDER_TIMEOUT, "Media3 production export timed out.")
       }
-      val transformer = transformerRef.get() ?: continue
-      handler.post {
-        val holder = ProgressHolder()
-        if (transformer.getProgress(holder) == Transformer.PROGRESS_STATE_AVAILABLE) {
-          onProgress(35 + (holder.progress * 0.64f).toInt(), "正在本地合成")
-        }
+      ProductionExportResolution.ExportFailed -> {
+        progress.close()
+        failure.get()?.let { throw ProductionException(ProductionFailureKind.MEDIA_EXPORT_FAILED, "Media3 production export failed.", it) }
+        throw ProductionException(ProductionFailureKind.MEDIA_EXPORT_FAILED, "Media3 production export is empty.")
+      }
+      ProductionExportResolution.ReadyToVerify -> {
+        // Verify the temporary export before replacing a previous successful
+        // output. A codec/container failure must leave that existing MP4 intact.
+        val durationSeconds = verifyOutput(temporary)
+        finalizeOutput(temporary, output)
+        progress.emit(100, "成片已保存")
+        return ProductionRenderResult(Uri.fromFile(output).toString(), output.length(), durationSeconds)
       }
     }
-    failure.get()?.let { throw ProductionException(ProductionFailureKind.MEDIA_EXPORT_FAILED, "Media3 production export failed.", it) }
-    if (!temporary.isFile || temporary.length() <= 0L) throw ProductionException(ProductionFailureKind.MEDIA_EXPORT_FAILED, "Media3 production export is empty.")
-    // Verify the temporary export before replacing a previous successful
-    // output. A codec/container failure must leave that existing MP4 intact.
-    val durationSeconds = verifyOutput(temporary)
-    finalizeOutput(temporary, output)
-    onProgress(100, "成片已保存")
-    return ProductionRenderResult(Uri.fromFile(output).toString(), output.length(), durationSeconds)
   }
 
   private fun compile(plan: NativeProductionPlan, narration: List<Pair<File, Long>>): Composition {
@@ -247,7 +266,4 @@ internal class ProductionRenderer(private val context: Context, private val stor
     } finally { retriever.release() }
   }
 
-  private companion object {
-    const val RENDER_TIMEOUT_MS = 180_000L
-  }
 }
