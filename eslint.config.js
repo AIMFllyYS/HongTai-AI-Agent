@@ -8,7 +8,12 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["packages/core/**/*.ts", "packages/platforms/**/*.ts", "packages/ai/**/*.ts"],
+    files: [
+      "packages/core/**/*.ts",
+      "packages/platforms/**/*.ts",
+      "packages/ai/**/*.ts",
+      "packages/capacitor-runtime/**/*.ts"
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -21,6 +26,12 @@ export default tseslint.config(
           ]
         }
       ]
+    }
+  },
+  {
+    files: ["packages/capacitor-runtime/**/*.test.ts"],
+    rules: {
+      "no-restricted-imports": "off"
     }
   }
 );
