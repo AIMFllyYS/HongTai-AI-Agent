@@ -107,7 +107,7 @@ test("settings, templates, and AI connection refresh actions appear only after a
   assert.doesNotMatch(templates, /setIssue\(issueFromAppError\(error, \{ code: "APP_RUNTIME_UNAVAILABLE"/);
   assert.doesNotMatch(templates, /\{issue \?[\s\S]{0,160}刷新/);
   assert.doesNotMatch(templates, /subscribe/);
-  const templatesSave = templates.match(/const save = async \(\) => \{[\s\S]*?\n  \};/)?.[0];
+  const templatesSave = templates.match(/const save = async \(\) => \{[\s\S]*?\n {2}\};/)?.[0];
   assert.ok(templatesSave, "templates save should be present");
   assert.match(templatesSave, /await load\(\)/);
   assert.match(templates, /setTemplates\(saved\);[\s\S]*?setReadIssue\(undefined\)/);
@@ -121,7 +121,7 @@ test("settings, templates, and AI connection refresh actions appear only after a
   assert.doesNotMatch(ai, /setIssue\(issueFromAppError\(error, \{ code: "APP_RUNTIME_UNAVAILABLE"/);
   assert.doesNotMatch(ai, /\{issue \?[\s\S]{0,200}刷新/);
   assert.doesNotMatch(ai, /subscribe/);
-  const persistFn = ai.match(/const persist = async \(nextDraft: AiDraft\): Promise<PublicAiConnectionConfig> => \{[\s\S]*?\n  \};/)?.[0];
+  const persistFn = ai.match(/const persist = async \(nextDraft: AiDraft\): Promise<PublicAiConnectionConfig> => \{[\s\S]*?\n {2}\};/)?.[0];
   assert.ok(persistFn, "AI persist helper should be present");
   assert.match(persistFn, /setReadIssue\(undefined\)/);
   assert.doesNotMatch(persistFn, /setReadIssue\(issueFromAppError/);
