@@ -23,16 +23,22 @@ const report = {
 } as const;
 
 function diagnosisModuleContent(request: AiGenerateRequest): string {
-  if (request.jsonSchema?.name !== "diagnosis_single_response_v1") {
+  if (request.jsonSchema?.name !== "diagnosis_single_response_v2") {
     throw new Error(`unexpected diagnosis schema: ${request.jsonSchema?.name ?? "none"}`);
   }
   return JSON.stringify({
-    quality: report.imageQuality.overallQuality,
-    observation: report.observations[0]?.description ?? "",
-    summary: report.summary.narrative,
-    advice: report.recommendations[0]?.action ?? "",
-    safety: report.safetyGuidance.recommendedAction,
-    followUp: report.followUpQuestions[0] ?? "",
+    quality: "good",
+    qualityNote: "目标完整、对焦清晰，颜色与形态基本可辨。",
+    observations: [
+      { category: "tongue_body", region: "舌体", label: "舌色", description: "舌体整体颜色较均匀。" },
+      { category: "tongue_coating", region: "舌中", label: "舌苔", description: "舌中可见薄白苔，分布较均匀。" },
+      { category: "tongue_moisture", region: "舌面", label: "润泽", description: "舌面可见轻度润泽感。" },
+    ],
+    summary: "本次图片可用于日常可见状态记录，不代表疾病诊断。",
+    wellnessReferences: [{ title: "传统望诊参考", statement: "传统观察中，这组可见特征可能作为日常状态记录线索。" }],
+    advice: "保持相同光线和角度定期记录，并结合近期作息观察变化。",
+    safety: "单张图片不能替代专业检查；如有持续不适，请咨询专业人员。",
+    followUp: "最近作息是否规律？",
   });
 }
 
@@ -326,12 +332,12 @@ test("StandaloneDiagnosisService keeps three validated modules on module-four fa
   assert.equal(native.values.has(`${session.sessionId}/report.json`), false);
   assert.equal((await service.getReport(session.sessionId))?.status, "failed");
   assert.deepEqual(schemas.slice(0, 2), [
-    "diagnosis_single_response_v1",
-    "diagnosis_single_response_v1",
+    "diagnosis_single_response_v2",
+    "diagnosis_single_response_v2",
   ]);
 
   assert.equal((await service.runReport(session.sessionId)).status, "succeeded");
-  assert.equal(schemas[2], "diagnosis_single_response_v1");
+  assert.equal(schemas[2], "diagnosis_single_response_v2");
 });
 
 test("StandaloneDiagnosisService keeps the selected image MIME across private copy and reload", async () => {
