@@ -298,36 +298,7 @@ export class StandaloneTaskService implements TaskService {
   async start(taskId: string): Promise<CancellableTask> {
     const active = this.#active.get(taskId);
     if (active) return active;
-    const task = await this.#readTask(taskId);
-    if (!task) throw taskError("TASK_ARTIFACT_MISSING", "未找到本地任务", "edit_input");
-    if (task.status !== "queued") {
-      throw taskError("TASK_INTERRUPTED", "该任务不能在当前状态继续执行，请重新提交链接。", "edit_input");
-    }
-    const request = await this.#readRequest(taskId);
-    const pipeline = new IngestPipeline({
-      adapters: this.#adapters,
-      http: this.#http,
-      downloader: this.#downloader,
-      mediaTools: this.#mediaTools,
-      ...(this.#transcriber ? { transcriber: this.#transcriber } : {}),
-      ...(this.#rewriter ? { rewriter: this.#rewriter } : {}),
-      store: this.#artifactStore,
-      reporter: { report: async (event) => this.#report(event) },
-    });
-    const pipelineRequest = request.kind === "local_video"
-      ? { taskId, localVideo: { displayName: request.displayName } } as const
-      : { input: request.normalizedUrl, taskId } as const;
-    const execute = async () => {
-      let pipelineIssues: readonly TaskIssue[] = [];
-      let runError: unknown;
-      try {
-        const result = await pipeline.run(pipelineRequest);
-        pipelineIssues = result.issues;
-      } catch (error) {
-        runError = error;
-      }
-      return this.#settleAfterPipeline(taskId, pipelineIssues, runError);
-    };
+    const execute = () => this.#startIngest(taskId);
     const completion = this.#operations
       ? this.#operations.track({ kind: "ingest", id: taskId, execution: "in-process" }, execute)
       : execute();
@@ -337,7 +308,9 @@ export class StandaloneTaskService implements TaskService {
       cancel: async () => { throw taskError("TASK_CANCEL_FAILED", "首版不在任务执行中断路径中写入第二套状态机。", "edit_input"); },
     };
     this.#active.set(taskId, cancellable);
-    void completion.finally(() => this.#active.delete(taskId)).catch(() => undefined);
+    void completion.finally(() => {
+      if (this.#active.get(taskId) === cancellable) this.#active.delete(taskId);
+    }).catch(() => undefined);
     return cancellable;
   }
 
@@ -511,6 +484,37 @@ export class StandaloneTaskService implements TaskService {
     const operation = this.#deleteTerminalTask(taskId).finally(() => this.#deletions.delete(taskId));
     this.#deletions.set(taskId, operation);
     return operation;
+  }
+
+  async #startIngest(taskId: string): Promise<AppTaskRecord> {
+    const task = await this.#readTask(taskId);
+    if (!task) throw taskError("TASK_ARTIFACT_MISSING", "未找到本地任务", "edit_input");
+    if (task.status !== "queued") {
+      throw taskError("TASK_INTERRUPTED", "该任务不能在当前状态继续执行，请重新提交链接。", "edit_input");
+    }
+    const request = await this.#readRequest(taskId);
+    const pipeline = new IngestPipeline({
+      adapters: this.#adapters,
+      http: this.#http,
+      downloader: this.#downloader,
+      mediaTools: this.#mediaTools,
+      ...(this.#transcriber ? { transcriber: this.#transcriber } : {}),
+      ...(this.#rewriter ? { rewriter: this.#rewriter } : {}),
+      store: this.#artifactStore,
+      reporter: { report: async (event) => this.#report(event) },
+    });
+    const pipelineRequest = request.kind === "local_video"
+      ? { taskId, localVideo: { displayName: request.displayName } } as const
+      : { input: request.normalizedUrl, taskId } as const;
+    let pipelineIssues: readonly TaskIssue[] = [];
+    let runError: unknown;
+    try {
+      const result = await pipeline.run(pipelineRequest);
+      pipelineIssues = result.issues;
+    } catch (error) {
+      runError = error;
+    }
+    return this.#settleAfterPipeline(taskId, pipelineIssues, runError);
   }
 
   /** Used only by the analysis adapter to keep the task projection current. */

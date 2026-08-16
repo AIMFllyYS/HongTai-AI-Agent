@@ -478,3 +478,90 @@ test("StandaloneTaskService persists initialize failure as failed for local vide
   assert.equal((await service.recoverInterruptedWork()).length, 0);
   assert.notEqual(persisted.status, "interrupted");
 });
+
+test("StandaloneTaskService single-flights concurrent start for the same taskId", async () => {
+  const native = memoryFiles();
+  const started = deferred();
+  const release = deferred();
+  let resolveCalls = 0;
+  const base = imageTextAdapter();
+  const adapter: PlatformAdapter = {
+    ...base,
+    resolve: async (url, http) => {
+      resolveCalls += 1;
+      started.resolve();
+      await release.promise;
+      return base.resolve(url, http);
+    },
+  };
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    adapters: [adapter],
+    http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 0, extractAudio: async () => undefined, splitAudio: async () => [] },
+    createTaskId: () => "task-single-flight",
+    toDisplayUri: (value) => value,
+  });
+
+  const task = await service.create({ input: "https://www.xiaohongshu.com/discovery/item/abc123" });
+  const [first, second] = await Promise.all([service.start(task.id), service.start(task.id)]);
+  assert.equal(first, second, "same taskId must return the same in-flight CancellableTask");
+  await started.promise;
+  const late = await service.start(task.id);
+  assert.equal(late, first);
+  assert.equal(resolveCalls, 1);
+
+  release.resolve();
+  const [left, right] = await Promise.all([first.completion, second.completion]);
+  assert.equal(left.status, right.status);
+  assert.equal(left.id, right.id);
+  assert.equal(resolveCalls, 1);
+  assert.equal((await service.get(task.id))?.status, "degraded");
+});
+
+test("StandaloneTaskService still runs different taskIds in parallel", async () => {
+  const native = memoryFiles();
+  const firstEntered = deferred();
+  const secondEntered = deferred();
+  const release = deferred();
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const ids = ["task-parallel-a", "task-parallel-b"];
+  const base = imageTextAdapter();
+  const adapter: PlatformAdapter = {
+    ...base,
+    resolve: async (url, http) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      if (inFlight === 1) firstEntered.resolve();
+      if (inFlight === 2) secondEntered.resolve();
+      await release.promise;
+      inFlight -= 1;
+      return base.resolve(url, http);
+    },
+  };
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    adapters: [adapter],
+    http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 0, extractAudio: async () => undefined, splitAudio: async () => [] },
+    createTaskId: () => ids.shift() ?? "task-unexpected",
+    toDisplayUri: (value) => value,
+  });
+
+  const firstTask = await service.create({ input: "https://www.xiaohongshu.com/discovery/item/aaa111" });
+  const secondTask = await service.create({ input: "https://www.xiaohongshu.com/discovery/item/bbb222" });
+  const [first, second] = await Promise.all([service.start(firstTask.id), service.start(secondTask.id)]);
+  assert.notEqual(first, second);
+  await Promise.all([firstEntered.promise, secondEntered.promise]);
+  assert.equal(maxInFlight, 2, "different taskIds must overlap in the shared pipeline");
+
+  release.resolve();
+  const [left, right] = await Promise.all([first.completion, second.completion]);
+  assert.equal(left.id, firstTask.id);
+  assert.equal(right.id, secondTask.id);
+  assert.equal(left.status, "degraded");
+  assert.equal(right.status, "degraded");
+});
