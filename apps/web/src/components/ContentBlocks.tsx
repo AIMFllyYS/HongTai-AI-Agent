@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { RecentAnalysis, VisualMedia } from "../data/visual-types";
+import type { RecentAnalysis } from "../data/visual-types";
 import { Icon, type IconName } from "./Icon";
 import { MediaFrame } from "./MediaFrame";
 import { StatusBadge } from "./StatusBadge";
@@ -62,8 +62,4 @@ export function MetricGrid({ items }: MetricGridProps) {
       ))}
     </div>
   );
-}
-
-export function MediaLabel({ media, label }: { readonly media: VisualMedia; readonly label: string }) {
-  return <MediaFrame media={media}><span className="media-label">{label}</span></MediaFrame>;
 }

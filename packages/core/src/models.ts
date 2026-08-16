@@ -47,7 +47,6 @@ export type ErrorCode =
   | "APP_RUNTIME_UNAVAILABLE" | "INTERNAL_UNKNOWN_ERROR";
 
 export type IssueAction = "edit_input" | "retry" | "wait_and_retry" | "check_network" | "configure_ai" | "free_storage" | "select_media" | "view_partial_result" | "none";
-export type TaskIssueAction = IssueAction;
 
 export const TASK_STAGE_VALUES = [
   "detect-platform",

@@ -191,10 +191,4 @@ export type DiagnosisFollowUpQuestions = z.infer<typeof diagnosisFollowUpQuestio
 export type DiagnosisSingleResponse = z.infer<typeof diagnosisSingleResponseSchema>;
 export type DiagnosisReportV1 = z.infer<typeof diagnosisReportSchema>;
 
-export const diagnosisVisualObservationsJsonSchema = toProviderJsonSchema(diagnosisVisualObservationsSchema);
-export const diagnosisObservationSummaryJsonSchema = toProviderJsonSchema(diagnosisObservationSummarySchema);
-export const diagnosisWellnessRecommendationsJsonSchema = toProviderJsonSchema(diagnosisWellnessRecommendationsSchema);
-export const diagnosisSafetyLimitationsJsonSchema = toProviderJsonSchema(diagnosisSafetyLimitationsSchema);
-export const diagnosisFollowUpQuestionsJsonSchema = toProviderJsonSchema(diagnosisFollowUpQuestionsSchema);
 export const diagnosisSingleResponseJsonSchema = toProviderJsonSchema(diagnosisSingleResponseSchema);
-export const diagnosisReportJsonSchema = toProviderJsonSchema(diagnosisReportSchema);

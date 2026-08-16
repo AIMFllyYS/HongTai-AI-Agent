@@ -98,10 +98,4 @@ export type ContentAnalysisRisksBoundaries = z.infer<typeof contentAnalysisRisks
 export type ContentAnalysisSingleResponse = z.infer<typeof contentAnalysisSingleResponseSchema>;
 export type ContentAnalysisResultV1 = z.infer<typeof contentAnalysisResultSchema>;
 
-export const contentAnalysisOverviewJsonSchema = toProviderJsonSchema(contentAnalysisOverviewSchema);
-export const contentAnalysisHookDriversJsonSchema = toProviderJsonSchema(contentAnalysisHookDriversSchema);
-export const contentAnalysisStructureClaimsJsonSchema = toProviderJsonSchema(contentAnalysisStructureClaimsSchema);
-export const contentAnalysisStyleTemplateJsonSchema = toProviderJsonSchema(contentAnalysisStyleTemplateSchema);
-export const contentAnalysisRisksBoundariesJsonSchema = toProviderJsonSchema(contentAnalysisRisksBoundariesSchema);
 export const contentAnalysisSingleResponseJsonSchema = toProviderJsonSchema(contentAnalysisSingleResponseSchema);
-export const contentAnalysisResultJsonSchema = toProviderJsonSchema(contentAnalysisResultSchema);

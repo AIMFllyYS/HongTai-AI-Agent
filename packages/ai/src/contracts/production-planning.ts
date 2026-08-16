@@ -1,5 +1,4 @@
 import type { ContentAnalysisResultV1 } from "../schemas/content-analysis";
-import type { ProductionPlanResult } from "../schemas/production-plan";
 import type { AiProvider, AiStreamEvent } from "./provider";
 
 export interface ProductionPlanningAsset {
@@ -30,8 +29,4 @@ export interface ProductionPlanInput {
 export interface ProductionPlanningFlowDependencies {
   readonly provider: AiProvider;
   readonly onEvent?: (event: AiStreamEvent) => void | Promise<void>;
-}
-
-export interface ProductionPlanStore {
-  savePlan(projectId: string, plan: ProductionPlanResult): Promise<void>;
 }
