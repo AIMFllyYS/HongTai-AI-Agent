@@ -58,6 +58,7 @@ export function upsertObservationSession(
 export function ObservationStartPage({ runtime, navigate }: ObservationStartPageProps) {
   const diagnosisAvailable = runtime.features.diagnosis === "available";
   const observationHistoryReads = useRef(new LiveListReadReconciler<DiagnosisSessionRecord>());
+  const runningReportSubscriptions = useRef(new Map<string, () => void>());
   const [mode, setMode] = useState<ObservationMode>("tongue");
   const [image, setImage] = useState<MediaReference>();
   const [sessions, setSessions] = useState<readonly DiagnosisSessionRecord[]>();
@@ -70,6 +71,16 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
   const applySessionChange = useCallback((session: DiagnosisSessionRecord) => {
     observationHistoryReads.current.record(session);
     setSessions((current) => upsertObservationSession(current, session));
+  }, []);
+
+  const applySessionTerminal = useCallback((sessionId: string, patch: Pick<DiagnosisSessionRecord, "reportStatus" | "updatedAt">) => {
+    setSessions((current) => {
+      const existing = current?.find((item) => item.sessionId === sessionId);
+      if (!existing) return current;
+      const next = { ...existing, ...patch };
+      observationHistoryReads.current.record(next);
+      return upsertObservationSession(current, next);
+    });
   }, []);
 
   const loadSessions = useCallback(async () => {
@@ -96,17 +107,29 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
     void loadSessions();
   }, [loadSessions]);
 
+  const runningSessionKey = (sessions ?? [])
+    .filter((session) => session.reportStatus === "running")
+    .map((session) => session.sessionId)
+    .sort()
+    .join("\n");
+
   useEffect(() => {
-    const running = sessions?.filter((session) => session.reportStatus === "running") ?? [];
-    const subscriptions: Array<() => void> = [];
+    const wantedIds = new Set(runningSessionKey === "" ? [] : runningSessionKey.split("\n"));
+    const subscriptions = runningReportSubscriptions.current;
+    for (const [sessionId, unsubscribe] of [...subscriptions]) {
+      if (wantedIds.has(sessionId)) continue;
+      unsubscribe();
+      subscriptions.delete(sessionId);
+    }
     try {
-      for (const session of running) {
-        subscriptions.push(runtime.diagnosis.subscribeReport(session.sessionId, (event) => {
+      for (const sessionId of wantedIds) {
+        if (subscriptions.has(sessionId)) continue;
+        subscriptions.set(sessionId, runtime.diagnosis.subscribeReport(sessionId, (event) => {
           if (event.type === "completed") {
-            applySessionChange({ ...session, reportStatus: "succeeded", updatedAt: event.record.updatedAt });
+            applySessionTerminal(sessionId, { reportStatus: "succeeded", updatedAt: event.record.updatedAt });
           }
           if (event.type === "failed") {
-            void runtime.diagnosis.getSession(session.sessionId).then((stored) => {
+            void runtime.diagnosis.getSession(sessionId).then((stored) => {
               if (stored) applySessionChange(stored);
             }).catch(() => undefined);
           }
@@ -115,8 +138,15 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
     } catch (error) {
       setHistoryIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "观察历史自动更新暂时不可用", action: "none" }));
     }
-    return () => subscriptions.forEach((unsubscribe) => unsubscribe());
-  }, [applySessionChange, runtime, sessions]);
+  }, [applySessionChange, applySessionTerminal, runtime, runningSessionKey]);
+
+  useEffect(() => {
+    const subscriptions = runningReportSubscriptions.current;
+    return () => {
+      for (const unsubscribe of subscriptions.values()) unsubscribe();
+      subscriptions.clear();
+    };
+  }, [runtime]);
 
   useEffect(() => {
     let active = true;
@@ -190,7 +220,7 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
             }).catch(() => undefined);
           }
           if (event.type === "completed") {
-            applySessionChange({ ...session, reportStatus: "succeeded", updatedAt: event.record.updatedAt });
+            applySessionTerminal(session.sessionId, { reportStatus: "succeeded", updatedAt: event.record.updatedAt });
           }
         });
         navigate(observationReportPath(session.sessionId));
