@@ -1,4 +1,4 @@
-import { IngestPipeline, TaskError, inspectInput, isTerminalTaskStatus, safeUrlForDisplay } from "@hongtai/core";
+import { IngestPipeline, TaskError, inspectInput, isTerminalTaskStatus, issueFromError, safeUrlForDisplay } from "@hongtai/core";
 import type {
   AppTaskRecord,
   CancellableTask,
@@ -317,11 +317,17 @@ export class StandaloneTaskService implements TaskService {
     const pipelineRequest = request.kind === "local_video"
       ? { taskId, localVideo: { displayName: request.displayName } } as const
       : { input: request.normalizedUrl, taskId } as const;
-    const execute = () => pipeline.run(pipelineRequest).then(async () => {
-      const finished = await this.get(taskId);
-      if (!finished) throw taskError("TASK_ARTIFACT_MISSING", "任务完成后未找到本地结果", "view_partial_result");
-      return finished;
-    });
+    const execute = async () => {
+      let pipelineIssues: readonly TaskIssue[] = [];
+      let runError: unknown;
+      try {
+        const result = await pipeline.run(pipelineRequest);
+        pipelineIssues = result.issues;
+      } catch (error) {
+        runError = error;
+      }
+      return this.#settleAfterPipeline(taskId, pipelineIssues, runError);
+    };
     const completion = this.#operations
       ? this.#operations.track({ kind: "ingest", id: taskId, execution: "in-process" }, execute)
       : execute();
@@ -519,6 +525,38 @@ export class StandaloneTaskService implements TaskService {
       type: "upsert",
       task: toAppTask(updated, await this.#taskMedia(updated)),
     });
+  }
+
+  async #settleAfterPipeline(
+    taskId: string,
+    pipelineIssues: readonly TaskIssue[],
+    runError: unknown,
+  ): Promise<AppTaskRecord> {
+    const persisted = await this.#readTask(taskId);
+    if (persisted?.status === "queued") {
+      const issues = pipelineIssues.length > 0
+        ? pipelineIssues
+        : [issueFromError(runError ?? taskError("STORAGE_WRITE_FAILED", "产物保存失败", "free_storage"), "save-artifacts")];
+      return this.#failQueuedSnapshot(persisted, issues);
+    }
+    if (runError) throw runError;
+    if (!persisted) throw taskError("TASK_ARTIFACT_MISSING", "任务完成后未找到本地结果", "view_partial_result");
+    return toAppTask(persisted, await this.#taskMedia(persisted));
+  }
+
+  async #failQueuedSnapshot(task: TaskRecord, issues: readonly TaskIssue[]): Promise<AppTaskRecord> {
+    const path = task.paths?.task;
+    if (!path) throw taskError("STORAGE_WRITE_FAILED", "产物保存失败", "free_storage");
+    const failed: TaskRecord = {
+      ...task,
+      status: "failed",
+      updatedAt: currentIso(this.#now),
+      issues: [...task.issues, ...issues],
+    };
+    await this.#artifactStore.writeJson(path, failed);
+    const projection = toAppTask(failed, await this.#taskMedia(failed));
+    await this.#emitChange({ schemaVersion: "task-change.v1", type: "upsert", task: projection });
+    return projection;
   }
 
   async #report(event: ProgressEvent): Promise<void> {

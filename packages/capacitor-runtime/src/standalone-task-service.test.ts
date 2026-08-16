@@ -390,3 +390,91 @@ test("StandaloneTaskService opens the picker without creating a task and maps ca
   );
   assert.deepEqual((await native.plugin.listTaskIds()).taskIds, []);
 });
+
+function filesWithEnsureLimit(successfulEnsures: number) {
+  const native = memoryFiles();
+  const ensure = native.plugin.ensure;
+  let calls = 0;
+  return {
+    values: native.values,
+    plugin: {
+      ...native.plugin,
+      ensure: async (options: { readonly taskId: string }) => {
+        calls += 1;
+        if (calls > successfulEnsures) throw new Error("no space left");
+        return ensure(options);
+      },
+    },
+  };
+}
+
+test("StandaloneTaskService persists initialize failure as failed instead of leaving public-link queued", async () => {
+  const native = filesWithEnsureLimit(1);
+  const changes: Array<{ readonly status?: string; readonly persistedStatus?: string }> = [];
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    adapters: [imageTextAdapter()],
+    http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 0, extractAudio: async () => undefined, splitAudio: async () => [] },
+    createTaskId: () => "task-init-fail-public",
+    toDisplayUri: (value) => value,
+    now: () => new Date("2026-08-16T09:00:00.000Z"),
+  });
+  service.subscribeChanges(async (event) => {
+    if (event.type !== "upsert") return;
+    changes.push({
+      status: event.task.status,
+      persistedStatus: JSON.parse(native.values.get(`${event.task.id}/task.json`) ?? "{}").status,
+    });
+  });
+
+  const queued = await service.create({ input: "https://www.xiaohongshu.com/discovery/item/abc123" });
+  assert.equal(queued.status, "queued");
+  const completed = await (await service.start(queued.id)).completion;
+  const persisted = JSON.parse(native.values.get("task-init-fail-public/task.json") ?? "{}");
+  const listed = await service.list();
+
+  assert.equal(completed.status, "failed");
+  assert.equal(persisted.status, "failed");
+  assert.equal(persisted.issues.at(-1)?.code, "STORAGE_WRITE_FAILED");
+  assert.equal(persisted.issues.at(-1)?.action, "free_storage");
+  assert.equal((await service.get(queued.id))?.status, "failed");
+  assert.equal(listed[0]?.status, "failed");
+  assert.deepEqual(await service.inspectUnfinishedWork(), []);
+  assert.equal((await service.recoverInterruptedWork()).length, 0);
+  assert.deepEqual(changes.at(-1), { status: "failed", persistedStatus: "failed" });
+});
+
+test("StandaloneTaskService persists initialize failure as failed for local video instead of leaving queued", async () => {
+  const native = filesWithEnsureLimit(1);
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    fileMedia: {
+      pickVideo: async ({ taskId }) => {
+        await native.plugin.writeText({ taskId, relativePath: "media/video.mp4", value: "private-mp4", replace: true });
+        return { uri: `file:///private/tasks/${taskId}/media/video.mp4`, mimeType: "video/mp4", displayName: "初始化失败.mp4", sizeBytes: 128, durationSeconds: 8 };
+      },
+    },
+    adapters: [],
+    http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 8, extractAudio: async () => undefined, splitAudio: async () => [] },
+    createTaskId: () => "task-init-fail-local",
+    toDisplayUri: (value) => value,
+    now: () => new Date("2026-08-16T09:00:00.000Z"),
+  });
+
+  const imported = await service.importVideo();
+  assert.equal(imported.status, "queued");
+  const completed = await (await service.start(imported.id)).completion;
+  const persisted = JSON.parse(native.values.get("task-init-fail-local/task.json") ?? "{}");
+
+  assert.equal(completed.status, "failed");
+  assert.equal(persisted.status, "failed");
+  assert.equal(persisted.issues.at(-1)?.code, "STORAGE_WRITE_FAILED");
+  assert.equal((await service.get(imported.id))?.status, "failed");
+  assert.deepEqual(await service.inspectUnfinishedWork(), []);
+  assert.equal((await service.recoverInterruptedWork()).length, 0);
+  assert.notEqual(persisted.status, "interrupted");
+});
