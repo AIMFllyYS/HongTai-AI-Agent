@@ -321,6 +321,29 @@ test("抖音桌面页受限时回退到公开移动分享页", async () => {
   assert.match(requests[1]?.headers?.["User-Agent"] ?? "", /Mobile/);
 });
 
+test("抖音适配器识别图文帖并解析图片与正文", async () => {
+  const html = `<script>window._ROUTER_DATA={"loaderData":{"note":{"aweme_id":"7600000000000000002","desc":"抖音图文正文","author":{"nickname":"作者己"},"Cookie":"synthetic-cookie","Authorization":"Bearer SYNTHETIC","images":[{"url_list":["https://img.example/dy-1.jpg?signature=fake-sign"],"download_url_list":["https://img.example/dy-1-dl.jpg"]},{"url_list":["not-a-url"],"download_url_list":["https://img.example/dy-2.jpg"]},{"url_list":[]}]}}};</script>`;
+  const client = new FakeHttpClient(() => response("https://www.douyin.com/note/7600000000000000002", html));
+  const adapter = new DouyinAdapter();
+  const resolved = await adapter.resolve("https://www.douyin.com/note/7600000000000000002", client);
+  const content = await adapter.parse(resolved, client);
+  assert.equal(content.platform, "douyin");
+  assert.equal(content.contentType, "image_text");
+  assert.equal(content.title, "抖音图文正文");
+  assert.equal(content.description, "抖音图文正文");
+  assert.equal(content.author, "作者己");
+  assert.equal(content.videos.length, 0);
+  assert.equal(content.images.length, 2);
+  assert.equal(content.images[0]?.kind, "image");
+  assert.equal(content.images[0]?.url, "https://img.example/dy-1.jpg?signature=fake-sign");
+  assert.equal(content.images[1]?.url, "https://img.example/dy-2.jpg");
+  assert.equal(content.coverUrl, "https://img.example/dy-1.jpg?signature=fake-sign");
+  assert.equal(content.images[0]?.headers?.Referer, "https://www.douyin.com/note/7600000000000000002");
+  assert.equal((content.raw as { contentType?: string }).contentType, "image_text");
+  assert.equal((content.raw as { media?: { imageCount?: number } }).media?.imageCount, 2);
+  assertWhitelistedRaw(content.raw);
+});
+
 test("小红书适配器提取H264视频流", async () => {
   const html = `<script>window.__INITIAL_STATE__={"note":{"noteDetailMap":{"abc123":{"note":{"noteId":"abc123","title":"测试小红书","desc":"正文","user":{"nickname":"作者乙"},"Cookie":"synthetic-cookie","Authorization":"Bearer SYNTHETIC","imageList":[{"urlDefault":"https://img.example/xhs.jpg?signature=fake-sign"}],"video":{"duration":30000,"media":{"stream":{"h264":[{"masterUrl":"https://sns-video.example/master.mp4?signature=fake-sign","videoQuality":"HD","width":1080,"height":1920,"avgBitrate":1800000}]}}}}}}}};</script>`;
   const client = new FakeHttpClient(() => response("https://www.xiaohongshu.com/explore/abc123", html));
