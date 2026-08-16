@@ -12,7 +12,7 @@
 - Android manifest 的普通图标和圆形图标都切换到 `@drawable/hongtai_launcher`；Android 源文件与 public 裁剪图 SHA-256 均为 `b7666580d788a694be1a331f4dac36aebfb06b1000190cef6eb542bb49afceac`。
 - 应用内既有 SVG、Pulse Flow 页头标记和导航图标没有被替换。
 - 用户提供的 1125×2436 富迪宣传图原样保存为 `apps/web/public/materials/fudi-material-library.jpg`，SHA-256 为 `cb86a094e7535d4923a0edecd159349b3ff94e4c4cbbe376a3e1f7100ecdb7d2`。
-- 底栏新增“富迪素材库”动作，打开可访问的图片弹层；该动作不进入页面路由或横向滑动顺序。
+- 富迪素材库入口在制作页页头右上角（`headerAction`），打开可访问的图片弹层；该动作不进入页面路由、横向滑动顺序或底部导航。v0.1.10 验收时入口曾在底栏第 6 格，后续按交互信息架构规范移出。
 
 ## 自动化证据
 

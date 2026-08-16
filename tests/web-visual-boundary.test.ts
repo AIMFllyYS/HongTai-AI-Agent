@@ -31,7 +31,6 @@ test("web application routes expose canonical runtime paths", () => {
     "/tasks/:taskId",
     "/tasks/:taskId/analysis",
     "/create",
-    "/publish",
     "/templates",
     "/settings",
     "/settings/profile",
@@ -51,6 +50,9 @@ test("web application routes expose canonical runtime paths", () => {
   assert.equal(pathForRoute("templates"), "/templates");
   assert.equal(matchRoute("/assets").key, "templates");
   assert.equal(matchRoute("/unknown").key, "not-found");
+  assert.equal(matchRoute("/publish").key, "not-found");
+  assert.doesNotMatch(read("router.ts"), /path:\s*"\/publish"/);
+  assert.doesNotMatch(read("router.ts"), /\|\s*"publish"/);
 });
 
 test("dynamic task routes decode their identifiers and keep analysis as a distinct route", () => {

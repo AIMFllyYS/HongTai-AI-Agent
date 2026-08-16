@@ -7,7 +7,6 @@ export type ActiveRouteKey =
   | "task-detail"
   | "task-analysis"
   | "create"
-  | "publish"
   | "templates"
   | "settings"
   | "settings-profile"
@@ -60,7 +59,6 @@ export const appRoutes: readonly AppRoute[] = [
   { path: "/tasks/:taskId", key: "task-detail", navKey: "home" },
   { path: "/tasks/:taskId/analysis", key: "task-analysis", navKey: "home" },
   { path: "/create", key: "create", navKey: "create" },
-  { path: "/publish", key: "publish" },
   { path: "/templates", key: "templates", navKey: "templates" },
   { path: "/settings", key: "settings", navKey: "settings" },
   { path: "/settings/profile", key: "settings-profile", navKey: "settings" },

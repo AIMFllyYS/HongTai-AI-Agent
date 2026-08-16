@@ -72,8 +72,10 @@ test("production runtime uses capability-gated shells while fixtures stay explic
 
   assert.match(app, /runtime && renderedRoute\.key === "create"[\s\S]*<CreatePage navigate=\{navigate\} runtime=\{runtime\} \/>/);
   assert.match(app, /runtime && renderedRoute\.key === "templates"[\s\S]*<TemplatesPage navigate=\{navigate\} runtime=\{runtime\} \/>/);
-  assert.match(app, /runtime && renderedRoute\.key === "publish"[\s\S]*<PublishPage capability=\{runtime\.features\.publish\} navigate=\{navigate\} \/>/);
-  assert.match(app, /if \(visualData\) \{[\s\S]*visualData\.getCreate\(\)[\s\S]*visualData\.getPublish\(\)/);
+  assert.doesNotMatch(app, /renderedRoute\.key === "publish"/);
+  assert.doesNotMatch(app, /<PublishPage/);
+  assert.doesNotMatch(app, /visualData\.getPublish\(\)/);
+  assert.match(app, /if \(visualData\) \{[\s\S]*visualData\.getCreate\(\)/);
 
   for (const page of ["pages/CreatePage.tsx", "pages/PublishPage.tsx"]) {
     assert.match(read(page), /viewModel\?:/);

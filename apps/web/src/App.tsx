@@ -18,7 +18,6 @@ import { TaskAnalysisPage } from "./pages/TaskAnalysisPage";
 import { TaskDetailPage } from "./pages/TaskDetailPage";
 import { TaskHomePage } from "./pages/TaskHomePage";
 import { TaskProcessingPage } from "./pages/TaskProcessingPage";
-import { PublishPage } from "./pages/PublishPage";
 import { AiSettingsPage } from "./pages/AiSettingsPage";
 import { ApplicationInfoPage } from "./pages/ApplicationInfoPage";
 import { ProfileSettingsPage } from "./pages/ProfileSettingsPage";
@@ -99,15 +98,11 @@ export function App({ runtime, visualData }: AppProps = {}) {
     if (runtime && renderedRoute.key === "templates") {
       return <TemplatesPage navigate={navigate} runtime={runtime} />;
     }
-    if (runtime && renderedRoute.key === "publish") {
-      return <PublishPage capability={runtime.features.publish} navigate={navigate} />;
-    }
 
     // Visual fixtures remain available only to explicit design/test callers.
     if (visualData) {
       if (renderedRoute.key === "home") return <HomePage navigate={navigate} viewModel={visualData.getHome()} />;
       if (renderedRoute.key === "create") return <CreatePage navigate={navigate} viewModel={visualData.getCreate()} />;
-      if (renderedRoute.key === "publish") return <PublishPage navigate={navigate} viewModel={visualData.getPublish()} />;
     }
 
     const unsupported = renderedRoute.key === "not-found"

@@ -49,7 +49,7 @@ export function AppShell({ title, subtitle, navigate, backPath, activeNav, showN
           <h1>{title}</h1>
           {subtitle ? <p>{subtitle}</p> : null}
         </div>
-        <div className="app-header__action">{headerAction ?? <button aria-label="通知" className="icon-button" type="button"><Icon name="notifications" size={24} /></button>}</div>
+        <div className="app-header__action">{headerAction}</div>
       </header>
       <main className="app-content">{children}</main>
       {contextualAction ? <div className="contextual-action">{contextualAction}</div> : null}

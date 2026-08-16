@@ -5,6 +5,7 @@ import type { AppRuntime, AppTaskRecord, ProductionMode, ProductionProjectRecord
 import type { CreateViewModel } from "../data/visual-types";
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
+import { MaterialLibraryHeaderAction } from "../components/MaterialLibraryHeaderAction";
 import { FeatureUnavailablePanel } from "../components/FeatureUnavailablePanel";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
@@ -41,7 +42,7 @@ function focusProductionInput(): void {
 
 function PlannedCreatePage({ navigate, title = "制作" }: { readonly navigate: (path: string) => void; readonly title?: string }) {
   return (
-    <AppShell activeNav="create" leadingAction={<span className="page-header-icon"><Icon name="movie_edit" size={25} /></span>} navigate={navigate} title={title}>
+    <AppShell activeNav="create" headerAction={<MaterialLibraryHeaderAction />} leadingAction={<span className="page-header-icon"><Icon name="movie_edit" size={25} /></span>} navigate={navigate} title={title}>
       <div className="page-stack page-create" data-feature-capability="planned">
         <FeatureUnavailablePanel feature="create" />
         <GlassCard className="planned-workbench">
@@ -204,10 +205,10 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
     }
   };
 
-  if (loading) return <AppShell activeNav="create" navigate={navigate} title="制作"><LoadingState description="正在读取正式拆解与本地制作项目" title="打开制作工作台" /></AppShell>;
+  if (loading) return <AppShell activeNav="create" headerAction={<MaterialLibraryHeaderAction />} navigate={navigate} title="制作"><LoadingState description="正在读取正式拆解与本地制作项目" title="打开制作工作台" /></AppShell>;
 
   return (
-    <AppShell activeNav="create" leadingAction={<span className="page-header-icon"><Icon name="movie_edit" size={24} /></span>} navigate={navigate} title="制作">
+    <AppShell activeNav="create" headerAction={<MaterialLibraryHeaderAction />} leadingAction={<span className="page-header-icon"><Icon name="movie_edit" size={24} /></span>} navigate={navigate} title="制作">
       <div className="page-stack page-create production-workbench">
         {issue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), selectMedia: project ? () => void perform(() => runtime.production.importAssets(project.projectId)) : undefined, editInput: focusProductionInput, retry: project?.plan ? () => void perform(() => runtime.production.render(project.projectId)) : undefined }} issue={issue} /> : null}
 

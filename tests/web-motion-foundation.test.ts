@@ -147,6 +147,13 @@ test("swipe preview panes stay inert and do not list, subscribe, or consume", ()
   assert.doesNotMatch(app, /renderRoute=\{renderRoute\}/);
 });
 
+test("material library header nudge uses motion tokens and is fully still when motion is reduced", () => {
+  const styles = read("styles/components.css");
+
+  assert.match(styles, /\.material-library-entry[\s\S]*?var\(--motion-ease-standard\)/);
+  assert.match(styles, /prefers-reduced-motion:\s*reduce[\s\S]*\.material-library-entry[\s\S]*animation:\s*none/);
+});
+
 test("shared controls expose one press-feedback vocabulary", () => {
   const buttons = read("components/Buttons.tsx");
   const cards = read("components/GlassCard.tsx");

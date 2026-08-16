@@ -77,7 +77,7 @@
   left: 0;
   z-index: 20;
   display: grid;
-  grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+  grid-template-columns: 2.5rem minmax(0, 1fr) minmax(2.5rem, auto);
   align-items: center;
   min-height: calc(var(--header-height) + max(env(safe-area-inset-top), var(--native-status-bar-inset)));
   padding: var(--space-2) var(--page-gutter);
@@ -96,7 +96,7 @@
 }
 
 .app-header--brand {
-  grid-template-columns: 3.5625rem minmax(0, 1fr) auto;
+  grid-template-columns: 3.5625rem minmax(0, 1fr) minmax(2.5rem, auto);
 }
 
 .app-header--detail .app-header__title-wrap {
