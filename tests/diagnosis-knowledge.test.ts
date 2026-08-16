@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { diagnosisSinglePrompt, diagnosisSingleRepairPrompt } from "../packages/ai/src/prompts/diagnosis-report-single";
 import { diagnosisConversationPrompt } from "../packages/ai/src/prompts/diagnosis-conversation";
 import { FIVE_ORGANS_OBSERVATION_KNOWLEDGE } from "../packages/ai/src/knowledge/five-organs-observation.generated";
+import { diagnosisFollowUpReplySchema } from "../packages/ai/src/schemas/diagnosis-follow-up";
 import {
   diagnosisReportSchema,
   diagnosisSingleResponseSchema,
@@ -210,6 +211,12 @@ test("清晰、有限和不可用图片遵守各自的观察数量边界", () =>
   assert.equal(diagnosisSingleResponseSchema.safeParse({ ...base, quality: "good", qualityNote: "清晰。", observations: [observation, observation] }).success, false);
   assert.equal(diagnosisSingleResponseSchema.safeParse({ ...base, quality: "limited", qualityNote: "略偏暗但可辨。", observations: [observation] }).success, true);
   assert.equal(diagnosisSingleResponseSchema.safeParse({ ...base, quality: "limited", qualityNote: "略偏暗但可辨。", observations: [] }).success, false);
+});
+
+test("追问回复复用报告级结构越界，拦截无「为」的概率和评分", () => {
+  assert.equal(diagnosisFollowUpReplySchema.safeParse("建议结合规律作息继续观察。").success, true);
+  assert.equal(diagnosisFollowUpReplySchema.safeParse("患病概率80%").success, false);
+  assert.equal(diagnosisFollowUpReplySchema.safeParse("健康评分90").success, false);
 });
 
 test("后续对话只继承安全边界而不继承JSON输出约束", () => {

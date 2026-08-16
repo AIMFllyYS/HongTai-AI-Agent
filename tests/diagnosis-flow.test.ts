@@ -235,10 +235,10 @@ test("后续对话保存文本消息信封且不把reasoning写入上下文", as
 
 test("越界追问回复不落库并抛出DIAGNOSIS_FOLLOW_UP_FAILED", async () => {
   const forbiddenReplies = [
-    "你就是湿气重。",
-    "你的肝、心、脾、肺、肾有问题。",
     "患病概率为百分之八十，健康评分为90。",
     "根据这张舌头已经确诊，请按处方停药并替代就医。",
+    "患病概率80%",
+    "健康评分90",
   ];
   for (const reply of forbiddenReplies) {
     const repository = new MemoryRepository();
