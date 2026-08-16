@@ -39,7 +39,20 @@ keystore.properties
 Thumbs.db
 
 # 本仓库只在根项目目录工作；不要忽略误建的附加工作区。
+# 发现 .worktrees 或其他复制式工作区时删除残留，而不是把目录写进本文件。
+
+# Playwright CLI 会话快照（任意层级）。已入库的 output/playwright/ 验收图不受影响。
+.playwright-cli/
 
 # 本地 APK 与端测证据保留在主项目目录，但不进入 Git。
+# output/playwright/ 里已跟踪的验收截图与脚本继续纳入版本管理。
 output/apk-archive/*.apk
 output/local-evidence/
+output/stage*
+output/reference-video-analysis/
+output/android-*/
+output/validation/
+
+# 根目录整仓压缩包是本地备份，不是交付物。HongTai.zip 当前已不在工作区。
+/HongTai.zip
+/*.zip
