@@ -97,6 +97,9 @@ export async function fetchKuaishouDetail(
   if (response.status === 401 || response.status === 403) {
     throw new TaskError({ code: "CONTENT_PRIVATE_OR_LOGIN_REQUIRED", message: "快手作品需要登录或没有访问权限", action: "edit_input", details: diagnosticDetails(response.status) });
   }
+  if (response.status === 404) {
+    throw new TaskError({ code: "CONTENT_NOT_FOUND", message: "快手作品不存在或链接已经失效", action: "edit_input", details: diagnosticDetails(404) });
+  }
   if (response.status === 429) {
     throw new TaskError({ code: "PLATFORM_API_RATE_LIMITED", message: "快手平台访问过于频繁，请稍后重试", retryable: true, action: "wait_and_retry", details: diagnosticDetails(429) });
   }

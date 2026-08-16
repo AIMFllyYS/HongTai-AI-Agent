@@ -301,7 +301,7 @@ test("快手HTTP和GraphQL失败映射为既有稳定错误码", async () => {
     { status: 403, body: "{}", code: "CONTENT_PRIVATE_OR_LOGIN_REQUIRED" },
     { status: 429, body: "{}", code: "PLATFORM_API_RATE_LIMITED" },
     { status: 503, body: "{}", code: "PLATFORM_API_UNAVAILABLE" },
-    { status: 404, body: "{}", code: "PLATFORM_API_RESPONSE_INVALID" },
+    { status: 404, body: "{}", code: "CONTENT_NOT_FOUND" },
     { status: 200, body: JSON.stringify({ errors: [{ message: "resolver failed" }] }), code: "PLATFORM_API_RESPONSE_INVALID" },
   ] as const;
   for (const item of cases) {
@@ -317,7 +317,11 @@ test("快手HTTP和GraphQL失败映射为既有稳定错误码", async () => {
         finalUrl: "https://www.kuaishou.com/short-video/error-photo",
         status: 200,
       }, client),
-      (error) => error instanceof TaskError && error.code === item.code,
+      (error) => {
+        if (!(error instanceof TaskError) || error.code !== item.code) return false;
+        if (item.status === 404) return error.action === "edit_input" && error.retryable === false;
+        return true;
+      },
     );
   }
 });
@@ -413,6 +417,29 @@ test("平台页面结构变化返回稳定错误码", async () => {
   const adapter = new XiaohongshuAdapter();
   const resolved = await adapter.resolve("https://www.xiaohongshu.com/explore/deadbeef", client);
   await assert.rejects(() => adapter.parse(resolved, client), (error) => error instanceof TaskError && error.code === "CONTENT_SCHEMA_CHANGED");
+});
+
+test("B站API的HTTP 401/403映射为需要登录且不可自动重试", async () => {
+  for (const status of [401, 403] as const) {
+    const client = new FakeHttpClient((request) => ({
+      url: request.url,
+      status,
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    }));
+    await assert.rejects(
+      () => new BilibiliAdapter().parse({
+        sourceUrl: "https://www.bilibili.com/video/BV1xx411c7mD",
+        finalUrl: "https://www.bilibili.com/video/BV1xx411c7mD",
+        status: 200,
+      }, client),
+      (error) => error instanceof TaskError
+        && error.code === "CONTENT_PRIVATE_OR_LOGIN_REQUIRED"
+        && error.action === "edit_input"
+        && error.retryable === false
+        && error.details?.httpStatus === status,
+    );
+  }
 });
 
 test("B站适配器提取P1 DASH音视频", async () => {
