@@ -26,8 +26,8 @@ test("homepage keeps static display state and design-owned copy behind the view 
   assert.doesNotMatch(page, /<SectionHeading title="AI 能力"/);
 });
 
-test("vitality pages explicitly use the warm-soft-tech visual theme", () => {
-  for (const page of ["pages/VitalityScanPage.tsx", "pages/VitalityResultPage.tsx"]) {
+test("observation pages keep the warm-soft-tech visual theme after vitality fixture pages were removed", () => {
+  for (const page of ["pages/ObservationStartPage.tsx", "pages/ObservationReportPage.tsx"]) {
     assert.match(read(page), /visualTheme="warm-soft-tech"/);
   }
 

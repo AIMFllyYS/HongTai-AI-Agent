@@ -9,14 +9,11 @@ import type { VisualDataAdapter } from "./data/visual-adapter";
 import { useInteractionFeedback } from "./hooks/useInteractionFeedback";
 import { useBrowserRoute } from "./hooks/useBrowserRoute";
 import { matchRoute } from "./router";
-import { AnalysisResultPage } from "./pages/AnalysisResultPage";
 import { TemplatesPage } from "./pages/TemplatesPage";
 import { CreatePage } from "./pages/CreatePage";
-import { DetailPage } from "./pages/DetailPage";
 import { HomePage } from "./pages/HomePage";
 import { ObservationReportPage } from "./pages/ObservationReportPage";
 import { ObservationStartPage } from "./pages/ObservationStartPage";
-import { ProcessingPage } from "./pages/ProcessingPage";
 import { TaskAnalysisPage } from "./pages/TaskAnalysisPage";
 import { TaskDetailPage } from "./pages/TaskDetailPage";
 import { TaskHomePage } from "./pages/TaskHomePage";
@@ -109,10 +106,6 @@ export function App({ runtime, visualData }: AppProps = {}) {
     // Visual fixtures remain available only to explicit design/test callers.
     if (visualData) {
       if (renderedRoute.key === "home") return <HomePage navigate={navigate} viewModel={visualData.getHome()} />;
-      if (renderedRoute.key === "processing") return <ProcessingPage navigate={navigate} viewModel={visualData.getProcessing()} />;
-      if (renderedRoute.key === "analysis-result") return <AnalysisResultPage navigate={navigate} viewModel={visualData.getAnalysisResult()} />;
-      if (renderedRoute.key === "video-detail") return <DetailPage navigate={navigate} viewModel={visualData.getDetail("video")} />;
-      if (renderedRoute.key === "gallery-detail") return <DetailPage navigate={navigate} viewModel={visualData.getDetail("gallery")} />;
       if (renderedRoute.key === "create") return <CreatePage navigate={navigate} viewModel={visualData.getCreate()} />;
       if (renderedRoute.key === "publish") return <PublishPage navigate={navigate} viewModel={visualData.getPublish()} />;
     }

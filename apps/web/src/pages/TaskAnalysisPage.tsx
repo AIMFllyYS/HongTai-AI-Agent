@@ -13,7 +13,8 @@ import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
 import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
 import { contentAnalysisModuleDefinitions } from "../features/tasks/content-analysis-module-progress";
 import { LatestReadGuard, preferNewerByUpdatedAt } from "../features/tasks/latest-read-guard";
-import { platformLabel, readContentAnalysis } from "../features/tasks/task-presenters";
+import { readContentAnalysis } from "../features/tasks/content-analysis-presenters";
+import { platformLabel } from "../features/tasks/task-presenters";
 import { useAppResume } from "../hooks/useAppResume";
 import { aiSettingsPath, pathForRoute, taskDetailPath, type Navigate } from "../router";
 

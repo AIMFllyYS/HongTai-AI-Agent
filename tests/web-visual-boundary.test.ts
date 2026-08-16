@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
 
 import { createStaticVisualDataAdapter } from "../apps/web/src/data/static-visual-adapter";
 import * as router from "../apps/web/src/router";
+
+const webRoot = join(process.cwd(), "apps", "web", "src");
+const read = (relativePath: string) => readFileSync(join(webRoot, relativePath), "utf8");
 
 const { appRoutes, matchRoute, pathForRoute, routeTransitionDirection } = router;
 
@@ -85,6 +90,9 @@ test("route builders encode opaque task and observation identifiers", () => {
 
 test("legacy vitality scan maps to the safe observation start and old analyze success paths do not resolve", () => {
   assert.equal(matchRoute("/vitality/scan").key, "observation-new");
+  assert.match(read("router.ts"), /"\/vitality\/scan":\s*\{\s*key:\s*"observation-new"/);
+  assert.doesNotMatch(read("router.ts"), /LegacyRouteKey/);
+  assert.doesNotMatch(read("App.tsx"), /renderedRoute\.key === "(?:processing|analysis-result|video-detail|gallery-detail)"/);
   for (const legacyPath of [
     "/analyze/processing",
     "/analyze/result",
@@ -93,6 +101,9 @@ test("legacy vitality scan maps to the safe observation start and old analyze su
     "/vitality/result",
   ]) {
     assert.equal(matchRoute(legacyPath).key, "not-found", legacyPath);
+  }
+  for (const page of ["pages/ProcessingPage.tsx", "pages/AnalysisResultPage.tsx", "pages/DetailPage.tsx", "pages/VitalityScanPage.tsx", "pages/VitalityResultPage.tsx"]) {
+    assert.equal(existsSync(join(webRoot, page)), false, `${page} should be removed`);
   }
 });
 

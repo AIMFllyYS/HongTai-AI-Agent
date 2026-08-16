@@ -1,6 +1,5 @@
 import type {
   ContentType,
-  ErrorCode,
   InputInspection,
   MediaReference,
   ProgressEvent,
@@ -356,6 +355,11 @@ export interface TaskImageTextDetail {
   readonly paragraphs: readonly TaskEvidenceUnit[];
 }
 
+/**
+ * Persistence contract for task records and the immutable event log.
+ * UI talks to `TaskService`; this type is kept because contract tests still
+ * assert `appendEvent`, so Node/Capacitor stores cannot drop the event log.
+ */
 export interface TaskRepository {
   create(task: TaskRecord): Promise<void>;
   get(taskId: string): Promise<TaskRecord | undefined>;
@@ -644,19 +648,4 @@ export interface AppRuntime {
 
 export function isTerminalTaskStatus(status: TaskStatus): boolean {
   return status !== "queued" && status !== "running";
-}
-
-/** Stable UI-facing error boundary: presentation maps only these values to actions. */
-export type TaskIssueDisplayAction = Extract<
-  import("./models").IssueAction,
-  "retry" | "wait_and_retry" | "configure_ai" | "free_storage" | "select_media" | "view_partial_result" | "edit_input" | "check_network" | "none"
->;
-
-export interface TaskIssuePresentation {
-  readonly code: ErrorCode;
-  readonly action: TaskIssueDisplayAction;
-}
-
-export function taskIssuePresentation(issue: Pick<TaskIssue, "code" | "action">): TaskIssuePresentation {
-  return { code: issue.code, action: issue.action };
 }

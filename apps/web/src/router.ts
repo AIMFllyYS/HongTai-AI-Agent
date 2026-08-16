@@ -16,19 +16,7 @@ export type ActiveRouteKey =
   | "observation-new"
   | "observation-report";
 
-/**
- * Kept temporarily so the current page shell can be migrated independently of
- * the router. No route definition resolves to one of these keys.
- */
-export type LegacyRouteKey =
-  | "processing"
-  | "analysis-result"
-  | "video-detail"
-  | "gallery-detail"
-  | "vitality-scan"
-  | "vitality-result";
-
-export type RouteKey = ActiveRouteKey | LegacyRouteKey | "not-found";
+export type RouteKey = ActiveRouteKey | "not-found";
 export type RouteParams = Readonly<Record<string, string>>;
 
 export interface AppRoute {

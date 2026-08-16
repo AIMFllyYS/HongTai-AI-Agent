@@ -1,19 +1,10 @@
 import { DiagnosisFlow, diagnosisReportSchema } from "@hongtai/ai";
-import type {
-  AiMessage,
-  AiProvider,
-  AiRunRecord,
-  DiagnosisImageInput,
-  DiagnosisReportV1,
-  DiagnosisRepository,
-  DiagnosisSession,
-} from "@hongtai/ai";
+import type { AiProvider, DiagnosisImageInput } from "@hongtai/ai";
 import { issueFromAppError, TaskError } from "@hongtai/core";
 import type {
   DiagnosisMessage,
   DiagnosisImageRecovery,
   DiagnosisReportEventListener,
-  DiagnosisReportStreamEvent,
   DiagnosisReportRecord,
   DiagnosisService,
   DiagnosisSessionRecord,
@@ -21,58 +12,29 @@ import type {
   MediaReference,
   ObservationMode,
   RuntimeUnfinishedWork,
-  StructuredGenerationModuleId,
-  StructuredGenerationProgressV1,
   TaskIssue,
 } from "@hongtai/core";
 
 import { persistedRuntimeWork, runtimeInterruptedIssue } from "./runtime-interruption.js";
 import type { RuntimeOperationIdentity, RuntimeOperationRegistry } from "./runtime-operation-registry.js";
+import {
+  DiagnosisPickedImages,
+  imagePath,
+  validMime,
+  type StandaloneDiagnosisFileMedia,
+} from "./standalone-diagnosis-image-recovery.js";
+import { DiagnosisReportSubscriptions } from "./standalone-diagnosis-report-subscription.js";
+import {
+  MESSAGES_PATH,
+  REPORT_PATH,
+  SESSION_PATH,
+  createStandaloneDiagnosisRepository,
+  type StandaloneObservationFilesPlugin,
+} from "./standalone-diagnosis-repository.js";
 
-const SESSION_PATH = "session.json";
-const REPORT_PATH = "report.json";
-const MESSAGES_PATH = "messages.json";
-const CONTEXT_PATH = "context.txt";
+export type { StandaloneDiagnosisFileMedia, StandaloneObservationFilesPlugin };
+
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/;
-const SUPPORTED_IMAGE_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
-
-export interface StandaloneObservationFilesPlugin {
-  ensureObservation(options: { readonly sessionId: string }): Promise<void>;
-  writeObservationText(options: {
-    readonly sessionId: string;
-    readonly relativePath: string;
-    readonly value: string;
-    readonly replace: boolean;
-  }): Promise<void>;
-  readObservationText(options: { readonly sessionId: string; readonly relativePath: string }): Promise<{ readonly value?: string }>;
-  listObservationIds(): Promise<{ readonly sessionIds: readonly string[] }>;
-  copyToObservation(options: { readonly sessionId: string; readonly sourceUri: string; readonly relativePath: string }): Promise<{
-    readonly uri: string;
-    readonly sizeBytes: number;
-    readonly mimeType?: string;
-  }>;
-  getObservationUri(options: { readonly sessionId: string; readonly relativePath: string }): Promise<{
-    readonly uri?: string;
-    readonly sizeBytes?: number;
-    readonly mimeType?: string;
-  }>;
-}
-
-export interface StandaloneDiagnosisFileMedia {
-  pickPhoto(): Promise<{ readonly uri: string; readonly mimeType?: string; readonly sizeBytes: number }>;
-  capturePhoto(): Promise<{ readonly uri: string; readonly mimeType?: string; readonly sizeBytes: number }>;
-  consumePhotoOperation(): Promise<
-    | { readonly status: "none" }
-    | {
-        readonly status: "succeeded";
-        readonly origin: "imported" | "captured";
-        readonly uri: string;
-        readonly mimeType?: string;
-        readonly sizeBytes: number;
-      }
-    | { readonly status: "failed"; readonly code: string }
-  >;
-}
 
 export interface StandaloneDiagnosisServiceOptions {
   readonly files: StandaloneObservationFilesPlugin;
@@ -106,47 +68,6 @@ function nowIso(now: () => Date): string {
 function generatedId(): string {
   const uuid = globalThis.crypto?.randomUUID?.().replaceAll("-", "");
   return uuid ? `observation-${uuid}` : `observation-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function validMime(value: string | undefined): string {
-  const mime = value?.trim().toLowerCase() ?? "";
-  if (!SUPPORTED_IMAGE_MIME.has(mime)) throw taskError("IMAGE_INVALID", "请选择有效的 JPEG、PNG 或 WebP 照片", "select_media");
-  return mime;
-}
-
-function imageTaskError(nativeCode: string | undefined, cause: unknown): TaskError {
-  switch (nativeCode) {
-    case "ERR_MEDIA_SELECTION_CANCELLED":
-      return new TaskError({ code: "MEDIA_SELECTION_CANCELLED", message: "已取消选择或拍摄图片", action: "select_media", cause });
-    case "ERR_MEDIA_SOURCE_MISSING":
-      return new TaskError({ code: "MEDIA_SOURCE_NOT_FOUND", message: "系统没有返回可读取的图片", action: "select_media", cause });
-    case "ERR_PHOTO_CAPTURE_LOST":
-    case "ERR_PHOTO_RECOVERY_FAILED":
-      return new TaskError({ code: "TASK_INTERRUPTED", message: "图片操作在应用重建后无法恢复，请重新选择或拍摄", action: "select_media", cause });
-    case "ERR_MEDIA_READ_FAILED":
-      return new TaskError({ code: "MEDIA_READ_FAILED", message: "无法继续读取系统返回的图片", action: "select_media", cause });
-    case "ERR_IMAGE_TOO_LARGE":
-      return new TaskError({ code: "IMAGE_TOO_LARGE", message: "图片不能超过15MB", action: "select_media", cause });
-    case "ERR_IMAGE_INVALID":
-      return new TaskError({ code: "IMAGE_INVALID", message: "无法读取或规范化图片", action: "select_media", cause });
-    default:
-      return new TaskError({ code: "MEDIA_IMPORT_FAILED", message: "图片没有成功导入应用私有目录", action: "select_media", cause });
-  }
-}
-
-function imageImportError(error: unknown): TaskError {
-  if (error instanceof TaskError) return error;
-  const nativeCode = typeof record(error)?.code === "string" ? record(error)?.code as string : undefined;
-  return imageTaskError(nativeCode, error);
-}
-
-function imagePath(mimeType: string): string {
-  switch (mimeType) {
-    case "image/jpeg": return "image.jpg";
-    case "image/png": return "image.png";
-    case "image/webp": return "image.webp";
-    default: return "image.bin";
-  }
 }
 
 function record(value: unknown): Readonly<Record<string, unknown>> | undefined {
@@ -197,11 +118,10 @@ export class StandaloneDiagnosisService implements DiagnosisService {
   readonly #createSessionId: () => string;
   readonly #now: () => Date;
   readonly #operations?: RuntimeOperationRegistry;
-  readonly #picked = new Map<string, { readonly nativeUri: string; readonly mimeType: string; readonly sizeBytes: number }>();
+  readonly #picked: DiagnosisPickedImages;
+  readonly #reports = new DiagnosisReportSubscriptions();
   readonly #activeReports = new Map<string, Promise<DiagnosisReportRecord>>();
   readonly #followUpQueues = new Map<string, Promise<unknown>>();
-  readonly #reportListeners = new Map<string, Set<DiagnosisReportEventListener>>();
-  readonly #reportSnapshots = new Map<string, StructuredGenerationProgressV1>();
 
   constructor(options: StandaloneDiagnosisServiceOptions) {
     this.#files = options.files;
@@ -211,35 +131,25 @@ export class StandaloneDiagnosisService implements DiagnosisService {
     this.#createSessionId = options.createSessionId ?? generatedId;
     this.#now = options.now ?? (() => new Date());
     this.#operations = options.operations;
+    this.#picked = new DiagnosisPickedImages(options.toDisplayUri);
   }
 
   async pickImage(): Promise<MediaReference> {
     return this.#track(
       { kind: "transient-operation", id: "diagnosis-photo", execution: "external-activity" },
-      () => this.#pickedImage(() => this.#fileMedia.pickPhoto(), "imported"),
+      () => this.#picked.pickedImage(() => this.#fileMedia.pickPhoto(), "imported"),
     );
   }
 
   async captureImage(): Promise<MediaReference> {
     return this.#track(
       { kind: "transient-operation", id: "diagnosis-photo", execution: "external-activity" },
-      () => this.#pickedImage(() => this.#fileMedia.capturePhoto(), "captured"),
+      () => this.#picked.pickedImage(() => this.#fileMedia.capturePhoto(), "captured"),
     );
   }
 
   async consumeImageRecovery(): Promise<DiagnosisImageRecovery> {
-    let recovered: Awaited<ReturnType<StandaloneDiagnosisFileMedia["consumePhotoOperation"]>>;
-    try {
-      recovered = await this.#fileMedia.consumePhotoOperation();
-    } catch (error) {
-      return { status: "failed", issue: issueFromAppError(imageImportError(error)) };
-    }
-    if (recovered.status === "none") return { status: "none" };
-    if (recovered.status === "failed") {
-      const cause = { code: recovered.code };
-      return { status: "failed", issue: issueFromAppError(imageTaskError(recovered.code, cause)) };
-    }
-    return { status: "succeeded", image: this.#rememberPicked(recovered, recovered.origin) };
+    return this.#picked.consumeImageRecovery(this.#fileMedia);
   }
 
   async createSession(input: { readonly mode: ObservationMode; readonly image: MediaReference }): Promise<DiagnosisSessionRecord> {
@@ -269,11 +179,11 @@ export class StandaloneDiagnosisService implements DiagnosisService {
   runReport(sessionId: string, onEvent?: DiagnosisReportEventListener): Promise<DiagnosisReportRecord> {
     const active = this.#activeReports.get(sessionId);
     if (active) {
-      const listener = onEvent ? this.#attachRunReportListener(sessionId, onEvent) : undefined;
-      if (listener) void active.finally(() => this.#removeReportListener(sessionId, listener)).catch(() => undefined);
+      const listener = onEvent ? this.#reports.attachRunListener(sessionId, onEvent) : undefined;
+      if (listener) void active.finally(() => this.#reports.remove(sessionId, listener)).catch(() => undefined);
       return active;
     }
-    const listener = onEvent ? this.#attachRunReportListener(sessionId, onEvent) : undefined;
+    const listener = onEvent ? this.#reports.attachRunListener(sessionId, onEvent) : undefined;
     const operation = this.#track(
       { kind: "diagnosis-report", id: sessionId, execution: "in-process" },
       () => this.#runReport(sessionId),
@@ -282,22 +192,15 @@ export class StandaloneDiagnosisService implements DiagnosisService {
     void operation.finally(() => {
       if (this.#activeReports.get(sessionId) === operation) {
         this.#activeReports.delete(sessionId);
-        this.#reportSnapshots.delete(sessionId);
+        this.#reports.clearSnapshot(sessionId);
       }
-      if (listener) this.#removeReportListener(sessionId, listener);
+      if (listener) this.#reports.remove(sessionId, listener);
     }).catch(() => undefined);
     return operation;
   }
 
   subscribeReport(sessionId: string, listener: DiagnosisReportEventListener): () => void {
-    this.#addReportListener(sessionId, listener);
-    const snapshot = this.#reportSnapshots.get(sessionId);
-    if (snapshot) void this.#notifyReportListener(listener, { type: "progress", sessionId, progress: snapshot });
-    return () => {
-      const listeners = this.#reportListeners.get(sessionId);
-      listeners?.delete(listener);
-      if (listeners?.size === 0) this.#reportListeners.delete(sessionId);
-    };
+    return this.#reports.subscribe(sessionId, listener);
   }
 
   async #runReport(sessionId: string): Promise<DiagnosisReportRecord> {
@@ -310,14 +213,14 @@ export class StandaloneDiagnosisService implements DiagnosisService {
         repository: this.#repository(),
         contextWindowTokens: 32_000,
         onProgress: (progress) => {
-          this.#reportSnapshots.set(sessionId, progress);
-          this.#notifyReport(sessionId, { type: "progress", sessionId, progress });
+          this.#reports.setSnapshot(sessionId, progress);
+          this.#reports.notify(sessionId, { type: "progress", sessionId, progress });
         },
       });
       await flow.runReport(sessionId);
       const saved = await this.getReport(sessionId);
       if (!saved?.report || saved.status !== "succeeded") throw taskError("STORAGE_WRITE_FAILED", "观察报告没有保存为正式本地文档", "free_storage");
-      this.#notifyReport(sessionId, { type: "completed", sessionId, record: saved });
+      this.#reports.notify(sessionId, { type: "completed", sessionId, record: saved });
       return saved;
     } catch (error) {
       const failure = issue(error, "观察报告未能完成");
@@ -325,9 +228,9 @@ export class StandaloneDiagnosisService implements DiagnosisService {
       if (current?.status !== "succeeded") {
         await this.#setStatus(started, "failed", failure).catch(() => undefined);
       }
-      const progress = this.#reportSnapshots.get(sessionId) ?? this.#emptyReportProgress();
-      const failedModuleId = this.#failedReportModuleId(progress);
-      this.#notifyReport(sessionId, {
+      const progress = this.#reports.snapshot(sessionId) ?? this.#reports.emptyProgress();
+      const failedModuleId = this.#reports.failedModuleId(progress);
+      this.#reports.notify(sessionId, {
         type: "failed",
         sessionId,
         issue: current?.issue ?? failure,
@@ -453,139 +356,17 @@ export class StandaloneDiagnosisService implements DiagnosisService {
     return this.#operations ? this.#operations.track(operation, run) : run();
   }
 
-  #addReportListener(sessionId: string, listener: DiagnosisReportEventListener): void {
-    const listeners = this.#reportListeners.get(sessionId) ?? new Set<DiagnosisReportEventListener>();
-    listeners.add(listener);
-    this.#reportListeners.set(sessionId, listeners);
-  }
-
-  #attachRunReportListener(sessionId: string, onEvent: DiagnosisReportEventListener): DiagnosisReportEventListener {
-    const listener: DiagnosisReportEventListener = (event) => onEvent(event);
-    this.#addReportListener(sessionId, listener);
-    const snapshot = this.#reportSnapshots.get(sessionId);
-    if (snapshot) void this.#notifyReportListener(listener, { type: "progress", sessionId, progress: snapshot });
-    return listener;
-  }
-
-  #removeReportListener(sessionId: string, listener: DiagnosisReportEventListener): void {
-    const listeners = this.#reportListeners.get(sessionId);
-    listeners?.delete(listener);
-    if (listeners?.size === 0) this.#reportListeners.delete(sessionId);
-  }
-
-  #notifyReport(sessionId: string, event: DiagnosisReportStreamEvent): void {
-    const listeners = this.#reportListeners.get(sessionId);
-    if (!listeners) return;
-    for (const listener of listeners) void this.#notifyReportListener(listener, event);
-  }
-
-  async #notifyReportListener(listener: DiagnosisReportEventListener, event: DiagnosisReportStreamEvent): Promise<void> {
-    try {
-      await listener(event);
-    } catch {
-      // Page lifecycle changes cannot affect a persisted formal report.
-    }
-  }
-
-  #emptyReportProgress(): StructuredGenerationProgressV1 {
-    return {
-      schemaVersion: "structured-generation-progress.v1",
-      flow: "diagnosis-report",
-      phase: "preparing",
-      modules: (["visual-observations", "observation-summary", "wellness-recommendations", "safety-limitations", "follow-up-questions"] as const)
-        .map((moduleId) => ({ moduleId, status: "pending" as const })),
-    };
-  }
-
-  #failedReportModuleId(progress: StructuredGenerationProgressV1): StructuredGenerationModuleId | undefined {
-    return progress.modules.find((module) => module.status === "failed")?.moduleId;
-  }
-
-  async #pickedImage(
-    pick: () => Promise<{ readonly uri: string; readonly mimeType?: string; readonly sizeBytes: number }>,
-    origin: MediaReference["origin"],
-  ): Promise<MediaReference> {
-    const raw = await pick().catch((error: unknown) => { throw imageImportError(error); });
-    return this.#rememberPicked(raw, origin);
-  }
-
-  #rememberPicked(
-    raw: { readonly uri: string; readonly mimeType?: string; readonly sizeBytes: number },
-    origin: MediaReference["origin"],
-  ): MediaReference {
-    const mimeType = validMime(raw.mimeType);
-    if (!raw.uri || !Number.isFinite(raw.sizeBytes) || raw.sizeBytes <= 0) throw taskError("MEDIA_IMPORT_FAILED", "图片导入没有返回有效的私有文件", "select_media");
-    const uri = this.#toDisplayUri(raw.uri);
-    this.#picked.set(uri, { nativeUri: raw.uri, mimeType, sizeBytes: raw.sizeBytes });
-    return { uri, kind: "image", origin, mimeType, byteLength: raw.sizeBytes, displayName: "已导入图片" };
-  }
-
-  #repository(): DiagnosisRepository {
-    return {
-      createSession: async (mode, image) => {
-        const synthetic = await this.#createFromFlow(mode, image);
-        return { id: synthetic.sessionId, reportId: `report-${synthetic.sessionId}`, mode, createdAt: synthetic.createdAt, image: { mimeType: synthetic.image.mimeType } };
+  #repository() {
+    return createStandaloneDiagnosisRepository({
+      files: this.#files,
+      readSession: (sessionId) => this.#readSession(sessionId),
+      setSucceeded: async (state) => {
+        await this.#setStatus(state as StoredSession, "succeeded");
       },
-      getSession: async (sessionId): Promise<DiagnosisSession | undefined> => {
-        const state = await this.#readSession(sessionId);
-        return state ? { id: state.sessionId, reportId: state.reportId, mode: state.mode, createdAt: state.createdAt, image: { mimeType: state.image.mimeType } } : undefined;
-      },
-      loadSessionImage: async (sessionId): Promise<DiagnosisImageInput | undefined> => {
-        const state = await this.#readSession(sessionId);
-        if (!state) return undefined;
-        const image = await this.#files.getObservationUri({ sessionId, relativePath: state.image.relativePath });
-        return image.uri ? { uri: image.uri, mimeType: state.image.mimeType } : undefined;
-      },
-      saveReport: async (sessionId, value) => {
-        const state = await this.#readSession(sessionId);
-        if (!state) throw taskError("AI_SESSION_NOT_FOUND", "未找到本地观察会话");
-        await this.#files.writeObservationText({ sessionId, relativePath: REPORT_PATH, value: JSON.stringify(value), replace: true });
-        await this.#setStatus(state, "succeeded");
-      },
-      getReport: async (sessionId): Promise<DiagnosisReportV1 | undefined> => {
-        const raw = await this.#files.readObservationText({ sessionId, relativePath: REPORT_PATH });
-        const parsed = raw.value ? diagnosisReportSchema.safeParse(this.#parseJson(raw.value)) : undefined;
-        return parsed?.success ? parsed.data : undefined;
-      },
-      listMessages: async (sessionId): Promise<readonly AiMessage[]> => {
-        const state = await this.#readSession(sessionId);
-        if (!state) return [];
-        return (await this.listMessages(sessionId)).map((message) => ({
-          id: message.id,
-          sessionId,
-          reportId: state.reportId,
-          role: message.role,
-          content: message.content,
-          status: message.status === "failed" ? "failed" : "completed",
-          createdAt: message.createdAt,
-        }));
-      },
-      appendMessages: async (sessionId, messages) => {
-        const existing = await this.listMessages(sessionId);
-        const state = await this.#readSession(sessionId);
-        if (!state) throw taskError("AI_SESSION_NOT_FOUND", "未找到本地观察会话");
-        const combined = [...existing, ...messages.map((message) => ({
-          id: message.id,
-          sessionId,
-          role: message.role,
-          content: message.content,
-          status: message.status,
-          createdAt: message.createdAt,
-          updatedAt: message.createdAt,
-        }))];
-        await this.#files.writeObservationText({ sessionId, relativePath: MESSAGES_PATH, value: JSON.stringify(combined), replace: true });
-      },
-      getContextSummary: async (sessionId) => (await this.#files.readObservationText({ sessionId, relativePath: CONTEXT_PATH })).value ?? "",
-      saveContextSummary: async (sessionId, summary) => {
-        await this.#files.writeObservationText({ sessionId, relativePath: CONTEXT_PATH, value: summary, replace: true });
-      },
-      // Prompt and provider reasoning are deliberately runtime-only and never
-      // persisted in application files or the formal observation report.
-      saveRun: async (_sessionId: string, _run: AiRunRecord) => {
-        void _sessionId;
-        void _run;
-      },
-    };
+      listMessages: (sessionId) => this.listMessages(sessionId),
+      createFromFlow: (mode, image) => this.#createFromFlow(mode, image),
+      parseJson: (value) => this.#parseJson(value),
+    });
   }
 
   async #createFromFlow(mode: ObservationMode, image: DiagnosisImageInput): Promise<StoredSession> {

@@ -95,10 +95,10 @@ export function BottomNav({ active, navigate, visualTheme = "workbench" }: Botto
 }
 
 export function activeNavForRoute(route: RouteKey): BottomNavProps["active"] {
-  if (route === "vitality-scan" || route === "vitality-result" || route === "observation-new" || route === "observation-report") return "ai";
+  if (route === "observation-new" || route === "observation-report") return "ai";
   if (route === "create") return "create";
   if (route === "templates") return "templates";
   if (route === "settings" || route === "settings-profile" || route === "settings-ai") return "settings";
-  if (route === "home" || route === "task-processing" || route === "task-detail" || route === "task-analysis" || route === "processing" || route === "analysis-result" || route === "video-detail" || route === "gallery-detail") return "home";
+  if (route === "home" || route === "task-processing" || route === "task-detail" || route === "task-analysis") return "home";
   return undefined;
 }

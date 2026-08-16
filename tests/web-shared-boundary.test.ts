@@ -47,12 +47,14 @@ test("page blocks and visual fixtures are split by responsibility", () => {
   assert.equal(existsSync(join(root, "data/static-visual-adapter.ts")), true);
   assert.match(read("data/static-visual-adapter.ts"), /fixtures\/(home|analysis|creation-library|vitality)/);
 
-  for (const page of ["pages/AnalysisResultPage.tsx", "pages/DetailPage.tsx"]) {
-    const source = read(page);
-    assert.match(source, /TabPanel/);
-    assert.match(source, /tabId/);
-    assert.match(source, /tabPanelId/);
+  for (const page of ["pages/AnalysisResultPage.tsx", "pages/DetailPage.tsx", "pages/ProcessingPage.tsx", "pages/VitalityScanPage.tsx", "pages/VitalityResultPage.tsx"]) {
+    assert.equal(existsSync(join(root, page)), false, `${page} should not remain as an unreachable fixture page`);
   }
+
+  const tabs = read("components/Tabs.tsx");
+  assert.match(tabs, /export function TabPanel/);
+  assert.match(tabs, /tabId/);
+  assert.match(tabs, /tabPanelId/);
 
   const templates = read("pages/TemplatesPage.tsx");
   assert.match(templates, /runtime\.templates/);

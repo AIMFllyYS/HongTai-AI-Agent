@@ -1,4 +1,4 @@
-import { IngestPipeline, TaskError, inspectInput, isTerminalTaskStatus, issueFromAppError, issueFromError, safeUrlForDisplay } from "@hongtai/core";
+import { IngestPipeline, TaskError, inspectInput, isTerminalTaskStatus } from "@hongtai/core";
 import type {
   AppTaskRecord,
   CancellableTask,
@@ -21,16 +21,32 @@ import type {
   TaskRecoveryProjection,
   RuntimeUnfinishedWork,
   TaskService,
-  TaskStatus,
 } from "@hongtai/core";
 
 import { NativeTaskFiles } from "./thin-task-files.js";
 import type { LocalTaskFilesPlugin } from "./thin-task-files.js";
 import type { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
-import type { NativeVideoOperationResult } from "./standalone-bridge.js";
+import {
+  asRecord,
+  eventFromJson,
+  isTaskStatus,
+  projectTaskDetail,
+  projectTaskMedia,
+  TASK_ID_PATTERN,
+  toAppTask,
+} from "./standalone-task-detail-projection.js";
+import { failQueuedSnapshot, settleAfterPipeline } from "./standalone-task-ingest-settlement.js";
+import {
+  consumeTaskVideoRecovery,
+  persistImportedVideo,
+  videoImportError,
+  type StandaloneTaskVideoPicker,
+  type TaskVideoRecovery,
+} from "./standalone-task-video-recovery.js";
+
+export type { StandaloneTaskVideoPicker, TaskVideoRecovery };
 
 const TASK_REQUEST_PATH = "request.json";
-const TASK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/;
 
 export interface StandaloneTaskFilesPlugin extends LocalTaskFilesPlugin {
   readText(options: { readonly taskId: string; readonly relativePath: string }): Promise<{ readonly value?: string }>;
@@ -42,22 +58,6 @@ export interface StandaloneTaskFilesPlugin extends LocalTaskFilesPlugin {
     readonly sizeBytes?: number;
     readonly mimeType?: string;
   }>;
-}
-
-export type TaskVideoRecovery =
-  | { readonly status: "none" }
-  | { readonly status: "succeeded"; readonly task: AppTaskRecord }
-  | { readonly status: "failed"; readonly issue: TaskIssue };
-
-export interface StandaloneTaskVideoPicker {
-  pickVideo(options: { readonly taskId: string }): Promise<{
-    readonly uri: string;
-    readonly mimeType: "video/mp4";
-    readonly displayName: string;
-    readonly sizeBytes: number;
-    readonly durationSeconds: number;
-  }>;
-  consumeVideoOperation(): Promise<NativeVideoOperationResult>;
 }
 
 export interface StandaloneTaskServiceOptions {
@@ -95,74 +95,6 @@ function generatedTaskId(): string {
   const uuid = globalThis.crypto?.randomUUID?.().replaceAll("-", "");
   if (uuid) return `task-${uuid}`;
   return `task-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function nativeCode(error: unknown): string | undefined {
-  if (typeof error !== "object" || error === null) return undefined;
-  const code = (error as Readonly<Record<string, unknown>>).code;
-  return typeof code === "string" ? code : undefined;
-}
-
-function videoImportError(error: unknown): TaskError {
-  switch (nativeCode(error)) {
-    case "ERR_MEDIA_SELECTION_CANCELLED":
-      return new TaskError({ code: "MEDIA_SELECTION_CANCELLED", message: "已取消选择本地视频", action: "select_media", cause: error });
-    case "ERR_MEDIA_SOURCE_MISSING":
-      return new TaskError({ code: "MEDIA_SOURCE_NOT_FOUND", message: "系统没有返回可读取的视频", action: "select_media", cause: error });
-    case "ERR_MEDIA_READ_FAILED":
-      return new TaskError({ code: "MEDIA_READ_FAILED", message: "所选本地视频无法读取", action: "select_media", cause: error });
-    case "ERR_VIDEO_RECOVERY_FAILED":
-      return new TaskError({ code: "TASK_INTERRUPTED", message: "视频选择在应用重建后无法恢复，请重新选择", action: "select_media", cause: error });
-    default:
-      return error instanceof TaskError ? error : new TaskError({ code: "MEDIA_IMPORT_FAILED", message: "本地视频导入没有完成", action: "select_media", cause: error });
-  }
-}
-
-function isTaskStatus(value: unknown): value is TaskStatus {
-  return value === "queued" || value === "running" || value === "succeeded" || value === "degraded" ||
-    value === "failed" || value === "cancelled" || value === "interrupted";
-}
-
-function asRecord(value: unknown): Readonly<Record<string, unknown>> | undefined {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Readonly<Record<string, unknown>> : undefined;
-}
-
-function toAppTask(task: TaskRecord, media: readonly MediaReference[] = []): AppTaskRecord {
-  if (!TASK_ID_PATTERN.test(task.id) || !isTaskStatus(task.status)) {
-    throw taskError("TASK_ARTIFACT_MISSING", "本地任务记录格式无效", "view_partial_result");
-  }
-  return {
-    id: task.id,
-    sourceUrl: task.sourceKind === "local_video" ? "" : safeUrlForDisplay(task.sourceUrl),
-    sourceKind: task.sourceKind ?? "public_link",
-    status: task.status,
-    ...(task.currentStage ? { currentStage: task.currentStage } : {}),
-    ...(task.platform ? { platform: task.platform } : {}),
-    ...(task.contentType ? { contentType: task.contentType } : {}),
-    ...(task.speechStatus ? { speechStatus: task.speechStatus } : {}),
-    analysisStatus: task.analysisStatus ?? "not_started",
-    ...(task.retryOfTaskId ? { retryOfTaskId: task.retryOfTaskId } : {}),
-    ...(task.cancelRequestedAt ? { cancelRequestedAt: task.cancelRequestedAt } : {}),
-    ...(task.cancelledAt ? { cancelledAt: task.cancelledAt } : {}),
-    ...(task.interruptedAt ? { interruptedAt: task.interruptedAt } : {}),
-    media,
-    createdAt: task.createdAt,
-    updatedAt: task.updatedAt,
-    issues: task.issues,
-  };
-}
-
-function eventFromJson(value: unknown): TaskEventRecord | undefined {
-  const record = asRecord(value);
-  const sequence = record?.sequence;
-  if (!record || typeof record.taskId !== "string" || typeof sequence !== "number" || !Number.isInteger(sequence) || sequence < 1) return undefined;
-  if (record.kind === "task-status") return record as unknown as TaskEventRecord;
-  if (typeof record.stage !== "string" || typeof record.status !== "string" || typeof record.message !== "string" || typeof record.timestamp !== "string") return undefined;
-  return record as unknown as TaskEventRecord;
-}
-
-function contentString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function issueForInterrupted(sourceKind: TaskRecord["sourceKind"]): TaskIssue {
@@ -271,24 +203,11 @@ export class StandaloneTaskService implements TaskService {
   }
 
   async consumeVideoRecovery(): Promise<TaskVideoRecovery> {
-    const fileMedia = this.#fileMedia;
-    if (!fileMedia) return { status: "none" };
-    let recovered: NativeVideoOperationResult;
-    try {
-      recovered = await fileMedia.consumeVideoOperation();
-    } catch (error) {
-      return { status: "failed", issue: issueFromAppError(videoImportError(error)) };
-    }
-    if (recovered.status === "none") return { status: "none" };
-    if (recovered.status === "failed") {
-      return { status: "failed", issue: issueFromAppError(videoImportError({ code: recovered.code })) };
-    }
-    try {
-      return { status: "succeeded", task: await this.#persistImportedVideo(recovered.taskId, recovered) };
-    } catch (error) {
-      await this.#files.deleteTask({ taskId: recovered.taskId }).catch(() => undefined);
-      return { status: "failed", issue: issueFromAppError(videoImportError(error)) };
-    }
+    return consumeTaskVideoRecovery(
+      this.#fileMedia,
+      (taskId, selected) => this.#persistImportedVideo(taskId, selected),
+      async (taskId) => { await this.#files.deleteTask({ taskId }); },
+    );
   }
 
   async #persistImportedVideo(taskId: string, selected: {
@@ -298,41 +217,12 @@ export class StandaloneTaskService implements TaskService {
     readonly sizeBytes: number;
     readonly durationSeconds: number;
   }): Promise<AppTaskRecord> {
-    if (selected.mimeType !== "video/mp4" || !selected.displayName.trim() || selected.sizeBytes <= 0 || selected.durationSeconds <= 0) {
-      throw taskError("MEDIA_IMPORT_FAILED", "本地视频导入没有返回有效 MP4", "select_media");
-    }
-    const paths = await this.#artifactStore.initializeTask(taskId);
-    const now = currentIso(this.#now);
-    const pending: TaskRecord = {
-      id: taskId,
-      sourceUrl: "",
-      sourceKind: "local_video",
-      status: "queued",
-      contentType: "video",
-      analysisStatus: "not_started",
-      createdAt: now,
-      updatedAt: now,
-      issues: [],
-      paths,
-    };
-    await Promise.all([
-      this.#artifactStore.writeJson(paths.task, pending),
-      this.#artifactStore.writeJson(`task://${taskId}/${TASK_REQUEST_PATH}`, {
-        kind: "local_video",
-        displayName: selected.displayName.trim(),
-      } satisfies StoredTaskRequest),
-    ]);
-    const projection = toAppTask(pending, [{
-      uri: this.#toDisplayUri(selected.uri),
-      kind: "video",
-      origin: "imported",
-      mimeType: "video/mp4",
-      byteLength: selected.sizeBytes,
-      durationSeconds: selected.durationSeconds,
-      displayName: selected.displayName.trim(),
-    }]);
-    await this.#emitChange({ schemaVersion: "task-change.v1", type: "upsert", task: projection });
-    return projection;
+    return persistImportedVideo(taskId, selected, {
+      artifactStore: this.#artifactStore,
+      toDisplayUri: this.#toDisplayUri,
+      now: this.#now,
+      emitChange: (event) => this.#emitChange(event),
+    });
   }
 
   async start(taskId: string): Promise<CancellableTask> {
@@ -369,59 +259,7 @@ export class StandaloneTaskService implements TaskService {
       this.#readJson(taskId, "transcript/transcript.json"),
       this.#readOptionalText(taskId, "content/content.txt"),
     ]);
-    const details = asRecord(metadata) ?? {};
-    const title = contentString(details.title);
-    const description = contentString(details.description);
-    const author = contentString(details.author);
-    const canonicalUrl = contentString(details.canonicalUrl);
-    const durationSeconds = typeof details.durationSeconds === "number" && Number.isFinite(details.durationSeconds)
-      ? details.durationSeconds
-      : undefined;
-    const content = {
-      ...(title ? { title } : {}),
-      ...(description ? { description } : {}),
-      ...(author ? { author } : {}),
-      ...(canonicalUrl ? { canonicalUrl: safeUrlForDisplay(canonicalUrl) } : {}),
-      ...(durationSeconds === undefined ? {} : { durationSeconds }),
-    };
-
-    if (task.contentType === "image_text") {
-      const text = contentText?.trim();
-      const paragraphs = text ? text.split(/\r?\n+/).map((item) => item.trim()).filter(Boolean) : [];
-      const evidenceUnits = paragraphs.map((textValue, index) => ({ id: `image-text-${index + 1}`, source: "image_text" as const, text: textValue }));
-      return {
-        task: toAppTask(task, media),
-        content,
-        media,
-        imageText: { ...(text ? { text } : {}), images: media.filter((item) => item.kind === "image"), paragraphs: evidenceUnits },
-        evidenceUnits,
-      };
-    }
-
-    const transcriptDetails = asRecord(transcriptInfo) ?? {};
-    const source = transcriptDetails.source === "asr" ? "asr" as const : "description" as const;
-    const storedSegments = Array.isArray(transcriptDetails.segments) ? transcriptDetails.segments : [];
-    const segments = storedSegments.flatMap((value, index) => {
-      const item = asRecord(value);
-      const textValue = contentString(item?.text);
-      if (!textValue) return [];
-      return [{
-        id: `transcript-${index + 1}`,
-        source: "transcript" as const,
-        text: textValue,
-        ...(typeof item?.startSeconds === "number" ? { startSeconds: item.startSeconds } : {}),
-        ...(typeof item?.endSeconds === "number" ? { endSeconds: item.endSeconds } : {}),
-      }];
-    });
-    const evidenceUnits = segments.length > 0
-      ? segments
-      : transcriptText?.trim()
-        ? [{ id: "transcript-1", source: "transcript" as const, text: transcriptText.trim() }]
-        : [];
-    const transcript = evidenceUnits.length > 0
-      ? { source, ...(transcriptText?.trim() ? { text: transcriptText.trim() } : {}), segments: evidenceUnits }
-      : undefined;
-    return { task: toAppTask(task, media), content, media, ...(transcript ? { transcript } : {}), evidenceUnits };
+    return projectTaskDetail(task, media, metadata, transcriptText, transcriptInfo, contentText);
   }
 
   async list(options: TaskListOptions = {}): Promise<readonly AppTaskRecord[]> {
@@ -554,7 +392,11 @@ export class StandaloneTaskService implements TaskService {
     } catch (error) {
       runError = error;
     }
-    return this.#settleAfterPipeline(taskId, pipelineIssues, runError);
+    return settleAfterPipeline(taskId, pipelineIssues, runError, {
+      readTask: (id) => this.#readTask(id),
+      taskMedia: (item) => this.#taskMedia(item),
+      failQueuedSnapshot: (item, issues) => this.#failQueuedSnapshot(item, issues),
+    });
   }
 
   /** Used only by the analysis adapter to keep the task projection current. */
@@ -571,36 +413,13 @@ export class StandaloneTaskService implements TaskService {
     });
   }
 
-  async #settleAfterPipeline(
-    taskId: string,
-    pipelineIssues: readonly TaskIssue[],
-    runError: unknown,
-  ): Promise<AppTaskRecord> {
-    const persisted = await this.#readTask(taskId);
-    if (persisted?.status === "queued") {
-      const issues = pipelineIssues.length > 0
-        ? pipelineIssues
-        : [issueFromError(runError ?? taskError("STORAGE_WRITE_FAILED", "产物保存失败", "free_storage"), "save-artifacts")];
-      return this.#failQueuedSnapshot(persisted, issues);
-    }
-    if (runError) throw runError;
-    if (!persisted) throw taskError("TASK_ARTIFACT_MISSING", "任务完成后未找到本地结果", "view_partial_result");
-    return toAppTask(persisted, await this.#taskMedia(persisted));
-  }
-
   async #failQueuedSnapshot(task: TaskRecord, issues: readonly TaskIssue[]): Promise<AppTaskRecord> {
-    const path = task.paths?.task;
-    if (!path) throw taskError("STORAGE_WRITE_FAILED", "产物保存失败", "free_storage");
-    const failed: TaskRecord = {
-      ...task,
-      status: "failed",
-      updatedAt: currentIso(this.#now),
-      issues: [...task.issues, ...issues],
-    };
-    await this.#artifactStore.writeJson(path, failed);
-    const projection = toAppTask(failed, await this.#taskMedia(failed));
-    await this.#emitChange({ schemaVersion: "task-change.v1", type: "upsert", task: projection });
-    return projection;
+    return failQueuedSnapshot(task, issues, {
+      now: this.#now,
+      artifactStore: this.#artifactStore,
+      taskMedia: (item) => this.#taskMedia(item),
+      emitChange: (event) => this.#emitChange(event),
+    });
   }
 
   async #report(event: ProgressEvent): Promise<void> {
@@ -674,45 +493,7 @@ export class StandaloneTaskService implements TaskService {
   }
 
   async #taskMedia(task: TaskRecord): Promise<readonly MediaReference[]> {
-    const media: MediaReference[] = [];
-    if (task.contentType === "video") {
-      const video = await this.#mediaReference(
-        task.id,
-        "media/video.mp4",
-        "video",
-        task.sourceKind === "local_video" ? "本地上传视频" : "下载的视频",
-        task.sourceKind === "local_video" ? "imported" : "downloaded",
-      );
-      if (video) media.push(video);
-    }
-    if (task.contentType === "image_text") {
-      const metadata = asRecord(await this.#readJson(task.id, "metadata.json"));
-      const images = Array.isArray(metadata?.images) ? metadata.images : [];
-      for (let index = 0; index < images.length && index < 100; index += 1) {
-        const image = await this.#mediaReference(task.id, `media/images/image-${index}.bin`, "image", `已保存图片 ${index + 1}`);
-        if (image) media.push(image);
-      }
-    }
-    return media;
-  }
-
-  async #mediaReference(
-    taskId: string,
-    relativePath: string,
-    kind: MediaReference["kind"],
-    displayName: string,
-    origin: MediaReference["origin"] = "downloaded",
-  ): Promise<MediaReference | undefined> {
-    const result = await this.#files.getUri({ taskId, relativePath });
-    if (!result.uri) return undefined;
-    return {
-      uri: this.#toDisplayUri(result.uri),
-      kind,
-      origin,
-      ...(result.mimeType ? { mimeType: result.mimeType } : {}),
-      ...(Number.isFinite(result.sizeBytes) ? { byteLength: result.sizeBytes } : {}),
-      displayName,
-    };
+    return projectTaskMedia(task, this.#files, this.#toDisplayUri, (taskId, relativePath) => this.#readJson(taskId, relativePath));
   }
 
   async #deleteTerminalTask(taskId: string): Promise<void> {
