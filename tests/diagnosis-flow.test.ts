@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { TaskError, type StructuredGenerationProgressV1 } from "../packages/core/src/index";
 import {
+  DIAGNOSIS_FOLLOW_UP_MAX_CHARS,
+  DIAGNOSIS_FOLLOW_UP_MAX_OUTPUT_TOKENS,
   DiagnosisFlow,
   type AiGenerateRequest,
   type AiGenerateResult,
   type AiProvider,
+  type AiStreamEvent,
   type DiagnosisImageInput,
   type DiagnosisRepository,
   type DiagnosisReportV1,
@@ -207,14 +210,75 @@ test("后续对话保存文本消息信封且不把reasoning写入上下文", as
   repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", image: { mimeType: "image/jpeg" } };
   repository.report = validReport;
   const provider = new SequenceProvider(["建议结合规律作息继续观察。"]);
-  const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
+  const streamEvents: AiStreamEvent[] = [];
+  const flow = new DiagnosisFlow({
+    provider,
+    repository,
+    contextWindowTokens: 32_000,
+    onEvent: (event) => { streamEvents.push(event); },
+  });
   const reply = await flow.chat("session-1", "平时要注意什么？");
   assert.equal(reply.content, "建议结合规律作息继续观察。");
   assert.deepEqual(repository.messages.map((message) => message.role), ["user", "assistant"]);
+  assert.equal(repository.messages[1]?.content, "建议结合规律作息继续观察。");
+  assert.equal(provider.calls[0]?.maxOutputTokens, DIAGNOSIS_FOLLOW_UP_MAX_OUTPUT_TOKENS);
+  assert.equal(streamEvents.some((event) => event.type === "content_delta" && event.delta.includes("规律作息")), true);
   assert.doesNotMatch(JSON.stringify(provider.calls[0]?.messages), /调试思考/);
   assert.doesNotMatch(String(provider.calls[0]?.messages[0]?.content), /最终结果只输出一个JSON对象|八个顶层字段/u);
+  assert.equal(repository.runs[0]?.status, "succeeded");
   assert.equal(repository.runs[0]?.reasoning, "");
   assert.equal(repository.runs[0]?.rawResponse, "");
+});
+
+test("越界追问回复不落库并抛出DIAGNOSIS_FOLLOW_UP_FAILED", async () => {
+  const forbiddenReplies = [
+    "你就是湿气重。",
+    "你的肝、心、脾、肺、肾有问题。",
+    "患病概率为百分之八十，健康评分为90。",
+    "根据这张舌头已经确诊，请按处方停药并替代就医。",
+  ];
+  for (const reply of forbiddenReplies) {
+    const repository = new MemoryRepository();
+    repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", image: { mimeType: "image/jpeg" } };
+    repository.report = validReport;
+    const streamEvents: AiStreamEvent[] = [];
+    const flow = new DiagnosisFlow({
+      provider: new SequenceProvider([reply]),
+      repository,
+      contextWindowTokens: 32_000,
+      onEvent: (event) => { streamEvents.push(event); },
+    });
+    await assert.rejects(
+      () => flow.chat("session-1", "我是不是生病了？"),
+      (error) => error instanceof TaskError && error.code === "DIAGNOSIS_FOLLOW_UP_FAILED" && error.action === "retry",
+    );
+    assert.equal(repository.messages.length, 0, `越界原文不得落库：${reply}`);
+    assert.equal(repository.runs.length, 1);
+    assert.equal(repository.runs[0]?.kind, "conversation");
+    assert.equal(repository.runs[0]?.status, "failed");
+    assert.equal(repository.runs[0]?.errorCode, "DIAGNOSIS_FOLLOW_UP_FAILED");
+    assert.equal(repository.runs[0]?.rawResponse, "");
+    assert.doesNotMatch(JSON.stringify(repository.messages), /湿气重|患病概率|健康评分|确诊|处方/u);
+    assert.doesNotMatch(JSON.stringify(repository.runs), /湿气重|患病概率|健康评分|确诊|处方/u);
+    assert.equal(streamEvents.some((event) => event.type === "content_delta"), true);
+  }
+});
+
+test("超长追问回复不落库并抛出DIAGNOSIS_FOLLOW_UP_FAILED", async () => {
+  const repository = new MemoryRepository();
+  repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", image: { mimeType: "image/jpeg" } };
+  repository.report = validReport;
+  const longReply = "建议结合规律作息继续观察。".padEnd(DIAGNOSIS_FOLLOW_UP_MAX_CHARS + 1, "记");
+  const flow = new DiagnosisFlow({ provider: new SequenceProvider([longReply]), repository, contextWindowTokens: 32_000 });
+  await assert.rejects(
+    () => flow.chat("session-1", "平时要注意什么？"),
+    (error) => error instanceof TaskError && error.code === "DIAGNOSIS_FOLLOW_UP_FAILED" && error.action === "retry",
+  );
+  assert.equal(repository.messages.length, 0);
+  assert.equal(repository.runs[0]?.status, "failed");
+  assert.equal(repository.runs[0]?.errorCode, "DIAGNOSIS_FOLLOW_UP_FAILED");
+  assert.equal(repository.runs[0]?.rawResponse, "");
+  assert.doesNotMatch(JSON.stringify(repository.messages), /规律作息/u);
 });
 
 test("上下文超过窗口80%时摘要较早消息并保留最近六条", async () => {

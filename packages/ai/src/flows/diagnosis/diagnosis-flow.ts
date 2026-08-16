@@ -15,6 +15,10 @@ import {
   diagnosisSingleRepairPrompt,
 } from "../../prompts/diagnosis-report-single";
 import {
+  DIAGNOSIS_FOLLOW_UP_MAX_OUTPUT_TOKENS,
+  diagnosisFollowUpReplySchema,
+} from "../../schemas/diagnosis-follow-up";
+import {
   diagnosisFollowUpQuestionsSchema,
   diagnosisObservationSummarySchema,
   diagnosisReportSchema,
@@ -460,13 +464,18 @@ export class DiagnosisFlow {
         model: "text",
         output: "text",
         messages,
+        maxOutputTokens: DIAGNOSIS_FOLLOW_UP_MAX_OUTPUT_TOKENS,
         onEvent: async (event) => {
           await this.#dependencies.onEvent?.({ ...event, runId });
         },
       });
+      const parsed = diagnosisFollowUpReplySchema.safeParse(result.content);
+      if (!parsed.success) {
+        throw new TaskError({ code: "DIAGNOSIS_FOLLOW_UP_FAILED", message: "追问回复未通过长度或日常观察安全边界校验", action: "retry" });
+      }
       const now = new Date().toISOString();
       const userMessage: AiMessage = { id: messageId(), sessionId, reportId: session.reportId, role: "user", content: question.trim(), status: "completed", createdAt: now };
-      const assistantMessage: AiMessage = { id: messageId(), sessionId, reportId: session.reportId, role: "assistant", content: result.content, status: "completed", createdAt: new Date().toISOString() };
+      const assistantMessage: AiMessage = { id: messageId(), sessionId, reportId: session.reportId, role: "assistant", content: parsed.data, status: "completed", createdAt: new Date().toISOString() };
       await this.#dependencies.repository.appendMessages(sessionId, [userMessage, assistantMessage]);
       await this.#dependencies.repository.saveRun(sessionId, { id: runId, kind: "conversation", status: "succeeded", startedAt, completedAt: new Date().toISOString(), rawResponse: "", reasoning: "" });
       return assistantMessage;
