@@ -19,6 +19,7 @@ export interface TaskIssueActionHandlers {
   readonly configureAi?: () => void;
   readonly selectMedia?: () => void;
   readonly partialResult?: () => void;
+  readonly editInput?: () => void;
 }
 
 type HandledIssueAction = keyof TaskIssueActionHandlers;
@@ -32,6 +33,7 @@ interface IssueActionDescriptor {
 const actionDescriptors: Readonly<Record<TaskIssue["action"], IssueActionDescriptor>> = {
   edit_input: {
     guidance: "请检查刚才填写的内容，再重新提交。",
+    handler: "editInput",
   },
   retry: {
     label: "重试",
@@ -92,6 +94,15 @@ export function issueActionPresentation(
 export interface IssueNoticeProps {
   readonly issue: TaskIssue;
   readonly actions?: TaskIssueActionHandlers;
+}
+
+export function isInlineIssueAction(action: TaskIssue["action"]): boolean {
+  return action === "edit_input";
+}
+
+export function defaultEditInputFocus(): void {
+  if (typeof document === "undefined") return;
+  document.getElementById("task-share-input")?.focus();
 }
 
 const NATIVE_ERROR_CODE = /^ERR_[A-Z0-9_]{2,116}$/;
@@ -209,22 +220,37 @@ export function issueTitle(issue: Pick<TaskIssue, "code" | "userMessage">): stri
 
 /** Shared presentation mapping for stable application issue codes/actions. */
 export function IssueNotice({ issue, actions }: IssueNoticeProps) {
-  const { show } = useNotification();
+  const { show, dismiss } = useNotification();
   const actionsRef = useRef(actions);
   actionsRef.current = actions;
   const diagnosticSummary = issueDiagnosticSummary(issue);
+  const inline = isInlineIssueAction(issue.action);
+  const presentation = issueActionPresentation(issue.action, actions);
+  const message = diagnosticSummary ? `${presentation.guidance}\n${diagnosticSummary}` : presentation.guidance;
 
   useEffect(() => {
-    const presentation = issueActionPresentation(issue.action, actionsRef.current);
+    if (inline) {
+      dismiss();
+      (actionsRef.current?.editInput ?? defaultEditInputFocus)();
+      return;
+    }
+    const next = issueActionPresentation(issue.action, actionsRef.current);
     show({
       level: issue.severity === "error" ? "error" : "warning",
       title: issueTitle(issue),
-      message: diagnosticSummary ? `${presentation.guidance}\n${diagnosticSummary}` : presentation.guidance,
-      ...(presentation.label && presentation.onAction
-        ? { action: { label: presentation.label, onPress: presentation.onAction } }
+      message: diagnosticSummary ? `${next.guidance}\n${diagnosticSummary}` : next.guidance,
+      ...(next.label && next.onAction
+        ? { action: { label: next.label, onPress: next.onAction } }
         : {}),
     });
-  }, [diagnosticSummary, issue.action, issue.code, issue.severity, issue.userMessage, show]);
+  }, [diagnosticSummary, dismiss, inline, issue.action, issue.code, issue.severity, issue.userMessage, show]);
 
-  return null;
+  if (!inline) return null;
+
+  return (
+    <aside className={`issue-notice issue-notice--${issue.severity}`} role={issue.severity === "error" ? "alert" : "status"}>
+      <strong>{issueTitle(issue)}</strong>
+      <small>{message}</small>
+    </aside>
+  );
 }

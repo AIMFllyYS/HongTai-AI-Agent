@@ -81,6 +81,16 @@ test("observation photo selection and capture own an importing state with every 
   assert.match(start, /disabled=\{!diagnosisAvailable \|\| !image \|\| loading \|\| importing\}/);
 });
 
+test("observation start page incrementally subscribes running reports by sessionId", () => {
+  const start = read("pages/ObservationStartPage.tsx");
+  assert.match(start, /useRef\(new Map<string, \(\) => void>\(\)\)/);
+  assert.match(start, /wantedIds\.has\(sessionId\)[\s\S]*subscriptions\.delete\(sessionId\)/);
+  assert.match(start, /if \(subscriptions\.has\(sessionId\)\) continue/);
+  assert.match(start, /subscriptions\.set\(sessionId, runtime\.diagnosis\.subscribeReport\(sessionId/);
+  assert.doesNotMatch(start, /const subscriptions: Array<\(\) => void>/);
+  assert.doesNotMatch(start, /return \(\) => subscriptions\.forEach\(\(unsubscribe\) => unsubscribe\(\)\)/);
+});
+
 test("observation pages refresh persisted records on resume without remounting photo recovery", () => {
   const start = read("pages/ObservationStartPage.tsx");
   const report = read("pages/ObservationReportPage.tsx");

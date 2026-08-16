@@ -45,6 +45,7 @@ test("templates and production use real runtimes while publishing remains planne
   assert.match(templates, /runtime\.templates\.(list|createFromAnalysis|create|update|delete)/);
   assert.match(templates, /runtime\.analysis\.get/);
   assert.match(templates, /确认删除模板/);
+  assert.match(templates, /\{readIssue \? <button className="text-action" onClick=\{\(\) => void load\(\)\} type="button">刷新<\/button> : null\}/);
   assert.doesNotMatch(templates, /data\/fixtures|visualData|viewModel/);
 
   const publish = read("pages/PublishPage.tsx");

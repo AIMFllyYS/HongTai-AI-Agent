@@ -563,6 +563,37 @@
   font-weight: 700;
 }
 
+.issue-notice {
+  display: grid;
+  gap: 0.2rem;
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+}
+
+.issue-notice--error {
+  color: var(--color-error);
+  background: var(--color-error-soft);
+}
+
+.issue-notice--warning {
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
+.issue-notice strong {
+  font-size: var(--text-caption);
+  line-height: 1.35;
+}
+
+.issue-notice small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+  line-height: 1.35;
+  white-space: pre-line;
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }

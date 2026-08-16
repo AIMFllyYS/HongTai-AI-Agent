@@ -1,20 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, TransitionEventHandler } from "react";
 import type { BottomNavProps } from "./BottomNav";
+import { visualThemeForRoute } from "./AppShell";
 import { adjacentPrimaryNavPath } from "../navigation/primary-nav";
 import { motionDurations } from "../motion/tokens";
-import type { Navigate } from "../router";
+import { matchRoute, type Navigate } from "../router";
 import { useSwipeNavigation, type SwipeCommit } from "../hooks/useSwipeNavigation";
+
+function SwipeRoutePreviewPane({ path }: { readonly path: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      className="app-shell app-shell--with-nav route-swipe-preview"
+      data-visual-theme={visualThemeForRoute(matchRoute(path).key)}
+    />
+  );
+}
 
 export interface SwipeRouteViewportProps {
   readonly active: BottomNavProps["active"];
   readonly currentPath: string;
   readonly navigate: Navigate;
-  readonly renderRoute: (path: string) => ReactNode;
   readonly children: ReactNode;
 }
 
-export function SwipeRouteViewport({ active, currentPath, navigate, renderRoute, children }: SwipeRouteViewportProps) {
+export function SwipeRouteViewport({ active, currentPath, navigate, children }: SwipeRouteViewportProps) {
   const [pendingSwipe, setPendingSwipe] = useState<SwipeCommit | null>(null);
   const [pendingSourcePath, setPendingSourcePath] = useState<string | null>(null);
   const [routeCommitPath, setRouteCommitPath] = useState<string | null>(null);
@@ -34,10 +44,10 @@ export function SwipeRouteViewport({ active, currentPath, navigate, renderRoute,
   const previousPath = adjacentPrimaryNavPath(active, "previous");
   const nextPath = adjacentPrimaryNavPath(active, "next");
   const targetPath = pendingPath ?? (isGestureActive ? (swipeDirection === "next" ? nextPath : previousPath) : undefined);
-  const candidate = targetPath ? renderRoute(targetPath) : null;
-  const edgeCopy = isGestureActive && !targetPath ? renderRoute(currentPath) : null;
-  const previousPane = targetPath === previousPath ? candidate : swipeDirection === "previous" ? edgeCopy : null;
-  const nextPane = targetPath === nextPath ? candidate : swipeDirection === "next" ? edgeCopy : null;
+  const previewPath = targetPath ?? (isGestureActive ? currentPath : undefined);
+  const previewPane = previewPath ? <SwipeRoutePreviewPane path={previewPath} /> : null;
+  const previousPane = targetPath === previousPath || (!targetPath && swipeDirection === "previous") ? previewPane : null;
+  const nextPane = targetPath === nextPath || (!targetPath && swipeDirection === "next") ? previewPane : null;
   const effectiveOffset = isRouteCommit ? 0 : swipeOffset;
   const trackStyle = { "--swipe-offset": `${effectiveOffset}px` } as CSSProperties;
   const trackClassName = [

@@ -31,6 +31,10 @@ interface AnalysisSource {
 
 const EMPTY_DRAFT: TemplateDraft = { name: "", summary: "", formula: "", steps: "", variableSlots: "" };
 
+function focusTemplateName(): void {
+  if (typeof document !== "undefined") document.getElementById("template-name")?.focus();
+}
+
 function draftFrom(record: ContentTemplateRecord): TemplateDraft {
   return { ...record, steps: record.steps.join("\n"), variableSlots: record.variableSlots.join("\n") };
 }
@@ -53,6 +57,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
   const [draft, setDraft] = useState<TemplateDraft>(EMPTY_DRAFT);
   const [deletingId, setDeletingId] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [readIssue, setReadIssue] = useState<TaskIssue>();
   const [issue, setIssue] = useState<TaskIssue>();
 
   const load = useCallback(async () => {
@@ -64,9 +69,10 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
       setTemplates(saved);
       setSources(available);
       setSourceTaskId((current) => current || available[0]?.task.id || "");
+      setReadIssue(undefined);
       setIssue(undefined);
     } catch (error) {
-      setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "本地模板暂时无法读取", action: "none" }));
+      setReadIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "本地模板暂时无法读取", action: "none" }));
     }
   }, [runtime]);
 
@@ -152,7 +158,8 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
           <p>这里只保存公式、步骤与变量槽，不复制原视频、供应商响应或推理内容。保存后可独立编辑和删除。</p>
         </section>
 
-        {issue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), retry: () => void load() }} issue={issue} /> : null}
+        {readIssue ? <IssueNotice issue={readIssue} /> : null}
+        {issue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), retry: () => void load(), editInput: focusTemplateName }} issue={issue} /> : null}
 
         <GlassCard className="template-import-card">
           <div className="production-section-title"><span>01</span><div><strong>从拆解结果保存</strong><small>把内容结构保存成以后可以继续使用的模板</small></div></div>
@@ -168,7 +175,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
         </GlassCard>
 
         <section className="template-library-section">
-          <div className="section-heading"><div><span className="eyebrow">LOCAL TEMPLATES</span><h3>我的模板</h3></div><button className="text-action" onClick={() => void load()} type="button">刷新</button></div>
+          <div className="section-heading"><div><span className="eyebrow">LOCAL TEMPLATES</span><h3>我的模板</h3></div>{readIssue ? <button className="text-action" onClick={() => void load()} type="button">刷新</button> : null}</div>
           {templates === undefined ? <LoadingState description="正在读取本地模板文件" title="读取模板" /> : templates.length === 0 ? <EmptyState action={<Button onClick={startCustom} variant="secondary">创建空白模板</Button>} description="你可以从拆解保存，也可以从空白结构开始自定义。" icon="content_paste" title="还没有模板" /> : (
             <div className="template-list">
               {templates.map((record) => (

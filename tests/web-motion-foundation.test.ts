@@ -135,6 +135,18 @@ test("horizontal navigation renders an adjacent route pane during movement", () 
   assert.match(shell, /overflow-x:\s*hidden/);
 });
 
+test("swipe preview panes stay inert and do not list, subscribe, or consume", () => {
+  const viewport = read("components/SwipeRouteViewport.tsx");
+  const app = read("App.tsx");
+
+  assert.doesNotMatch(viewport, /renderRoute\s*\(/);
+  assert.doesNotMatch(viewport, /\.list\s*\(|subscribe|consume/);
+  assert.match(viewport, /aria-hidden/);
+  assert.match(viewport, /data-visual-theme/);
+  assert.match(app, /\{renderRoute\(pathname\)\}/);
+  assert.doesNotMatch(app, /renderRoute=\{renderRoute\}/);
+});
+
 test("shared controls expose one press-feedback vocabulary", () => {
   const buttons = read("components/Buttons.tsx");
   const cards = read("components/GlassCard.tsx");

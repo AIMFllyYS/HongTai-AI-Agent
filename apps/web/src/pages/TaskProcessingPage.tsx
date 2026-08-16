@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { issueFromAppError, safeUrlForDisplay } from "@hongtai/core";
 import type { AppRuntime, AppTaskRecord, TaskEventRecord, TaskIssue } from "@hongtai/core";
 
@@ -11,6 +11,7 @@ import { EmptyState, ErrorState, LoadingState } from "../components/StatePanels"
 import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
 import { TaskProgressSteps } from "../components/TaskProgressSteps";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
+import { LatestReadGuard, preferNewerByUpdatedAt } from "../features/tasks/latest-read-guard";
 import { buildTaskStagePresentations, platformLabel } from "../features/tasks/task-presenters";
 import { useAppResume } from "../hooks/useAppResume";
 import { aiSettingsPath, pathForRoute, taskDetailPath, type Navigate } from "../router";
@@ -41,20 +42,24 @@ export function TaskProcessingPage({ runtime, taskId, navigate }: TaskProcessing
   const [loading, setLoading] = useState(true);
   const [issue, setIssue] = useState<TaskIssue>();
   const [actionPending, setActionPending] = useState<"start">();
+  const latestRead = useRef(new LatestReadGuard());
 
   const load = useCallback(async () => {
+    const generation = latestRead.current.current();
     try {
       const [nextTask, nextEvents] = await Promise.all([
         runtime.tasks.get(taskId),
         runtime.tasks.listEvents(taskId),
       ]);
-      setTask(nextTask);
-      setEvents(nextEvents.slice().sort((left, right) => left.sequence - right.sequence));
+      if (!latestRead.current.isCurrent(generation)) return;
+      setTask((current) => preferNewerByUpdatedAt(current, nextTask));
+      setEvents((current) => current.reduce((events, event) => mergeEvents(events, event), nextEvents));
       setIssue(undefined);
     } catch (error) {
+      if (!latestRead.current.isCurrent(generation)) return;
       setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "任务进度暂时无法读取", action: "none" }));
     } finally {
-      setLoading(false);
+      if (latestRead.current.isCurrent(generation)) setLoading(false);
     }
   }, [runtime, taskId]);
 
@@ -66,14 +71,22 @@ export function TaskProcessingPage({ runtime, taskId, navigate }: TaskProcessing
     try {
       unsubscribe = runtime.tasks.subscribe(taskId, (event) => {
         setEvents((current) => mergeEvents(current, event));
-        void runtime.tasks.get(taskId).then(setTask).catch((error: unknown) => {
+        const generation = latestRead.current.current();
+        void runtime.tasks.get(taskId).then((nextTask) => {
+          if (!latestRead.current.isCurrent(generation)) return;
+          setTask((current) => preferNewerByUpdatedAt(current, nextTask));
+        }).catch((error: unknown) => {
+          if (!latestRead.current.isCurrent(generation)) return;
           setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "任务状态暂时无法更新", action: "none" }));
         });
       });
     } catch (error) {
       setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "任务进度订阅暂时不可用", action: "none" }));
     }
-    return () => unsubscribe?.();
+    return () => {
+      latestRead.current.invalidate();
+      unsubscribe?.();
+    };
   }, [load, runtime, taskId]);
 
   const steps = useMemo(() => task ? buildTaskStagePresentations(task, events) : [], [events, task]);
@@ -93,6 +106,9 @@ export function TaskProcessingPage({ runtime, taskId, navigate }: TaskProcessing
 
   const issueActions = {
     configureAi: () => navigate(aiSettingsPath()),
+    ...(task && (task.media.length > 0 || Boolean(task.speechStatus) || task.status === "degraded" || task.status === "succeeded")
+      ? { partialResult: () => navigate(taskDetailPath(task.id)) }
+      : {}),
   };
 
   if (loading) {

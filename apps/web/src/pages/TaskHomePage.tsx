@@ -74,6 +74,10 @@ export function applyTaskHistoryChange(
     .slice(0, limit);
 }
 
+function focusTaskShareInput(): void {
+  if (typeof document !== "undefined") document.getElementById("task-share-input")?.focus();
+}
+
 function inspectionFor(runtime: AppRuntime, input: string): InputInspection | undefined {
   if (!input.trim()) return undefined;
   try {
@@ -273,8 +277,8 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
                 {inspection.value.platform === "kuaishou" ? <small>快手为实验性支持，平台风控结果会如实记录。</small> : null}
               </div>
             </div>
-          ) : inspection ? <IssueNotice issue={inspection.issue} /> : null}
-          {submitIssue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()) }} issue={submitIssue} /> : null}
+          ) : inspection ? <IssueNotice actions={{ editInput: focusTaskShareInput }} issue={inspection.issue} /> : null}
+          {submitIssue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), editInput: focusTaskShareInput }} issue={submitIssue} /> : null}
 
           <Button className={`task-input-card__submit ${submitting ? "is-busy" : ""}`.trim()} disabled={!ingestAvailable || !inspection?.ok || submitting || videoImporting} icon={<Icon name={submitting ? "sync" : "bolt"} size={19} />} onClick={() => void submit()} size="lg">
             {submitting ? "正在创建本地任务" : "开始采集"}
@@ -283,7 +287,7 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
 
         <section className="page-section">
           <div className="section-heading"><h3>本地任务历史</h3>{historyIssue ? <Button onClick={() => void loadHistory()} variant="quiet">重新读取</Button> : null}</div>
-          {historyIssue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()) }} issue={historyIssue} /> : null}
+          {historyIssue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), editInput: focusTaskShareInput }} issue={historyIssue} /> : null}
           {historyIssue && tasks === undefined ? <ErrorState description={historyIssue.userMessage} title="任务历史无法读取" /> : tasks === undefined ? <LoadingState description="正在从本地仓储读取任务记录" title="读取任务历史" /> : <TaskHistory navigate={navigate} tasks={tasks} />}
         </section>
       </div>

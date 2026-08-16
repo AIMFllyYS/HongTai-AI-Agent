@@ -125,7 +125,7 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
           <p>本地档案与公开 AI 配置保存在本机应用数据中；API Key 仅写入 Android Keystore，不会回传到页面。</p>
         </GlassCard>
 
-        <Button onClick={() => void load()} variant="quiet"><Icon name="sync" size={17} />重新读取</Button>
+        {issue ? <Button onClick={() => void load()} variant="quiet"><Icon name="sync" size={17} />重新读取</Button> : null}
       </div>
     </AppShell>
   );

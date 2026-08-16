@@ -213,6 +213,9 @@ test("live generation pages use narrow subscriptions with no healthy-state manua
   assert.match(analysis, /runtime\.tasks\.subscribeChanges/);
   assert.match(analysis, /runtime\.analysis\.subscribe\(taskId/);
   assert.match(observationStart, /runtime\.diagnosis\.subscribeReport/);
+  assert.match(observationStart, /if \(subscriptions\.has\(sessionId\)\) continue/);
+  assert.match(observationStart, /wantedIds\.has\(sessionId\)[\s\S]*subscriptions\.delete\(sessionId\)/);
+  assert.doesNotMatch(observationStart, /return \(\) => subscriptions\.forEach\(\(unsubscribe\) => unsubscribe\(\)\)/);
   assert.match(observationStart, /LiveListReadReconciler<DiagnosisSessionRecord>/);
   assert.match(observationStart, /observationHistoryReads\.current\.record\(/);
   assert.match(observationStart, /if \(reconciled === undefined\) return;/);
