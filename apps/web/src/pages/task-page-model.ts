@@ -1,6 +1,80 @@
 import type { AppTaskRecord, TaskChangeEventV1, TaskDetailRecord, TaskEventRecord, TaskIssue, TaskStatus } from "@hongtai/core";
 
 import { preferNewerByUpdatedAt } from "../features/tasks/latest-read-guard";
+import { matchRoute, pathForRoute, taskAnalysisPath, taskDetailPath, type Navigate } from "../router";
+
+export type TaskResultTab = "source" | "analysis";
+export type TaskCompletedPrimaryAction = "none" | "start-analysis" | "next-steps";
+
+export const ANALYSIS_TAB_LABEL = "AI自动拆解";
+
+export function sourceTabLabel(contentType?: string): string {
+  return contentType === "image_text" ? "图文正文" : "原始文稿";
+}
+
+export function taskResultTabs(contentType?: string): readonly string[] {
+  return [sourceTabLabel(contentType), ANALYSIS_TAB_LABEL];
+}
+
+export function taskResultTabFromPath(pathname: string): TaskResultTab {
+  return matchRoute(pathname).key === "task-analysis" ? "analysis" : "source";
+}
+
+export function pathForTaskResultTab(taskId: string, tab: TaskResultTab): string {
+  return tab === "analysis" ? taskAnalysisPath(taskId) : taskDetailPath(taskId);
+}
+
+export function syncTaskResultTabPath(taskId: string, tab: TaskResultTab): void {
+  if (typeof window === "undefined") return;
+  const next = pathForTaskResultTab(taskId, tab);
+  if (window.location.pathname === next) return;
+  window.history.replaceState(window.history.state ?? {}, "", next);
+}
+
+export function createPagePathWithSource(taskId: string): string {
+  return `/create?sourceId=${encodeURIComponent(taskId)}`;
+}
+
+export function sourceIdFromSearch(search: string): string {
+  const raw = search.startsWith("?") ? search.slice(1) : search;
+  try {
+    return new URLSearchParams(raw).get("sourceId")?.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function navigateToCreateWithSource(navigate: Navigate, taskId: string): void {
+  navigate(pathForRoute("create"));
+  if (typeof window === "undefined") return;
+  const next = createPagePathWithSource(taskId);
+  if (`${window.location.pathname}${window.location.search}` === next) return;
+  window.history.replaceState(window.history.state ?? {}, "", next);
+}
+
+export type TaskCompletedBarAction = TaskCompletedPrimaryAction | "confirm-analysis";
+
+export function resolveCompletedBarAction(input: {
+  readonly primary: TaskCompletedPrimaryAction;
+  readonly confirmationOpen: boolean;
+  readonly deleteConfirmationOpen: boolean;
+}): TaskCompletedBarAction {
+  if (input.deleteConfirmationOpen) return "none";
+  if (input.confirmationOpen) return "confirm-analysis";
+  return input.primary;
+}
+
+export function resolveCompletedPrimaryAction(input: {
+  readonly analysisStatus?: string;
+  readonly analysisAvailable: boolean;
+  readonly hasEvidence: boolean;
+}): TaskCompletedPrimaryAction {
+  if (!input.analysisAvailable || input.analysisStatus === "running") return "none";
+  if (input.analysisStatus === "succeeded") return "next-steps";
+  if (!input.hasEvidence) return "none";
+  if (input.analysisStatus === "not_started" || input.analysisStatus === "failed") return "start-analysis";
+  return "none";
+}
 
 export type TaskPageSurface = "loading" | "missing-task" | "processing" | "completed-missing" | "completed";
 

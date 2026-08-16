@@ -368,7 +368,8 @@ test("three task URL aliases mount one TaskPage and stay mounted after ingest co
   assert.doesNotMatch(page, /navigate\(taskDetailPath/);
   assert.doesNotMatch(page, /navigate\(taskAnalysisPath/);
   assert.doesNotMatch([page, processing, read("pages/TaskDetailPage.tsx"), read("pages/TaskAnalysisPage.tsx")].join("\n"), /查看任务详情|查看拆解结果|查看当前状态|查看拆解状态/);
-  assert.doesNotMatch(page, /contextualAction=/);
+  const processingShell = page.slice(page.indexOf("if (surface === \"processing\")"), page.indexOf("if (surface === \"completed-missing\""));
+  assert.doesNotMatch(processingShell, /contextualAction=/);
   assert.match(processing, /进程在后台运行，可以放心离开此页/);
   assert.match(processing, /<Button variant="secondary"[\s\S]*?开始执行/);
   assert.doesNotMatch(processing, /<Button(?! variant="secondary")[\s\S]*?开始执行/);
@@ -459,4 +460,154 @@ test("failed interrupted cancelled 仍走处理页", async () => {
   const page = read("pages/TaskPage.tsx");
   assert.match(page, /resolveTaskPageSurface/);
   assert.doesNotMatch(page, /isTerminalTaskStatus/);
+});
+
+test("完成态用共享 Tabs 恢复 URL 分栏，并按阶段给出底部主操作", async () => {
+  const model = await import("../apps/web/src/pages/task-page-model") as {
+    sourceTabLabel?: (contentType?: string) => string;
+    taskResultTabs?: (contentType?: string) => readonly string[];
+    taskResultTabFromPath?: (pathname: string) => string;
+    pathForTaskResultTab?: (taskId: string, tab: string) => string;
+    createPagePathWithSource?: (taskId: string) => string;
+    sourceIdFromSearch?: (search: string) => string;
+    navigateToCreateWithSource?: (navigate: (path: string) => void, taskId: string) => void;
+    resolveCompletedBarAction?: (input: {
+      readonly primary: string;
+      readonly confirmationOpen: boolean;
+      readonly deleteConfirmationOpen: boolean;
+    }) => string;
+    resolveCompletedPrimaryAction?: (input: {
+      readonly analysisStatus?: string;
+      readonly analysisAvailable: boolean;
+      readonly hasEvidence: boolean;
+    }) => string;
+    syncTaskResultTabPath?: (taskId: string, tab: string) => void;
+  };
+
+  assert.equal(typeof model.sourceTabLabel, "function");
+  assert.equal(typeof model.taskResultTabs, "function");
+  assert.equal(typeof model.taskResultTabFromPath, "function");
+  assert.equal(typeof model.pathForTaskResultTab, "function");
+  assert.equal(typeof model.createPagePathWithSource, "function");
+  assert.equal(typeof model.sourceIdFromSearch, "function");
+  assert.equal(typeof model.resolveCompletedPrimaryAction, "function");
+  assert.equal(typeof model.syncTaskResultTabPath, "function");
+
+  assert.equal(model.sourceTabLabel?.("video"), "原始文稿");
+  assert.equal(model.sourceTabLabel?.("image_text"), "图文正文");
+  assert.equal(model.sourceTabLabel?.("unknown"), "原始文稿");
+  assert.deepEqual(model.taskResultTabs?.("video"), ["原始文稿", "AI自动拆解"]);
+  assert.deepEqual(model.taskResultTabs?.("image_text"), ["图文正文", "AI自动拆解"]);
+  assert.equal(model.taskResultTabFromPath?.("/tasks/task-1/analysis"), "analysis");
+  assert.equal(model.taskResultTabFromPath?.("/tasks/task-1"), "source");
+  assert.equal(model.taskResultTabFromPath?.("/tasks/task-1/processing"), "source");
+  assert.equal(model.pathForTaskResultTab?.("task-1", "analysis"), "/tasks/task-1/analysis");
+  assert.equal(model.pathForTaskResultTab?.("task-1", "source"), "/tasks/task-1");
+  assert.equal(model.createPagePathWithSource?.("task/1"), "/create?sourceId=task%2F1");
+  assert.equal(model.sourceIdFromSearch?.("?sourceId=task-9"), "task-9");
+  assert.equal(model.sourceIdFromSearch?.("sourceId=task-9&x=1"), "task-9");
+  assert.equal(model.sourceIdFromSearch?.(""), "");
+  assert.equal(model.resolveCompletedPrimaryAction?.({ analysisStatus: "not_started", analysisAvailable: true, hasEvidence: true }), "start-analysis");
+  assert.equal(model.resolveCompletedPrimaryAction?.({ analysisStatus: "failed", analysisAvailable: true, hasEvidence: true }), "start-analysis");
+  assert.equal(model.resolveCompletedPrimaryAction?.({ analysisStatus: "succeeded", analysisAvailable: true, hasEvidence: true }), "next-steps");
+  assert.equal(model.resolveCompletedPrimaryAction?.({ analysisStatus: "running", analysisAvailable: true, hasEvidence: true }), "none");
+  assert.equal(model.resolveCompletedPrimaryAction?.({ analysisStatus: "not_started", analysisAvailable: true, hasEvidence: false }), "none");
+  assert.equal(model.resolveCompletedPrimaryAction?.({ analysisStatus: "not_started", analysisAvailable: false, hasEvidence: true }), "none");
+
+  const page = read("pages/TaskPage.tsx");
+  const detail = read("pages/TaskDetailPage.tsx");
+  const analysis = read("pages/TaskAnalysisPage.tsx");
+  const modelSource = read("pages/task-page-model.ts");
+  const create = read("pages/CreatePage.tsx");
+  const home = read("pages/TaskHomePage.tsx");
+  const completed = [page, detail, analysis, modelSource].join("\n");
+
+  assert.match(detail, /from "\.\.\/components\/Tabs"/);
+  assert.match(detail, /<Tabs\b/);
+  assert.match(detail, /<TabPanel\b/);
+  assert.doesNotMatch(detail, /role="tablist"/);
+  assert.match(completed, /AI自动拆解/);
+  assert.match(detail, /原始文稿/);
+  assert.match(detail, /图文正文/);
+  assert.match(page, /taskResultTabFromPath/);
+  assert.match(page, /syncTaskResultTabPath/);
+  assert.match(page, /popstate/);
+  assert.match(page, /contextualAction=/);
+  assert.match(completed, /开始 AI 拆解/);
+  assert.match(completed, /存为模板/);
+  assert.match(completed, /用它做视频/);
+  assert.match(completed, /createPagePathWithSource/);
+  assert.match(completed, /重新拆解/);
+  assert.match(completed, /role="menuitem"/);
+  assert.match(completed, /确认删除这个任务/);
+  assert.doesNotMatch(detail, /<Button[^>]*>删除任务</);
+  assert.doesNotMatch(detail, /<Button[^>]*>重新拆解</);
+  assert.doesNotMatch(analysis, /前往模板管理保存结构/);
+  assert.match(create, /sourceIdFromSearch/);
+  assert.match(home, /task-source-index">01</);
+  assert.match(home, /task-source-index">02</);
+
+  assert.equal(typeof model.navigateToCreateWithSource, "function");
+  assert.equal(typeof model.resolveCompletedBarAction, "function");
+  assert.match(detail, /navigateToCreateWithSource/);
+  assert.doesNotMatch(detail, /navigate\(createPagePathWithSource/);
+  assert.match(detail, /resolveCompletedBarAction/);
+  assert.match(detail, /confirmationOpen/);
+  assert.match(detail, /deleteConfirmationOpen/);
+  const confirmCard = detail.slice(detail.indexOf("{confirmationOpen ?"), detail.indexOf("{activeTab !== \"analysis\""));
+  assert.match(confirmCard, /暂不运行/);
+  assert.doesNotMatch(confirmCard, /开始拆解/);
+  assert.match(detail, /variant="secondary"[^>]*>\{pendingAction === "delete"/);
+});
+
+test("用它做视频先进入 /create 再写 sourceId，确认态底栏不再出现第二个主按钮", async () => {
+  const model = await import("../apps/web/src/pages/task-page-model") as {
+    createPagePathWithSource: (taskId: string) => string;
+    sourceIdFromSearch: (search: string) => string;
+    navigateToCreateWithSource: (navigate: (path: string) => void, taskId: string) => void;
+    resolveCompletedBarAction: (input: {
+      readonly primary: string;
+      readonly confirmationOpen: boolean;
+      readonly deleteConfirmationOpen: boolean;
+    }) => string;
+  };
+  const { matchRoute, pathForRoute } = await import("../apps/web/src/router");
+
+  assert.equal(matchRoute(model.createPagePathWithSource("task-88")).key, "not-found");
+  assert.equal(matchRoute(pathForRoute("create")).key, "create");
+
+  const location = { pathname: "/tasks/task-88", search: "" };
+  const previousWindow = (globalThis as { window?: unknown }).window;
+  (globalThis as { window: unknown }).window = {
+    location,
+    history: {
+      state: {},
+      replaceState(_data: unknown, _title: string, url: string) {
+        const parsed = new URL(url, "https://hongtai.local");
+        location.pathname = parsed.pathname;
+        location.search = parsed.search;
+      },
+    },
+  };
+
+  try {
+    const navigated: string[] = [];
+    model.navigateToCreateWithSource((path) => {
+      navigated.push(path);
+    }, "task-88");
+    assert.equal(navigated.length, 1);
+    assert.equal(matchRoute(navigated[0] ?? "").key, "create");
+    assert.doesNotMatch(navigated[0] ?? "", /\?/);
+    assert.equal(model.sourceIdFromSearch(location.search), "task-88");
+  } finally {
+    if (previousWindow === undefined) delete (globalThis as { window?: unknown }).window;
+    else (globalThis as { window: unknown }).window = previousWindow;
+  }
+
+  assert.equal(model.resolveCompletedBarAction({ primary: "start-analysis", confirmationOpen: false, deleteConfirmationOpen: false }), "start-analysis");
+  assert.equal(model.resolveCompletedBarAction({ primary: "next-steps", confirmationOpen: false, deleteConfirmationOpen: false }), "next-steps");
+  assert.equal(model.resolveCompletedBarAction({ primary: "start-analysis", confirmationOpen: true, deleteConfirmationOpen: false }), "confirm-analysis");
+  assert.equal(model.resolveCompletedBarAction({ primary: "next-steps", confirmationOpen: true, deleteConfirmationOpen: false }), "confirm-analysis");
+  assert.equal(model.resolveCompletedBarAction({ primary: "next-steps", confirmationOpen: false, deleteConfirmationOpen: true }), "none");
+  assert.equal(model.resolveCompletedBarAction({ primary: "start-analysis", confirmationOpen: true, deleteConfirmationOpen: true }), "none");
 });

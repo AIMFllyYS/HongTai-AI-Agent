@@ -10,9 +10,8 @@ import { LiveListReadReconciler } from "../features/generation/live-list-read-re
 import { LatestReadGuard, preferNewerByUpdatedAt } from "../features/tasks/latest-read-guard";
 import { useAppResume } from "../hooks/useAppResume";
 import { pathForRoute, type Navigate } from "../router";
-import { TaskAnalysisPage } from "./TaskAnalysisPage";
-import { TaskDetailPage } from "./TaskDetailPage";
-import { applyTaskDetailChange, mergeEvents, newestIssue, resolveTaskPageSurface } from "./task-page-model";
+import { TaskDetailPage, type TaskCompletedChrome } from "./TaskDetailPage";
+import { applyTaskDetailChange, mergeEvents, newestIssue, resolveTaskPageSurface, syncTaskResultTabPath, taskResultTabFromPath, type TaskResultTab } from "./task-page-model";
 import { TaskProcessingPage } from "./TaskProcessingPage";
 
 export interface TaskPageProps {
@@ -33,6 +32,8 @@ export function TaskPage({ runtime, taskId, navigate }: TaskPageProps) {
   const [issue, setIssue] = useState<TaskIssue>();
   const [readIssue, setReadIssue] = useState<TaskIssue>();
   const [streamProgress, setStreamProgress] = useState<StructuredGenerationProgressV1>();
+  const [resultTab, setResultTab] = useState<TaskResultTab>(() => taskResultTabFromPath(typeof window === "undefined" ? "" : window.location.pathname));
+  const [completedChrome, setCompletedChrome] = useState<TaskCompletedChrome>({});
 
   const loadProcessing = useCallback(async () => {
     const generation = latestRead.current.current();
@@ -89,6 +90,25 @@ export function TaskPage({ runtime, taskId, navigate }: TaskPageProps) {
   }, [loadDetail, loadProcessing]);
 
   useAppResume(load);
+
+  useEffect(() => {
+    setResultTab(taskResultTabFromPath(typeof window === "undefined" ? "" : window.location.pathname));
+  }, [taskId]);
+
+  useEffect(() => {
+    const sync = () => setResultTab(taskResultTabFromPath(window.location.pathname));
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
+  }, []);
+
+  const selectResultTab = useCallback((tab: TaskResultTab) => {
+    setResultTab(tab);
+    syncTaskResultTabPath(taskId, tab);
+  }, [taskId]);
+
+  const onChromeChange = useCallback((chrome: TaskCompletedChrome) => {
+    setCompletedChrome(chrome);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -201,26 +221,20 @@ export function TaskPage({ runtime, taskId, navigate }: TaskPageProps) {
   }
 
   return (
-    <AppShell activeNav="home" backPath="/" navigate={navigate} title="拆解完成">
+    <AppShell activeNav="home" backPath="/" contextualAction={completedChrome.contextualAction} headerAction={completedChrome.headerAction} navigate={navigate} title="拆解完成">
       <div className="page-stack page-task-detail">
         <TaskDetailPage
+          activeTab={resultTab}
           detail={detail}
           issue={issue}
           navigate={navigate}
+          onChromeChange={onChromeChange}
           onReload={load}
-          readIssue={readIssue}
-          runtime={runtime}
-          streamProgress={streamProgress}
-        />
-        <TaskAnalysisPage
-          contentAnalysisCapability={runtime.features.contentAnalysis}
-          detail={detail}
-          issue={issue}
-          navigate={navigate}
-          onReload={load}
-          progress={streamProgress}
+          onSelectTab={selectResultTab}
           readIssue={readIssue}
           record={record}
+          runtime={runtime}
+          streamProgress={streamProgress}
         />
       </div>
     </AppShell>

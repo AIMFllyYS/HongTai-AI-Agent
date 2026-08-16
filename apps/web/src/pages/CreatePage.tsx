@@ -14,6 +14,7 @@ import { ProductionProjectCard } from "../components/ProductionProjectCard";
 import { EmptyState, LoadingState } from "../components/StatePanels";
 import { useAppResume } from "../hooks/useAppResume";
 import { aiSettingsPath } from "../router";
+import { sourceIdFromSearch } from "./task-page-model";
 
 type CreateShellViewModel = Pick<CreateViewModel, "title">;
 
@@ -83,7 +84,8 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
         .map(({ task }) => ({ task, label: `${platformName(task.platform, task.sourceKind)} · ${new Date(task.updatedAt).toLocaleDateString("zh-CN")}` }));
       setSources(available);
       setProjects(savedProjects);
-      setSourceId((current) => current || available[0]?.task.id || "");
+      const requestedSourceId = typeof window === "undefined" ? "" : sourceIdFromSearch(window.location.search);
+      setSourceId((current) => current || (available.some((item) => item.task.id === requestedSourceId) ? requestedSourceId : "") || available[0]?.task.id || "");
       setProject((current) => current
         ? savedProjects.find((candidate) => candidate.projectId === current.projectId) ?? savedProjects[0]
         : savedProjects[0]);
