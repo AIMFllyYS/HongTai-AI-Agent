@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { once } from "node:events";
 import { tmpdir } from "node:os";
@@ -14,7 +14,7 @@ import {
   setGlobalDispatcher,
 } from "undici";
 import { TaskError } from "../packages/core/src/index";
-import { assertDownloadedLength, NodeHttpClient, NodeMediaDownloader } from "../packages/node-runtime/src/index";
+import { assertDownloadedLength, NodeHttpClient, NodeMediaDownloader, replaceDownloadedFile } from "../packages/node-runtime/src/index";
 
 test("HTTP客户端对5xx有限重试后成功", async () => {
   const originalFetch = globalThis.fetch;
@@ -213,7 +213,7 @@ test("媒体下载通过Undici对5xx有限重试后写入完整文件", async ()
   }
 });
 
-test("媒体下载重试耗尽后删除不完整目标文件", async () => {
+test("媒体下载重试耗尽后保留已有目标文件", async () => {
   const directory = await mkdtemp(join(tmpdir(), "hongtai-download-cleanup-test-"));
   const destination = join(directory, "video.mp4");
   await writeFile(destination, "partial-data");
@@ -233,11 +233,93 @@ test("媒体下载重试耗尽后删除不完整目标文件", async () => {
       ),
       (error) => error instanceof TaskError && error.code === "MEDIA_DOWNLOAD_FAILED",
     );
-    await assert.rejects(() => readFile(destination), { code: "ENOENT" });
+    assert.equal((await readFile(destination)).toString(), "partial-data");
+    assert.deepEqual((await readdir(directory)).filter((name) => name.endsWith(".part") || name.endsWith(".bak")), []);
     mockAgent.assertNoPendingInterceptors();
   } finally {
     setGlobalDispatcher(originalDispatcher);
     await mockAgent.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("媒体下载成功时替换已有目标且不留下半成品", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "hongtai-download-replace-test-"));
+  const destination = join(directory, "video.mp4");
+  await writeFile(destination, "old-artifact");
+  const originalDispatcher = getGlobalDispatcher();
+  const mockAgent = new MockAgent();
+  mockAgent.disableNetConnect();
+  mockAgent.get("https://media.example")
+    .intercept({ path: "/video.mp4" })
+    .reply(200, Buffer.from("video-data"));
+  setGlobalDispatcher(mockAgent);
+  try {
+    await new NodeMediaDownloader({ minRetryDelayMs: 0 }).download(
+      { kind: "video", url: "https://media.example/video.mp4" },
+      destination,
+    );
+    assert.equal((await readFile(destination)).toString(), "video-data");
+    assert.deepEqual((await readdir(directory)).filter((name) => name.endsWith(".part") || name.endsWith(".bak")), []);
+    mockAgent.assertNoPendingInterceptors();
+  } finally {
+    setGlobalDispatcher(originalDispatcher);
+    await mockAgent.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("Windows覆盖第二步失败时恢复已有目标并只留下临时文件", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "hongtai-download-rollback-test-"));
+  const destination = join(directory, "video.mp4");
+  const temporary = join(directory, ".video.mp4.part");
+  await writeFile(destination, "old-artifact");
+  await writeFile(temporary, "new-artifact");
+  let calls = 0;
+  const moveFile = async (from: string, to: string) => {
+    calls += 1;
+    if (calls === 1) throw Object.assign(new Error("exists"), { code: "EPERM" });
+    if (calls === 3) throw Object.assign(new Error("replace failed"), { code: "EACCES" });
+    await rename(from, to);
+  };
+  try {
+    await assert.rejects(
+      () => replaceDownloadedFile(temporary, destination, moveFile),
+      (error) => error instanceof Error && error.message === "replace failed",
+    );
+    assert.equal((await readFile(destination)).toString(), "old-artifact");
+    assert.equal((await readFile(temporary)).toString(), "new-artifact");
+    assert.deepEqual((await readdir(directory)).filter((name) => name.endsWith(".bak")), []);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("Windows覆盖回滚失败时保留backup且不吞错", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "hongtai-download-rollback-keep-test-"));
+  const destination = join(directory, "video.mp4");
+  const temporary = join(directory, ".video.mp4.part");
+  await writeFile(destination, "old-artifact");
+  await writeFile(temporary, "new-artifact");
+  let calls = 0;
+  const moveFile = async (from: string, to: string) => {
+    calls += 1;
+    if (calls === 1) throw Object.assign(new Error("exists"), { code: "EPERM" });
+    if (calls === 3) throw Object.assign(new Error("replace failed"), { code: "EACCES" });
+    if (calls === 4) throw Object.assign(new Error("rollback failed"), { code: "EBUSY" });
+    await rename(from, to);
+  };
+  try {
+    await assert.rejects(
+      () => replaceDownloadedFile(temporary, destination, moveFile),
+      (error) => error instanceof Error && error.message === "rollback failed" && error.cause instanceof Error && error.cause.message === "replace failed",
+    );
+    await assert.rejects(() => readFile(destination), { code: "ENOENT" });
+    const backups = (await readdir(directory)).filter((name) => name.endsWith(".bak"));
+    assert.equal(backups.length, 1);
+    assert.equal((await readFile(join(directory, backups[0]))).toString(), "old-artifact");
+    assert.equal((await readFile(temporary)).toString(), "new-artifact");
+  } finally {
     await rm(directory, { recursive: true, force: true });
   }
 });
@@ -270,6 +352,7 @@ test("视频下载在写入前拒绝明确的HTML、JSON和HLS响应", async () 
         (error) => error instanceof TaskError && error.code === "MEDIA_DOWNLOAD_FAILED",
       );
       await assert.rejects(() => readFile(destination), { code: "ENOENT" });
+      assert.deepEqual((await readdir(directory)).filter((name) => name.endsWith(".part")), []);
     }
     mockAgent.assertNoPendingInterceptors();
   } finally {
@@ -305,7 +388,7 @@ test("视频下载允许通用二进制响应", async () => {
   }
 });
 
-test("媒体下载拒绝空响应并删除目标文件", async () => {
+test("媒体下载拒绝空响应且不留下目标或半成品", async () => {
   const directory = await mkdtemp(join(tmpdir(), "hongtai-download-length-test-"));
   const originalDispatcher = getGlobalDispatcher();
   const mockAgent = new MockAgent();
@@ -323,6 +406,7 @@ test("媒体下载拒绝空响应并删除目标文件", async () => {
       (error) => error instanceof TaskError && error.code === "MEDIA_DOWNLOAD_FAILED",
     );
     await assert.rejects(() => readFile(destination), { code: "ENOENT" });
+    assert.deepEqual((await readdir(directory)).filter((name) => name.endsWith(".part")), []);
     mockAgent.assertNoPendingInterceptors();
   } finally {
     setGlobalDispatcher(originalDispatcher);
