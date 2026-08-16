@@ -122,11 +122,33 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
     return () => { active = false; };
   }, [loading, runtime]);
   useEffect(() => {
-    if (!project) return undefined;
-    return runtime.production.subscribe(project.projectId, (event) => {
-      if (event.type === "state") setProject(event.project);
-      else { setProgress(event.progress); setProgressMessage(productionRenderStageCopy(event.stage)); }
-    });
+    const projectId = project?.projectId;
+    setProgress(0);
+    setProgressMessage("");
+    if (!projectId) return undefined;
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
+    try {
+      unsubscribe = runtime.production.subscribe(projectId, (event) => {
+        if (!active) return;
+        if (event.type === "state") {
+          if (event.project.projectId !== projectId) return;
+          setProject(event.project);
+          return;
+        }
+        if (event.projectId !== projectId) return;
+        setProgress(event.progress);
+        setProgressMessage(productionRenderStageCopy(event.stage));
+      });
+    } catch (error) {
+      if (active) {
+        setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "制作进度订阅暂时不可用", action: "none" }));
+      }
+    }
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, [project?.projectId, runtime.production]);
 
   const perform = async (action: () => Promise<ProductionProjectRecord>) => {
@@ -242,7 +264,7 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
         {projects.length > 1 ? (
           <section className="production-history">
             <h3>本地制作记录</h3>
-            <div>{projects.map((item) => <button className={item.projectId === project?.projectId ? "is-active" : ""} key={item.projectId} onClick={() => setProject(item)} type="button"><span>{item.brief}</span><small>{statusLabel(item.status)}</small></button>)}</div>
+            <div>{projects.map((item) => <button className={item.projectId === project?.projectId ? "is-active" : ""} key={item.projectId} onClick={() => { if (item.projectId === project?.projectId) return; setProgress(0); setProgressMessage(""); setProject(item); }} type="button"><span>{item.brief}</span><small>{statusLabel(item.status)}</small></button>)}</div>
           </section>
         ) : null}
       </div>
