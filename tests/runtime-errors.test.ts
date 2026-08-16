@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { writeFileSync } from "node:fs";
+import { copyFile, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
-import { once } from "node:events";
+import { EventEmitter, once } from "node:events";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
+import type { ChildProcess } from "node:child_process";
 import {
   Agent,
   fetch as undiciFetch,
@@ -14,7 +16,45 @@ import {
   setGlobalDispatcher,
 } from "undici";
 import { TaskError } from "../packages/core/src/index";
-import { assertDownloadedLength, NodeHttpClient, NodeMediaDownloader, replaceDownloadedFile } from "../packages/node-runtime/src/index";
+import {
+  assertDownloadedLength,
+  FfmpegMediaTools,
+  NodeHttpClient,
+  NodeMediaDownloader,
+  replaceDownloadedFile,
+  type FfmpegSpawn,
+  type MediaDownloadFetch,
+} from "../packages/node-runtime/src/index";
+
+function hangingChildProcess(killed: NodeJS.Signals[]) {
+  const child = new EventEmitter() as EventEmitter & {
+    stdout: EventEmitter;
+    stderr: EventEmitter;
+    kill: (signal?: NodeJS.Signals) => boolean;
+    exitCode: number | null;
+    signalCode: NodeJS.Signals | null;
+  };
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.exitCode = null;
+  child.signalCode = null;
+  child.kill = (signal?: NodeJS.Signals) => {
+    killed.push(signal ?? "SIGTERM");
+    return true;
+  };
+  return child as unknown as ChildProcess;
+}
+
+function cancellableDownloadBody(onCancel: () => void) {
+  return {
+    cancel: async () => {
+      onCancel();
+    },
+    getReader() {
+      throw new Error("响应流应在读取前被取消");
+    },
+  };
+}
 
 test("HTTP客户端对5xx有限重试后成功", async () => {
   const originalFetch = globalThis.fetch;
@@ -425,4 +465,340 @@ test("媒体下载字节数必须与有效Content-Length一致", () => {
       && error.details?.expectedBytes === 10
       && error.details?.downloadedBytes === 5,
   );
+});
+
+test("FFmpeg超时后先SIGTERM再强杀子进程", async () => {
+  const killed: NodeJS.Signals[] = [];
+  const spawn: FfmpegSpawn = () => hangingChildProcess(killed);
+  const tools = new FfmpegMediaTools({ timeoutMs: 30, killGraceMs: 20, spawn });
+  await assert.rejects(
+    () => tools.probeDuration("video.mp4"),
+    (error) => error instanceof TaskError && error.code === "MEDIA_PROBE_FAILED",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  assert.deepEqual(killed, ["SIGTERM", "SIGKILL"]);
+});
+
+test("FFmpeg失败只删除临时文件并保留已有产物", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "hongtai-ffmpeg-keep-test-"));
+  const outputPath = join(directory, "merged.mp4");
+  await writeFile(outputPath, "existing-artifact");
+  const spawn: FfmpegSpawn = (_command, args) => {
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: EventEmitter;
+      stderr: EventEmitter;
+      kill: () => boolean;
+    };
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.kill = () => true;
+    const temporary = args[args.length - 1];
+    if (typeof temporary === "string") writeFileSync(temporary, "partial-output");
+    queueMicrotask(() => child.emit("close", 1));
+    return child as unknown as ChildProcess;
+  };
+  try {
+    await assert.rejects(
+      () => new FfmpegMediaTools({ spawn }).merge("video.mp4", "audio.m4a", outputPath),
+      (error) => error instanceof TaskError && error.code === "MEDIA_MERGE_FAILED",
+    );
+    assert.equal((await readFile(outputPath)).toString(), "existing-artifact");
+    assert.deepEqual((await readdir(directory)).filter((name) => name.endsWith(".part") || name.endsWith(".bak")), []);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("媒体下载在HTTP失败、创建目录失败和打开文件失败时取消响应流", async () => {
+  const destination = join(tmpdir(), "hongtai-download-cancel", "video.mp4");
+  let cancelled = 0;
+  const cases: Array<{
+    name: string;
+    options: ConstructorParameters<typeof NodeMediaDownloader>[0];
+    code: TaskError["code"];
+  }> = [
+    {
+      name: "!ok",
+      options: {
+        fetch: (async () => ({
+          url: "https://media.example/missing.mp4",
+          status: 404,
+          ok: false,
+          headers: { get: () => null },
+          body: cancellableDownloadBody(() => { cancelled += 1; }),
+        })) as MediaDownloadFetch,
+      },
+      code: "MEDIA_SOURCE_NOT_FOUND",
+    },
+    {
+      name: "mkdir",
+      options: {
+        fetch: (async () => ({
+          url: "https://media.example/video.mp4",
+          status: 200,
+          ok: true,
+          headers: { get: () => null },
+          body: cancellableDownloadBody(() => { cancelled += 1; }),
+        })) as MediaDownloadFetch,
+        mkdir: async () => {
+          throw Object.assign(new Error("enospc"), { code: "ENOSPC" });
+        },
+      },
+      code: "STORAGE_SPACE_INSUFFICIENT",
+    },
+    {
+      name: "open",
+      options: {
+        fetch: (async () => ({
+          url: "https://media.example/video.mp4",
+          status: 200,
+          ok: true,
+          headers: { get: () => null },
+          body: cancellableDownloadBody(() => { cancelled += 1; }),
+        })) as MediaDownloadFetch,
+        mkdir: async () => undefined,
+        openFile: async () => {
+          throw Object.assign(new Error("eacces"), { code: "EACCES" });
+        },
+      },
+      code: "STORAGE_PERMISSION_DENIED",
+    },
+  ];
+
+  for (const item of cases) {
+    cancelled = 0;
+    await assert.rejects(
+      () => new NodeMediaDownloader({ maxRetries: 0, minRetryDelayMs: 0, ...item.options }).download(
+        { kind: "video", url: "https://media.example/video.mp4" },
+        destination,
+      ),
+      (error) => error instanceof TaskError && error.code === item.code,
+      item.name,
+    );
+    assert.equal(cancelled, 1, item.name);
+  }
+});
+
+function lockingDownloadBody(
+  onCancel: () => void,
+  read: () => Promise<ReadableStreamReadResult<Uint8Array>>,
+) {
+  let locked = false;
+  return {
+    cancel: async () => {
+      if (locked) throw new TypeError("ReadableStream is locked");
+      onCancel();
+    },
+    getReader() {
+      if (locked) throw new TypeError("ReadableStream is locked");
+      locked = true;
+      return {
+        read,
+        cancel: async () => {
+          onCancel();
+        },
+      };
+    },
+  };
+}
+
+test("媒体下载在读流开始后失败时仍取消响应流", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "hongtai-download-read-cancel-"));
+  let cancelled = 0;
+  const cases: Array<{
+    name: string;
+    options: ConstructorParameters<typeof NodeMediaDownloader>[0];
+    code: TaskError["code"];
+  }> = [
+    {
+      name: "write",
+      options: {
+        mkdir: async () => undefined,
+        openFile: (async () => ({
+          write: async () => {
+            throw Object.assign(new Error("enospc"), { code: "ENOSPC" });
+          },
+          close: async () => undefined,
+        })) as typeof import("node:fs/promises").open,
+        fetch: (async () => ({
+          url: "https://media.example/video.mp4",
+          status: 200,
+          ok: true,
+          headers: { get: () => null },
+          body: lockingDownloadBody(() => { cancelled += 1; }, async () => ({ done: false, value: new Uint8Array([1, 2, 3]) })),
+        })) as MediaDownloadFetch,
+      },
+      code: "STORAGE_SPACE_INSUFFICIENT",
+    },
+    {
+      name: "read",
+      options: {
+        fetch: (async () => {
+          let reads = 0;
+          return {
+            url: "https://media.example/video.mp4",
+            status: 200,
+            ok: true,
+            headers: { get: () => null },
+            body: lockingDownloadBody(() => { cancelled += 1; }, async () => {
+              reads += 1;
+              if (reads === 1) return { done: false, value: new Uint8Array([1, 2, 3]) };
+              throw new Error("socket hang up");
+            }),
+          };
+        }) as MediaDownloadFetch,
+      },
+      code: "MEDIA_DOWNLOAD_FAILED",
+    },
+  ];
+
+  try {
+    for (const item of cases) {
+      cancelled = 0;
+      await assert.rejects(
+        () => new NodeMediaDownloader({ maxRetries: 0, minRetryDelayMs: 0, ...item.options }).download(
+          { kind: "video", url: "https://media.example/video.mp4" },
+          join(directory, `${item.name}.mp4`),
+        ),
+        (error) => error instanceof TaskError && error.code === item.code,
+        item.name,
+      );
+      assert.equal(cancelled, 1, item.name);
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+function splitAudioSpawn(writeSegments: (directory: string) => void): FfmpegSpawn {
+  return (_command, args) => {
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: EventEmitter;
+      stderr: EventEmitter;
+      kill: () => boolean;
+    };
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.kill = () => true;
+    const pattern = args[args.length - 1];
+    if (typeof pattern === "string") writeSegments(dirname(pattern));
+    queueMicrotask(() => child.emit("close", 0));
+    return child as unknown as ChildProcess;
+  };
+}
+
+test("音频切片全部成功后才替换已有分段", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "hongtai-ffmpeg-split-success-"));
+  await writeFile(join(directory, "segment-0000.wav"), "old-0");
+  await writeFile(join(directory, "segment-0001.wav"), "old-1");
+  const spawn = splitAudioSpawn((temporaryDirectory) => {
+    writeFileSync(join(temporaryDirectory, "segment-0000.wav"), "new-0");
+    writeFileSync(join(temporaryDirectory, "segment-0001.wav"), "new-1");
+  });
+  try {
+    const files = await new FfmpegMediaTools({ spawn }).splitAudio("audio.wav", directory, 30);
+    assert.deepEqual(files, [join(directory, "segment-0000.wav"), join(directory, "segment-0001.wav")]);
+    assert.equal((await readFile(join(directory, "segment-0000.wav"))).toString(), "new-0");
+    assert.equal((await readFile(join(directory, "segment-0001.wav"))).toString(), "new-1");
+    assert.deepEqual((await readdir(directory)).filter((name) => name.startsWith(".")), []);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("音频切片替换中途失败时保留已有分段", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "hongtai-ffmpeg-split-keep-"));
+  await writeFile(join(directory, "segment-0000.wav"), "old-0");
+  await writeFile(join(directory, "segment-0001.wav"), "old-1");
+  const spawn = splitAudioSpawn((temporaryDirectory) => {
+    writeFileSync(join(temporaryDirectory, "segment-0000.wav"), "new-0");
+    writeFileSync(join(temporaryDirectory, "segment-0001.wav"), "new-1");
+  });
+  let replaces = 0;
+  try {
+    await assert.rejects(
+      () => new FfmpegMediaTools({
+        spawn,
+        replaceFile: async (temporary, destination) => {
+          replaces += 1;
+          if (replaces === 2) throw Object.assign(new Error("replace failed"), { code: "EACCES" });
+          await replaceDownloadedFile(temporary, destination);
+        },
+      }).splitAudio("audio.wav", directory, 30),
+      (error) => error instanceof TaskError && error.code === "MEDIA_PROBE_FAILED",
+    );
+    assert.equal((await readFile(join(directory, "segment-0000.wav"))).toString(), "old-0");
+    assert.equal((await readFile(join(directory, "segment-0001.wav"))).toString(), "old-1");
+    assert.deepEqual((await readdir(directory)).filter((name) => name.startsWith(".")), []);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("音频切片恢复失败时保留backup且不吞错", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "hongtai-ffmpeg-split-restore-keep-"));
+  await writeFile(join(directory, "segment-0000.wav"), "old-0");
+  await writeFile(join(directory, "segment-0001.wav"), "old-1");
+  const spawn = splitAudioSpawn((temporaryDirectory) => {
+    writeFileSync(join(temporaryDirectory, "segment-0000.wav"), "new-0");
+    writeFileSync(join(temporaryDirectory, "segment-0001.wav"), "new-1");
+  });
+  let replaces = 0;
+  try {
+    await assert.rejects(
+      () => new FfmpegMediaTools({
+        spawn,
+        replaceFile: async (temporary, destination) => {
+          replaces += 1;
+          if (replaces === 2) throw Object.assign(new Error("replace failed"), { code: "EACCES" });
+          await replaceDownloadedFile(temporary, destination);
+        },
+        copyFile: async (source, destination) => {
+          if (source.includes(".segments-backup-")) {
+            throw Object.assign(new Error("restore failed"), { code: "EBUSY" });
+          }
+          await copyFile(source, destination);
+        },
+      }).splitAudio("audio.wav", directory, 30),
+      (error) => error instanceof TaskError
+        && error.code === "MEDIA_PROBE_FAILED"
+        && error.cause instanceof Error
+        && error.cause.message === "restore failed"
+        && error.cause.cause instanceof Error
+        && error.cause.cause.message === "replace failed",
+    );
+    const backups = (await readdir(directory)).filter((name) => name.startsWith(".segments-backup-"));
+    assert.equal(backups.length, 1);
+    assert.equal((await readFile(join(directory, backups[0], "segment-0000.wav"))).toString(), "old-0");
+    assert.equal((await readFile(join(directory, backups[0], "segment-0001.wav"))).toString(), "old-1");
+    assert.equal((await readFile(join(directory, "segment-0000.wav"))).toString(), "new-0");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("音频切片备份失败时保留已有分段", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "hongtai-ffmpeg-split-backup-keep-"));
+  await writeFile(join(directory, "segment-0000.wav"), "old-0");
+  await writeFile(join(directory, "segment-0001.wav"), "old-1");
+  const spawn = splitAudioSpawn((temporaryDirectory) => {
+    writeFileSync(join(temporaryDirectory, "segment-0000.wav"), "new-0");
+    writeFileSync(join(temporaryDirectory, "segment-0001.wav"), "new-1");
+  });
+  try {
+    await assert.rejects(
+      () => new FfmpegMediaTools({
+        spawn,
+        copyFile: async () => {
+          throw Object.assign(new Error("backup failed"), { code: "ENOSPC" });
+        },
+      }).splitAudio("audio.wav", directory, 30),
+      (error) => error instanceof TaskError && error.code === "MEDIA_PROBE_FAILED",
+    );
+    assert.equal((await readFile(join(directory, "segment-0000.wav"))).toString(), "old-0");
+    assert.equal((await readFile(join(directory, "segment-0001.wav"))).toString(), "old-1");
+    assert.deepEqual((await readdir(directory)).filter((name) => name.startsWith(".")), []);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
