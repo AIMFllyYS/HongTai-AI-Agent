@@ -1,4 +1,4 @@
-import { OpenAiCompatibleProvider, reasoningDialectForBaseUrl } from "@hongtai/ai";
+import { OpenAiCompatibleProvider, reasoningDialectForBaseUrl, splitTranscriptRewriteChunks, TRANSCRIPT_REWRITE_SYSTEM_PROMPT } from "@hongtai/ai";
 import { issueFromAppError, issueFromError, TaskError } from "@hongtai/core";
 import type {
   AiAsrTransport,
@@ -282,12 +282,16 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
   const rewriter = {
     rewrite: async (transcript: string) => {
       const provider = await requireProvider();
-      const result = await provider.generate({
-        model: "text",
-        output: "text",
-        messages: [{ role: "system", content: "将以下文稿整理为清晰、忠实的中文稿，不补充事实。只返回整理后的正文。" }, { role: "user", content: transcript }],
-      });
-      return result.content;
+      const results: string[] = [];
+      for (const chunk of splitTranscriptRewriteChunks(transcript)) {
+        const result = await provider.generate({
+          model: "text",
+          output: "text",
+          messages: [{ role: "system", content: TRANSCRIPT_REWRITE_SYSTEM_PROMPT }, { role: "user", content: chunk }],
+        });
+        results.push(result.content);
+      }
+      return results.join("\n\n");
     },
   };
   const tasks = new StandaloneTaskService({
