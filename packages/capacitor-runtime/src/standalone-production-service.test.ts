@@ -506,6 +506,64 @@ test("制作服务将原生媒体和 TTS 失败转换为可行动的稳定错误
   assert.equal(persisted?.output?.uri, "file:///private/productions/project-1/output.mp4");
 });
 
+test("制作服务将导出失败拆成可区分的稳定错误且不再提示更换 MP4", async () => {
+  const cases = [
+    ["ERR_MEDIA_ENCODER_UNAVAILABLE", "MEDIA_ENCODER_UNAVAILABLE", "retry"],
+    ["ERR_MEDIA_DECODE_FAILED", "MEDIA_DECODE_FAILED", "select_media"],
+    ["ERR_MEDIA_RENDER_PIPELINE_FAILED", "MEDIA_RENDER_PIPELINE_FAILED", "retry"],
+    ["ERR_MEDIA_OUTPUT_INVALID", "MEDIA_OUTPUT_INVALID", "retry"],
+    ["ERR_MEDIA_EXPORT_FAILED", "MEDIA_EXPORT_FAILED", "retry"],
+  ] as const;
+
+  for (const [nativeCode, code, action] of cases) {
+    const values = new Map<string, string>();
+    const service = new StandaloneProductionService({
+      files: {
+        ensureProduction: async () => undefined,
+        writeProductionText: async ({ projectId, relativePath, value }) => { values.set(`${projectId}/${relativePath}`, value); },
+        readProductionText: async ({ projectId, relativePath }) => ({ value: values.get(`${projectId}/${relativePath}`) }),
+        listProductionIds: async () => ({ projectIds: ["project-1"] }),
+        deleteProductionFile: async () => undefined,
+        deleteProduction: async () => undefined,
+      },
+      native: {
+        pickAssets: async () => ({ assets: [] }),
+        consumeAssetOperation: async () => ({ status: "none" as const }),
+        render: async () => { throw { code: nativeCode }; },
+        probeTts: async () => undefined,
+      },
+      analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
+      tasks,
+      getProvider: async () => ({ generate: async () => ({ content: JSON.stringify(plan), reasoning: "" }), transcribe: async () => "" }),
+      getNarrationMode: async () => "system",
+      toDisplayUri: (uri) => uri,
+      createProjectId: () => "project-1",
+    });
+    await service.create({ analysisTaskId: "task-1", brief: "真实门店", targetDurationSeconds: 20 });
+    const draft = JSON.parse(values.get("project-1/project.json") ?? "{}") as Record<string, unknown>;
+    values.set("project-1/project.json", JSON.stringify({
+      ...draft,
+      status: "ready",
+      plan,
+      output: { uri: "file:///private/productions/project-1/output.mp4", mimeType: "video/mp4", sizeBytes: 512, durationSeconds: 20 },
+    }));
+
+    await assert.rejects(
+      () => service.render("project-1"),
+      (error) => error instanceof Error && "code" in error && error.code === code && "action" in error && error.action === action
+        && !error.message.includes("请更换兼容的 MP4 素材"),
+    );
+    const persisted = await service.get("project-1");
+    assert.equal(persisted?.issue?.code, code);
+    assert.equal(persisted?.issue?.action, action);
+    assert.equal(persisted?.issue?.userMessage.includes("请更换兼容的 MP4 素材"), false);
+    assert.equal(persisted?.output?.uri, "file:///private/productions/project-1/output.mp4");
+    if (code === "MEDIA_DECODE_FAILED") {
+      assert.match(persisted?.issue?.userMessage ?? "", /解码|音轨/);
+    }
+  }
+});
+
 test("StandaloneProductionService consumes a recovered native asset picker as project assets", async () => {
   const { create, values } = harness();
   const created = create();

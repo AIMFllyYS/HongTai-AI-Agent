@@ -160,6 +160,11 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
       setProjects(await runtime.production.list());
     } catch (error) {
       setIssue(issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "本地制作操作没有完成", action: "retry" }));
+      const remaining = await runtime.production.list();
+      setProjects(remaining);
+      setProject((current) => current
+        ? remaining.find((candidate) => candidate.projectId === current.projectId) ?? current
+        : remaining[0]);
     } finally {
       setBusy(false);
     }
@@ -204,7 +209,7 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
   return (
     <AppShell activeNav="create" leadingAction={<span className="page-header-icon"><Icon name="movie_edit" size={24} /></span>} navigate={navigate} title="制作">
       <div className="page-stack page-create production-workbench">
-        {issue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), selectMedia: project ? () => void perform(() => runtime.production.importAssets(project.projectId)) : undefined, editInput: focusProductionInput }} issue={issue} /> : null}
+        {issue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), selectMedia: project ? () => void perform(() => runtime.production.importAssets(project.projectId)) : undefined, editInput: focusProductionInput, retry: project?.plan ? () => void perform(() => runtime.production.render(project.projectId)) : undefined }} issue={issue} /> : null}
 
         <section className="production-hero">
           <span className="eyebrow">视频制作</span>

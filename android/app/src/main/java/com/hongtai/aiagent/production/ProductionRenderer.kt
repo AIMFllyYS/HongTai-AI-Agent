@@ -25,13 +25,17 @@ import androidx.media3.effect.Presentation
 import androidx.media3.effect.StaticOverlaySettings
 import androidx.media3.effect.TextOverlay
 import androidx.media3.transformer.Composition
+import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
 import androidx.media3.transformer.Effects
+import androidx.media3.transformer.EncoderSelector
+import androidx.media3.transformer.EncoderUtil
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
+import com.google.common.collect.ImmutableList
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicReference
@@ -52,6 +56,51 @@ internal class ProductionRenderer(private val context: Context, private val stor
     progress.emit(25, ProductionRenderStage.COMPILE_SHOTS.wireName)
     val composition = compile(plan, narration)
     val (temporary, output) = store.outputTarget(projectId)
+    progress.emit(35, ProductionRenderStage.EXPORT.wireName)
+    var attempt = exportOnce(composition, temporary, progress, softwareOnly = false)
+    var resolution = ProductionRenderTimeoutPolicy.resolve(attempt.watch, attempt.failure, attempt.temporaryUsable)
+    if (
+      resolution == ProductionExportResolution.ExportFailed &&
+      ProductionExportFailureClassifier.shouldRetryWithSoftware(exportFailureKind(attempt.failure), alreadyTriedSoftware = false)
+    ) {
+      attempt = exportOnce(composition, temporary, progress, softwareOnly = true)
+      resolution = ProductionRenderTimeoutPolicy.resolve(attempt.watch, attempt.failure, attempt.temporaryUsable)
+    }
+    when (resolution) {
+      ProductionExportResolution.Timeout -> {
+        val stopped = (attempt.watch as? ProductionExportWatchResult.TimedOut)?.exportStopped == true
+        ProductionRenderTimeoutPolicy.discardIncompletePart(temporary, stopped)
+        throw ProductionException(ProductionFailureKind.MEDIA_RENDER_TIMEOUT, "Media3 production export timed out.")
+      }
+      ProductionExportResolution.ExportFailed -> {
+        progress.close()
+        val kind = exportFailureKind(attempt.failure)
+        attempt.failure?.let { throw ProductionException(kind, "Media3 production export failed.", it) }
+        throw ProductionException(ProductionFailureKind.MEDIA_EXPORT_FAILED, "Media3 production export is empty.")
+      }
+      ProductionExportResolution.ReadyToVerify -> {
+        // Verify the temporary export before replacing a previous successful
+        // output. A codec/container failure must leave that existing MP4 intact.
+        val durationSeconds = verifyOutput(temporary)
+        finalizeOutput(temporary, output)
+        progress.emit(100, ProductionRenderStage.SAVED.wireName)
+        return ProductionRenderResult(Uri.fromFile(output).toString(), output.length(), durationSeconds)
+      }
+    }
+  }
+
+  private data class ProductionExportAttempt(
+    val watch: ProductionExportWatchResult,
+    val failure: Throwable?,
+    val temporaryUsable: Boolean,
+  )
+
+  private fun exportOnce(
+    composition: Composition,
+    temporary: File,
+    progress: ProductionRenderProgressGate,
+    softwareOnly: Boolean,
+  ): ProductionExportAttempt {
     temporary.delete()
     val failure = AtomicReference<Throwable?>()
     val finished = CountDownLatch(1)
@@ -62,6 +111,7 @@ internal class ProductionRenderer(private val context: Context, private val stor
         val transformer = Transformer.Builder(context)
           .setVideoMimeType(MimeTypes.VIDEO_H264)
           .setAudioMimeType(MimeTypes.AUDIO_AAC)
+          .setEncoderFactory(h264EncoderFactory(softwareOnly))
           .addListener(object : Transformer.Listener {
             override fun onCompleted(composition: Composition, exportResult: ExportResult) { finished.countDown() }
             override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
@@ -76,7 +126,6 @@ internal class ProductionRenderer(private val context: Context, private val stor
         finished.countDown()
       }
     }
-    progress.emit(35, ProductionRenderStage.EXPORT.wireName)
     val watch = ProductionExportWatchdog(progress).awaitExport(
       finished,
       onPoll = {
@@ -99,26 +148,26 @@ internal class ProductionRenderer(private val context: Context, private val stor
         )
       },
     )
-    when (ProductionRenderTimeoutPolicy.resolve(watch, failure.get(), temporary.isFile && temporary.length() > 0L)) {
-      ProductionExportResolution.Timeout -> {
-        val stopped = (watch as? ProductionExportWatchResult.TimedOut)?.exportStopped == true
-        ProductionRenderTimeoutPolicy.discardIncompletePart(temporary, stopped)
-        throw ProductionException(ProductionFailureKind.MEDIA_RENDER_TIMEOUT, "Media3 production export timed out.")
-      }
-      ProductionExportResolution.ExportFailed -> {
-        progress.close()
-        failure.get()?.let { throw ProductionException(ProductionFailureKind.MEDIA_EXPORT_FAILED, "Media3 production export failed.", it) }
-        throw ProductionException(ProductionFailureKind.MEDIA_EXPORT_FAILED, "Media3 production export is empty.")
-      }
-      ProductionExportResolution.ReadyToVerify -> {
-        // Verify the temporary export before replacing a previous successful
-        // output. A codec/container failure must leave that existing MP4 intact.
-        val durationSeconds = verifyOutput(temporary)
-        finalizeOutput(temporary, output)
-        progress.emit(100, ProductionRenderStage.SAVED.wireName)
-        return ProductionRenderResult(Uri.fromFile(output).toString(), output.length(), durationSeconds)
-      }
-    }
+    return ProductionExportAttempt(watch, failure.get(), temporary.isFile && temporary.length() > 0L)
+  }
+
+  private fun h264EncoderFactory(softwareOnly: Boolean): DefaultEncoderFactory =
+    DefaultEncoderFactory.Builder(context)
+      .setVideoEncoderSelector(h264EncoderSelector(softwareOnly))
+      .setEnableFallback(false)
+      .build()
+
+  /** Hardware H.264 first, then software H.264. MIME rewrite to HEVC is forbidden. */
+  private fun h264EncoderSelector(softwareOnly: Boolean): EncoderSelector = EncoderSelector { mimeType ->
+    val supported = EncoderUtil.getSupportedEncoders(mimeType)
+    val hardware = supported.filter { EncoderUtil.isHardwareAccelerated(it, mimeType) }
+    val software = supported.filter { !EncoderUtil.isHardwareAccelerated(it, mimeType) }
+    ImmutableList.copyOf(if (softwareOnly) software else hardware + software)
+  }
+
+  private fun exportFailureKind(error: Throwable?): ProductionFailureKind {
+    val code = (error as? ExportException)?.errorCode ?: return ProductionFailureKind.MEDIA_EXPORT_FAILED
+    return ProductionExportFailureClassifier.classifyExport(code)
   }
 
   private fun compile(plan: NativeProductionPlan, narration: List<Pair<File, Long>>): Composition {
@@ -243,16 +292,34 @@ internal class ProductionRenderer(private val context: Context, private val stor
     return try {
       extractor.setDataSource(file.absolutePath)
       val mimes = (0 until extractor.trackCount).map { index -> extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME) }
-      if (MimeTypes.VIDEO_H264 !in mimes || MimeTypes.AUDIO_AAC !in mimes) {
-        throw ProductionException(ProductionFailureKind.MEDIA_EXPORT_FAILED, "The production output is not H.264/AAC MP4.")
+      if (MimeTypes.VIDEO_H264 !in mimes) {
+        throw ProductionException(
+          ProductionExportFailureClassifier.classifyVerification(ProductionOutputVerificationFailure.MISSING_VIDEO_H264),
+          "The production output is not H.264 MP4.",
+        )
+      }
+      if (MimeTypes.AUDIO_AAC !in mimes) {
+        throw ProductionException(
+          ProductionExportFailureClassifier.classifyVerification(ProductionOutputVerificationFailure.MISSING_AUDIO_AAC),
+          "The production output has no AAC audio track.",
+        )
       }
       durationSeconds(file).also { duration ->
-        if (duration <= 0.0) throw ProductionException(ProductionFailureKind.MEDIA_EXPORT_FAILED, "The production output has no duration.")
+        if (duration <= 0.0) {
+          throw ProductionException(
+            ProductionExportFailureClassifier.classifyVerification(ProductionOutputVerificationFailure.NO_DURATION),
+            "The production output has no duration.",
+          )
+        }
       }
     } catch (error: ProductionException) {
       throw error
     } catch (error: Exception) {
-      throw ProductionException(ProductionFailureKind.MEDIA_EXPORT_FAILED, "The production output could not be verified.", error)
+      throw ProductionException(
+        ProductionExportFailureClassifier.classifyVerification(ProductionOutputVerificationFailure.UNREADABLE),
+        "The production output could not be verified.",
+        error,
+      )
     } finally {
       extractor.release()
     }

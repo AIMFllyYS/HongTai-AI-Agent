@@ -4,6 +4,7 @@ import type { JsonObject, ProductionProjectRecord } from "@hongtai/core";
 import { Button } from "./Buttons";
 import { GlassCard } from "./GlassCard";
 import { Icon } from "./Icon";
+import { issueActionPresentation, issueTitle } from "./IssueNotice";
 
 export interface ProductionProjectCardProps {
   readonly project: ProductionProjectRecord;
@@ -63,6 +64,13 @@ export function ProductionProjectCard({ project, progress, progressMessage, busy
         <Button disabled={busy || !canGeneratePlan || rendering} onClick={onGeneratePlan} variant="secondary"><Icon name="auto_awesome" size={18} />AI 生成制作计划</Button>
         <Button disabled={busy || !project.plan || rendering} onClick={onRender}><Icon name="movie_edit" size={18} />本地合成视频</Button>
       </div>
+
+      {project.issue ? (
+        <aside className={`issue-notice issue-notice--${project.issue.severity}`} role={project.issue.severity === "error" ? "alert" : "status"}>
+          <strong>{issueTitle(project.issue)}</strong>
+          <small>{`${project.issue.userMessage}\n${issueActionPresentation(project.issue.action).guidance}`}</small>
+        </aside>
+      ) : null}
 
       {shots.length > 0 ? <div className="production-shot-list"><h3>制作计划</h3>{shots.map((shot) => <article key={shot.order}><em>{String(shot.order).padStart(2, "0")}</em><div><strong>{shot.caption}</strong><p>{shot.narration}</p></div><small>{shot.durationSeconds} 秒</small></article>)}</div> : null}
 

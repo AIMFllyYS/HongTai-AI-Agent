@@ -371,6 +371,10 @@ class ProductionRuntimePlugin : Plugin() {
     ProductionFailureKind.TTS_UNAVAILABLE -> NativeIssueCode.TTS_UNAVAILABLE
     ProductionFailureKind.TTS_SYNTHESIS_FAILED -> NativeIssueCode.TTS_SYNTHESIS_FAILED
     ProductionFailureKind.MEDIA_RENDER_TIMEOUT -> NativeIssueCode.MEDIA_RENDER_TIMEOUT
+    ProductionFailureKind.MEDIA_ENCODER_UNAVAILABLE -> NativeIssueCode.MEDIA_ENCODER_UNAVAILABLE
+    ProductionFailureKind.MEDIA_DECODE_FAILED -> NativeIssueCode.MEDIA_DECODE_FAILED
+    ProductionFailureKind.MEDIA_RENDER_PIPELINE_FAILED -> NativeIssueCode.MEDIA_RENDER_PIPELINE_FAILED
+    ProductionFailureKind.MEDIA_OUTPUT_INVALID -> NativeIssueCode.MEDIA_OUTPUT_INVALID
     ProductionFailureKind.MEDIA_EXPORT_FAILED -> NativeIssueCode.MEDIA_EXPORT_FAILED
     ProductionFailureKind.OUTPUT_FINALIZATION_FAILED -> NativeIssueCode.OUTPUT_FINALIZATION_FAILED
   }

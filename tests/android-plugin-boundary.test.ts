@@ -198,6 +198,8 @@ test("the foreground APK keeps the screen awake while its in-process tasks are a
 test("video production returns stable safe errors and exports an AAC audio track", () => {
   const plugin = read("android/app/src/main/java/com/hongtai/aiagent/bridge/ProductionRuntimePlugin.kt");
   const renderer = read("android/app/src/main/java/com/hongtai/aiagent/production/ProductionRenderer.kt");
+  const classifier = read("android/app/src/main/java/com/hongtai/aiagent/production/ProductionExportFailureClassifier.kt");
+  const failureKinds = read("android/app/src/main/java/com/hongtai/aiagent/production/ProductionFailure.kt");
   const cloudTts = read("android/app/src/main/java/com/hongtai/aiagent/production/CloudNarrationSynthesizer.kt");
   const issueCodes = read("android/app/src/main/java/com/hongtai/aiagent/bridge/NativeIssueCode.kt");
 
@@ -207,15 +209,47 @@ test("video production returns stable safe errors and exports an AAC audio track
     "TTS_UNAVAILABLE",
     "TTS_SYNTHESIS_FAILED",
     "MEDIA_RENDER_TIMEOUT",
+    "MEDIA_ENCODER_UNAVAILABLE",
+    "MEDIA_DECODE_FAILED",
+    "MEDIA_RENDER_PIPELINE_FAILED",
+    "MEDIA_OUTPUT_INVALID",
     "MEDIA_EXPORT_FAILED",
     "OUTPUT_FINALIZATION_FAILED",
   ]) assert.match(issueCodes, new RegExp(code));
+  for (const code of [
+    "MEDIA_SOURCE_INVALID",
+    "TTS_UNAVAILABLE",
+    "TTS_SYNTHESIS_FAILED",
+    "MEDIA_RENDER_TIMEOUT",
+    "MEDIA_ENCODER_UNAVAILABLE",
+    "MEDIA_DECODE_FAILED",
+    "MEDIA_RENDER_PIPELINE_FAILED",
+    "MEDIA_OUTPUT_INVALID",
+    "MEDIA_EXPORT_FAILED",
+    "OUTPUT_FINALIZATION_FAILED",
+  ]) assert.match(failureKinds, new RegExp(code));
+  assert.match(plugin, /ProductionFailureKind\.MEDIA_ENCODER_UNAVAILABLE -> NativeIssueCode\.MEDIA_ENCODER_UNAVAILABLE/);
+  assert.match(plugin, /ProductionFailureKind\.MEDIA_DECODE_FAILED -> NativeIssueCode\.MEDIA_DECODE_FAILED/);
+  assert.match(plugin, /ProductionFailureKind\.MEDIA_RENDER_PIPELINE_FAILED -> NativeIssueCode\.MEDIA_RENDER_PIPELINE_FAILED/);
+  assert.match(plugin, /ProductionFailureKind\.MEDIA_OUTPUT_INVALID -> NativeIssueCode\.MEDIA_OUTPUT_INVALID/);
   assert.match(plugin, /call\.reject\("Production asset selection was cancelled\."\s*,\s*NativeIssueCode\.MEDIA_SELECTION_CANCELLED\)/);
   assert.doesNotMatch(plugin, /call\.reject\([^\n]*,\s*error\)/);
   assert.match(renderer, /setAudioMimeType\(MimeTypes\.AUDIO_AAC\)/);
+  assert.match(renderer, /setVideoMimeType\(MimeTypes\.VIDEO_H264\)/);
+  assert.match(renderer, /setEnableFallback\(false\)/);
+  assert.match(renderer, /setVideoEncoderSelector\(h264EncoderSelector/);
+  assert.match(renderer, /EncoderUtil\.getSupportedEncoders/);
+  assert.match(renderer, /shouldRetryWithSoftware/);
+  assert.doesNotMatch(renderer, /VIDEO_H265|VIDEO_HEVC|MimeTypes\.VIDEO_H265/);
+  assert.match(classifier, /MEDIA_ENCODER_UNAVAILABLE/);
+  assert.match(classifier, /MEDIA_DECODE_FAILED/);
+  assert.match(classifier, /MEDIA_RENDER_PIPELINE_FAILED/);
+  assert.match(classifier, /MEDIA_OUTPUT_INVALID/);
   const verification = renderer.indexOf("val durationSeconds = verifyOutput(temporary)");
   const finalization = renderer.indexOf("finalizeOutput(temporary, output)");
   assert.ok(verification >= 0 && verification < finalization, "the temporary MP4 must pass H.264/AAC verification before an existing output is replaced");
+  assert.match(renderer, /MimeTypes\.VIDEO_H264 !in mimes/);
+  assert.match(renderer, /MimeTypes\.AUDIO_AAC !in mimes/);
   assert.match(renderer, /MEDIA_RENDER_TIMEOUT/);
   assert.match(plugin, /fun probeTts\(call: PluginCall\)/);
   assert.match(plugin, /CloudNarrationSynthesizer/);

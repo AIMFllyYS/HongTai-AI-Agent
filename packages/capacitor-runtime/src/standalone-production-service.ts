@@ -156,7 +156,11 @@ function productionTaskError(error: unknown, fallbackMessage: string): TaskError
     ERR_TTS_UNAVAILABLE: { code: "TTS_UNAVAILABLE", message: "视频配音暂不可用。请检查 AI 连接中的 TTS 配置；未配置云端配音时，请确认手机已启用中文系统语音。", action: "retry", retryable: true },
     ERR_TTS_SYNTHESIS_FAILED: { code: "TTS_SYNTHESIS_FAILED", message: "视频旁白没有生成成功。请检查 AI 连接、网络或手机语音服务后重试。", action: "retry", retryable: true },
     ERR_MEDIA_RENDER_TIMEOUT: { code: "MEDIA_RENDER_TIMEOUT", message: "本地合成超时，已保留之前成功的成片。请减少时长或更换较小的素材后重试。", action: "retry", retryable: true },
-    ERR_MEDIA_EXPORT_FAILED: { code: "MEDIA_EXPORT_FAILED", message: "手机未能完成 H.264/AAC 视频导出。请更换兼容的 MP4 素材后重试。", action: "retry", retryable: true },
+    ERR_MEDIA_ENCODER_UNAVAILABLE: { code: "MEDIA_ENCODER_UNAVAILABLE", message: "这台手机未能用 H.264 编码器完成本次导出。已保留之前成功的成片，请稍后重试。", action: "retry", retryable: true },
+    ERR_MEDIA_DECODE_FAILED: { code: "MEDIA_DECODE_FAILED", message: "当前素材无法解码或缺少可用音轨，请重新选择可播放的素材。", action: "select_media", retryable: false },
+    ERR_MEDIA_RENDER_PIPELINE_FAILED: { code: "MEDIA_RENDER_PIPELINE_FAILED", message: "本地画面处理没有完成。已保留之前成功的成片，请稍后重试。", action: "retry", retryable: true },
+    ERR_MEDIA_OUTPUT_INVALID: { code: "MEDIA_OUTPUT_INVALID", message: "导出文件未通过 H.264/AAC 成片校验，未覆盖之前成功的成片。请重试。", action: "retry", retryable: true },
+    ERR_MEDIA_EXPORT_FAILED: { code: "MEDIA_EXPORT_FAILED", message: "本地视频导出没有完成。已保留之前成功的成片，请稍后重试。", action: "retry", retryable: true },
     ERR_OUTPUT_FINALIZATION_FAILED: { code: "OUTPUT_FINALIZATION_FAILED", message: "新成片无法安全写入本地目录，之前成功的成片已保留。", action: "free_storage", retryable: true },
   };
   const selected = code ? mapped[code] : undefined;
