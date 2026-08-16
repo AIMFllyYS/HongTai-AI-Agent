@@ -45,6 +45,7 @@ class ProductionRuntimePlugin : Plugin() {
   private val secrets by lazy { AndroidKeystoreSecretStore(context) }
   private val assetOperations by lazy { AssetOperationStateStore(context) }
   private val scheduledOperations = ConcurrentHashMap.newKeySet<String>()
+  private var assetOriginalCall: PluginCall? = null
   private var assetRecoveryConsumerCall: PluginCall? = null
 
   override fun load() {
@@ -73,6 +74,7 @@ class ProductionRuntimePlugin : Plugin() {
       call.reject("Another asset operation must finish first.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED)
       return
     }
+    assetOriginalCall = call
     val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
       .addCategory(Intent.CATEGORY_OPENABLE)
       .setType(if (selection == ProductionImportSelection.AVATAR) "video/mp4" else "*/*")
@@ -133,6 +135,10 @@ class ProductionRuntimePlugin : Plugin() {
         else call.resolve(assetRecoveryResult(terminal))
       }
       else -> {
+        if (isLiveOriginalCall(assetOriginalCall)) {
+          call.resolve(JSObject().put("status", "none"))
+          return
+        }
         if (assetRecoveryConsumerCall != null) {
           call.reject("An asset recovery consumer is already waiting.", NativeIssueCode.INVALID_ARGUMENT)
           return
@@ -263,6 +269,7 @@ class ProductionRuntimePlugin : Plugin() {
   }
 
   private fun finishAssetTerminal(call: PluginCall?, terminal: AssetOperationTerminal) {
+    assetOriginalCall = null
     if (call != null && isLiveOriginalCall(call)) {
       val consumed = assetOperations.consumeTerminal() ?: return
       when (consumed) {

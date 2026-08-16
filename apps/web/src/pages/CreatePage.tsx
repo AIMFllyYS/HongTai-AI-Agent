@@ -94,11 +94,11 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
     if (loading) return undefined;
     let active = true;
     const consumeRecovery = async () => {
-      setBusy(true);
       try {
         const recovered = await runtime.production.consumeAssetRecovery();
         if (!active) return;
         if (recovered.status === "succeeded") {
+          setBusy(true);
           setProject(recovered.project);
           setProjects(await runtime.production.list());
         }

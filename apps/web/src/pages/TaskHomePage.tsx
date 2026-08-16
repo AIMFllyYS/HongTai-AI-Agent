@@ -118,7 +118,7 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
   const [historyIssue, setHistoryIssue] = useState<TaskIssue>();
   const [submitIssue, setSubmitIssue] = useState<TaskIssue>();
   const [submitting, setSubmitting] = useState(false);
-  const [videoImporting, setVideoImporting] = useState(true);
+  const [videoImporting, setVideoImporting] = useState(false);
   const [videoProgress, setVideoProgress] = useState<StructuredGenerationProgressV1>();
 
   const loadHistory = useCallback(async () => {
@@ -151,6 +151,7 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
       try {
         const recovered = await runtime.analysis.consumeVideoRecovery((event) => {
           if (!active) return;
+          setVideoImporting(true);
           if (event.type === "progress") setVideoProgress(event.progress);
           if (event.type === "failed") {
             setVideoProgress(event.progress);

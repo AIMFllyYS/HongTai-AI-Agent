@@ -44,6 +44,8 @@ class FileMediaPlugin : Plugin() {
   private val videoOperations: VideoOperationStateStore by lazy { VideoOperationStateStore(context) }
   private val taskVideos: TaskVideoImportStore by lazy { TaskVideoImportStore(context) }
   private val scheduledOperations = ConcurrentHashMap.newKeySet<String>()
+  private var photoOriginalCall: PluginCall? = null
+  private var videoOriginalCall: PluginCall? = null
   private var recoveryConsumerCall: PluginCall? = null
   private var videoRecoveryConsumerCall: PluginCall? = null
 
@@ -74,6 +76,7 @@ class FileMediaPlugin : Plugin() {
       call.reject("Another photo operation must finish first.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
       return
     }
+    photoOriginalCall = call
     try {
       startActivityForResult(call, imagePickerIntent(), "onPhotoPicked")
     } catch (error: ActivityNotFoundException) {
@@ -102,6 +105,7 @@ class FileMediaPlugin : Plugin() {
       call.reject("Could not persist the camera operation.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
       return
     }
+    photoOriginalCall = call
     val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
       .putExtra(MediaStore.EXTRA_OUTPUT, capture.uri)
       .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
@@ -135,6 +139,7 @@ class FileMediaPlugin : Plugin() {
       call.reject("Another video operation must finish first.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
       return
     }
+    videoOriginalCall = call
     val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
       .addCategory(Intent.CATEGORY_OPENABLE)
       .setType("video/mp4")
@@ -248,6 +253,10 @@ class FileMediaPlugin : Plugin() {
         else call.resolve(recoveryResult(terminal))
       }
       else -> {
+        if (isLiveOriginalCall(photoOriginalCall)) {
+          call.resolve(JSObject().put("status", "none"))
+          return
+        }
         if (recoveryConsumerCall != null) {
           call.reject("A photo recovery consumer is already waiting.", NativeIssueCode.INVALID_ARGUMENT)
           return
@@ -268,6 +277,10 @@ class FileMediaPlugin : Plugin() {
         else call.resolve(videoRecoveryResult(terminal))
       }
       else -> {
+        if (isLiveOriginalCall(videoOriginalCall)) {
+          call.resolve(JSObject().put("status", "none"))
+          return
+        }
         if (videoRecoveryConsumerCall != null) {
           call.reject("A video recovery consumer is already waiting.", NativeIssueCode.INVALID_ARGUMENT)
           return
@@ -410,6 +423,7 @@ class FileMediaPlugin : Plugin() {
   }
 
   private fun finishVideoTerminal(call: PluginCall?, terminal: VideoOperationTerminal, cause: Exception? = null) {
+    videoOriginalCall = null
     if (isLiveOriginalCall(call)) {
       val consumed = videoOperations.consumeTerminal() ?: return
       when (consumed) {
@@ -434,6 +448,7 @@ class FileMediaPlugin : Plugin() {
   }
 
   private fun finishTerminal(call: PluginCall?, terminal: PhotoOperationTerminal, cause: Exception? = null) {
+    photoOriginalCall = null
     if (isLiveOriginalCall(call)) {
       val consumed = photoOperations.consumeTerminal() ?: return
       when (consumed) {

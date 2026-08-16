@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { TaskError } from "@hongtai/core";
 import type { MediaDownloader, MediaTools, PlatformAdapter } from "@hongtai/core";
 
 import { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
 import { StandaloneTaskService } from "./standalone-task-service.js";
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 function memoryFiles() {
   const values = new Map<string, string>();
@@ -636,4 +641,59 @@ test("StandaloneTaskService maps every recovered native video terminal to a stab
     assert.equal(recovered.issue.action, "select_media", nativeCode);
     assert.equal(recovered.issue.details?.nativeCode, nativeCode);
   }
+});
+
+test("consume returns none immediately while the original pick is still live so a remounted page is not stuck busy", async () => {
+  const fileMediaSource = readFileSync(join(repoRoot, "android/app/src/main/java/com/hongtai/aiagent/bridge/FileMediaPlugin.kt"), "utf8");
+  const productionSource = readFileSync(join(repoRoot, "android/app/src/main/java/com/hongtai/aiagent/bridge/ProductionRuntimePlugin.kt"), "utf8");
+  const homeSource = readFileSync(join(repoRoot, "apps/web/src/pages/TaskHomePage.tsx"), "utf8");
+  const consumeVideo = fileMediaSource.slice(fileMediaSource.indexOf("fun consumeVideoOperation"), fileMediaSource.indexOf("fun copyFromUri"));
+  const consumeAsset = productionSource.slice(productionSource.indexOf("fun consumeAssetOperation"), productionSource.indexOf("fun render"));
+
+  assert.match(consumeVideo, /isLiveOriginalCall\(videoOriginalCall\)[\s\S]*put\("status", "none"\)/);
+  assert.ok(
+    consumeVideo.indexOf("isLiveOriginalCall(videoOriginalCall)") >= 0
+      && consumeVideo.indexOf("isLiveOriginalCall(videoOriginalCall)") < consumeVideo.indexOf("videoRecoveryConsumerCall = call"),
+    "a live original pickVideo must return none before a consumer is held",
+  );
+  assert.match(consumeAsset, /isLiveOriginalCall\(assetOriginalCall\)[\s\S]*put\("status", "none"\)/);
+  assert.ok(
+    consumeAsset.indexOf("isLiveOriginalCall(assetOriginalCall)") >= 0
+      && consumeAsset.indexOf("isLiveOriginalCall(assetOriginalCall)") < consumeAsset.indexOf("assetRecoveryConsumerCall = call"),
+    "a live original pickAssets must return none before a consumer is held",
+  );
+  assert.match(homeSource, /const \[videoImporting, setVideoImporting\] = useState\(false\)/);
+
+  const pickLive = true;
+  const native = memoryFiles();
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    fileMedia: {
+      pickVideo: async () => new Promise(() => undefined),
+      consumeVideoOperation: async () => {
+        if (pickLive) return { status: "none" as const };
+        return new Promise(() => undefined);
+      },
+    },
+    adapters: [],
+    http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 0, extractAudio: async () => undefined, splitAudio: async () => [] },
+    toDisplayUri: (value) => value,
+  });
+
+  let videoImporting = false;
+  const recovered = await Promise.race([
+    (async () => {
+      const result = await service.consumeVideoRecovery();
+      videoImporting = result.status === "succeeded";
+      return result;
+    })(),
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("consume hung while the original pick was still live")), 100);
+    }),
+  ]);
+
+  assert.equal(recovered.status, "none");
+  assert.equal(videoImporting, false);
 });
