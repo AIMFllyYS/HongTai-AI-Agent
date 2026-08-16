@@ -1,4 +1,4 @@
-import { persistableSuccessRaw, TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
+import { persistableSuccessRaw, platformForHost, TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
 import {
   DESKTOP_USER_AGENT,
   asArray,
@@ -15,7 +15,6 @@ import {
   normalizeHttpUrl,
 } from "../shared";
 
-const DOUYIN_HOST = /(^|\.)(douyin\.com|iesdouyin\.com)$/i;
 const MOBILE_USER_AGENT =
   "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
 
@@ -79,13 +78,29 @@ function videoSources(item: Record<string, unknown>, referer: string): MediaSour
   return dedupeMedia(sources);
 }
 
+function imageSources(item: Record<string, unknown>, referer: string): MediaSource[] {
+  const headers = mediaHeaders(referer);
+  const sources: MediaSource[] = [];
+  for (const imageValue of asArray(item.images)) {
+    const image = asRecord(imageValue);
+    if (!image) continue;
+    let url: string | undefined;
+    for (const candidate of [...asArray(image.url_list), ...asArray(image.download_url_list)]) {
+      url = normalizeHttpUrl(candidate);
+      if (url) break;
+    }
+    if (url) sources.push({ kind: "image", url, headers });
+  }
+  return dedupeMedia(sources);
+}
+
 export class DouyinAdapter implements PlatformAdapter {
   readonly platform = "douyin" as const;
   readonly supportLevel = "stable" as const;
 
   matches(url: string): boolean {
     try {
-      return DOUYIN_HOST.test(new URL(url).hostname);
+      return platformForHost(new URL(url).hostname) === "douyin";
     } catch {
       return false;
     }
@@ -128,11 +143,12 @@ export class DouyinAdapter implements PlatformAdapter {
     const video = asRecord(item.video);
     const cover = asRecord(video?.cover);
     const sources = videoSources(item, link.finalUrl);
+    const images = imageSources(item, link.finalUrl);
     const durationMs = asNumber(video?.duration);
     const id = asString(item.aweme_id) ?? awemeId;
     const title = asString(item.desc);
     const authorName = asString(author?.nickname);
-    const contentType = sources.length > 0 ? "video" as const : "unknown" as const;
+    const contentType = sources.length > 0 ? "video" as const : images.length > 0 ? "image_text" as const : "unknown" as const;
 
     return {
       platform: this.platform,
@@ -143,11 +159,11 @@ export class DouyinAdapter implements PlatformAdapter {
       title,
       description: title,
       author: authorName,
-      coverUrl: normalizeHttpUrl(firstString(cover?.url_list)),
+      coverUrl: normalizeHttpUrl(firstString(cover?.url_list)) ?? images[0]?.url,
       durationSeconds: durationMs ? durationMs / 1_000 : undefined,
       videos: sources,
       audios: [],
-      images: [],
+      images,
       subtitles: [],
       raw: persistableSuccessRaw({
         platform: this.platform,
@@ -158,7 +174,7 @@ export class DouyinAdapter implements PlatformAdapter {
         hasTitle: Boolean(title),
         videos: sources,
         audios: [],
-        images: [],
+        images,
       }),
     };
   }

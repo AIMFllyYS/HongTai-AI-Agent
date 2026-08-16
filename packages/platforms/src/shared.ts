@@ -106,7 +106,7 @@ function findBalancedObject(source: string, start: number): string | undefined {
   return undefined;
 }
 
-function replaceUndefined(source: string): string {
+export function replaceUndefined(source: string): string {
   let output = "";
   let quote = "";
   let escaped = false;
@@ -125,9 +125,13 @@ function replaceUndefined(source: string): string {
       continue;
     }
     if (source.startsWith("undefined", index)) {
-      output += "null";
-      index += "undefined".length - 1;
-      continue;
+      const before = index === 0 ? "" : source[index - 1] ?? "";
+      const after = source[index + "undefined".length] ?? "";
+      if (!/[0-9A-Za-z_$]/.test(before) && !/[0-9A-Za-z_$]/.test(after)) {
+        output += "null";
+        index += "undefined".length - 1;
+        continue;
+      }
     }
     output += character;
   }

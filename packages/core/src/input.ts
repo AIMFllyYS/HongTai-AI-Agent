@@ -1,18 +1,12 @@
 import { TaskError, issueFromError } from "./errors";
-import type { InputInspection, NormalizedInput, SupportedPlatform } from "./models";
+import type { InputInspection, NormalizedInput } from "./models";
+import { platformForHost, supportedLinkHostPattern } from "./platform-hosts";
 
-const SUPPORTED_LINK = /(^|[^\p{L}\p{N}@._-])((?:https?:\/\/)?(?:www\.)?(?:douyin\.com|v\.douyin\.com|iesdouyin\.com|xiaohongshu\.com|xhslink\.com|xhslink\.cn|bilibili\.com|b23\.tv|kuaishou\.com|v\.kuaishou\.com)(?:\/[^\s<>"'，。！？；：、）》】」』]*)?)/giu;
+const SUPPORTED_LINK = new RegExp(
+  String.raw`(^|[^\p{L}\p{N}@._-])((?:https?:\/\/)?(?:www\.)?(?:${supportedLinkHostPattern()})(?:\/[^\s<>"'，。！？；：、）》】」』]*)?)`,
+  "giu",
+);
 const TRAILING_PUNCTUATION = /[，。！？；：、）》】」』,.!?;:]+$/u;
-
-function platformForHost(hostname: string): SupportedPlatform | undefined {
-  const rawHost = hostname.toLowerCase();
-  const host = rawHost.replace(/^www\./, "");
-  if (host === "douyin.com" || host === "v.douyin.com" || host === "iesdouyin.com") return "douyin";
-  if (host === "xiaohongshu.com" || host === "xhslink.com" || host === "xhslink.cn") return "xiaohongshu";
-  if (host === "bilibili.com" || host === "b23.tv") return "bilibili";
-  if (rawHost === "www.kuaishou.com" || rawHost === "v.kuaishou.com") return "kuaishou";
-  return undefined;
-}
 
 function normalizeCandidate(candidate: string): Omit<NormalizedInput, "rawInput" | "ignoredSupportedUrlCount"> | undefined {
   const extractedText = candidate.replace(TRAILING_PUNCTUATION, "");

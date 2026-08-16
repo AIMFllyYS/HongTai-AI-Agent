@@ -6,7 +6,12 @@ import { resolve } from "node:path";
 import { diagnosisSinglePrompt, diagnosisSingleRepairPrompt } from "../packages/ai/src/prompts/diagnosis-report-single";
 import { diagnosisConversationPrompt } from "../packages/ai/src/prompts/diagnosis-conversation";
 import { FIVE_ORGANS_OBSERVATION_KNOWLEDGE } from "../packages/ai/src/knowledge/five-organs-observation.generated";
-import { diagnosisSingleResponseSchema } from "../packages/ai/src/schemas/diagnosis-report";
+import { diagnosisFollowUpReplySchema } from "../packages/ai/src/schemas/diagnosis-follow-up";
+import {
+  diagnosisReportSchema,
+  diagnosisSingleResponseSchema,
+  diagnosisWellnessRecommendationsSchema,
+} from "../packages/ai/src/schemas/diagnosis-report";
 
 const root = resolve(import.meta.dirname, "..");
 // 与生成脚本一致地归一化为 LF：注入 Prompt 的内容不得随检出平台的行尾转换而变化。
@@ -92,6 +97,107 @@ test("紧凑诊察响应只允许把传统关联作为不确定的日常参考",
   assert.equal(overconfident.success, false);
 });
 
+const compactBase = {
+  quality: "good" as const,
+  qualityNote: "目标完整清晰。",
+  observations: [
+    { category: "tongue_shape" as const, region: "舌边", label: "浅齿痕", description: "舌边可见数处浅齿痕。" },
+    { category: "tongue_body" as const, region: "舌体", label: "形态", description: "舌体在画面中略显胖。" },
+    { category: "tongue_coating" as const, region: "舌中", label: "薄白苔", description: "舌中可见薄白苔。" },
+  ],
+  summary: "当前图片可用于记录舌形变化。",
+  advice: "在相同光线下记录变化，如有持续不适请咨询专业人员。",
+  safety: "这不是疾病诊断，也不能替代四诊合参。",
+  followUp: "近期是否同时有食欲、腹胀或大便变化？",
+};
+
+const assembledWellnessBase = {
+  wellnessReferences: [{
+    title: "传统观察方向",
+    basisObservationIds: ["obs-1"],
+    statement: "传统观察中，这组特征可能与脾气不足、津液运化失常一类状态同时出现；单张图片不能据此诊断。",
+    certainty: "uncertain" as const,
+    notADiagnosis: true as const,
+  }],
+  recommendations: [{
+    category: "monitoring" as const,
+    priority: "low" as const,
+    title: "日常记录建议",
+    action: "保持相同光线定期记录，并结合近期作息观察变化。",
+    rationale: "基于本次图片中已确认的可见状态，建议只用于日常记录和变化比较。",
+    relatedObservationIds: ["obs-1"],
+  }],
+};
+
+test("紧凑响应与组装板块拦截确诊、概率、处方和健康评分，不误杀不确定参考", () => {
+  const traditional = diagnosisSingleResponseSchema.safeParse({
+    ...compactBase,
+    wellnessReferences: [{ title: "传统观察方向", statement: "传统观察中，这组特征可能与脾气不足、津液运化失常一类状态同时出现。" }],
+  });
+  assert.equal(traditional.success, true);
+
+  const knowledgeDisclaimer = diagnosisSingleResponseSchema.safeParse({
+    ...compactBase,
+    wellnessReferences: [{
+      title: "传统观察方向",
+      statement: "传统分区中舌尖与心肺相关，舌尖偏红有时会被用于询问心烦、睡眠、口舌不适等情况；不能据此判断心脏疾病或确诊心火旺",
+    }],
+  });
+  assert.equal(knowledgeDisclaimer.success, true);
+
+  const assembled = diagnosisWellnessRecommendationsSchema.safeParse(assembledWellnessBase);
+  assert.equal(assembled.success, true);
+
+  const diagnosisClaim = diagnosisSingleResponseSchema.safeParse({
+    ...compactBase,
+    wellnessReferences: [{ title: "错误结论", statement: "可能确诊为糖尿病，患病概率80%。" }],
+  });
+  assert.equal(diagnosisClaim.success, false);
+
+  const prescriptionAdvice = diagnosisSingleResponseSchema.safeParse({
+    ...compactBase,
+    wellnessReferences: [{ title: "传统观察方向", statement: "传统观察中，这组特征可能作为日常记录线索。" }],
+    advice: "建议按处方服用，每次500mg。",
+  });
+  assert.equal(prescriptionAdvice.success, false);
+
+  const healthScore = diagnosisWellnessRecommendationsSchema.safeParse({
+    ...assembledWellnessBase,
+    wellnessReferences: [{
+      ...assembledWellnessBase.wellnessReferences[0]!,
+      statement: "可能健康评分为90；单张图片不能据此诊断。",
+    }],
+  });
+  assert.equal(healthScore.success, false);
+
+  const reportOverreach = diagnosisReportSchema.safeParse({
+    schemaVersion: "diagnosis-report.v1",
+    mode: "tongue",
+    promptVersion: "diagnosis-single-stream.v3",
+    imageQuality: { usable: true, overallQuality: "good", limitations: [], retakeSuggestions: [] },
+    observations: [{
+      id: "obs-1",
+      category: "tongue_body",
+      region: "舌体",
+      label: "颜色",
+      description: "颜色较均匀",
+      visibility: "clear",
+      evidenceDescription: "舌体区域清晰",
+    }],
+    summary: { headline: "舌象清晰可观察", keyPoints: ["舌体颜色较均匀"], narrative: "本结果仅提供可见状态观察参考。" },
+    ...assembledWellnessBase,
+    wellnessReferences: [{
+      ...assembledWellnessBase.wellnessReferences[0]!,
+      statement: "可能诊断为脾虚，患病概率80%；单张图片不能据此诊断。",
+    }],
+    safetyGuidance: { level: "none", reasons: [], recommendedAction: "如有持续不适请咨询专业人员。" },
+    limitations: ["单张图片不能替代专业检查。"],
+    disclaimer: "本报告仅提供图片中可见状态的日常观察参考，不是疾病诊断，不提供患病概率，也不能替代专业检查。",
+    followUpQuestions: [],
+  });
+  assert.equal(reportOverreach.success, false);
+});
+
 test("清晰、有限和不可用图片遵守各自的观察数量边界", () => {
   const base = {
     summary: "图片可用于记录。",
@@ -105,6 +211,12 @@ test("清晰、有限和不可用图片遵守各自的观察数量边界", () =>
   assert.equal(diagnosisSingleResponseSchema.safeParse({ ...base, quality: "good", qualityNote: "清晰。", observations: [observation, observation] }).success, false);
   assert.equal(diagnosisSingleResponseSchema.safeParse({ ...base, quality: "limited", qualityNote: "略偏暗但可辨。", observations: [observation] }).success, true);
   assert.equal(diagnosisSingleResponseSchema.safeParse({ ...base, quality: "limited", qualityNote: "略偏暗但可辨。", observations: [] }).success, false);
+});
+
+test("追问回复复用报告级结构越界，拦截无「为」的概率和评分", () => {
+  assert.equal(diagnosisFollowUpReplySchema.safeParse("建议结合规律作息继续观察。").success, true);
+  assert.equal(diagnosisFollowUpReplySchema.safeParse("患病概率80%").success, false);
+  assert.equal(diagnosisFollowUpReplySchema.safeParse("健康评分90").success, false);
 });
 
 test("后续对话只继承安全边界而不继承JSON输出约束", () => {

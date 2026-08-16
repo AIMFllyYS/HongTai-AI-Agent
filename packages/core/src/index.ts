@@ -4,6 +4,7 @@ export * from "./errors";
 export * from "./input";
 export * from "./models";
 export * from "./persistable-raw";
+export * from "./platform-hosts";
 export * from "./pipeline";
 export * from "./runtime-id";
 export * from "./transcription";

@@ -175,6 +175,49 @@ test("证据不足时允许空受众、空结构和空模板步骤而不诱导�
   assert.equal(contentAnalysisResultSchema.safeParse(insufficient).success, true);
 });
 
+test("进度监听失败时仍保存正式结果，并显式记录监听失败", async () => {
+  const store = new MemoryContentStore();
+  const flow = new ContentAnalysisFlow({
+    provider: new SequenceProvider([JSON.stringify(singleResponse())]),
+    store,
+    onProgress: () => {
+      throw new Error("progress listener failed");
+    },
+  });
+
+  const result = await flow.run("task-1");
+  assert.equal(contentAnalysisResultSchema.safeParse(result).success, true);
+  assert.equal(store.saved, result);
+  assert.equal(store.run?.status, "succeeded");
+  assert.equal(store.failedRun, undefined);
+  assert.ok(flow.listenerIssues.length > 0);
+  assert.equal(flow.listenerIssues.every((issue) => issue.name === "Error" && issue.code === undefined), true);
+  assert.doesNotMatch(JSON.stringify(flow.listenerIssues), /progress listener failed|拆解思考/u);
+});
+
+test("saveFailedRun 失败时记录写入失败并抛出原来的拆解错误", async () => {
+  const writeError = new Error("disk full");
+  class FailingStore extends MemoryContentStore {
+    override async saveFailedRun(): Promise<void> {
+      throw writeError;
+    }
+  }
+  const store = new FailingStore();
+  const flow = new ContentAnalysisFlow({
+    provider: new SequenceProvider([JSON.stringify(singleResponse("missing-segment")), JSON.stringify(singleResponse("missing-segment"))]),
+    store,
+  });
+
+  await assert.rejects(
+    () => flow.run("task-1"),
+    (error) => error instanceof TaskError && error.code === "AI_FORMAT_REPAIR_FAILED",
+  );
+  assert.equal(store.saved, undefined);
+  assert.equal(store.failedRun, undefined);
+  assert.deepEqual(flow.failedRunWriteIssues, [{ source: "saveFailedRun", name: "Error" }]);
+  assert.doesNotMatch(JSON.stringify(flow.failedRunWriteIssues), /disk full/u);
+});
+
 test("本地上传视频使用显式来源并通过正式拆解语义校验", async () => {
   const store = new LocalVideoContentStore();
   const provider = new SequenceProvider([JSON.stringify(singleResponse())]);

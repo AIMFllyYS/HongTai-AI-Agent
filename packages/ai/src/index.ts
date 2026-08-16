@@ -7,6 +7,8 @@ export * from "./flows/diagnosis/diagnosis-flow";
 export * from "./flows/production/avatar-caption-plan";
 export * from "./flows/production/production-planning-flow";
 export * from "./schemas/content-analysis";
+export * from "./schemas/diagnosis-context-summary";
+export * from "./schemas/diagnosis-follow-up";
 export * from "./schemas/diagnosis-report";
 export * from "./schemas/production-plan";
 export * from "./structured-output/parse-structured-output";

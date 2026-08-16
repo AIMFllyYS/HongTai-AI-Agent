@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { toProviderJsonSchema } from "../structured-output/json-schema";
+import { rejectDiagnosisStructuralOverreach } from "./diagnosis-medical-boundary";
 
 export const observationModeSchema = z.enum(["tongue", "face"]);
 export type ObservationMode = z.infer<typeof observationModeSchema>;
@@ -46,11 +47,19 @@ export const diagnosisObservationSummarySchema = z.object({
   }),
 });
 
+/**
+ * 图片观察医疗边界分三层，职责不可互相替代：
+ * 1. 无越界字段：本 Schema 不存在健康评分、处方或患病概率字段。
+ * 2. 组装强制：DiagnosisFlow 写入 certainty=uncertain、notADiagnosis=true 与固定免责声明。
+ * 3. 本层拦截越界声明：对 statement 与 action 做结构型检查（确诊/诊断为、概率+数字或%、
+ *    处方/用药剂量、健康评分）。流式板块只走本字段级 Schema，故必须在此拦截，
+ *    否则进度板块会先放出越界句。不依赖缓和词，也不维护疾病名词典。
+ */
 export const diagnosisWellnessRecommendationsSchema = z.object({
   wellnessReferences: z.array(z.object({
     title: z.string().min(1),
     basisObservationIds: z.array(z.string()),
-    statement: z.string().min(1),
+    statement: z.string().min(1).superRefine(rejectDiagnosisStructuralOverreach),
     certainty: z.enum(["possible", "uncertain"]),
     notADiagnosis: z.literal(true),
   })),
@@ -58,7 +67,7 @@ export const diagnosisWellnessRecommendationsSchema = z.object({
     category: z.enum(["daily_care", "diet_lifestyle", "monitoring"]),
     priority: z.enum(["low", "medium", "high"]),
     title: z.string().min(1),
-    action: z.string().min(1),
+    action: z.string().min(1).superRefine(rejectDiagnosisStructuralOverreach),
     rationale: z.string().min(1),
     relatedObservationIds: z.array(z.string()),
   })),
@@ -90,13 +99,14 @@ export const diagnosisSingleResponseFieldSchemas = {
   summary: z.string().trim().max(2000),
   wellnessReferences: z.array(z.object({
     title: z.string().trim().min(1).max(200),
-    statement: z.string().trim().min(1).max(2000),
+    statement: z.string().trim().min(1).max(2000).superRefine(rejectDiagnosisStructuralOverreach),
   }).strict()).max(3),
-  advice: z.string().trim().max(2000),
+  advice: z.string().trim().max(2000).superRefine(rejectDiagnosisStructuralOverreach),
   safety: z.string().trim().min(1).max(2000),
   followUp: z.string().trim().max(500),
 } as const;
 
+/** 紧凑响应同步挂第3层：statement 与 advice 在字段级拦截越界声明，供流式接收与整单校验共用。 */
 export const diagnosisSingleResponseSchema = z.object(diagnosisSingleResponseFieldSchemas).strict().superRefine((value, context) => {
   if (value.quality === "good" && value.observations.length < 3) {
     context.addIssue({ code: "custom", path: ["observations"], message: "清晰图片应输出3至6条独立观察" });
@@ -148,6 +158,13 @@ export const diagnosisReportSchema = diagnosisReportBaseSchema.superRefine((repo
   const visual = diagnosisVisualObservationsSchema.safeParse({ imageQuality: report.imageQuality, observations: report.observations });
   if (!visual.success) {
     for (const issue of visual.error.issues) context.addIssue({ code: "custom", path: issue.path, message: issue.message });
+  }
+  const wellness = diagnosisWellnessRecommendationsSchema.safeParse({
+    wellnessReferences: report.wellnessReferences,
+    recommendations: report.recommendations,
+  });
+  if (!wellness.success) {
+    for (const issue of wellness.error.issues) context.addIssue({ code: "custom", path: issue.path, message: issue.message });
   }
   const ids = new Set(report.observations.map((item) => item.id));
   const references = [

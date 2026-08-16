@@ -1,4 +1,6 @@
+import { TaskError } from "@hongtai/core";
 import type {
+  ErrorCode,
   JsonObject,
   StructuredGenerationFlow,
   StructuredGenerationModuleId,
@@ -8,8 +10,25 @@ import type {
 } from "@hongtai/core";
 import { ReasoningProgress } from "./reasoning-progress";
 
+export interface StructuredGenerationListenerIssue {
+  readonly phase: StructuredGenerationProgressV1["phase"];
+  readonly name: string;
+  readonly code?: ErrorCode;
+}
+
 function jsonObject(value: object): JsonObject {
   return JSON.parse(JSON.stringify(value)) as JsonObject;
+}
+
+function projectListenerIssue(
+  error: unknown,
+  phase: StructuredGenerationProgressV1["phase"],
+): StructuredGenerationListenerIssue {
+  return {
+    phase,
+    name: error instanceof Error ? error.name : "UnknownError",
+    ...(error instanceof TaskError ? { code: error.code } : {}),
+  };
 }
 
 export class StructuredGenerationProgressTracker {
@@ -21,7 +40,12 @@ export class StructuredGenerationProgressTracker {
     status: StructuredGenerationModuleStatus;
     result?: JsonObject;
   }>();
+  readonly #listenerIssues: StructuredGenerationListenerIssue[] = [];
   #phase: StructuredGenerationProgressV1["phase"] = "preparing";
+
+  get listenerIssues(): readonly StructuredGenerationListenerIssue[] {
+    return this.#listenerIssues;
+  }
 
   constructor(
     flow: StructuredGenerationFlow,
@@ -108,11 +132,11 @@ export class StructuredGenerationProgressTracker {
   }
 
   async #emit(): Promise<void> {
+    if (!this.#listener) return;
     try {
-      await this.#listener?.(this.snapshot());
-    } catch {
-      // Presentation listeners are best-effort and never authorize or reject
-      // a formal AI document.
+      await this.#listener(this.snapshot());
+    } catch (error) {
+      this.#listenerIssues.push(projectListenerIssue(error, this.#phase));
     }
   }
 }

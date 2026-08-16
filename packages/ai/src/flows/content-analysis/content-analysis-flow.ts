@@ -1,5 +1,5 @@
 import { createRuntimeId, TaskError } from "@hongtai/core";
-import type { StructuredGenerationModuleId } from "@hongtai/core";
+import type { ErrorCode, StructuredGenerationModuleId } from "@hongtai/core";
 
 import type {
   ContentAnalysisFlowDependencies,
@@ -29,8 +29,25 @@ import {
   type ContentAnalysisStructureClaims,
 } from "../../schemas/content-analysis";
 import { generateStructuredModule } from "../../structured-output/generate-structured-module";
-import { StructuredGenerationProgressTracker } from "../../structured-output/structured-generation-progress";
+import {
+  StructuredGenerationProgressTracker,
+  type StructuredGenerationListenerIssue,
+} from "../../structured-output/structured-generation-progress";
 import { TopLevelJsonFieldStream, type CompletedTopLevelJsonField } from "../../structured-output/top-level-json-field-stream";
+
+export interface FailedRunWriteIssue {
+  readonly source: "saveFailedRun";
+  readonly name: string;
+  readonly code?: ErrorCode;
+}
+
+function projectFailedRunWriteIssue(error: unknown): FailedRunWriteIssue {
+  return {
+    source: "saveFailedRun",
+    name: error instanceof Error ? error.name : "UnknownError",
+    ...(error instanceof TaskError ? { code: error.code } : {}),
+  };
+}
 
 const MODULE_IDS = [
   "overview",
@@ -108,12 +125,24 @@ function validatedResult(value: ContentAnalysisSingleResponse, input: ContentAna
 
 export class ContentAnalysisFlow {
   readonly #dependencies: ContentAnalysisFlowDependencies;
+  #listenerIssues: readonly StructuredGenerationListenerIssue[] = [];
+  #failedRunWriteIssues: readonly FailedRunWriteIssue[] = [];
 
   constructor(dependencies: ContentAnalysisFlowDependencies) {
     this.#dependencies = dependencies;
   }
 
+  get listenerIssues(): readonly StructuredGenerationListenerIssue[] {
+    return this.#listenerIssues;
+  }
+
+  get failedRunWriteIssues(): readonly FailedRunWriteIssue[] {
+    return this.#failedRunWriteIssues;
+  }
+
   async run(taskId: string): Promise<ContentAnalysisResultV1> {
+    this.#listenerIssues = [];
+    this.#failedRunWriteIssues = [];
     const input = await this.#dependencies.store.loadInput(taskId);
     if (input.evidenceUnits.length === 0) {
       throw new TaskError({
@@ -300,8 +329,14 @@ export class ContentAnalysisFlow {
         promptVersions: PROMPT_VERSIONS,
         errorCode: error instanceof TaskError ? error.code : "INTERNAL_UNKNOWN_ERROR",
       };
-      await this.#dependencies.store.saveFailedRun(taskId, run).catch(() => undefined);
+      try {
+        await this.#dependencies.store.saveFailedRun(taskId, run);
+      } catch (writeError) {
+        this.#failedRunWriteIssues = [projectFailedRunWriteIssue(writeError)];
+      }
       throw error;
+    } finally {
+      this.#listenerIssues = progress.listenerIssues;
     }
   }
 }

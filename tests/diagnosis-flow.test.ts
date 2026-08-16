@@ -2,15 +2,21 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { TaskError, type StructuredGenerationProgressV1 } from "../packages/core/src/index";
 import {
+  DIAGNOSIS_CONTEXT_SUMMARY_MAX_CHARS,
+  DIAGNOSIS_FOLLOW_UP_MAX_CHARS,
+  DIAGNOSIS_FOLLOW_UP_MAX_OUTPUT_TOKENS,
   DiagnosisFlow,
   type AiGenerateRequest,
   type AiGenerateResult,
   type AiProvider,
+  type AiStreamEvent,
   type DiagnosisImageInput,
   type DiagnosisRepository,
   type DiagnosisReportV1,
   type DiagnosisSession,
 } from "../packages/ai/src/index";
+import { estimateWeightedTokens } from "../packages/ai/src/flows/diagnosis/estimate-context-tokens";
+import { diagnosisConversationPrompt } from "../packages/ai/src/prompts/diagnosis-conversation";
 
 const validReport: DiagnosisReportV1 = {
   schemaVersion: "diagnosis-report.v1",
@@ -207,14 +213,75 @@ test("后续对话保存文本消息信封且不把reasoning写入上下文", as
   repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", image: { mimeType: "image/jpeg" } };
   repository.report = validReport;
   const provider = new SequenceProvider(["建议结合规律作息继续观察。"]);
-  const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
+  const streamEvents: AiStreamEvent[] = [];
+  const flow = new DiagnosisFlow({
+    provider,
+    repository,
+    contextWindowTokens: 32_000,
+    onEvent: (event) => { streamEvents.push(event); },
+  });
   const reply = await flow.chat("session-1", "平时要注意什么？");
   assert.equal(reply.content, "建议结合规律作息继续观察。");
   assert.deepEqual(repository.messages.map((message) => message.role), ["user", "assistant"]);
+  assert.equal(repository.messages[1]?.content, "建议结合规律作息继续观察。");
+  assert.equal(provider.calls[0]?.maxOutputTokens, DIAGNOSIS_FOLLOW_UP_MAX_OUTPUT_TOKENS);
+  assert.equal(streamEvents.some((event) => event.type === "content_delta" && event.delta.includes("规律作息")), true);
   assert.doesNotMatch(JSON.stringify(provider.calls[0]?.messages), /调试思考/);
   assert.doesNotMatch(String(provider.calls[0]?.messages[0]?.content), /最终结果只输出一个JSON对象|八个顶层字段/u);
+  assert.equal(repository.runs[0]?.status, "succeeded");
   assert.equal(repository.runs[0]?.reasoning, "");
   assert.equal(repository.runs[0]?.rawResponse, "");
+});
+
+test("越界追问回复不落库并抛出DIAGNOSIS_FOLLOW_UP_FAILED", async () => {
+  const forbiddenReplies = [
+    "患病概率为百分之八十，健康评分为90。",
+    "根据这张舌头已经确诊，请按处方停药并替代就医。",
+    "患病概率80%",
+    "健康评分90",
+  ];
+  for (const reply of forbiddenReplies) {
+    const repository = new MemoryRepository();
+    repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", image: { mimeType: "image/jpeg" } };
+    repository.report = validReport;
+    const streamEvents: AiStreamEvent[] = [];
+    const flow = new DiagnosisFlow({
+      provider: new SequenceProvider([reply]),
+      repository,
+      contextWindowTokens: 32_000,
+      onEvent: (event) => { streamEvents.push(event); },
+    });
+    await assert.rejects(
+      () => flow.chat("session-1", "我是不是生病了？"),
+      (error) => error instanceof TaskError && error.code === "DIAGNOSIS_FOLLOW_UP_FAILED" && error.action === "retry",
+    );
+    assert.equal(repository.messages.length, 0, `越界原文不得落库：${reply}`);
+    assert.equal(repository.runs.length, 1);
+    assert.equal(repository.runs[0]?.kind, "conversation");
+    assert.equal(repository.runs[0]?.status, "failed");
+    assert.equal(repository.runs[0]?.errorCode, "DIAGNOSIS_FOLLOW_UP_FAILED");
+    assert.equal(repository.runs[0]?.rawResponse, "");
+    assert.doesNotMatch(JSON.stringify(repository.messages), /湿气重|患病概率|健康评分|确诊|处方/u);
+    assert.doesNotMatch(JSON.stringify(repository.runs), /湿气重|患病概率|健康评分|确诊|处方/u);
+    assert.equal(streamEvents.some((event) => event.type === "content_delta"), true);
+  }
+});
+
+test("超长追问回复不落库并抛出DIAGNOSIS_FOLLOW_UP_FAILED", async () => {
+  const repository = new MemoryRepository();
+  repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", image: { mimeType: "image/jpeg" } };
+  repository.report = validReport;
+  const longReply = "建议结合规律作息继续观察。".padEnd(DIAGNOSIS_FOLLOW_UP_MAX_CHARS + 1, "记");
+  const flow = new DiagnosisFlow({ provider: new SequenceProvider([longReply]), repository, contextWindowTokens: 32_000 });
+  await assert.rejects(
+    () => flow.chat("session-1", "平时要注意什么？"),
+    (error) => error instanceof TaskError && error.code === "DIAGNOSIS_FOLLOW_UP_FAILED" && error.action === "retry",
+  );
+  assert.equal(repository.messages.length, 0);
+  assert.equal(repository.runs[0]?.status, "failed");
+  assert.equal(repository.runs[0]?.errorCode, "DIAGNOSIS_FOLLOW_UP_FAILED");
+  assert.equal(repository.runs[0]?.rawResponse, "");
+  assert.doesNotMatch(JSON.stringify(repository.messages), /规律作息/u);
 });
 
 test("上下文超过窗口80%时摘要较早消息并保留最近六条", async () => {
@@ -237,6 +304,32 @@ test("上下文超过窗口80%时摘要较早消息并保留最近六条", async
   assert.equal(provider.calls.length, 2);
   assert.match(JSON.stringify(provider.calls[1]?.messages), /较早对话摘要/);
   assert.doesNotMatch(JSON.stringify(provider.calls[1]?.messages), /第0条/);
+});
+
+test("正式报告拦截确诊概率或处方建议且进度板块不先放出越界句", async () => {
+  const cases = [
+    { ...validSingleResponse, wellnessReferences: [{ title: "错误结论", statement: "可能确诊为糖尿病，患病概率80%。" }] },
+    { ...validSingleResponse, advice: "建议按处方服用，每次500mg。" },
+  ];
+  for (const payload of cases) {
+    const repository = new MemoryRepository();
+    const progress: StructuredGenerationProgressV1[] = [];
+    const flow = new DiagnosisFlow({
+      provider: new SequenceProvider([JSON.stringify(payload), JSON.stringify(payload)]),
+      repository,
+      contextWindowTokens: 32_000,
+      onProgress: (event) => { progress.push(event); },
+    });
+    await assert.rejects(
+      () => flow.analyze({ mode: "tongue", image: { mimeType: "image/jpeg", data: new Uint8Array([1]) } }),
+      /修复/u,
+    );
+    assert.equal(repository.report, undefined);
+    const published = JSON.stringify(progress.flatMap((snapshot) => (
+      snapshot.modules.filter((module) => module.status === "succeeded").map((module) => module.result)
+    )));
+    assert.doesNotMatch(published, /确诊|患病概率80%|处方|500mg/u);
+  }
 });
 
 test("图片不可用时Schema拒绝模型虚构可见观察项", async () => {
@@ -337,4 +430,112 @@ test("上下文摘要调用失败时返回稳定摘要错误且不追加消息",
   const flow = new DiagnosisFlow({ provider: new FailingProvider("AI_SERVER_ERROR"), repository, contextWindowTokens: 100 });
   await assert.rejects(() => flow.chat("session-1", "继续"), (error) => error instanceof TaskError && error.code === "AI_CONTEXT_SUMMARY_FAILED");
   assert.equal(repository.messages.length, originalCount);
+});
+
+test("上下文 token 估算对 CJK 权重大于 ASCII，且不再等于长度除以二", () => {
+  const ascii = "a".repeat(100);
+  const cjk = "中".repeat(100);
+  assert.equal(estimateWeightedTokens(ascii), 25);
+  assert.equal(estimateWeightedTokens(cjk), 150);
+  assert.notEqual(estimateWeightedTokens(cjk), Math.ceil(cjk.length / 2));
+  assert.ok(estimateWeightedTokens(cjk) > estimateWeightedTokens(ascii));
+});
+
+test("中文历史在字符数除以二未超限时仍触发摘要", async () => {
+  const repository = new MemoryRepository();
+  repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", image: { mimeType: "image/jpeg" } };
+  repository.report = validReport;
+  repository.messages = Array.from({ length: 8 }, (_, index) => ({
+    id: `message-${index}`,
+    sessionId: "session-1",
+    reportId: "report-1",
+    role: index % 2 === 0 ? "user" as const : "assistant" as const,
+    content: `第${index}条中文观察记录`,
+    status: "completed" as const,
+    createdAt: "2026-08-05T00:00:00.000Z",
+  }));
+  const question = "继续";
+  const serialized = JSON.stringify([
+    { role: "system", content: diagnosisConversationPrompt(validReport) },
+    ...repository.messages.map((message) => ({ role: message.role, content: message.content })),
+    { role: "user", content: question },
+  ]);
+  const naive = Math.ceil(serialized.length / 2);
+  const weighted = estimateWeightedTokens(serialized);
+  assert.ok(weighted > naive);
+  const windowTokens = Math.ceil(naive / 0.8);
+  assert.ok(naive <= windowTokens * 0.8);
+  assert.ok(weighted > windowTokens * 0.8);
+  const provider = new SequenceProvider(["较早中文摘要", "最终回复"]);
+  const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: windowTokens });
+  await flow.chat("session-1", question);
+  assert.equal(repository.summary, "较早中文摘要");
+  assert.equal(provider.calls.length, 2);
+  assert.match(JSON.stringify(provider.calls[1]?.messages), /较早中文摘要/);
+});
+
+test("生成的空摘要不持久化也不注入后续请求", async () => {
+  const repository = new MemoryRepository();
+  repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", image: { mimeType: "image/jpeg" } };
+  repository.report = validReport;
+  repository.messages = Array.from({ length: 10 }, (_, index) => ({
+    id: `m-${index}`,
+    sessionId: "session-1",
+    reportId: "report-1",
+    role: index % 2 ? "assistant" as const : "user" as const,
+    content: "很长的历史".repeat(20),
+    status: "completed" as const,
+    createdAt: "2026-08-05T00:00:00.000Z",
+  }));
+  const originalCount = repository.messages.length;
+  const provider = new SequenceProvider(["", "最终回复"]);
+  const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 100 });
+  await assert.rejects(
+    () => flow.chat("session-1", "继续"),
+    (error) => error instanceof TaskError && error.code === "AI_CONTEXT_SUMMARY_FAILED",
+  );
+  assert.equal(repository.summary, "");
+  assert.equal(repository.messages.length, originalCount);
+  assert.equal(provider.calls.length, 1);
+});
+
+test("超长生成摘要不持久化", async () => {
+  const repository = new MemoryRepository();
+  repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", image: { mimeType: "image/jpeg" } };
+  repository.report = validReport;
+  repository.messages = Array.from({ length: 10 }, (_, index) => ({
+    id: `m-${index}`,
+    sessionId: "session-1",
+    reportId: "report-1",
+    role: index % 2 ? "assistant" as const : "user" as const,
+    content: "很长的历史".repeat(20),
+    status: "completed" as const,
+    createdAt: "2026-08-05T00:00:00.000Z",
+  }));
+  const tooLong = "记".repeat(DIAGNOSIS_CONTEXT_SUMMARY_MAX_CHARS + 1);
+  const provider = new SequenceProvider([tooLong, "最终回复"]);
+  const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 100 });
+  await assert.rejects(
+    () => flow.chat("session-1", "继续"),
+    (error) => error instanceof TaskError && error.code === "AI_CONTEXT_SUMMARY_FAILED",
+  );
+  assert.equal(repository.summary, "");
+  assert.doesNotMatch(repository.summary, /记/);
+  assert.equal(provider.calls.length, 1);
+});
+
+test("已保存的超长摘要回放前校验失败且不注入 prompt", async () => {
+  const repository = new MemoryRepository();
+  repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", image: { mimeType: "image/jpeg" } };
+  repository.report = validReport;
+  repository.summary = "记".repeat(DIAGNOSIS_CONTEXT_SUMMARY_MAX_CHARS + 1);
+  const provider = new SequenceProvider(["最终回复"]);
+  const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
+  await assert.rejects(
+    () => flow.chat("session-1", "平时要注意什么？"),
+    (error) => error instanceof TaskError && error.code === "AI_CONTEXT_SUMMARY_FAILED",
+  );
+  assert.equal(provider.calls.length, 0);
+  assert.equal(repository.messages.length, 0);
+  assert.equal(repository.summary.length, DIAGNOSIS_CONTEXT_SUMMARY_MAX_CHARS + 1);
 });

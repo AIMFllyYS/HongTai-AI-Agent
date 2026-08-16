@@ -1,4 +1,4 @@
-import { persistableSuccessRaw, TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
+import { persistableSuccessRaw, platformForHost, TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
 import {
   DESKTOP_USER_AGENT,
   asArray,
@@ -10,8 +10,6 @@ import {
   mediaHeaders,
   normalizeHttpUrl,
 } from "../shared";
-
-const BILIBILI_HOST = /(^|\.)(bilibili\.com|b23\.tv)$/i;
 
 function extractBvid(url: string): string | undefined {
   return url.match(/\b(BV[0-9A-Za-z]{10})\b/i)?.[1];
@@ -29,6 +27,7 @@ async function getApi(http: HttpClient, url: string, referer: string): Promise<R
     timeoutMs: 30_000,
   });
   if (response.status < 200 || response.status >= 300) {
+    if (response.status === 401 || response.status === 403) throw new TaskError({ code: "CONTENT_PRIVATE_OR_LOGIN_REQUIRED", message: "B站视频需要登录或没有访问权限", action: "edit_input", details: { httpStatus: response.status } });
     if (response.status === 404) throw new TaskError({ code: "CONTENT_NOT_FOUND", message: "B站视频不存在或链接已经失效", action: "edit_input", details: { httpStatus: 404 } });
     if (response.status === 429) throw new TaskError({ code: "PLATFORM_API_RATE_LIMITED", message: "B站API访问过于频繁", retryable: true, action: "wait_and_retry", details: { httpStatus: 429 } });
     if (response.status >= 500) throw new TaskError({ code: "PLATFORM_API_UNAVAILABLE", message: "B站API暂时不可用", retryable: true, action: "wait_and_retry", details: { httpStatus: response.status } });
@@ -111,7 +110,7 @@ export class BilibiliAdapter implements PlatformAdapter {
 
   matches(url: string): boolean {
     try {
-      return BILIBILI_HOST.test(new URL(url).hostname);
+      return platformForHost(new URL(url).hostname) === "bilibili";
     } catch {
       return false;
     }
@@ -128,7 +127,7 @@ export class BilibiliAdapter implements PlatformAdapter {
   }
 
   async parse(link: ResolvedLink, http: HttpClient): Promise<PlatformContent> {
-    const bvid = extractBvid(link.finalUrl) ?? extractBvid(link.body ?? "");
+    const bvid = extractBvid(link.finalUrl) ?? extractBvid(link.sourceUrl);
     if (!bvid) throw new TaskError({ code: "INPUT_URL_INVALID", message: "无法从B站链接中提取BV号", action: "edit_input" });
     const viewPayload = await getApi(
       http,

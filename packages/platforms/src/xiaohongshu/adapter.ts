@@ -1,4 +1,4 @@
-import { persistableSuccessRaw, TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
+import { persistableSuccessRaw, platformForHost, TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
 import {
   MOBILE_USER_AGENT,
   asArray,
@@ -14,8 +14,6 @@ import {
   normalizeHttpUrl,
 } from "../shared";
 
-const XHS_HOST = /(^|\.)(xiaohongshu\.com|xhslink\.com|xhslink\.cn)$/i;
-
 function extractNoteId(url: string): string | undefined {
   return url.match(/\/(?:explore|note)\/([a-f0-9]+)/i)?.[1]
     ?? url.match(/\/discovery\/item\/([a-f0-9]+)/i)?.[1]
@@ -23,10 +21,11 @@ function extractNoteId(url: string): string | undefined {
 }
 
 function extractNote(root: unknown, noteId?: string): Record<string, unknown> | undefined {
+  if (!noteId) return undefined;
   return findRecord(root, (record) => {
     const id = asString(record.noteId) ?? asString(record.id);
     const hasMedia = Boolean(asRecord(record.video) || Array.isArray(record.imageList));
-    return hasMedia && (!noteId || id === noteId || id == null);
+    return hasMedia && id === noteId;
   });
 }
 
@@ -75,7 +74,7 @@ export class XiaohongshuAdapter implements PlatformAdapter {
 
   matches(url: string): boolean {
     try {
-      return XHS_HOST.test(new URL(url).hostname);
+      return platformForHost(new URL(url).hostname) === "xiaohongshu";
     } catch {
       return false;
     }

@@ -61,3 +61,34 @@ test("未验证的快手地址不是用户作品链接", () => {
     if (!result.ok) assert.equal(result.issue.code, "INPUT_NO_SUPPORTED_URL");
   }
 });
+
+test("移动子域名可以进入采集入口", () => {
+  const cases = [
+    { input: "https://m.douyin.com/video/7600000000000000000", platform: "douyin", url: "https://m.douyin.com/video/7600000000000000000" },
+    { input: "https://m.bilibili.com/video/BV1xx411c7mD", platform: "bilibili", url: "https://m.bilibili.com/video/BV1xx411c7mD" },
+    { input: "https://m.xiaohongshu.com/explore/abc123", platform: "xiaohongshu", url: "https://m.xiaohongshu.com/explore/abc123" },
+  ] as const;
+  for (const item of cases) {
+    const result = normalizeInput(item.input);
+    assert.equal(result.platform, item.platform);
+    assert.equal(result.normalizedUrl, item.url);
+  }
+});
+
+test("api、live、creator 等无关子域名不能进入采集入口", () => {
+  for (const url of [
+    "https://api.douyin.com/aweme/v1/play/",
+    "https://live.douyin.com/123",
+    "https://creator.douyin.com/studio",
+    "https://api.bilibili.com/x/web-interface/view",
+    "https://live.bilibili.com/123",
+    "https://creator.bilibili.com/",
+    "https://api.xiaohongshu.com/api",
+    "https://live.xiaohongshu.com/live",
+    "https://creator.xiaohongshu.com/",
+  ]) {
+    const result = inspectInput(url);
+    assert.equal(result.ok, false, url);
+    if (!result.ok) assert.equal(result.issue.code, "INPUT_NO_SUPPORTED_URL");
+  }
+});
