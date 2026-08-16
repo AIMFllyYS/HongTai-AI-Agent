@@ -95,7 +95,9 @@ AI转写请求成功但所有音频分段均没有有效文字时，任务返回
 speechStatus=no_speech
 ```
 
-这是一种正常结果：任务保持`succeeded`，不生成伪造的`transcript.txt`或`draft.txt`，也不会使用平台描述冒充语音转写。`transcript/transcript.json`会保留`no_speech`状态和分段结果。
+这是一种正常结果：任务保持`succeeded`，不生成伪造的`transcript.txt`或`draft.txt`。`transcript/transcript.json`会保留`no_speech`状态和分段结果。
+
+注意`no_speech`与转写失败降级是两回事：`no_speech`不产生文稿；转写失败时会用平台描述作为**明示来源的降级文稿**，此时`transcript.json`的`source`记为`description`并附带`AI_EMPTY_RESPONSE`警告。降级规则见[错误码与前端通知约定](错误码与前端通知约定.md)第 4 节。
 
 ## 5. 常见失败
 
@@ -116,7 +118,7 @@ speechStatus=no_speech
 - `STORAGE_SPACE_INSUFFICIENT`：本地空间不足；
 - 下载HTTP 403：平台CDN验证了Referer或媒体地址已过期；
 - FFmpeg失败：本机未安装FFmpeg，或B站音视频流编码不兼容；
-- 只有平台描述：语音转写失败后使用描述字段降级，不代表真实语音逐字稿。
+- 只有平台描述：语音转写失败后使用描述字段降级，`transcript.json`会记`source=description`，不代表真实语音逐字稿。
 
 CLI会打印稳定错误码；未来前端使用错误码、严重程度和建议动作展示弹窗，不解析中文错误文本。
 
