@@ -146,8 +146,8 @@ test("observation presentation only recognizes diagnosis-report.v1 and never tur
 test("the packaged source contains no diagnostic-treatment or health-score copy", () => {
   const forbidden = ["AI 智能诊疗", "诊断结果", "整体健康评分", "轻度气虚"];
   const sources = [
-    "pages/VitalityScanPage.tsx",
-    "pages/VitalityResultPage.tsx",
+    "pages/ObservationStartPage.tsx",
+    "pages/ObservationReportPage.tsx",
     "data/fixtures/vitality.ts",
     "data/visual-types.ts",
   ];
