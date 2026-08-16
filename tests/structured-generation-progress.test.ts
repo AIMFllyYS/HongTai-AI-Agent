@@ -77,6 +77,29 @@ test("ReasoningProgress exposes waiting, coalesced streaming and completed snaps
   assert.equal(reasoning.complete(), undefined);
 });
 
+test("进度监听失败时仍保留已通过校验的模块结果，并显式记录监听失败", async () => {
+  const tracker = new StructuredGenerationProgressTracker(
+    "content-analysis",
+    ["overview"],
+    () => {
+      throw new TaskError({ code: "AI_STRUCTURED_OUTPUT_INVALID", message: "页面拒绝", action: "retry" });
+    },
+  );
+
+  await tracker.succeeded("overview", { text: "ok" });
+  await tracker.saving();
+
+  assert.deepEqual(tracker.snapshot().modules, [
+    { moduleId: "overview", status: "succeeded", result: { text: "ok" } },
+  ]);
+  assert.equal(tracker.snapshot().phase, "saving");
+  assert.deepEqual(tracker.listenerIssues, [
+    { phase: "validating", name: "TaskError", code: "AI_STRUCTURED_OUTPUT_INVALID" },
+    { phase: "saving", name: "TaskError", code: "AI_STRUCTURED_OUTPUT_INVALID" },
+  ]);
+  assert.doesNotMatch(JSON.stringify(tracker.listenerIssues), /页面拒绝/u);
+});
+
 test("StructuredGenerationProgressTracker includes runtime-only reasoning in cumulative snapshots", async () => {
   const snapshots: StructuredGenerationProgressV1[] = [];
   const tracker = new StructuredGenerationProgressTracker(

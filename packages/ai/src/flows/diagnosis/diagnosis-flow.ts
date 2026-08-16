@@ -14,10 +14,12 @@ import {
   diagnosisSinglePrompt,
   diagnosisSingleRepairPrompt,
 } from "../../prompts/diagnosis-report-single";
+import { diagnosisContextSummarySchema } from "../../schemas/diagnosis-context-summary";
 import {
   DIAGNOSIS_FOLLOW_UP_MAX_OUTPUT_TOKENS,
   diagnosisFollowUpReplySchema,
 } from "../../schemas/diagnosis-follow-up";
+import { estimateWeightedTokens } from "./estimate-context-tokens";
 import {
   diagnosisFollowUpQuestionsSchema,
   diagnosisObservationSummarySchema,
@@ -112,6 +114,13 @@ function diagnosisVisualFailure(error: unknown): unknown {
   return error instanceof TaskError && error.code === "AI_PERMISSION_DENIED"
     ? new TaskError({ code: "AI_VISION_UNAVAILABLE", message: "当前AI连接没有可用的视觉模型能力", action: "configure_ai", cause: error })
     : error;
+}
+
+function parsedContextSummary(value: string, required: boolean): string {
+  const parsed = diagnosisContextSummarySchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  if (!required && !value.trim()) return "";
+  throw new TaskError({ code: "AI_CONTEXT_SUMMARY_FAILED", message: "较早对话摘要未通过校验", action: "retry" });
 }
 
 const REPORT_MODULE_IDS = [
@@ -487,14 +496,14 @@ export class DiagnosisFlow {
 
   async #conversationMessages(sessionId: string, report: import("../../schemas/diagnosis-report").DiagnosisReportV1, question: string): Promise<AiRequestMessage[]> {
     const history = await this.#dependencies.repository.listMessages(sessionId);
-    let summary = await this.#dependencies.repository.getContextSummary(sessionId);
+    const summary = parsedContextSummary(await this.#dependencies.repository.getContextSummary(sessionId), false);
     const base: AiRequestMessage[] = [
       { role: "system", content: diagnosisConversationPrompt(report) },
       ...(summary ? [{ role: "system" as const, content: `较早对话摘要：${summary}` }] : []),
       ...history.map((message) => ({ role: message.role, content: message.content } as AiRequestMessage)),
       { role: "user", content: question },
     ];
-    const estimatedTokens = Math.ceil(JSON.stringify(base).length / 2);
+    const estimatedTokens = estimateWeightedTokens(JSON.stringify(base));
     if (estimatedTokens > this.#dependencies.contextWindowTokens * 0.8 && history.length > 6) {
       const older = history.slice(0, -6);
       let result: AiGenerateResult;
@@ -510,11 +519,11 @@ export class DiagnosisFlow {
       } catch (error) {
         throw new TaskError({ code: "AI_CONTEXT_SUMMARY_FAILED", message: "较早对话摘要生成失败", action: "retry", cause: error });
       }
-      summary = result.content;
-      await this.#dependencies.repository.saveContextSummary(sessionId, summary);
+      const compressed = parsedContextSummary(result.content, true);
+      await this.#dependencies.repository.saveContextSummary(sessionId, compressed);
       return [
         { role: "system", content: diagnosisConversationPrompt(report) },
-        { role: "system", content: `较早对话摘要：${summary}` },
+        { role: "system", content: `较早对话摘要：${compressed}` },
         ...history.slice(-6).map((message) => ({ role: message.role, content: message.content } as AiRequestMessage)),
         { role: "user", content: question },
       ];

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { TaskError, type StructuredGenerationProgressV1 } from "../packages/core/src/index";
 import {
+  DIAGNOSIS_CONTEXT_SUMMARY_MAX_CHARS,
   DIAGNOSIS_FOLLOW_UP_MAX_CHARS,
   DIAGNOSIS_FOLLOW_UP_MAX_OUTPUT_TOKENS,
   DiagnosisFlow,
@@ -14,6 +15,8 @@ import {
   type DiagnosisReportV1,
   type DiagnosisSession,
 } from "../packages/ai/src/index";
+import { estimateWeightedTokens } from "../packages/ai/src/flows/diagnosis/estimate-context-tokens";
+import { diagnosisConversationPrompt } from "../packages/ai/src/prompts/diagnosis-conversation";
 
 const validReport: DiagnosisReportV1 = {
   schemaVersion: "diagnosis-report.v1",
@@ -427,4 +430,112 @@ test("上下文摘要调用失败时返回稳定摘要错误且不追加消息",
   const flow = new DiagnosisFlow({ provider: new FailingProvider("AI_SERVER_ERROR"), repository, contextWindowTokens: 100 });
   await assert.rejects(() => flow.chat("session-1", "继续"), (error) => error instanceof TaskError && error.code === "AI_CONTEXT_SUMMARY_FAILED");
   assert.equal(repository.messages.length, originalCount);
+});
+
+test("上下文 token 估算对 CJK 权重大于 ASCII，且不再等于长度除以二", () => {
+  const ascii = "a".repeat(100);
+  const cjk = "中".repeat(100);
+  assert.equal(estimateWeightedTokens(ascii), 25);
+  assert.equal(estimateWeightedTokens(cjk), 150);
+  assert.notEqual(estimateWeightedTokens(cjk), Math.ceil(cjk.length / 2));
+  assert.ok(estimateWeightedTokens(cjk) > estimateWeightedTokens(ascii));
+});
+
+test("中文历史在字符数除以二未超限时仍触发摘要", async () => {
+  const repository = new MemoryRepository();
+  repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", image: { mimeType: "image/jpeg" } };
+  repository.report = validReport;
+  repository.messages = Array.from({ length: 8 }, (_, index) => ({
+    id: `message-${index}`,
+    sessionId: "session-1",
+    reportId: "report-1",
+    role: index % 2 === 0 ? "user" as const : "assistant" as const,
+    content: `第${index}条中文观察记录`,
+    status: "completed" as const,
+    createdAt: "2026-08-05T00:00:00.000Z",
+  }));
+  const question = "继续";
+  const serialized = JSON.stringify([
+    { role: "system", content: diagnosisConversationPrompt(validReport) },
+    ...repository.messages.map((message) => ({ role: message.role, content: message.content })),
+    { role: "user", content: question },
+  ]);
+  const naive = Math.ceil(serialized.length / 2);
+  const weighted = estimateWeightedTokens(serialized);
+  assert.ok(weighted > naive);
+  const windowTokens = Math.ceil(naive / 0.8);
+  assert.ok(naive <= windowTokens * 0.8);
+  assert.ok(weighted > windowTokens * 0.8);
+  const provider = new SequenceProvider(["较早中文摘要", "最终回复"]);
+  const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: windowTokens });
+  await flow.chat("session-1", question);
+  assert.equal(repository.summary, "较早中文摘要");
+  assert.equal(provider.calls.length, 2);
+  assert.match(JSON.stringify(provider.calls[1]?.messages), /较早中文摘要/);
+});
+
+test("生成的空摘要不持久化也不注入后续请求", async () => {
+  const repository = new MemoryRepository();
+  repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", image: { mimeType: "image/jpeg" } };
+  repository.report = validReport;
+  repository.messages = Array.from({ length: 10 }, (_, index) => ({
+    id: `m-${index}`,
+    sessionId: "session-1",
+    reportId: "report-1",
+    role: index % 2 ? "assistant" as const : "user" as const,
+    content: "很长的历史".repeat(20),
+    status: "completed" as const,
+    createdAt: "2026-08-05T00:00:00.000Z",
+  }));
+  const originalCount = repository.messages.length;
+  const provider = new SequenceProvider(["", "最终回复"]);
+  const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 100 });
+  await assert.rejects(
+    () => flow.chat("session-1", "继续"),
+    (error) => error instanceof TaskError && error.code === "AI_CONTEXT_SUMMARY_FAILED",
+  );
+  assert.equal(repository.summary, "");
+  assert.equal(repository.messages.length, originalCount);
+  assert.equal(provider.calls.length, 1);
+});
+
+test("超长生成摘要不持久化", async () => {
+  const repository = new MemoryRepository();
+  repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", image: { mimeType: "image/jpeg" } };
+  repository.report = validReport;
+  repository.messages = Array.from({ length: 10 }, (_, index) => ({
+    id: `m-${index}`,
+    sessionId: "session-1",
+    reportId: "report-1",
+    role: index % 2 ? "assistant" as const : "user" as const,
+    content: "很长的历史".repeat(20),
+    status: "completed" as const,
+    createdAt: "2026-08-05T00:00:00.000Z",
+  }));
+  const tooLong = "记".repeat(DIAGNOSIS_CONTEXT_SUMMARY_MAX_CHARS + 1);
+  const provider = new SequenceProvider([tooLong, "最终回复"]);
+  const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 100 });
+  await assert.rejects(
+    () => flow.chat("session-1", "继续"),
+    (error) => error instanceof TaskError && error.code === "AI_CONTEXT_SUMMARY_FAILED",
+  );
+  assert.equal(repository.summary, "");
+  assert.doesNotMatch(repository.summary, /记/);
+  assert.equal(provider.calls.length, 1);
+});
+
+test("已保存的超长摘要回放前校验失败且不注入 prompt", async () => {
+  const repository = new MemoryRepository();
+  repository.session = { id: "session-1", reportId: "report-1", mode: "tongue", createdAt: "2026-08-05T00:00:00.000Z", image: { mimeType: "image/jpeg" } };
+  repository.report = validReport;
+  repository.summary = "记".repeat(DIAGNOSIS_CONTEXT_SUMMARY_MAX_CHARS + 1);
+  const provider = new SequenceProvider(["最终回复"]);
+  const flow = new DiagnosisFlow({ provider, repository, contextWindowTokens: 32_000 });
+  await assert.rejects(
+    () => flow.chat("session-1", "平时要注意什么？"),
+    (error) => error instanceof TaskError && error.code === "AI_CONTEXT_SUMMARY_FAILED",
+  );
+  assert.equal(provider.calls.length, 0);
+  assert.equal(repository.messages.length, 0);
+  assert.equal(repository.summary.length, DIAGNOSIS_CONTEXT_SUMMARY_MAX_CHARS + 1);
 });
