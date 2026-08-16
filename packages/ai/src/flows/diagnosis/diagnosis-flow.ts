@@ -1,6 +1,6 @@
 import { createRuntimeId, TaskError } from "@hongtai/core";
 import type { StructuredGenerationModuleId } from "@hongtai/core";
-import type { AiGenerateResult, AiRequestMessage, AiStreamEvent } from "../../contracts/provider";
+import type { AiGenerateResult, AiStreamEvent } from "../../contracts/provider";
 import type {
   AiMessage,
   DiagnosisFlowDependencies,
@@ -8,40 +8,34 @@ import type {
   DiagnosisReportRunResult,
   DiagnosisSession,
 } from "../../contracts/diagnosis";
-import { diagnosisConversationPrompt } from "../../prompts/diagnosis-conversation";
-import {
-  DIAGNOSIS_SINGLE_PROMPT_VERSION,
-  diagnosisSinglePrompt,
-  diagnosisSingleRepairPrompt,
-} from "../../prompts/diagnosis-report-single";
-import { diagnosisContextSummarySchema } from "../../schemas/diagnosis-context-summary";
 import {
   DIAGNOSIS_FOLLOW_UP_MAX_OUTPUT_TOKENS,
   diagnosisFollowUpReplySchema,
 } from "../../schemas/diagnosis-follow-up";
-import { estimateWeightedTokens } from "./estimate-context-tokens";
 import {
-  diagnosisFollowUpQuestionsSchema,
-  diagnosisObservationSummarySchema,
-  diagnosisReportSchema,
-  diagnosisSafetyLimitationsSchema,
-  diagnosisSingleResponseFieldSchemas,
   diagnosisSingleResponseJsonSchema,
   diagnosisSingleResponseSchema,
-  diagnosisVisualObservationsSchema,
-  diagnosisWellnessRecommendationsSchema,
-  type DiagnosisFollowUpQuestions,
-  type DiagnosisObservationSummary,
   type DiagnosisReportV1,
-  type DiagnosisSafetyLimitations,
   type DiagnosisSingleResponse,
-  type DiagnosisVisualObservations,
-  type DiagnosisWellnessRecommendations,
   type ObservationMode,
 } from "../../schemas/diagnosis-report";
+import {
+  diagnosisSinglePrompt,
+  diagnosisSingleRepairPrompt,
+} from "../../prompts/diagnosis-report-single";
 import { generateStructuredModule } from "../../structured-output/generate-structured-module";
 import { StructuredGenerationProgressTracker } from "../../structured-output/structured-generation-progress";
 import { TopLevelJsonFieldStream, type CompletedTopLevelJsonField } from "../../structured-output/top-level-json-field-stream";
+import { conversationMessagesForFollowUp } from "./diagnosis-context-compression";
+import {
+  acceptDiagnosisField,
+  diagnosisModuleResult,
+  REPORT_MODULE_IDS,
+  REPORT_PROMPT_VERSIONS,
+  SINGLE_RESPONSE_KEYS,
+  structuredIssue,
+  validatedReport,
+} from "./diagnosis-report-sections";
 
 const IMAGE_MIME_TYPE_PATTERN = /^image\/[a-z0-9][a-z0-9.+-]*$/;
 
@@ -116,121 +110,6 @@ function diagnosisVisualFailure(error: unknown): unknown {
     : error;
 }
 
-function parsedContextSummary(value: string, required: boolean): string {
-  const parsed = diagnosisContextSummarySchema.safeParse(value);
-  if (parsed.success) return parsed.data;
-  if (!required && !value.trim()) return "";
-  throw new TaskError({ code: "AI_CONTEXT_SUMMARY_FAILED", message: "较早对话摘要未通过校验", action: "retry" });
-}
-
-const REPORT_MODULE_IDS = [
-  "visual-observations",
-  "observation-summary",
-  "wellness-recommendations",
-  "safety-limitations",
-  "follow-up-questions",
-] as const satisfies readonly StructuredGenerationModuleId[];
-
-const REPORT_PROMPT_VERSIONS = [DIAGNOSIS_SINGLE_PROMPT_VERSION] as const;
-const SINGLE_RESPONSE_KEYS = ["quality", "qualityNote", "observations", "summary", "wellnessReferences", "advice", "safety", "followUp"] as const;
-const FIXED_DISCLAIMER = "本报告仅提供图片中可见状态的日常观察参考，不是疾病诊断，不提供患病概率，也不能替代专业检查。";
-
-interface DiagnosisSections {
-  readonly visual: DiagnosisVisualObservations;
-  readonly summary: DiagnosisObservationSummary;
-  readonly wellness: DiagnosisWellnessRecommendations;
-  readonly safety: DiagnosisSafetyLimitations;
-  readonly followUp: DiagnosisFollowUpQuestions;
-}
-
-function diagnosisSections(value: DiagnosisSingleResponse, mode: ObservationMode): DiagnosisSections {
-  const usable = value.quality !== "unusable";
-  const qualityNote = value.qualityNote.trim();
-  const advice = value.advice.trim();
-  const observations = usable ? value.observations : [];
-  const observationIds = observations.map((_, index) => `obs-${index + 1}`);
-  const visual: DiagnosisVisualObservations = {
-    imageQuality: {
-      usable,
-      overallQuality: value.quality,
-      limitations: value.quality === "good" ? [] : [qualityNote],
-      retakeSuggestions: value.quality === "good" ? [] : ["请在自然光、对焦清晰且无遮挡的条件下重新拍摄。"],
-    },
-    observations: observations.map((item, index) => ({
-      id: observationIds[index]!,
-      category: item.category,
-      region: item.region,
-      label: item.label,
-      description: item.description,
-      visibility: value.quality === "good" ? "clear" : "limited",
-      evidenceDescription: item.description,
-    })),
-  };
-  const fallbackSummary = usable ? "本次图片未形成更多可确认的可见信息。" : "当前图片质量不足，暂不形成可见状态结论。";
-  const summary: DiagnosisObservationSummary = {
-    summary: {
-      headline: usable ? `${mode === "tongue" ? "舌部" : "面部"}可见状态摘要` : "图片暂不适合观察",
-      keyPoints: observations.length > 0
-        ? observations.slice(0, 5).map((item) => item.description)
-        : [value.summary || fallbackSummary],
-      narrative: value.summary || fallbackSummary,
-    },
-  };
-  const wellness: DiagnosisWellnessRecommendations = {
-    wellnessReferences: observations.length > 0 ? value.wellnessReferences.map((item) => ({
-      title: item.title,
-      basisObservationIds: observationIds,
-      statement: `${item.statement.replace(/[。；;\s]+$/u, "")}；单张图片不能据此诊断。`,
-      certainty: "uncertain",
-      notADiagnosis: true,
-    })) : [],
-    recommendations: observations.length > 0 && advice ? [{
-      category: "monitoring",
-      priority: "low",
-      title: "日常记录建议",
-      action: advice,
-      rationale: "基于本次图片中已确认的可见状态，建议只用于日常记录和变化比较。",
-      relatedObservationIds: observationIds,
-    }] : [],
-  };
-  const safety: DiagnosisSafetyLimitations = {
-    safetyGuidance: {
-      level: usable ? "none" : "routine_attention",
-      reasons: usable ? [] : [qualityNote || "当前图片不足以支持可见状态观察。"],
-      recommendedAction: value.safety,
-    },
-    limitations: [
-      "单张图片与拍摄条件会限制可见信息，不能替代专业检查。",
-      ...(value.quality === "good" ? [] : ["建议在更合适的拍摄条件下重新记录。"]),
-    ],
-    disclaimer: FIXED_DISCLAIMER,
-  };
-  const followUp: DiagnosisFollowUpQuestions = {
-    followUpQuestions: value.followUp ? [value.followUp] : [],
-  };
-  return { visual, summary, wellness, safety, followUp };
-}
-
-function structuredIssue(message: string, cause?: unknown): TaskError {
-  return new TaskError({ code: "AI_STRUCTURED_OUTPUT_INVALID", message, action: "retry", ...(cause === undefined ? {} : { cause }) });
-}
-
-function validatedReport(value: DiagnosisSingleResponse, mode: ObservationMode): DiagnosisReportV1 {
-  const sections = diagnosisSections(value, mode);
-  const result = diagnosisReportSchema.safeParse({
-    schemaVersion: "diagnosis-report.v1",
-    mode,
-    promptVersion: DIAGNOSIS_SINGLE_PROMPT_VERSION,
-    ...sections.visual,
-    ...sections.summary,
-    ...sections.wellness,
-    ...sections.safety,
-    ...sections.followUp,
-  });
-  if (!result.success) throw structuredIssue("观察报告组装后不符合最终Schema", result.error);
-  return result.data;
-}
-
 export class DiagnosisFlow {
   readonly #dependencies: DiagnosisFlowDependencies;
 
@@ -273,62 +152,11 @@ export class DiagnosisFlow {
       let failedModuleId: StructuredGenerationModuleId | undefined;
       let reportResult: DiagnosisReportV1 | undefined;
 
-      const acceptField = (field: CompletedTopLevelJsonField): void => {
-        const schema = diagnosisSingleResponseFieldSchemas[field.key as keyof typeof diagnosisSingleResponseFieldSchemas];
-        if (!schema) return;
-        const parsed = schema.safeParse(field.value);
-        if (!parsed.success) throw structuredIssue(`诊察字段${field.key}不符合Schema`, parsed.error);
-        switch (field.key) {
-          case "quality": fields.quality = parsed.data as DiagnosisSingleResponse["quality"]; break;
-          case "qualityNote": fields.qualityNote = parsed.data as string; break;
-          case "observations": fields.observations = parsed.data as DiagnosisSingleResponse["observations"]; break;
-          case "summary": fields.summary = parsed.data as string; break;
-          case "wellnessReferences": fields.wellnessReferences = parsed.data as DiagnosisSingleResponse["wellnessReferences"]; break;
-          case "advice": fields.advice = parsed.data as string; break;
-          case "safety": fields.safety = parsed.data as string; break;
-          case "followUp": fields.followUp = parsed.data as string; break;
-        }
-      };
-      const has = (key: keyof DiagnosisSingleResponse): boolean => fields[key] !== undefined;
-      const moduleResult = (index: number): object | undefined => {
-        const ready = [
-          has("quality") && has("qualityNote") && has("observations"),
-          has("summary"),
-          has("quality") && has("observations") && has("wellnessReferences") && has("advice"),
-          has("quality") && has("safety"),
-          has("followUp"),
-        ][index];
-        if (!ready) return undefined;
-        if (fields.quality === "unusable" && fields.observations?.length) throw structuredIssue("图片不可用时不能展示可见观察");
-        if (fields.quality === "unusable" && fields.advice) throw structuredIssue("图片不可用时不能展示无依据建议");
-        if (fields.quality === "unusable" && fields.wellnessReferences?.length) throw structuredIssue("图片不可用时不能展示传统状态参考");
-        const sections = diagnosisSections({
-          quality: fields.quality ?? "unusable",
-          qualityNote: fields.qualityNote ?? "当前图片不足以支持可见状态观察。",
-          observations: fields.observations ?? [],
-          summary: fields.summary ?? "",
-          wellnessReferences: fields.wellnessReferences ?? [],
-          advice: fields.advice ?? "",
-          safety: fields.safety ?? "安全说明正在生成。",
-          followUp: fields.followUp ?? "",
-        }, session.mode);
-        const candidate = [sections.visual, sections.summary, sections.wellness, sections.safety, sections.followUp][index];
-        const schema = [
-          diagnosisVisualObservationsSchema,
-          diagnosisObservationSummarySchema,
-          diagnosisWellnessRecommendationsSchema,
-          diagnosisSafetyLimitationsSchema,
-          diagnosisFollowUpQuestionsSchema,
-        ][index];
-        const parsed = schema?.safeParse(candidate);
-        if (!parsed?.success) throw structuredIssue("诊察板块不符合安全展示Schema", parsed?.error);
-        return parsed.data as object;
-      };
       const publishReadyModules = async (): Promise<void> => {
         while (nextModuleIndex < REPORT_MODULE_IDS.length) {
           let result: object | undefined;
           try {
-            result = moduleResult(nextModuleIndex);
+            result = diagnosisModuleResult(fields, session.mode, nextModuleIndex);
           } catch (error) {
             streamIssue = error instanceof TaskError ? error : structuredIssue("诊察板块流式校验失败", error);
             failedModuleId = REPORT_MODULE_IDS[nextModuleIndex];
@@ -347,7 +175,7 @@ export class DiagnosisFlow {
         if (streamIssue) return;
         try {
           for (const field of completed) {
-            acceptField(field);
+            acceptDiagnosisField(fields, field);
             await publishReadyModules();
           }
         } catch (error) {
@@ -468,7 +296,7 @@ export class DiagnosisFlow {
     const runId = createRuntimeId();
     const startedAt = new Date().toISOString();
     try {
-      const messages = await this.#conversationMessages(sessionId, report, question.trim());
+      const messages = await conversationMessagesForFollowUp(this.#dependencies, sessionId, report, question.trim());
       const result: AiGenerateResult = await this.#dependencies.provider.generate({
         model: "text",
         output: "text",
@@ -492,42 +320,5 @@ export class DiagnosisFlow {
       await this.#dependencies.repository.saveRun(sessionId, { id: runId, kind: "conversation", status: "failed", startedAt, completedAt: new Date().toISOString(), rawResponse: "", reasoning: "", errorCode: error instanceof TaskError ? error.code : "INTERNAL_UNKNOWN_ERROR" });
       throw error;
     }
-  }
-
-  async #conversationMessages(sessionId: string, report: import("../../schemas/diagnosis-report").DiagnosisReportV1, question: string): Promise<AiRequestMessage[]> {
-    const history = await this.#dependencies.repository.listMessages(sessionId);
-    const summary = parsedContextSummary(await this.#dependencies.repository.getContextSummary(sessionId), false);
-    const base: AiRequestMessage[] = [
-      { role: "system", content: diagnosisConversationPrompt(report) },
-      ...(summary ? [{ role: "system" as const, content: `较早对话摘要：${summary}` }] : []),
-      ...history.map((message) => ({ role: message.role, content: message.content } as AiRequestMessage)),
-      { role: "user", content: question },
-    ];
-    const estimatedTokens = estimateWeightedTokens(JSON.stringify(base));
-    if (estimatedTokens > this.#dependencies.contextWindowTokens * 0.8 && history.length > 6) {
-      const older = history.slice(0, -6);
-      let result: AiGenerateResult;
-      try {
-        result = await this.#dependencies.provider.generate({
-          model: "text",
-          output: "text",
-          messages: [
-            { role: "system", content: "将以下较早对话压缩为忠实、简短的中文事实摘要，不加入新建议。" },
-            { role: "user", content: JSON.stringify(older) },
-          ],
-        });
-      } catch (error) {
-        throw new TaskError({ code: "AI_CONTEXT_SUMMARY_FAILED", message: "较早对话摘要生成失败", action: "retry", cause: error });
-      }
-      const compressed = parsedContextSummary(result.content, true);
-      await this.#dependencies.repository.saveContextSummary(sessionId, compressed);
-      return [
-        { role: "system", content: diagnosisConversationPrompt(report) },
-        { role: "system", content: `较早对话摘要：${compressed}` },
-        ...history.slice(-6).map((message) => ({ role: message.role, content: message.content } as AiRequestMessage)),
-        { role: "user", content: question },
-      ];
-    }
-    return base;
   }
 }

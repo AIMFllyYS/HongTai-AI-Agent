@@ -4,7 +4,7 @@ import { EmptyState } from "./StatePanels";
 import { GlassCard } from "./GlassCard";
 import { Icon } from "./Icon";
 import { SectionHeading } from "./Headings";
-import type { ContentAnalysisView } from "../features/tasks/task-presenters";
+import type { ContentAnalysisView } from "../features/tasks/content-analysis-presenters";
 
 export interface ContentAnalysisDocumentProps {
   readonly analysis: ContentAnalysisView;
