@@ -544,8 +544,13 @@ test("完成态用共享 Tabs 恢复 URL 分栏，并按阶段给出底部主操
   assert.doesNotMatch(detail, /<Button[^>]*>重新拆解</);
   assert.doesNotMatch(analysis, /前往模板管理保存结构/);
   assert.match(create, /sourceIdFromSearch/);
-  assert.match(home, /task-source-index">01</);
-  assert.match(home, /task-source-index">02</);
+  assert.match(home, /from "\.\.\/components\/Tabs"/);
+  assert.match(home, /<Tabs\b/);
+  assert.match(home, /"粘贴链接"/);
+  assert.match(home, /"上传视频"/);
+  assert.doesNotMatch(home, /task-source-index/);
+  assert.doesNotMatch(home, />01</);
+  assert.doesNotMatch(home, />02</);
 
   assert.equal(typeof model.navigateToCreateWithSource, "function");
   assert.equal(typeof model.resolveCompletedBarAction, "function");
@@ -610,4 +615,43 @@ test("用它做视频先进入 /create 再写 sourceId，确认态底栏不再�
   assert.equal(model.resolveCompletedBarAction({ primary: "next-steps", confirmationOpen: true, deleteConfirmationOpen: false }), "confirm-analysis");
   assert.equal(model.resolveCompletedBarAction({ primary: "next-steps", confirmationOpen: false, deleteConfirmationOpen: true }), "none");
   assert.equal(model.resolveCompletedBarAction({ primary: "start-analysis", confirmationOpen: true, deleteConfirmationOpen: true }), "none");
+});
+
+test("首页来源用 Tabs，唯一主按钮在 contextualAction，成功后进入 /tasks/:id", () => {
+  const home = read("pages/TaskHomePage.tsx");
+  const css = read("styles/pages/tasks-runtime.css");
+
+  assert.match(home, /from "\.\.\/components\/Tabs"/);
+  assert.match(home, /<Tabs\b/);
+  assert.match(home, /<TabPanel\b/);
+  assert.match(home, /tabs=\{SOURCE_TABS\}|tabs=\{\["粘贴链接", "上传视频"\]\}/);
+  assert.match(home, /"粘贴链接"/);
+  assert.match(home, /"上传视频"/);
+  assert.match(home, /contextualAction=\{/);
+  assert.match(home, /\{submitting \? "正在创建本地任务" : "开始拆解"\}/);
+  assert.match(home, /\{videoImporting \? "正在识别视频内容" : "选择视频并拆解"\}/);
+  assert.match(home, /disabled=\{!ingestAvailable \|\| !inspection\?\.ok \|\| submitting \|\| videoImporting\}/);
+  assert.match(home, /className=\{videoImporting \? "is-busy" : ""\}/);
+  assert.match(home, /id="task-share-input"/);
+  assert.match(home, /aria-label="粘贴"/);
+  assert.match(home, /navigator\.clipboard\.readText/);
+  assert.match(home, /已识别 \{platformLabel/);
+  assert.match(home, /单个 MP4/);
+  assert.match(home, /250MB/);
+  assert.match(home, /只保存在本机/);
+  assert.match(home, /<ValidatedModuleProgress/);
+  assert.match(home, /navigate\(taskDetailPath\(result\.task\.id\)\)/);
+  assert.match(home, /navigate\(taskDetailPath\(record\.taskId\)\)/);
+  assert.match(home, /navigate\(taskDetailPath\(recovered\.record\.taskId\)\)/);
+  assert.match(home, /navigate\(taskDetailPath\(task\.id\)\)/);
+  assert.doesNotMatch(home, /taskAnalysisPath/);
+  assert.doesNotMatch(home, /taskProcessingPath/);
+  assert.doesNotMatch(home, /task-source-index/);
+  assert.doesNotMatch(home, />01</);
+  assert.doesNotMatch(home, />02</);
+  assert.doesNotMatch(home, /开始采集/);
+  assert.doesNotMatch(home, /"选择本地视频"/);
+  assert.doesNotMatch(home, /<GlassCard[\s\S]*<Button[\s\S]*<\/GlassCard>/);
+  assert.doesNotMatch(css, /\.task-source-index/);
+  assert.match(css, /\.page-task-home[^{]*\{[^}]*padding-bottom:\s*calc\(/);
 });

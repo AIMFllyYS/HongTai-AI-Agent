@@ -1,5 +1,8 @@
 /* Runtime task surfaces: every value comes from AppRuntime rather than visual fixtures. */
-.page-task-home,
+.page-task-home {
+  padding-bottom: calc(var(--space-5) + 4.75rem);
+}
+
 .page-task-processing,
 .page-task-analysis {
   padding-bottom: var(--space-5);
@@ -78,76 +81,46 @@
   line-height: 1.45;
 }
 
-.task-input-card {
+.task-source-card {
   display: grid;
   gap: var(--space-4);
   padding: var(--space-5);
 }
 
-.task-local-upload-card {
+.task-source-card__panel {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-3);
-  align-items: start;
-  padding: var(--space-5);
-  background:
-    radial-gradient(circle at 92% 12%, rgba(38, 166, 154, 0.16), transparent 38%),
-    var(--color-surface-card);
-  border-color: rgba(0, 105, 92, 0.22);
+  gap: var(--space-4);
 }
 
-.task-source-index {
-  display: grid;
-  width: 2.35rem;
-  height: 2.35rem;
-  place-items: center;
-  color: var(--color-primary-strong);
-  background: var(--color-accent-soft);
-  border-radius: 0.8rem;
-  font-family: var(--font-data);
-  font-size: var(--text-meta);
-  font-weight: 700;
+.task-source-card .input-card__control {
+  margin-bottom: 0;
 }
 
-.task-input-card > .task-source-index { justify-self: start; }
-.task-local-upload-card > div { display: grid; gap: var(--space-2); }
-.task-local-upload-card strong { color: var(--color-primary); font-family: var(--font-display); font-size: var(--text-label); }
-.task-local-upload-card p { color: var(--color-text-subtle); font-size: var(--text-caption); line-height: 1.55; }
-.task-local-upload-card small { color: var(--color-text-muted); font-size: var(--text-meta); line-height: 1.45; }
-.task-local-upload-card > .button { grid-column: 1 / -1; width: 100%; }
-
-.task-input-card textarea {
-  width: 100%;
-  min-height: 8.25rem;
-  padding: var(--space-4);
-  resize: vertical;
-  color: var(--color-text-subtle);
-  background: var(--color-surface-low);
-  border: 1px solid var(--color-outline);
-  border-radius: var(--radius-control);
-  outline: none;
-  font: inherit;
-  font-size: 0.86rem;
-  line-height: 1.55;
-}
-
-.task-input-card textarea:focus {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(38, 166, 154, 0.12);
-}
-
-.task-input-card textarea:disabled {
-  color: var(--color-text-muted);
-  cursor: not-allowed;
-  background: var(--color-surface-container);
-}
-
-.task-input-card .field-hint {
+.task-source-card .field-hint {
   margin: calc(var(--space-2) * -1) 0 0;
 }
 
-.task-input-card__submit {
-  width: 100%;
+.task-source-card__upload {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.task-source-card__upload strong {
+  color: var(--color-primary);
+  font-family: var(--font-display);
+  font-size: var(--text-label);
+}
+
+.task-source-card__upload p {
+  color: var(--color-text-subtle);
+  font-size: var(--text-caption);
+  line-height: 1.55;
+}
+
+.task-source-card__upload small {
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+  line-height: 1.45;
 }
 
 .task-input-inspection {
@@ -688,8 +661,7 @@
 }
 
 @media (max-width: 26.875rem) {
-  .task-input-card,
-  .task-local-upload-card,
+  .task-source-card,
   .task-stage-card,
   .task-detail-summary,
   .runtime-transcript-card,

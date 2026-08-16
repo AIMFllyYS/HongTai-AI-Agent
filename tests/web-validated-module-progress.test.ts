@@ -258,6 +258,8 @@ test("live generation renders runtime-only deep thinking and keeps busy primary 
   assert.match(observationStart, /className=\{loading \? "is-busy" : ""\}/);
   assert.match(detail, /className=\{pendingAction === "analysis" \? "is-busy" : ""\}/);
   assert.match(home, /className=\{videoImporting \? "is-busy" : ""\}/);
+  assert.match(home, /<ValidatedModuleProgress/);
+  assert.doesNotMatch(home, /taskAnalysisPath/);
   assert.match(observationReport, /className=\{chatPending \? "is-busy" : ""\}/);
   assert.doesNotMatch([component, home, detail, observationStart].join("\n"), /正在生成五个板块|正在按顺序生成当前板块/);
 });

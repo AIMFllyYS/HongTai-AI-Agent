@@ -121,6 +121,17 @@ test("route transition direction follows dynamic task route order", () => {
   assert.equal(routeTransitionDirection("/observation/new", "/observation/session-42"), "forward");
 });
 
+test("homepage source card drops numbered dual cards and reserves bottom action space", () => {
+  const home = read("pages/TaskHomePage.tsx");
+  const css = read("styles/pages/tasks-runtime.css");
+
+  assert.match(home, /<Tabs\b/);
+  assert.match(home, /contextualAction=\{/);
+  assert.doesNotMatch(home, /task-source-index/);
+  assert.doesNotMatch(css, /\.task-source-index/);
+  assert.match(css, /\.page-task-home[^{]*\{[^}]*padding-bottom:\s*calc\(/);
+});
+
 test("static visual data is isolated behind the adapter boundary", () => {
   const adapter = createStaticVisualDataAdapter();
   const home = adapter.getHome();
