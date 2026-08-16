@@ -1,4 +1,4 @@
-import { IngestPipeline, TaskError, inspectInput, isTerminalTaskStatus, issueFromError, safeUrlForDisplay } from "@hongtai/core";
+import { IngestPipeline, TaskError, inspectInput, isTerminalTaskStatus, issueFromAppError, issueFromError, safeUrlForDisplay } from "@hongtai/core";
 import type {
   AppTaskRecord,
   CancellableTask,
@@ -27,6 +27,7 @@ import type {
 import { NativeTaskFiles } from "./thin-task-files.js";
 import type { LocalTaskFilesPlugin } from "./thin-task-files.js";
 import type { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
+import type { NativeVideoOperationResult } from "./standalone-bridge.js";
 
 const TASK_REQUEST_PATH = "request.json";
 const TASK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/;
@@ -43,6 +44,11 @@ export interface StandaloneTaskFilesPlugin extends LocalTaskFilesPlugin {
   }>;
 }
 
+export type TaskVideoRecovery =
+  | { readonly status: "none" }
+  | { readonly status: "succeeded"; readonly task: AppTaskRecord }
+  | { readonly status: "failed"; readonly issue: TaskIssue };
+
 export interface StandaloneTaskVideoPicker {
   pickVideo(options: { readonly taskId: string }): Promise<{
     readonly uri: string;
@@ -51,6 +57,7 @@ export interface StandaloneTaskVideoPicker {
     readonly sizeBytes: number;
     readonly durationSeconds: number;
   }>;
+  consumeVideoOperation(): Promise<NativeVideoOperationResult>;
 }
 
 export interface StandaloneTaskServiceOptions {
@@ -99,13 +106,15 @@ function nativeCode(error: unknown): string | undefined {
 function videoImportError(error: unknown): TaskError {
   switch (nativeCode(error)) {
     case "ERR_MEDIA_SELECTION_CANCELLED":
-      return taskError("MEDIA_SELECTION_CANCELLED", "已取消选择本地视频", "select_media");
+      return new TaskError({ code: "MEDIA_SELECTION_CANCELLED", message: "已取消选择本地视频", action: "select_media", cause: error });
     case "ERR_MEDIA_SOURCE_MISSING":
-      return taskError("MEDIA_SOURCE_NOT_FOUND", "系统没有返回可读取的视频", "select_media");
+      return new TaskError({ code: "MEDIA_SOURCE_NOT_FOUND", message: "系统没有返回可读取的视频", action: "select_media", cause: error });
     case "ERR_MEDIA_READ_FAILED":
-      return taskError("MEDIA_READ_FAILED", "所选本地视频无法读取", "select_media");
+      return new TaskError({ code: "MEDIA_READ_FAILED", message: "所选本地视频无法读取", action: "select_media", cause: error });
+    case "ERR_VIDEO_RECOVERY_FAILED":
+      return new TaskError({ code: "TASK_INTERRUPTED", message: "视频选择在应用重建后无法恢复，请重新选择", action: "select_media", cause: error });
     default:
-      return error instanceof TaskError ? error : taskError("MEDIA_IMPORT_FAILED", "本地视频导入没有完成", "select_media");
+      return error instanceof TaskError ? error : new TaskError({ code: "MEDIA_IMPORT_FAILED", message: "本地视频导入没有完成", action: "select_media", cause: error });
   }
 }
 
@@ -254,45 +263,76 @@ export class StandaloneTaskService implements TaskService {
       const selected = this.#operations
         ? await this.#operations.track({ kind: "transient-operation", id: `task-video:${taskId}`, execution: "external-activity" }, selectVideo)
         : await selectVideo();
-      if (selected.mimeType !== "video/mp4" || !selected.displayName.trim() || selected.sizeBytes <= 0 || selected.durationSeconds <= 0) {
-        throw taskError("MEDIA_IMPORT_FAILED", "本地视频导入没有返回有效 MP4", "select_media");
-      }
-      const paths = await this.#artifactStore.initializeTask(taskId);
-      const now = currentIso(this.#now);
-      const pending: TaskRecord = {
-        id: taskId,
-        sourceUrl: "",
-        sourceKind: "local_video",
-        status: "queued",
-        contentType: "video",
-        analysisStatus: "not_started",
-        createdAt: now,
-        updatedAt: now,
-        issues: [],
-        paths,
-      };
-      await Promise.all([
-        this.#artifactStore.writeJson(paths.task, pending),
-        this.#artifactStore.writeJson(`task://${taskId}/${TASK_REQUEST_PATH}`, {
-          kind: "local_video",
-          displayName: selected.displayName.trim(),
-        } satisfies StoredTaskRequest),
-      ]);
-      const projection = toAppTask(pending, [{
-        uri: this.#toDisplayUri(selected.uri),
-        kind: "video",
-        origin: "imported",
-        mimeType: "video/mp4",
-        byteLength: selected.sizeBytes,
-        durationSeconds: selected.durationSeconds,
-        displayName: selected.displayName.trim(),
-      }]);
-      await this.#emitChange({ schemaVersion: "task-change.v1", type: "upsert", task: projection });
-      return projection;
+      return await this.#persistImportedVideo(taskId, selected);
     } catch (error) {
       await this.#files.deleteTask({ taskId }).catch(() => undefined);
       throw videoImportError(error);
     }
+  }
+
+  async consumeVideoRecovery(): Promise<TaskVideoRecovery> {
+    const fileMedia = this.#fileMedia;
+    if (!fileMedia) return { status: "none" };
+    let recovered: NativeVideoOperationResult;
+    try {
+      recovered = await fileMedia.consumeVideoOperation();
+    } catch (error) {
+      return { status: "failed", issue: issueFromAppError(videoImportError(error)) };
+    }
+    if (recovered.status === "none") return { status: "none" };
+    if (recovered.status === "failed") {
+      return { status: "failed", issue: issueFromAppError(videoImportError({ code: recovered.code })) };
+    }
+    try {
+      return { status: "succeeded", task: await this.#persistImportedVideo(recovered.taskId, recovered) };
+    } catch (error) {
+      await this.#files.deleteTask({ taskId: recovered.taskId }).catch(() => undefined);
+      return { status: "failed", issue: issueFromAppError(videoImportError(error)) };
+    }
+  }
+
+  async #persistImportedVideo(taskId: string, selected: {
+    readonly uri: string;
+    readonly mimeType: "video/mp4";
+    readonly displayName: string;
+    readonly sizeBytes: number;
+    readonly durationSeconds: number;
+  }): Promise<AppTaskRecord> {
+    if (selected.mimeType !== "video/mp4" || !selected.displayName.trim() || selected.sizeBytes <= 0 || selected.durationSeconds <= 0) {
+      throw taskError("MEDIA_IMPORT_FAILED", "本地视频导入没有返回有效 MP4", "select_media");
+    }
+    const paths = await this.#artifactStore.initializeTask(taskId);
+    const now = currentIso(this.#now);
+    const pending: TaskRecord = {
+      id: taskId,
+      sourceUrl: "",
+      sourceKind: "local_video",
+      status: "queued",
+      contentType: "video",
+      analysisStatus: "not_started",
+      createdAt: now,
+      updatedAt: now,
+      issues: [],
+      paths,
+    };
+    await Promise.all([
+      this.#artifactStore.writeJson(paths.task, pending),
+      this.#artifactStore.writeJson(`task://${taskId}/${TASK_REQUEST_PATH}`, {
+        kind: "local_video",
+        displayName: selected.displayName.trim(),
+      } satisfies StoredTaskRequest),
+    ]);
+    const projection = toAppTask(pending, [{
+      uri: this.#toDisplayUri(selected.uri),
+      kind: "video",
+      origin: "imported",
+      mimeType: "video/mp4",
+      byteLength: selected.sizeBytes,
+      durationSeconds: selected.durationSeconds,
+      displayName: selected.displayName.trim(),
+    }]);
+    await this.#emitChange({ schemaVersion: "task-change.v1", type: "upsert", task: projection });
+    return projection;
   }
 
   async start(taskId: string): Promise<CancellableTask> {

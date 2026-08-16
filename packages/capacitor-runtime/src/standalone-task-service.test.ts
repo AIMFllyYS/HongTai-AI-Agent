@@ -270,6 +270,7 @@ test("StandaloneTaskService imports one private MP4 through the shared pipeline 
         await native.plugin.writeText({ taskId, relativePath: "media/video.mp4", value: "private-mp4", replace: true });
         return { uri: `file:///private/tasks/${taskId}/media/video.mp4`, mimeType: "video/mp4", displayName: "真实口播.mp4", sizeBytes: 128, durationSeconds: 8 };
       },
+      consumeVideoOperation: async () => ({ status: "none" as const }),
     },
     adapters: [imageTextAdapter()],
     http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
@@ -321,6 +322,7 @@ test("StandaloneTaskService tracks the local-video picker and recovers its queue
         await native.plugin.writeText({ taskId, relativePath: "media/video.mp4", value: "private-mp4", replace: true });
         return { uri: `file:///private/tasks/${taskId}/media/video.mp4`, mimeType: "video/mp4", displayName: "恢复测试.mp4", sizeBytes: 128, durationSeconds: 8 };
       },
+      consumeVideoOperation: async () => ({ status: "none" as const }),
     },
     adapters: [],
     http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
@@ -375,6 +377,7 @@ test("StandaloneTaskService opens the picker without creating a task and maps ca
         );
         throw { code: "ERR_MEDIA_SELECTION_CANCELLED" };
       },
+      consumeVideoOperation: async () => ({ status: "none" as const }),
     },
     adapters: [],
     http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
@@ -455,6 +458,7 @@ test("StandaloneTaskService persists initialize failure as failed for local vide
         await native.plugin.writeText({ taskId, relativePath: "media/video.mp4", value: "private-mp4", replace: true });
         return { uri: `file:///private/tasks/${taskId}/media/video.mp4`, mimeType: "video/mp4", displayName: "初始化失败.mp4", sizeBytes: 128, durationSeconds: 8 };
       },
+      consumeVideoOperation: async () => ({ status: "none" as const }),
     },
     adapters: [],
     http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
@@ -564,4 +568,72 @@ test("StandaloneTaskService still runs different taskIds in parallel", async () 
   assert.equal(right.id, secondTask.id);
   assert.equal(left.status, "degraded");
   assert.equal(right.status, "degraded");
+});
+
+test("StandaloneTaskService consumes a recovered native video as a queued local task", async () => {
+  const native = memoryFiles();
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    fileMedia: {
+      pickVideo: async () => { throw new Error("unused"); },
+      consumeVideoOperation: async () => ({
+        status: "succeeded" as const,
+        taskId: "task-recovered-video",
+        uri: "file:///private/tasks/task-recovered-video/media/video.mp4",
+        mimeType: "video/mp4" as const,
+        displayName: "恢复口播.mp4",
+        sizeBytes: 256,
+        durationSeconds: 12,
+      }),
+    },
+    adapters: [],
+    http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 12, extractAudio: async () => undefined, splitAudio: async () => [] },
+    createTaskId: () => "task-unused",
+    toDisplayUri: (value) => `capacitor://localhost/tasks/${encodeURIComponent(value)}`,
+  });
+
+  const recovered = await service.consumeVideoRecovery();
+
+  assert.equal(recovered.status, "succeeded");
+  if (recovered.status !== "succeeded") assert.fail("expected a recovered video task");
+  assert.equal(recovered.task.id, "task-recovered-video");
+  assert.equal(recovered.task.sourceKind, "local_video");
+  assert.equal(recovered.task.status, "queued");
+  assert.doesNotMatch(JSON.stringify(recovered), /file:\/\//);
+});
+
+test("StandaloneTaskService maps every recovered native video terminal to a stable TaskIssue", async () => {
+  const expected = new Map<string, string>([
+    ["ERR_MEDIA_SELECTION_CANCELLED", "MEDIA_SELECTION_CANCELLED"],
+    ["ERR_MEDIA_SOURCE_MISSING", "MEDIA_SOURCE_NOT_FOUND"],
+    ["ERR_VIDEO_RECOVERY_FAILED", "TASK_INTERRUPTED"],
+    ["ERR_MEDIA_READ_FAILED", "MEDIA_READ_FAILED"],
+    ["ERR_PRIVATE_FILE_IMPORT_FAILED", "MEDIA_IMPORT_FAILED"],
+  ]);
+
+  for (const [nativeCode, taskCode] of expected) {
+    const native = memoryFiles();
+    const service = new StandaloneTaskService({
+      files: native.plugin,
+      fileMedia: {
+        pickVideo: async () => { throw new Error("unused"); },
+        consumeVideoOperation: async () => ({ status: "failed" as const, code: nativeCode }),
+      },
+      adapters: [],
+      http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+      downloader: { download: async () => undefined },
+      mediaTools: { merge: async () => undefined, probeDuration: async () => 0, extractAudio: async () => undefined, splitAudio: async () => [] },
+      toDisplayUri: (value) => value,
+    });
+
+    const recovered = await service.consumeVideoRecovery();
+
+    assert.equal(recovered.status, "failed", nativeCode);
+    if (recovered.status !== "failed") assert.fail(`expected ${nativeCode} to fail`);
+    assert.equal(recovered.issue.code, taskCode, nativeCode);
+    assert.equal(recovered.issue.action, "select_media", nativeCode);
+    assert.equal(recovered.issue.details?.nativeCode, nativeCode);
+  }
 });

@@ -27,6 +27,12 @@ import com.hongtai.aiagent.media.PrivateMediaReadException
 import com.hongtai.aiagent.media.PrivateMediaStore
 import com.hongtai.aiagent.media.PrivateMediaTooLargeException
 import com.hongtai.aiagent.media.TaskVideoImportStore
+import com.hongtai.aiagent.media.VideoOperationAwaitingResult
+import com.hongtai.aiagent.media.VideoOperationFailed
+import com.hongtai.aiagent.media.VideoOperationImporting
+import com.hongtai.aiagent.media.VideoOperationStateStore
+import com.hongtai.aiagent.media.VideoOperationSucceeded
+import com.hongtai.aiagent.media.VideoOperationTerminal
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
@@ -35,22 +41,29 @@ import java.util.concurrent.RejectedExecutionException
 class FileMediaPlugin : Plugin() {
   private val mediaStore: PrivateMediaStore by lazy { PrivateMediaStore(context) }
   private val photoOperations: PhotoOperationStateStore by lazy { PhotoOperationStateStore(context) }
+  private val videoOperations: VideoOperationStateStore by lazy { VideoOperationStateStore(context) }
   private val taskVideos: TaskVideoImportStore by lazy { TaskVideoImportStore(context) }
   private val scheduledOperations = ConcurrentHashMap.newKeySet<String>()
   private var recoveryConsumerCall: PluginCall? = null
+  private var videoRecoveryConsumerCall: PluginCall? = null
 
   override fun load() {
     super.load()
     resumePersistedImport()
+    resumePersistedVideoImport()
   }
 
   override fun handleOnResume() {
     super.handleOnResume()
-    val awaiting = photoOperations.current() as? PhotoOperationAwaitingResult ?: return
-    if (awaiting.kind == PhotoOperationKind.CAPTURE) {
-      awaiting.captureFileName?.let(mediaStore::restorePhotoCapture)?.let(mediaStore::discardCapture)
+    val awaiting = photoOperations.current() as? PhotoOperationAwaitingResult
+    if (awaiting != null) {
+      if (awaiting.kind == PhotoOperationKind.CAPTURE) {
+        awaiting.captureFileName?.let(mediaStore::restorePhotoCapture)?.let(mediaStore::discardCapture)
+      }
+      finishFailure(null, awaiting.operationId, NativeIssueCode.PHOTO_RECOVERY_FAILED)
     }
-    finishFailure(null, awaiting.operationId, NativeIssueCode.PHOTO_RECOVERY_FAILED)
+    val videoAwaiting = videoOperations.current() as? VideoOperationAwaitingResult ?: return
+    finishVideoFailure(null, videoAwaiting.operationId, NativeIssueCode.VIDEO_RECOVERY_FAILED)
   }
 
   @PluginMethod
@@ -111,63 +124,59 @@ class FileMediaPlugin : Plugin() {
 
   @PluginMethod
   fun pickVideo(call: PluginCall) {
-    if (call.getString("taskId").isNullOrBlank()) {
-      call.reject("taskId is required.", NativeIssueCode.INVALID_ARGUMENT)
-      return
-    }
-    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
-      .addCategory(Intent.CATEGORY_OPENABLE)
-      .setType("video/mp4")
-      .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    try {
-      startActivityForResult(call, intent, "onVideoPicked")
-    } catch (error: ActivityNotFoundException) {
-      call.reject("No system video picker is available.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
-    } catch (error: Exception) {
-      call.reject("Could not open the system video picker.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
-    }
-  }
-
-  @ActivityCallback
-  private fun onVideoPicked(call: PluginCall?, result: ActivityResult) {
-    if (call == null) return
-    if (result.resultCode != Activity.RESULT_OK) {
-      call.reject("The video selection was cancelled.", NativeIssueCode.MEDIA_SELECTION_CANCELLED)
-      return
-    }
-    val sourceUri = result.data?.data
-    if (sourceUri == null) {
-      call.reject("The selected video did not provide a URI.", NativeIssueCode.MEDIA_SOURCE_MISSING)
-      return
-    }
     val taskId = call.getString("taskId")
     if (taskId.isNullOrBlank()) {
       call.reject("taskId is required.", NativeIssueCode.INVALID_ARGUMENT)
       return
     }
-    try {
-      VIDEO_IMPORT_EXECUTOR.execute {
-        try {
-          val imported = taskVideos.import(taskId, sourceUri)
-          call.resolve(
-            JSObject()
-              .put("uri", imported.uri)
-              .put("mimeType", imported.mimeType)
-              .put("displayName", imported.displayName)
-              .put("sizeBytes", imported.sizeBytes)
-              .put("durationSeconds", imported.durationSeconds),
-          )
-        } catch (error: PrivateMediaReadException) {
-          call.reject("The selected video could not be read.", NativeIssueCode.MEDIA_READ_FAILED, error)
-        } catch (error: IllegalArgumentException) {
-          call.reject("The selected video is not a supported MP4.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
-        } catch (error: Exception) {
-          call.reject("Could not import the selected video into private storage.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
-        }
-      }
-    } catch (error: RejectedExecutionException) {
-      call.reject("The private video import queue is unavailable.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
+    val operation = try {
+      videoOperations.begin(taskId)
+    } catch (error: Exception) {
+      call.reject("Another video operation must finish first.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
+      return
     }
+    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+      .addCategory(Intent.CATEGORY_OPENABLE)
+      .setType("video/mp4")
+      .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+    try {
+      startActivityForResult(call, intent, "onVideoPicked")
+    } catch (error: ActivityNotFoundException) {
+      finishVideoFailure(call, operation.operationId, NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
+    } catch (error: Exception) {
+      finishVideoFailure(call, operation.operationId, NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
+    }
+  }
+
+  @ActivityCallback
+  private fun onVideoPicked(call: PluginCall?, result: ActivityResult) {
+    val operation = videoOperations.current() as? VideoOperationAwaitingResult
+    if (operation == null) {
+      finishOrphanedVideoFailure(call, NativeIssueCode.VIDEO_RECOVERY_FAILED)
+      return
+    }
+    if (result.resultCode != Activity.RESULT_OK) {
+      finishVideoFailure(call, operation.operationId, NativeIssueCode.MEDIA_SELECTION_CANCELLED)
+      return
+    }
+    val sourceUri = result.data?.data
+    if (sourceUri == null) {
+      finishVideoFailure(call, operation.operationId, NativeIssueCode.MEDIA_SOURCE_MISSING)
+      return
+    }
+    try {
+      persistPickerReadPermission(sourceUri)
+    } catch (error: PhotoOperationImportException) {
+      finishVideoFailure(call, operation.operationId, error.nativeCode, error)
+      return
+    }
+    val importing = videoOperations.markImporting(operation.operationId, sourceUri.toString())
+    if (importing == null) {
+      releasePickerReadPermission(sourceUri.toString())
+      finishVideoFailure(call, operation.operationId, NativeIssueCode.VIDEO_RECOVERY_FAILED)
+      return
+    }
+    submitVideoImport(call, importing)
   }
 
   @ActivityCallback
@@ -250,6 +259,26 @@ class FileMediaPlugin : Plugin() {
   }
 
   @PluginMethod
+  fun consumeVideoOperation(call: PluginCall) {
+    when (val state = videoOperations.current()) {
+      null -> call.resolve(JSObject().put("status", "none"))
+      is VideoOperationTerminal -> {
+        val terminal = videoOperations.consumeTerminal()
+        if (terminal == null) call.reject("Could not consume the recovered video operation.", NativeIssueCode.VIDEO_RECOVERY_FAILED)
+        else call.resolve(videoRecoveryResult(terminal))
+      }
+      else -> {
+        if (videoRecoveryConsumerCall != null) {
+          call.reject("A video recovery consumer is already waiting.", NativeIssueCode.INVALID_ARGUMENT)
+          return
+        }
+        videoRecoveryConsumerCall = call
+        if (state is VideoOperationImporting) resumePersistedVideoImport()
+      }
+    }
+  }
+
+  @PluginMethod
   fun copyFromUri(call: PluginCall) {
     val sourceUri = call.getString("sourceUri")
     if (sourceUri.isNullOrBlank()) {
@@ -268,6 +297,34 @@ class FileMediaPlugin : Plugin() {
   private fun resumePersistedImport() {
     val importing = photoOperations.current() as? PhotoOperationImporting ?: return
     submitImport(null, importing)
+  }
+
+  private fun resumePersistedVideoImport() {
+    val importing = videoOperations.current() as? VideoOperationImporting ?: return
+    submitVideoImport(null, importing)
+  }
+
+  private fun submitVideoImport(call: PluginCall?, operation: VideoOperationImporting) {
+    if (!scheduledOperations.add(operation.operationId)) return
+    try {
+      VIDEO_IMPORT_EXECUTOR.execute {
+        try {
+          val sourceUri = Uri.parse(operation.sourceUri)
+          val imported = taskVideos.import(operation.taskId, sourceUri)
+          val terminal = videoOperations.complete(operation.operationId, imported)
+            ?: videoOperations.current() as? VideoOperationTerminal
+          terminal?.let { finishVideoTerminal(call, it) }
+        } catch (error: Exception) {
+          finishVideoFailure(call, operation.operationId, videoNativeCodeFor(error), error)
+        } finally {
+          releasePickerReadPermission(operation.sourceUri)
+          scheduledOperations.remove(operation.operationId)
+        }
+      }
+    } catch (error: RejectedExecutionException) {
+      scheduledOperations.remove(operation.operationId)
+      finishVideoFailure(call, operation.operationId, NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
+    }
   }
 
   private fun submitImport(call: PluginCall?, operation: PhotoOperationImporting) {
@@ -342,6 +399,35 @@ class FileMediaPlugin : Plugin() {
     terminal?.let { finishTerminal(call, it) }
   }
 
+  private fun finishOrphanedVideoFailure(call: PluginCall?, code: String) {
+    val terminal = videoOperations.failOrphaned(code) ?: videoOperations.current() as? VideoOperationTerminal
+    terminal?.let { finishVideoTerminal(call, it) }
+  }
+
+  private fun finishVideoFailure(call: PluginCall?, operationId: String, code: String, cause: Exception? = null) {
+    val terminal = videoOperations.fail(operationId, code) ?: videoOperations.current() as? VideoOperationTerminal
+    terminal?.let { finishVideoTerminal(call, it, cause) }
+  }
+
+  private fun finishVideoTerminal(call: PluginCall?, terminal: VideoOperationTerminal, cause: Exception? = null) {
+    if (isLiveOriginalCall(call)) {
+      val consumed = videoOperations.consumeTerminal() ?: return
+      when (consumed) {
+        is VideoOperationSucceeded -> call?.resolve(videoFileResult(consumed))
+        is VideoOperationFailed -> call?.reject(videoMessageFor(consumed.code), consumed.code, cause)
+      }
+      return
+    }
+    deliverRecoveredVideoTerminal()
+  }
+
+  private fun deliverRecoveredVideoTerminal() {
+    val consumer = videoRecoveryConsumerCall ?: return
+    val terminal = videoOperations.consumeTerminal() ?: return
+    videoRecoveryConsumerCall = null
+    consumer.resolve(videoRecoveryResult(terminal))
+  }
+
   private fun finishFailure(call: PluginCall?, operationId: String, code: String, cause: Exception? = null) {
     val terminal = photoOperations.fail(operationId, code) ?: photoOperations.current() as? PhotoOperationTerminal
     terminal?.let { finishTerminal(call, it, cause) }
@@ -386,6 +472,36 @@ class FileMediaPlugin : Plugin() {
     NativeIssueCode.IMAGE_TOO_LARGE -> "The selected image exceeds the supported size limit."
     NativeIssueCode.IMAGE_INVALID -> "The selected file is not a supported image."
     else -> "Could not import the selected photo into private storage."
+  }
+
+  private fun videoNativeCodeFor(error: Exception): String = when (error) {
+    is PhotoOperationImportException -> error.nativeCode
+    is PrivateMediaReadException -> NativeIssueCode.MEDIA_READ_FAILED
+    else -> NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED
+  }
+
+  private fun videoMessageFor(code: String): String = when (code) {
+    NativeIssueCode.MEDIA_SELECTION_CANCELLED -> "The video selection was cancelled."
+    NativeIssueCode.MEDIA_SOURCE_MISSING -> "The selected video did not provide a URI."
+    NativeIssueCode.VIDEO_RECOVERY_FAILED -> "The video operation could not be recovered."
+    NativeIssueCode.MEDIA_READ_FAILED -> "The selected video could not be read."
+    else -> "Could not import the selected video into private storage."
+  }
+
+  private fun videoFileResult(file: VideoOperationSucceeded): JSObject = JSObject()
+    .put("uri", file.uri)
+    .put("mimeType", file.mimeType)
+    .put("displayName", file.displayName)
+    .put("sizeBytes", file.sizeBytes)
+    .put("durationSeconds", file.durationSeconds)
+
+  private fun videoRecoveryResult(terminal: VideoOperationTerminal): JSObject = when (terminal) {
+    is VideoOperationSucceeded -> videoFileResult(terminal)
+      .put("status", "succeeded")
+      .put("taskId", terminal.taskId)
+    is VideoOperationFailed -> JSObject()
+      .put("status", "failed")
+      .put("code", terminal.code)
   }
 
   private fun recoveryResult(terminal: PhotoOperationTerminal): JSObject = when (terminal) {

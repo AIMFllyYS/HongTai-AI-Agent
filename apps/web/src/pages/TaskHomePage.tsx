@@ -118,7 +118,7 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
   const [historyIssue, setHistoryIssue] = useState<TaskIssue>();
   const [submitIssue, setSubmitIssue] = useState<TaskIssue>();
   const [submitting, setSubmitting] = useState(false);
-  const [videoImporting, setVideoImporting] = useState(false);
+  const [videoImporting, setVideoImporting] = useState(true);
   const [videoProgress, setVideoProgress] = useState<StructuredGenerationProgressV1>();
 
   const loadHistory = useCallback(async () => {
@@ -144,6 +144,33 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
   useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
+
+  useEffect(() => {
+    let active = true;
+    const consumeRecovery = async () => {
+      try {
+        const recovered = await runtime.analysis.consumeVideoRecovery((event) => {
+          if (!active) return;
+          if (event.type === "progress") setVideoProgress(event.progress);
+          if (event.type === "failed") {
+            setVideoProgress(event.progress);
+            setSubmitIssue(event.issue);
+          }
+        });
+        if (!active) return;
+        if (recovered.status === "succeeded") navigate(taskAnalysisPath(recovered.record.taskId));
+        if (recovered.status === "failed") setSubmitIssue(recovered.issue);
+      } catch (error) {
+        if (active) {
+          setSubmitIssue(issueFromAppError(error, { code: "TASK_INTERRUPTED", message: "视频选择恢复失败，请重新选择", action: "select_media" }));
+        }
+      } finally {
+        if (active) setVideoImporting(false);
+      }
+    };
+    void consumeRecovery();
+    return () => { active = false; };
+  }, [navigate, runtime]);
 
   useEffect(() => {
     try {

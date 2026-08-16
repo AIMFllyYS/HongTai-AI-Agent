@@ -14,9 +14,10 @@ import type {
   StructuredGenerationProgressV1,
   TaskDetailRecord,
   TaskIssue,
+  VideoImportRecovery,
 } from "@hongtai/core";
 
-import type { StandaloneTaskFilesPlugin } from "./standalone-task-service.js";
+import type { StandaloneTaskFilesPlugin, TaskVideoRecovery } from "./standalone-task-service.js";
 import { persistedRuntimeWork, runtimeInterruptedIssue } from "./runtime-interruption.js";
 import type { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
 
@@ -24,6 +25,7 @@ const ANALYSIS_PATH = "analysis.json";
 
 export interface StandaloneAnalysisTaskPort {
   importVideo(): Promise<AppTaskRecord>;
+  consumeVideoRecovery(): Promise<TaskVideoRecovery>;
   start(taskId: string): Promise<CancellableTask>;
   getDetail(taskId: string): Promise<TaskDetailRecord | undefined>;
   list?(): Promise<readonly AppTaskRecord[]>;
@@ -158,7 +160,25 @@ export class StandaloneAnalysisService implements AnalysisService {
   }
 
   async importVideo(onEvent?: ContentAnalysisEventListener): Promise<ContentAnalysisRecord> {
-    const imported = await this.#tasks.importVideo();
+    return this.#finishImportedVideo(await this.#tasks.importVideo(), onEvent);
+  }
+
+  async consumeVideoRecovery(onEvent?: ContentAnalysisEventListener): Promise<VideoImportRecovery> {
+    let recovered: TaskVideoRecovery;
+    try {
+      recovered = await this.#tasks.consumeVideoRecovery();
+    } catch (error) {
+      return { status: "failed", issue: issueFromAppError(error, { code: "TASK_INTERRUPTED", message: "视频选择恢复失败，请重新选择", action: "select_media" }) };
+    }
+    if (recovered.status !== "succeeded") return recovered;
+    try {
+      return { status: "succeeded", record: await this.#finishImportedVideo(recovered.task, onEvent) };
+    } catch (error) {
+      return { status: "failed", issue: issueFromAppError(error, { code: "MEDIA_IMPORT_FAILED", message: "本地视频没有完成自动拆解", action: "select_media" }) };
+    }
+  }
+
+  async #finishImportedVideo(imported: AppTaskRecord, onEvent?: ContentAnalysisEventListener): Promise<ContentAnalysisRecord> {
     const ingest = await this.#tasks.start(imported.id);
     const completed = await ingest.completion;
     if (completed.status !== "succeeded" && completed.status !== "degraded") {

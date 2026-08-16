@@ -4,6 +4,7 @@ import type {
   AnalysisService,
   JsonObject,
   ProductionAsset,
+  ProductionAssetRecovery,
   ProductionAssetRole,
   ProductionEvent,
   ProductionMode,
@@ -146,6 +147,9 @@ function productionTaskError(error: unknown, fallbackMessage: string): TaskError
     retryable: boolean;
   }>>> = {
     ERR_MEDIA_SELECTION_CANCELLED: { code: "MEDIA_SELECTION_CANCELLED", message: "已取消选择制作素材。", action: "select_media", retryable: false },
+    ERR_MEDIA_SOURCE_MISSING: { code: "MEDIA_SOURCE_NOT_FOUND", message: "系统没有返回可读取的制作素材。", action: "select_media", retryable: false },
+    ERR_MEDIA_READ_FAILED: { code: "MEDIA_READ_FAILED", message: "所选制作素材无法读取，请重新选择。", action: "select_media", retryable: false },
+    ERR_ASSET_RECOVERY_FAILED: { code: "TASK_INTERRUPTED", message: "素材选择在应用重建后无法恢复，请重新选择。", action: "select_media", retryable: false },
     ERR_MEDIA_SOURCE_INVALID: { code: "MEDIA_SOURCE_INVALID", message: "素材不含可用于本地合成的媒体轨，请重新选择完整文件。", action: "select_media", retryable: false },
     ERR_MEDIA_PROBE_FAILED: { code: "MEDIA_PROBE_FAILED", message: "无法读取素材的媒体轨或时长，请重新选择完整文件。", action: "select_media", retryable: false },
     ERR_PRIVATE_FILE_IMPORT_FAILED: { code: "MEDIA_IMPORT_FAILED", message: "素材无法安全导入应用私有目录，请重新选择。", action: "select_media", retryable: false },
@@ -238,7 +242,36 @@ export class StandaloneProductionService implements ProductionService {
     } catch (error) {
       throw productionTaskError(error, "素材没有导入成功");
     }
-    const imported = result.assets.map(nativeAsset).filter((asset): asset is NativeProductionAsset => Boolean(asset));
+    return this.#applyImportedAssets(project, result.assets);
+  }
+
+  async consumeAssetRecovery(): Promise<ProductionAssetRecovery> {
+    let recovered;
+    try {
+      recovered = await this.#options.native.consumeAssetOperation();
+    } catch (error) {
+      return { status: "failed", issue: issueFromAppError(productionTaskError(error, "素材没有导入成功")) };
+    }
+    if (recovered.status === "none") return { status: "none" };
+    if (recovered.status === "failed") {
+      return { status: "failed", issue: issueFromAppError(productionTaskError({ code: recovered.code }, "素材没有导入成功")) };
+    }
+    try {
+      return {
+        status: "succeeded",
+        project: await this.#exclusive(recovered.projectId, async () => {
+          const project = await this.#required(recovered.projectId);
+          return this.#applyImportedAssets(project, recovered.assets);
+        }),
+      };
+    } catch (error) {
+      return { status: "failed", issue: issueFromAppError(productionTaskError(error, "素材没有导入成功")) };
+    }
+  }
+
+  async #applyImportedAssets(project: PersistedProject, assets: readonly NativeProductionAsset[]): Promise<ProductionProjectRecord> {
+    const selection = project.mode === "avatar" ? "avatar" as const : "visual" as const;
+    const imported = assets.map(nativeAsset).filter((asset): asset is NativeProductionAsset => Boolean(asset));
     if (imported.length === 0) throw taskError("没有导入可用的图片、视频或音频", "select_media");
     if (selection === "avatar" && (imported.length !== 1 || imported[0]?.role !== "avatar" || imported[0].kind !== "video")) {
       throw taskError("请选择一个包含口播原声的 MP4 数字人视频", "select_media");

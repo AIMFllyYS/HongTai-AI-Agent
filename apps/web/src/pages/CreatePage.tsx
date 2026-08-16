@@ -91,6 +91,30 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
+    if (loading) return undefined;
+    let active = true;
+    const consumeRecovery = async () => {
+      setBusy(true);
+      try {
+        const recovered = await runtime.production.consumeAssetRecovery();
+        if (!active) return;
+        if (recovered.status === "succeeded") {
+          setProject(recovered.project);
+          setProjects(await runtime.production.list());
+        }
+        if (recovered.status === "failed") setIssue(recovered.issue);
+      } catch (error) {
+        if (active) {
+          setIssue(issueFromAppError(error, { code: "TASK_INTERRUPTED", message: "素材选择恢复失败，请重新选择", action: "select_media" }));
+        }
+      } finally {
+        if (active) setBusy(false);
+      }
+    };
+    void consumeRecovery();
+    return () => { active = false; };
+  }, [loading, runtime]);
+  useEffect(() => {
     if (!project) return undefined;
     return runtime.production.subscribe(project.projectId, (event) => {
       if (event.type === "state") setProject(event.project);

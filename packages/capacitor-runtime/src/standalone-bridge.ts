@@ -201,8 +201,14 @@ export interface NativeProductionProgressEvent {
   readonly message: string;
 }
 
+export type NativeAssetOperationResult =
+  | { readonly status: "none" }
+  | { readonly status: "succeeded"; readonly projectId: string; readonly assets: readonly NativeProductionAsset[] }
+  | { readonly status: "failed"; readonly code: string };
+
 export interface StandaloneProductionRuntimePlugin {
   pickAssets(options: { readonly projectId: string; readonly maxItems: number; readonly selection?: "visual" | "avatar" }): Promise<{ readonly assets: readonly NativeProductionAsset[] }>;
+  consumeAssetOperation(): Promise<NativeAssetOperationResult>;
   render(options: { readonly projectId: string; readonly planJson: string; readonly mode?: "montage" | "avatar"; readonly narration?: "system" | "provider" }): Promise<NativeProductionResult>;
   /** Runs a short non-personal synthesis request using the saved protected key. */
   probeTts(): Promise<void>;
@@ -235,12 +241,26 @@ export interface StandaloneFileMediaPlugin {
   }>;
   capturePhoto(): Promise<{ readonly uri: NativeUri; readonly mimeType?: string; readonly sizeBytes: number }>;
   consumePhotoOperation(): Promise<NativePhotoOperationResult>;
+  consumeVideoOperation(): Promise<NativeVideoOperationResult>;
   copyFromUri(options: { readonly sourceUri: NativeUri; readonly displayName?: string }): Promise<{
     readonly uri: NativeUri;
     readonly mimeType?: string;
     readonly sizeBytes: number;
   }>;
 }
+
+export type NativeVideoOperationResult =
+  | { readonly status: "none" }
+  | {
+      readonly status: "succeeded";
+      readonly taskId: string;
+      readonly uri: NativeUri;
+      readonly mimeType: "video/mp4";
+      readonly displayName: string;
+      readonly sizeBytes: number;
+      readonly durationSeconds: number;
+    }
+  | { readonly status: "failed"; readonly code: string };
 
 export type NativePhotoOperationResult =
   | { readonly status: "none" }
