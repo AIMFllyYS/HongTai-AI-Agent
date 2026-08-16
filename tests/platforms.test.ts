@@ -31,6 +31,34 @@ function response(url: string, body: string): HttpResponse {
   return { url, status: 200, headers: { "content-type": "text/html" }, body };
 }
 
+function assertWhitelistedRaw(raw: unknown): void {
+  const serialized = JSON.stringify(raw);
+  assert.doesNotMatch(serialized, /Cookie|Authorization|signature=|fake-sign|synthetic-cookie|Bearer SYNTHETIC/i);
+  assert.doesNotMatch(serialized, /https?:\/\/[^"\s]*\?/);
+  assert.ok(raw !== null && typeof raw === "object" && !Array.isArray(raw));
+  const record = raw as Record<string, unknown>;
+  for (const leaked of ["item", "view", "play", "note"] as const) {
+    assert.equal(leaked in record, false, `raw must not persist ${leaked}`);
+  }
+  assert.equal(typeof record.platform, "string");
+  assert.equal(typeof record.contentType, "string");
+  assert.equal(typeof record.hasAuthor, "boolean");
+  assert.equal(typeof record.hasTitle, "boolean");
+  assert.ok(record.media !== null && typeof record.media === "object" && !Array.isArray(record.media));
+  const media = record.media as Record<string, unknown>;
+  assert.equal(typeof media.videoCount, "number");
+  assert.equal(typeof media.audioCount, "number");
+  assert.equal(typeof media.imageCount, "number");
+  assert.ok(Array.isArray(media.candidates));
+  for (const candidate of media.candidates as Record<string, unknown>[]) {
+    assert.deepEqual(Object.keys(candidate).sort(), ["host", "path"]);
+    assert.equal(typeof candidate.host, "string");
+    assert.equal(typeof candidate.path, "string");
+    assert.doesNotMatch(String(candidate.host), /[?&=]/);
+    assert.doesNotMatch(String(candidate.path), /[?&=]/);
+  }
+}
+
 test("extractAssignedJson支持嵌套对象和undefined", () => {
   const value = extractAssignedJson(
     '<script>window.__INITIAL_STATE__={"note":{"value":undefined,"nested":{"ok":true}}};</script>',
@@ -72,6 +100,8 @@ test("快手适配器优先使用photoUrl直链并输出脱敏原始结果", asy
               author: { id: "author-1", name: "快手作者" },
               photo: {
                 id: "3xk22yucqvrwx64",
+                Cookie: "synthetic-cookie",
+                Authorization: "Bearer SYNTHETIC",
                 duration: 398_000,
                 caption: "快手测试视频",
                 coverUrl: "https://img.example/cover.jpg?token=cover-secret",
@@ -118,6 +148,7 @@ test("快手适配器优先使用photoUrl直链并输出脱敏原始结果", asy
   assert.doesNotMatch(raw, /media-secret|manifest-secret|hls-secret|cover-secret/);
   assert.match(raw, /v23\.kwaicdn\.com/);
   assert.equal((content.raw as { errorClassification?: string }).errorClassification, "none");
+  assertWhitelistedRaw(content.raw);
 });
 
 test("快手适配器在没有photoUrl时只选择manifest中的MP4", async () => {
@@ -155,6 +186,7 @@ test("快手适配器在没有photoUrl时只选择manifest中的MP4", async () =
   assert.equal(content.videos.some((source) => source.url.includes("m3u8")), false);
   assert.equal((content.raw as { media?: { hlsCount?: number } }).media?.hlsCount, 1);
   assert.doesNotMatch(JSON.stringify(content.raw), /signature=secret/);
+  assertWhitelistedRaw(content.raw);
 });
 
 test("快手详情只有HLS时保留视频元数据但不伪造下载源", async () => {
@@ -261,7 +293,7 @@ test("快手解析拒绝跳转到未认可域名", async () => {
 });
 
 test("抖音适配器从公开页面状态提取无水印视频", async () => {
-  const html = `<script>window._ROUTER_DATA={"loaderData":{"video":{"aweme_id":"7600000000000000000","desc":"测试抖音","author":{"nickname":"作者甲"},"video":{"duration":45000,"cover":{"url_list":["https://img.example/cover.jpg"]},"bit_rate":[{"gear_name":"1080p","bit_rate":2000000,"play_addr":{"uri":"video-file-id","url_list":["https://cdn.example/playwm/item.mp4"]}}]}}}};</script>`;
+  const html = `<script>window._ROUTER_DATA={"loaderData":{"video":{"aweme_id":"7600000000000000000","desc":"测试抖音","author":{"nickname":"作者甲"},"Cookie":"synthetic-cookie","Authorization":"Bearer SYNTHETIC","video":{"duration":45000,"cover":{"url_list":["https://img.example/cover.jpg?signature=fake-sign"]},"bit_rate":[{"gear_name":"1080p","bit_rate":2000000,"play_addr":{"uri":"video-file-id","url_list":["https://cdn.example/playwm/item.mp4?signature=fake-sign"]}}]}}}};</script>`;
   const client = new FakeHttpClient(() => response("https://www.douyin.com/video/7600000000000000000", html));
   const adapter = new DouyinAdapter();
   const resolved = await adapter.resolve("https://www.douyin.com/video/7600000000000000000", client);
@@ -271,6 +303,7 @@ test("抖音适配器从公开页面状态提取无水印视频", async () => {
   assert.equal(content.title, "测试抖音");
   assert.equal(content.videos[0]?.hasWatermark, false);
   assert.match(content.videos[0]?.url ?? "", /aweme\.snssdk\.com/);
+  assertWhitelistedRaw(content.raw);
 });
 
 test("抖音桌面页受限时回退到公开移动分享页", async () => {
@@ -289,7 +322,7 @@ test("抖音桌面页受限时回退到公开移动分享页", async () => {
 });
 
 test("小红书适配器提取H264视频流", async () => {
-  const html = `<script>window.__INITIAL_STATE__={"note":{"noteDetailMap":{"abc123":{"note":{"noteId":"abc123","title":"测试小红书","desc":"正文","user":{"nickname":"作者乙"},"imageList":[{"urlDefault":"https://img.example/xhs.jpg"}],"video":{"duration":30000,"media":{"stream":{"h264":[{"masterUrl":"https://sns-video.example/master.mp4","videoQuality":"HD","width":1080,"height":1920,"avgBitrate":1800000}]}}}}}}}};</script>`;
+  const html = `<script>window.__INITIAL_STATE__={"note":{"noteDetailMap":{"abc123":{"note":{"noteId":"abc123","title":"测试小红书","desc":"正文","user":{"nickname":"作者乙"},"Cookie":"synthetic-cookie","Authorization":"Bearer SYNTHETIC","imageList":[{"urlDefault":"https://img.example/xhs.jpg?signature=fake-sign"}],"video":{"duration":30000,"media":{"stream":{"h264":[{"masterUrl":"https://sns-video.example/master.mp4?signature=fake-sign","videoQuality":"HD","width":1080,"height":1920,"avgBitrate":1800000}]}}}}}}}};</script>`;
   const client = new FakeHttpClient(() => response("https://www.xiaohongshu.com/explore/abc123", html));
   const adapter = new XiaohongshuAdapter();
   const resolved = await adapter.resolve("https://www.xiaohongshu.com/explore/abc123", client);
@@ -298,6 +331,7 @@ test("小红书适配器提取H264视频流", async () => {
   assert.equal(content.contentType, "video");
   assert.equal(content.author, "作者乙");
   assert.equal(content.videos[0]?.codec, "H.264");
+  assertWhitelistedRaw(content.raw);
 });
 
 test("小红书适配器识别图文笔记", async () => {
@@ -310,6 +344,7 @@ test("小红书适配器识别图文笔记", async () => {
   assert.equal(content.contentType, "image_text");
   assert.equal(content.images.length, 2);
   assert.equal(content.videos.length, 0);
+  assertWhitelistedRaw(content.raw);
 });
 
 test("平台页面结构变化返回稳定错误码", async () => {
@@ -338,9 +373,11 @@ test("B站适配器提取P1 DASH音视频", async () => {
       return response(request.url, JSON.stringify({
         code: 0,
         data: {
+          Cookie: "synthetic-cookie",
+          Authorization: "Bearer SYNTHETIC",
           dash: {
-            video: [{ id: 80, baseUrl: "https://video.example/video.m4s", bandwidth: 2000000, width: 1920, height: 1080, codecs: "avc1" }],
-            audio: [{ id: 30280, baseUrl: "https://video.example/audio.m4s", bandwidth: 192000, codecs: "mp4a" }],
+            video: [{ id: 80, baseUrl: "https://video.example/video.m4s?signature=fake-sign", bandwidth: 2000000, width: 1920, height: 1080, codecs: "avc1" }],
+            audio: [{ id: 30280, baseUrl: "https://video.example/audio.m4s?signature=fake-sign", bandwidth: 192000, codecs: "mp4a" }],
           },
         },
       }));
@@ -354,4 +391,5 @@ test("B站适配器提取P1 DASH音视频", async () => {
   assert.equal(content.contentType, "video");
   assert.equal(content.videos.length, 1);
   assert.equal(content.audios.length, 1);
+  assertWhitelistedRaw(content.raw);
 });

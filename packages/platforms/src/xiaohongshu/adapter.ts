@@ -1,4 +1,4 @@
-import { TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
+import { persistableSuccessRaw, TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
 import {
   MOBILE_USER_AGENT,
   asArray,
@@ -114,22 +114,37 @@ export class XiaohongshuAdapter implements PlatformAdapter {
     const video = asRecord(note.video);
     const durationMs = asNumber(video?.duration) ?? asNumber(asRecord(video?.media)?.duration);
     const videos = xhsVideos(note, link.finalUrl);
+    const images = dedupeMedia(imageSources);
+    const id = asString(note.noteId) ?? asString(note.id) ?? noteId;
+    const title = asString(note.title) ?? asString(note.desc);
+    const authorName = asString(user?.nickname) ?? asString(user?.nickName);
+    const contentType = videos.length > 0 ? "video" as const : images.length > 0 ? "image_text" as const : "unknown" as const;
     return {
       platform: this.platform,
-      contentType: videos.length > 0 ? "video" : imageSources.length > 0 ? "image_text" : "unknown",
-      id: asString(note.noteId) ?? asString(note.id) ?? noteId,
+      contentType,
+      id,
       sourceUrl: link.sourceUrl,
       canonicalUrl: link.finalUrl,
-      title: asString(note.title) ?? asString(note.desc),
+      title,
       description: asString(note.desc),
-      author: asString(user?.nickname) ?? asString(user?.nickName),
+      author: authorName,
       coverUrl: imageSources[0]?.url,
       durationSeconds: durationMs ? durationMs / 1_000 : undefined,
       videos,
       audios: [],
-      images: dedupeMedia(imageSources),
+      images,
       subtitles: [],
-      raw: { note },
+      raw: persistableSuccessRaw({
+        platform: this.platform,
+        id,
+        contentType,
+        httpStatus: link.status,
+        hasAuthor: Boolean(authorName),
+        hasTitle: Boolean(title),
+        videos,
+        audios: [],
+        images,
+      }),
     };
   }
 }

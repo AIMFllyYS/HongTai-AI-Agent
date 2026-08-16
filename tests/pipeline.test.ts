@@ -47,24 +47,40 @@ function dependencies(withVideo: boolean, withAudio = false): { dependencies: In
     platform: "douyin",
     supportLevel: "stable",
     matches: () => true,
-    resolve: async (url) => ({ sourceUrl: url, finalUrl: `${url}?xsec_token=private-token`, status: 200, body: "<html></html>" }),
+    resolve: async (url) => ({
+      sourceUrl: url,
+      finalUrl: `${url}?xsec_token=private-token`,
+      status: 200,
+      body: '<html><img src="https://cdn.example/cover.jpg?signature=fake-sign"></html>',
+    }),
     parse: async (link) => ({
       platform: "douyin",
       contentType: "video",
+      id: "synthetic-aweme-1",
       sourceUrl: link.sourceUrl,
       canonicalUrl: link.finalUrl,
       title: "测试",
       description: "平台描述",
+      author: "作者甲",
       videos: withVideo ? [{
         kind: "video",
         url: "https://media.example/video.mp4?signature=media-secret",
         hasWatermark: false,
-        headers: { Referer: "https://platform.example/item", Cookie: "session=secret" },
+        headers: { Referer: "https://platform.example/item", Cookie: "synthetic-cookie", Authorization: "Bearer SYNTHETIC" },
       }] : [],
       audios: withAudio ? [{ kind: "audio", url: "https://media.example/audio.m4s" }] : [],
       images: [],
       subtitles: [],
-      raw: { ok: true },
+      raw: {
+        item: {
+          play_addr: "https://cdn.example/play.mp4?signature=fake-sign",
+          Cookie: "synthetic-cookie",
+          Authorization: "Bearer SYNTHETIC",
+        },
+        view: { title: "leak" },
+        play: { dash: "https://video.example/a.m4s?signature=fake-sign" },
+        note: { url: "https://img.example/n.jpg?signature=fake-sign" },
+      },
     }),
   };
   const http: HttpClient = {
@@ -103,8 +119,13 @@ test("完整流水线覆盖七个阶段、保留两种文稿并清理日志URL",
   assert.match(setup.store.values.get(paths.draft) ?? "", /整理文稿/);
   assert.doesNotMatch(setup.store.values.get(paths.log) ?? "", /private-token|xsec_token/);
   assert.doesNotMatch(setup.store.values.get(paths.task) ?? "", /复制打开抖音|后续还有|b23\.tv/);
-  assert.doesNotMatch(setup.store.values.get(paths.metadata) ?? "", /private-token|xsec_token|media-secret|signature|Cookie|session=secret/);
+  assert.doesNotMatch(setup.store.values.get(paths.metadata) ?? "", /private-token|xsec_token|media-secret|signature|Cookie|session=secret|synthetic-cookie|Bearer SYNTHETIC|fake-sign/);
   assert.doesNotMatch(setup.store.values.get(paths.metadata) ?? "", /"raw"/, "metadata is the safe presentation projection, not a raw platform response");
+  assert.equal(setup.store.values.has(paths.rawPage), false, "rawPage HTML is not a product artifact");
+  const rawResponse = setup.store.values.get(paths.rawResponse) ?? "";
+  assert.doesNotMatch(rawResponse, /Cookie|Authorization|signature=|fake-sign|synthetic-cookie|Bearer SYNTHETIC|media-secret|private-token/i);
+  assert.doesNotMatch(rawResponse, /https?:\/\/[^"\s]*\?/);
+  assert.doesNotMatch(rawResponse, /"item"|"view"|"play"|"note"/);
   assert.equal(setup.events.find((event) => event.stage === "detect-platform" && event.status === "succeeded")?.detail?.ignoredSupportedUrlCount, 1);
   assert.equal(setup.events.some((event) => event.message === "媒体校验通过：时长=10秒"), true);
   for (const stage of ["detect-platform", "resolve-link", "parse-content", "select-media", "download-media"] as const) {
@@ -374,6 +395,44 @@ test("平台结构变化和无媒体保持既有业务码而不被映射成链�
   assert.equal(noMediaResult.issues[0]?.code, "MEDIA_SOURCE_NOT_FOUND");
   assert.equal(noMediaResult.issues.some((issue) => issue.code === "LINK_NETWORK_FAILED"), false);
 });
+test("成功落盘只保留白名单投影且不写整页HTML", async () => {
+  const setup = dependencies(true);
+  const result = await new IngestPipeline(setup.dependencies).run({ input: "https://www.douyin.com/video/1" });
+  const persisted = JSON.parse(setup.store.values.get(paths.rawResponse) ?? "{}") as {
+    readonly platform?: string;
+    readonly id?: string;
+    readonly contentType?: string;
+    readonly httpStatus?: number;
+    readonly hasAuthor?: boolean;
+    readonly hasTitle?: boolean;
+    readonly media?: {
+      readonly videoCount?: number;
+      readonly audioCount?: number;
+      readonly imageCount?: number;
+      readonly candidates?: readonly { readonly host?: string; readonly path?: string }[];
+    };
+  };
+
+  assert.equal(result.status, "succeeded");
+  assert.equal(setup.store.values.has(paths.rawPage), false);
+  assert.equal(persisted.platform, "douyin");
+  assert.equal(persisted.id, "synthetic-aweme-1");
+  assert.equal(persisted.contentType, "video");
+  assert.equal(persisted.httpStatus, 200);
+  assert.equal(persisted.hasAuthor, true);
+  assert.equal(persisted.hasTitle, true);
+  assert.equal(persisted.media?.videoCount, 1);
+  assert.equal(persisted.media?.audioCount, 0);
+  assert.equal(persisted.media?.imageCount, 0);
+  assert.deepEqual(persisted.media?.candidates, [{ host: "media.example", path: "/video.mp4" }]);
+  assert.deepEqual(Object.keys(persisted).sort(), [
+    "contentType", "hasAuthor", "hasTitle", "httpStatus", "id", "media", "platform",
+  ]);
+  assert.deepEqual(Object.keys(persisted.media ?? {}).sort(), [
+    "audioCount", "candidates", "imageCount", "videoCount",
+  ]);
+});
+
 test("没有视频源时返回降级并保存任务", async () => {
   const setup = dependencies(false);
   const result = await new IngestPipeline(setup.dependencies).run({ input: "https://www.douyin.com/note/1" });
