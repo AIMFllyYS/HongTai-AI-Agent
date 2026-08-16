@@ -47,7 +47,7 @@ test("standalone runtime exposes local profile and write-only AI settings withou
         listTemplateIds: async () => ({ templateIds: [] }),
       } as never,
       nativeNetwork: {} as never,
-      fileMedia: { pickPhoto: async () => ({ uri: "file:///private/avatar.jpg", mimeType: "image/jpeg", sizeBytes: 1 }), capturePhoto: async () => ({ uri: "file:///private/avatar.jpg", mimeType: "image/jpeg", sizeBytes: 1 }), pickVideo: async () => ({ uri: "file:///private/video.mp4", mimeType: "video/mp4", displayName: "video.mp4", sizeBytes: 1, durationSeconds: 1 }), consumePhotoOperation: async () => ({ status: "none" }), copyFromUri: async () => ({ uri: "file:///private/avatar.jpg", mimeType: "image/jpeg", sizeBytes: 1 }) },
+      fileMedia: { pickPhoto: async () => ({ uri: "file:///private/avatar.jpg", mimeType: "image/jpeg", sizeBytes: 1 }), capturePhoto: async () => ({ uri: "file:///private/avatar.jpg", mimeType: "image/jpeg", sizeBytes: 1 }), pickVideo: async () => ({ uri: "file:///private/video.mp4", mimeType: "video/mp4", displayName: "video.mp4", sizeBytes: 1, durationSeconds: 1 }), consumePhotoOperation: async () => ({ status: "none" }), consumeVideoOperation: async () => ({ status: "none" }), copyFromUri: async () => ({ uri: "file:///private/avatar.jpg", mimeType: "image/jpeg", sizeBytes: 1 }) },
       mediaRuntime: {} as never,
     },
     convertFileSrc: (uri) => `capacitor://localhost/${uri.slice("file:///".length)}`,
@@ -105,6 +105,7 @@ test("cloud TTS remains in the AI connection and probes through the native rende
       mediaRuntime: {} as never,
       productionRuntime: {
         pickAssets: async () => ({ assets: [] }),
+        consumeAssetOperation: async () => ({ status: "none" as const }),
         render: async () => ({ uri: "file:///private/output.mp4", mimeType: "video/mp4", sizeBytes: 1, durationSeconds: 1 }),
         probeTts: async () => { ttsProbeCalls += 1; },
       },
@@ -155,6 +156,7 @@ test("profile saves the private avatar URI once and returns a display URI to the
         capturePhoto: async () => ({ uri: "file:///private/avatar.jpg", mimeType: "image/jpeg", sizeBytes: 1 }),
         pickVideo: async () => ({ uri: "file:///private/video.mp4", mimeType: "video/mp4", displayName: "video.mp4", sizeBytes: 1, durationSeconds: 1 }),
         consumePhotoOperation: async () => ({ status: "none" }),
+        consumeVideoOperation: async () => ({ status: "none" }),
         copyFromUri: async () => {
           copyCalls += 1;
           return { uri: "file:///private/avatar.jpg", mimeType: "image/jpeg", sizeBytes: 1 };

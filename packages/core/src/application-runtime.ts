@@ -423,12 +423,19 @@ export type ContentAnalysisStreamEvent =
 
 export type ContentAnalysisEventListener = (event: ContentAnalysisStreamEvent) => void | Promise<void>;
 
+export type VideoImportRecovery =
+  | { readonly status: "none" }
+  | { readonly status: "succeeded"; readonly record: ContentAnalysisRecord }
+  | { readonly status: "failed"; readonly issue: TaskIssue };
+
 export interface AnalysisService {
   get(taskId: string): Promise<ContentAnalysisRecord | undefined>;
   /** Emits only validated semantic modules; raw provider output is never exposed. */
   run(taskId: string, onEvent?: ContentAnalysisEventListener): Promise<ContentAnalysisRecord>;
   /** Selects one local MP4, runs the shared ingest pipeline, then creates the formal analysis. */
   importVideo(onEvent?: ContentAnalysisEventListener): Promise<ContentAnalysisRecord>;
+  /** Consumes at most one terminal video-picker result left by an external Activity/WebView rebuild. */
+  consumeVideoRecovery(onEvent?: ContentAnalysisEventListener): Promise<VideoImportRecovery>;
   subscribe(taskId: string, listener: ContentAnalysisEventListener): Unsubscribe;
 }
 
@@ -465,6 +472,11 @@ export type ProductionEvent =
   | { readonly type: "state"; readonly project: ProductionProjectRecord }
   | { readonly type: "render-progress"; readonly projectId: string; readonly progress: number; readonly message: string };
 
+export type ProductionAssetRecovery =
+  | { readonly status: "none" }
+  | { readonly status: "succeeded"; readonly project: ProductionProjectRecord }
+  | { readonly status: "failed"; readonly issue: TaskIssue };
+
 export interface ProductionService {
   create(input: {
     readonly analysisTaskId: string;
@@ -479,6 +491,8 @@ export interface ProductionService {
   list(): Promise<readonly ProductionProjectRecord[]>;
   /** Opens the system picker and copies selected items into this project's private directory. */
   importAssets(projectId: string): Promise<ProductionProjectRecord>;
+  /** Consumes at most one terminal asset-picker result left by an external Activity/WebView rebuild. */
+  consumeAssetRecovery(): Promise<ProductionAssetRecovery>;
   generatePlan(projectId: string): Promise<ProductionProjectRecord>;
   render(projectId: string): Promise<ProductionProjectRecord>;
   /** Removes one imported asset and invalidates any plan and output that referenced it. */

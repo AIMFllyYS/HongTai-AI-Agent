@@ -316,6 +316,7 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
   });
   const unavailableProduction = {
     pickAssets: async () => { throw taskError("APP_RUNTIME_UNAVAILABLE", "本地制作插件尚未加载", "retry"); },
+    consumeAssetOperation: async () => ({ status: "none" as const }),
     render: async () => { throw taskError("APP_RUNTIME_UNAVAILABLE", "本地制作插件尚未加载", "retry"); },
     probeTts: async () => { throw taskError("APP_RUNTIME_UNAVAILABLE", "本地配音插件尚未加载", "retry"); },
   };

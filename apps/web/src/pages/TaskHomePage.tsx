@@ -146,6 +146,34 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
   }, [loadHistory]);
 
   useEffect(() => {
+    let active = true;
+    const consumeRecovery = async () => {
+      try {
+        const recovered = await runtime.analysis.consumeVideoRecovery((event) => {
+          if (!active) return;
+          setVideoImporting(true);
+          if (event.type === "progress") setVideoProgress(event.progress);
+          if (event.type === "failed") {
+            setVideoProgress(event.progress);
+            setSubmitIssue(event.issue);
+          }
+        });
+        if (!active) return;
+        if (recovered.status === "succeeded") navigate(taskAnalysisPath(recovered.record.taskId));
+        if (recovered.status === "failed") setSubmitIssue(recovered.issue);
+      } catch (error) {
+        if (active) {
+          setSubmitIssue(issueFromAppError(error, { code: "TASK_INTERRUPTED", message: "视频选择恢复失败，请重新选择", action: "select_media" }));
+        }
+      } finally {
+        if (active) setVideoImporting(false);
+      }
+    };
+    void consumeRecovery();
+    return () => { active = false; };
+  }, [navigate, runtime]);
+
+  useEffect(() => {
     try {
       return runtime.tasks.subscribeChanges((event) => {
         taskHistoryReads.current.record(event);

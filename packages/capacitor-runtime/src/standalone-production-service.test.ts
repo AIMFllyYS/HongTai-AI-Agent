@@ -92,12 +92,13 @@ function harness(narration: "system" | "provider" = "system") {
       renderCalls.push(options);
       return { uri: "file:///private/productions/project-1/output.mp4", mimeType: "video/mp4" as const, sizeBytes: 1_024, durationSeconds: 20 };
     },
+    consumeAssetOperation: async () => ({ status: "none" as const }),
     probeTts: async () => undefined,
   };
   const create = () => new StandaloneProductionService({
     files,
     native,
-    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, subscribe: () => () => undefined },
+    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
     tasks,
     getProvider: async () => provider,
     getNarrationMode: async () => narration,
@@ -159,8 +160,8 @@ test("制作计划失败时保留项目和已导入素材", async () => {
       deleteProductionFile: async () => undefined,
       deleteProduction: async () => undefined,
     },
-    native: { pickAssets: async () => ({ assets: [] }), render: async () => { throw new Error("unused"); }, probeTts: async () => undefined },
-    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, subscribe: () => () => undefined },
+    native: { pickAssets: async () => ({ assets: [] }), consumeAssetOperation: async () => ({ status: "none" as const }), render: async () => { throw new Error("unused"); }, probeTts: async () => undefined },
+    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
     tasks,
     getProvider: async () => ({ generate: async () => { throw new Error("provider down"); }, transcribe: async () => "" }),
     getNarrationMode: async () => "system",
@@ -256,9 +257,10 @@ test("制作服务按真实 Promise 区分系统素材选择、计划与渲染",
         await renderRelease.promise;
         return { uri: "file:///private/output.mp4", mimeType: "video/mp4", sizeBytes: 1_024, durationSeconds: 20 };
       },
+      consumeAssetOperation: async () => ({ status: "none" as const }),
       probeTts: async () => undefined,
     },
-    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, subscribe: () => () => undefined },
+    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
     tasks,
     getProvider: async () => ({
       generate: async () => {
@@ -384,10 +386,11 @@ test("制作服务将原生媒体和 TTS 失败转换为可行动的稳定错误
     },
     native: {
       pickAssets: async () => { throw { code: "ERR_MEDIA_SOURCE_INVALID" }; },
+      consumeAssetOperation: async () => ({ status: "none" as const }),
       render: async () => { throw { code: "ERR_TTS_UNAVAILABLE" }; },
       probeTts: async () => undefined,
     },
-    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, subscribe: () => () => undefined },
+    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
     tasks,
     getProvider: async () => ({ generate: async () => ({ content: JSON.stringify(plan), reasoning: "" }), transcribe: async () => "" }),
     getNarrationMode: async () => "system",
@@ -415,4 +418,91 @@ test("制作服务将原生媒体和 TTS 失败转换为可行动的稳定错误
   const persisted = await service.get("project-1");
   assert.equal(persisted?.issue?.code, "TTS_UNAVAILABLE");
   assert.equal(persisted?.output?.uri, "file:///private/productions/project-1/output.mp4");
+});
+
+test("StandaloneProductionService consumes a recovered native asset picker as project assets", async () => {
+  const { create, values } = harness();
+  const created = create();
+  await created.create({ analysisTaskId: "task-1", brief: "真实门店", targetDurationSeconds: 20 });
+  const service = new StandaloneProductionService({
+    files: {
+      ensureProduction: async () => undefined,
+      writeProductionText: async ({ projectId, relativePath, value }) => { values.set(`${projectId}/${relativePath}`, value); },
+      readProductionText: async ({ projectId, relativePath }) => ({ value: values.get(`${projectId}/${relativePath}`) }),
+      listProductionIds: async () => ({ projectIds: ["project-1"] }),
+      deleteProductionFile: async () => undefined,
+      deleteProduction: async () => undefined,
+    },
+    native: {
+      pickAssets: async () => ({ assets: [] }),
+      consumeAssetOperation: async () => ({
+        status: "succeeded" as const,
+        projectId: "project-1",
+        assets: [
+          { id: "asset-1", uri: "file:///private/productions/project-1/inputs/asset-1.jpg", kind: "image" as const, mimeType: "image/jpeg", displayName: "门店.jpg", sizeBytes: 100 },
+        ],
+      }),
+      render: async () => { throw new Error("unused"); },
+      probeTts: async () => undefined,
+    },
+    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
+    tasks,
+    getProvider: async () => ({ generate: async () => ({ content: JSON.stringify(plan), reasoning: "" }), transcribe: async () => "" }),
+    getNarrationMode: async () => "system",
+    toDisplayUri: (uri) => uri.replace("file:///private/", "capacitor://localhost/private/"),
+  });
+
+  const recovered = await service.consumeAssetRecovery();
+
+  assert.equal(recovered.status, "succeeded");
+  if (recovered.status !== "succeeded") assert.fail("expected recovered assets");
+  assert.equal(recovered.project.assets.length, 1);
+  assert.equal(recovered.project.assets[0]?.id, "asset-1");
+  assert.doesNotMatch(JSON.stringify(recovered), /file:\/\//);
+});
+
+test("StandaloneProductionService maps every recovered native asset terminal to a stable TaskIssue", async () => {
+  const expected = new Map<string, string>([
+    ["ERR_MEDIA_SELECTION_CANCELLED", "MEDIA_SELECTION_CANCELLED"],
+    ["ERR_MEDIA_SOURCE_MISSING", "MEDIA_SOURCE_NOT_FOUND"],
+    ["ERR_ASSET_RECOVERY_FAILED", "TASK_INTERRUPTED"],
+    ["ERR_MEDIA_READ_FAILED", "MEDIA_READ_FAILED"],
+    ["ERR_MEDIA_SOURCE_INVALID", "MEDIA_SOURCE_INVALID"],
+    ["ERR_PRIVATE_FILE_IMPORT_FAILED", "MEDIA_IMPORT_FAILED"],
+  ]);
+
+  for (const [nativeCode, taskCode] of expected) {
+    const { create } = harness();
+    const created = create();
+    await created.create({ analysisTaskId: "task-1", brief: "真实门店", targetDurationSeconds: 20 });
+    const service = new StandaloneProductionService({
+      files: {
+        ensureProduction: async () => undefined,
+        writeProductionText: async () => undefined,
+        readProductionText: async () => ({ value: undefined }),
+        listProductionIds: async () => ({ projectIds: [] }),
+        deleteProductionFile: async () => undefined,
+        deleteProduction: async () => undefined,
+      },
+      native: {
+        pickAssets: async () => ({ assets: [] }),
+        consumeAssetOperation: async () => ({ status: "failed" as const, code: nativeCode }),
+        render: async () => { throw new Error("unused"); },
+        probeTts: async () => undefined,
+      },
+      analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
+      tasks,
+      getProvider: async () => ({ generate: async () => ({ content: "", reasoning: "" }), transcribe: async () => "" }),
+      getNarrationMode: async () => "system",
+      toDisplayUri: (uri) => uri,
+    });
+
+    const recovered = await service.consumeAssetRecovery();
+
+    assert.equal(recovered.status, "failed", nativeCode);
+    if (recovered.status !== "failed") assert.fail(`expected ${nativeCode} to fail`);
+    assert.equal(recovered.issue.code, taskCode, nativeCode);
+    assert.equal(recovered.issue.action, "select_media", nativeCode);
+    assert.equal(recovered.issue.details?.nativeCode, nativeCode);
+  }
 });

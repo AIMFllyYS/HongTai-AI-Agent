@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { TaskError } from "@hongtai/core";
 import type { MediaDownloader, MediaTools, PlatformAdapter } from "@hongtai/core";
 
 import { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
 import { StandaloneTaskService } from "./standalone-task-service.js";
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 function memoryFiles() {
   const values = new Map<string, string>();
@@ -270,6 +275,7 @@ test("StandaloneTaskService imports one private MP4 through the shared pipeline 
         await native.plugin.writeText({ taskId, relativePath: "media/video.mp4", value: "private-mp4", replace: true });
         return { uri: `file:///private/tasks/${taskId}/media/video.mp4`, mimeType: "video/mp4", displayName: "真实口播.mp4", sizeBytes: 128, durationSeconds: 8 };
       },
+      consumeVideoOperation: async () => ({ status: "none" as const }),
     },
     adapters: [imageTextAdapter()],
     http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
@@ -321,6 +327,7 @@ test("StandaloneTaskService tracks the local-video picker and recovers its queue
         await native.plugin.writeText({ taskId, relativePath: "media/video.mp4", value: "private-mp4", replace: true });
         return { uri: `file:///private/tasks/${taskId}/media/video.mp4`, mimeType: "video/mp4", displayName: "恢复测试.mp4", sizeBytes: 128, durationSeconds: 8 };
       },
+      consumeVideoOperation: async () => ({ status: "none" as const }),
     },
     adapters: [],
     http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
@@ -375,6 +382,7 @@ test("StandaloneTaskService opens the picker without creating a task and maps ca
         );
         throw { code: "ERR_MEDIA_SELECTION_CANCELLED" };
       },
+      consumeVideoOperation: async () => ({ status: "none" as const }),
     },
     adapters: [],
     http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
@@ -389,4 +397,303 @@ test("StandaloneTaskService opens the picker without creating a task and maps ca
     (error) => error instanceof TaskError && error.code === "MEDIA_SELECTION_CANCELLED" && error.action === "select_media",
   );
   assert.deepEqual((await native.plugin.listTaskIds()).taskIds, []);
+});
+
+function filesWithEnsureLimit(successfulEnsures: number) {
+  const native = memoryFiles();
+  const ensure = native.plugin.ensure;
+  let calls = 0;
+  return {
+    values: native.values,
+    plugin: {
+      ...native.plugin,
+      ensure: async (options: { readonly taskId: string }) => {
+        calls += 1;
+        if (calls > successfulEnsures) throw new Error("no space left");
+        return ensure(options);
+      },
+    },
+  };
+}
+
+test("StandaloneTaskService persists initialize failure as failed instead of leaving public-link queued", async () => {
+  const native = filesWithEnsureLimit(1);
+  const changes: Array<{ readonly status?: string; readonly persistedStatus?: string }> = [];
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    adapters: [imageTextAdapter()],
+    http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 0, extractAudio: async () => undefined, splitAudio: async () => [] },
+    createTaskId: () => "task-init-fail-public",
+    toDisplayUri: (value) => value,
+    now: () => new Date("2026-08-16T09:00:00.000Z"),
+  });
+  service.subscribeChanges(async (event) => {
+    if (event.type !== "upsert") return;
+    changes.push({
+      status: event.task.status,
+      persistedStatus: JSON.parse(native.values.get(`${event.task.id}/task.json`) ?? "{}").status,
+    });
+  });
+
+  const queued = await service.create({ input: "https://www.xiaohongshu.com/discovery/item/abc123" });
+  assert.equal(queued.status, "queued");
+  const completed = await (await service.start(queued.id)).completion;
+  const persisted = JSON.parse(native.values.get("task-init-fail-public/task.json") ?? "{}");
+  const listed = await service.list();
+
+  assert.equal(completed.status, "failed");
+  assert.equal(persisted.status, "failed");
+  assert.equal(persisted.issues.at(-1)?.code, "STORAGE_WRITE_FAILED");
+  assert.equal(persisted.issues.at(-1)?.action, "free_storage");
+  assert.equal((await service.get(queued.id))?.status, "failed");
+  assert.equal(listed[0]?.status, "failed");
+  assert.deepEqual(await service.inspectUnfinishedWork(), []);
+  assert.equal((await service.recoverInterruptedWork()).length, 0);
+  assert.deepEqual(changes.at(-1), { status: "failed", persistedStatus: "failed" });
+});
+
+test("StandaloneTaskService persists initialize failure as failed for local video instead of leaving queued", async () => {
+  const native = filesWithEnsureLimit(1);
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    fileMedia: {
+      pickVideo: async ({ taskId }) => {
+        await native.plugin.writeText({ taskId, relativePath: "media/video.mp4", value: "private-mp4", replace: true });
+        return { uri: `file:///private/tasks/${taskId}/media/video.mp4`, mimeType: "video/mp4", displayName: "初始化失败.mp4", sizeBytes: 128, durationSeconds: 8 };
+      },
+      consumeVideoOperation: async () => ({ status: "none" as const }),
+    },
+    adapters: [],
+    http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 8, extractAudio: async () => undefined, splitAudio: async () => [] },
+    createTaskId: () => "task-init-fail-local",
+    toDisplayUri: (value) => value,
+    now: () => new Date("2026-08-16T09:00:00.000Z"),
+  });
+
+  const imported = await service.importVideo();
+  assert.equal(imported.status, "queued");
+  const completed = await (await service.start(imported.id)).completion;
+  const persisted = JSON.parse(native.values.get("task-init-fail-local/task.json") ?? "{}");
+
+  assert.equal(completed.status, "failed");
+  assert.equal(persisted.status, "failed");
+  assert.equal(persisted.issues.at(-1)?.code, "STORAGE_WRITE_FAILED");
+  assert.equal((await service.get(imported.id))?.status, "failed");
+  assert.deepEqual(await service.inspectUnfinishedWork(), []);
+  assert.equal((await service.recoverInterruptedWork()).length, 0);
+  assert.notEqual(persisted.status, "interrupted");
+});
+
+test("StandaloneTaskService single-flights concurrent start for the same taskId", async () => {
+  const native = memoryFiles();
+  const started = deferred();
+  const release = deferred();
+  let resolveCalls = 0;
+  const base = imageTextAdapter();
+  const adapter: PlatformAdapter = {
+    ...base,
+    resolve: async (url, http) => {
+      resolveCalls += 1;
+      started.resolve();
+      await release.promise;
+      return base.resolve(url, http);
+    },
+  };
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    adapters: [adapter],
+    http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 0, extractAudio: async () => undefined, splitAudio: async () => [] },
+    createTaskId: () => "task-single-flight",
+    toDisplayUri: (value) => value,
+  });
+
+  const task = await service.create({ input: "https://www.xiaohongshu.com/discovery/item/abc123" });
+  const [first, second] = await Promise.all([service.start(task.id), service.start(task.id)]);
+  assert.equal(first, second, "same taskId must return the same in-flight CancellableTask");
+  await started.promise;
+  const late = await service.start(task.id);
+  assert.equal(late, first);
+  assert.equal(resolveCalls, 1);
+
+  release.resolve();
+  const [left, right] = await Promise.all([first.completion, second.completion]);
+  assert.equal(left.status, right.status);
+  assert.equal(left.id, right.id);
+  assert.equal(resolveCalls, 1);
+  assert.equal((await service.get(task.id))?.status, "degraded");
+});
+
+test("StandaloneTaskService still runs different taskIds in parallel", async () => {
+  const native = memoryFiles();
+  const firstEntered = deferred();
+  const secondEntered = deferred();
+  const release = deferred();
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const ids = ["task-parallel-a", "task-parallel-b"];
+  const base = imageTextAdapter();
+  const adapter: PlatformAdapter = {
+    ...base,
+    resolve: async (url, http) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      if (inFlight === 1) firstEntered.resolve();
+      if (inFlight === 2) secondEntered.resolve();
+      await release.promise;
+      inFlight -= 1;
+      return base.resolve(url, http);
+    },
+  };
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    adapters: [adapter],
+    http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 0, extractAudio: async () => undefined, splitAudio: async () => [] },
+    createTaskId: () => ids.shift() ?? "task-unexpected",
+    toDisplayUri: (value) => value,
+  });
+
+  const firstTask = await service.create({ input: "https://www.xiaohongshu.com/discovery/item/aaa111" });
+  const secondTask = await service.create({ input: "https://www.xiaohongshu.com/discovery/item/bbb222" });
+  const [first, second] = await Promise.all([service.start(firstTask.id), service.start(secondTask.id)]);
+  assert.notEqual(first, second);
+  await Promise.all([firstEntered.promise, secondEntered.promise]);
+  assert.equal(maxInFlight, 2, "different taskIds must overlap in the shared pipeline");
+
+  release.resolve();
+  const [left, right] = await Promise.all([first.completion, second.completion]);
+  assert.equal(left.id, firstTask.id);
+  assert.equal(right.id, secondTask.id);
+  assert.equal(left.status, "degraded");
+  assert.equal(right.status, "degraded");
+});
+
+test("StandaloneTaskService consumes a recovered native video as a queued local task", async () => {
+  const native = memoryFiles();
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    fileMedia: {
+      pickVideo: async () => { throw new Error("unused"); },
+      consumeVideoOperation: async () => ({
+        status: "succeeded" as const,
+        taskId: "task-recovered-video",
+        uri: "file:///private/tasks/task-recovered-video/media/video.mp4",
+        mimeType: "video/mp4" as const,
+        displayName: "恢复口播.mp4",
+        sizeBytes: 256,
+        durationSeconds: 12,
+      }),
+    },
+    adapters: [],
+    http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 12, extractAudio: async () => undefined, splitAudio: async () => [] },
+    createTaskId: () => "task-unused",
+    toDisplayUri: (value) => `capacitor://localhost/tasks/${encodeURIComponent(value)}`,
+  });
+
+  const recovered = await service.consumeVideoRecovery();
+
+  assert.equal(recovered.status, "succeeded");
+  if (recovered.status !== "succeeded") assert.fail("expected a recovered video task");
+  assert.equal(recovered.task.id, "task-recovered-video");
+  assert.equal(recovered.task.sourceKind, "local_video");
+  assert.equal(recovered.task.status, "queued");
+  assert.doesNotMatch(JSON.stringify(recovered), /file:\/\//);
+});
+
+test("StandaloneTaskService maps every recovered native video terminal to a stable TaskIssue", async () => {
+  const expected = new Map<string, string>([
+    ["ERR_MEDIA_SELECTION_CANCELLED", "MEDIA_SELECTION_CANCELLED"],
+    ["ERR_MEDIA_SOURCE_MISSING", "MEDIA_SOURCE_NOT_FOUND"],
+    ["ERR_VIDEO_RECOVERY_FAILED", "TASK_INTERRUPTED"],
+    ["ERR_MEDIA_READ_FAILED", "MEDIA_READ_FAILED"],
+    ["ERR_PRIVATE_FILE_IMPORT_FAILED", "MEDIA_IMPORT_FAILED"],
+  ]);
+
+  for (const [nativeCode, taskCode] of expected) {
+    const native = memoryFiles();
+    const service = new StandaloneTaskService({
+      files: native.plugin,
+      fileMedia: {
+        pickVideo: async () => { throw new Error("unused"); },
+        consumeVideoOperation: async () => ({ status: "failed" as const, code: nativeCode }),
+      },
+      adapters: [],
+      http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+      downloader: { download: async () => undefined },
+      mediaTools: { merge: async () => undefined, probeDuration: async () => 0, extractAudio: async () => undefined, splitAudio: async () => [] },
+      toDisplayUri: (value) => value,
+    });
+
+    const recovered = await service.consumeVideoRecovery();
+
+    assert.equal(recovered.status, "failed", nativeCode);
+    if (recovered.status !== "failed") assert.fail(`expected ${nativeCode} to fail`);
+    assert.equal(recovered.issue.code, taskCode, nativeCode);
+    assert.equal(recovered.issue.action, "select_media", nativeCode);
+    assert.equal(recovered.issue.details?.nativeCode, nativeCode);
+  }
+});
+
+test("consume returns none immediately while the original pick is still live so a remounted page is not stuck busy", async () => {
+  const fileMediaSource = readFileSync(join(repoRoot, "android/app/src/main/java/com/hongtai/aiagent/bridge/FileMediaPlugin.kt"), "utf8");
+  const productionSource = readFileSync(join(repoRoot, "android/app/src/main/java/com/hongtai/aiagent/bridge/ProductionRuntimePlugin.kt"), "utf8");
+  const homeSource = readFileSync(join(repoRoot, "apps/web/src/pages/TaskHomePage.tsx"), "utf8");
+  const consumeVideo = fileMediaSource.slice(fileMediaSource.indexOf("fun consumeVideoOperation"), fileMediaSource.indexOf("fun copyFromUri"));
+  const consumeAsset = productionSource.slice(productionSource.indexOf("fun consumeAssetOperation"), productionSource.indexOf("fun render"));
+
+  assert.match(consumeVideo, /isLiveOriginalCall\(videoOriginalCall\)[\s\S]*put\("status", "none"\)/);
+  assert.ok(
+    consumeVideo.indexOf("isLiveOriginalCall(videoOriginalCall)") >= 0
+      && consumeVideo.indexOf("isLiveOriginalCall(videoOriginalCall)") < consumeVideo.indexOf("videoRecoveryConsumerCall = call"),
+    "a live original pickVideo must return none before a consumer is held",
+  );
+  assert.match(consumeAsset, /isLiveOriginalCall\(assetOriginalCall\)[\s\S]*put\("status", "none"\)/);
+  assert.ok(
+    consumeAsset.indexOf("isLiveOriginalCall(assetOriginalCall)") >= 0
+      && consumeAsset.indexOf("isLiveOriginalCall(assetOriginalCall)") < consumeAsset.indexOf("assetRecoveryConsumerCall = call"),
+    "a live original pickAssets must return none before a consumer is held",
+  );
+  assert.match(homeSource, /const \[videoImporting, setVideoImporting\] = useState\(false\)/);
+
+  const pickLive = true;
+  const native = memoryFiles();
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    fileMedia: {
+      pickVideo: async () => new Promise(() => undefined),
+      consumeVideoOperation: async () => {
+        if (pickLive) return { status: "none" as const };
+        return new Promise(() => undefined);
+      },
+    },
+    adapters: [],
+    http: { get: async () => ({ url: "", status: 200, headers: {}, body: "" }), post: async () => ({ url: "", status: 200, headers: {}, body: "" }) },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 0, extractAudio: async () => undefined, splitAudio: async () => [] },
+    toDisplayUri: (value) => value,
+  });
+
+  let videoImporting = false;
+  const recovered = await Promise.race([
+    (async () => {
+      const result = await service.consumeVideoRecovery();
+      videoImporting = result.status === "succeeded";
+      return result;
+    })(),
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("consume hung while the original pick was still live")), 100);
+    }),
+  ]);
+
+  assert.equal(recovered.status, "none");
+  assert.equal(videoImporting, false);
 });

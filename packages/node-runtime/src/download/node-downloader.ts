@@ -1,5 +1,6 @@
-import { mkdir, open, rm } from "node:fs/promises";
-import { dirname } from "node:path";
+import { randomUUID } from "node:crypto";
+import { mkdir, open, rename, rm } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import { TaskError, type DownloadProgress, type MediaDownloader, type MediaSource } from "@hongtai/core";
 import { fetch, getGlobalDispatcher, RetryAgent, type Dispatcher } from "undici";
 import { mediaNetworkError, storageTaskError } from "../errors";
@@ -45,6 +46,40 @@ export function assertDownloadedLength(downloadedBytes: number, totalBytes?: num
   }
 }
 
+function downloadPartPath(destination: string): string {
+  return join(dirname(destination), `.${basename(destination)}.${randomUUID()}.part`);
+}
+
+type MoveFile = (from: string, to: string) => Promise<void>;
+
+export async function replaceDownloadedFile(
+  temporary: string,
+  destination: string,
+  moveFile: MoveFile = rename,
+): Promise<void> {
+  try {
+    await moveFile(temporary, destination);
+    return;
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code !== "EEXIST" && code !== "EPERM") throw error;
+  }
+  const backup = join(dirname(destination), `.${basename(destination)}.${randomUUID()}.bak`);
+  await moveFile(destination, backup);
+  try {
+    await moveFile(temporary, destination);
+  } catch (error) {
+    try {
+      await moveFile(backup, destination);
+    } catch (rollbackError) {
+      if (rollbackError instanceof Error) rollbackError.cause = error;
+      throw rollbackError;
+    }
+    throw error;
+  }
+  await rm(backup, { force: true }).catch(() => undefined);
+}
+
 export class NodeMediaDownloader implements MediaDownloader {
   readonly #dispatcher: Dispatcher;
   readonly #timeoutMs: number;
@@ -69,10 +104,11 @@ export class NodeMediaDownloader implements MediaDownloader {
     destination: string,
     onProgress?: (progress: DownloadProgress) => void | Promise<void>,
   ): Promise<void> {
+    const temporary = downloadPartPath(destination);
     try {
-      await this.#downloadOnce(source, destination, onProgress);
+      await this.#downloadOnce(source, destination, temporary, onProgress);
     } catch (error) {
-      await rm(destination, { force: true }).catch(() => undefined);
+      await rm(temporary, { force: true }).catch(() => undefined);
       throw error instanceof TaskError ? error : mediaNetworkError(error);
     }
   }
@@ -80,6 +116,7 @@ export class NodeMediaDownloader implements MediaDownloader {
   async #downloadOnce(
     source: MediaSource,
     destination: string,
+    temporary: string,
     onProgress?: (progress: DownloadProgress) => void | Promise<void>,
   ): Promise<void> {
     let parsed: URL;
@@ -135,7 +172,7 @@ export class NodeMediaDownloader implements MediaDownloader {
     const totalBytes = validContentLength(response.headers.get("content-length"));
     let file;
     try {
-      file = await open(destination, "w");
+      file = await open(temporary, "w");
     } catch (error) {
       throw storageTaskError(error, "无法创建媒体文件");
     }
@@ -163,6 +200,11 @@ export class NodeMediaDownloader implements MediaDownloader {
       throw mediaNetworkError(error);
     } finally {
       await file.close().catch(() => undefined);
+    }
+    try {
+      await replaceDownloadedFile(temporary, destination);
+    } catch (error) {
+      throw storageTaskError(error, "无法创建媒体文件");
     }
   }
 }

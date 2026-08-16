@@ -73,6 +73,7 @@ test("StandaloneAnalysisService persists only the formal content-analysis docume
     } as never,
     tasks: {
       importVideo: async () => { throw new Error("unused"); },
+      consumeVideoRecovery: async () => ({ status: "none" as const }),
       start: async () => { throw new Error("unused"); },
       getDetail: async () => detail(),
       setAnalysisStatus: async (_taskId, status) => { statuses.push(status); },
@@ -115,6 +116,7 @@ test("StandaloneAnalysisService recovers a running analysis and synchronizes its
     } as never,
     tasks: {
       importVideo: async () => { throw new Error("unused"); },
+      consumeVideoRecovery: async () => ({ status: "none" as const }),
       start: async () => { throw new Error("unused"); },
       getDetail: async () => detail(),
       list: async () => [{ ...detail().task, analysisStatus }],
@@ -154,6 +156,7 @@ test("StandaloneAnalysisService registers the real analysis promise lifetime", a
     } as never,
     tasks: {
       importVideo: async () => { throw new Error("unused"); },
+      consumeVideoRecovery: async () => ({ status: "none" as const }),
       start: async () => { throw new Error("unused"); },
       getDetail: async () => detail(),
       setAnalysisStatus: async () => undefined,
@@ -194,6 +197,7 @@ test("StandaloneAnalysisService single-flights by task id and replays runtime-on
     } as never,
     tasks: {
       importVideo: async () => { throw new Error("unused"); },
+      consumeVideoRecovery: async () => ({ status: "none" as const }),
       start: async () => { throw new Error("unused"); },
       getDetail: async () => detail(),
       setAnalysisStatus: async () => undefined,
@@ -260,6 +264,7 @@ test("StandaloneAnalysisService unsubscribe and listener failures never cancel f
     } as never,
     tasks: {
       importVideo: async () => { throw new Error("unused"); },
+      consumeVideoRecovery: async () => ({ status: "none" as const }),
       start: async () => { throw new Error("unused"); },
       getDetail: async () => detail(),
       setAnalysisStatus: async () => undefined,
@@ -290,6 +295,7 @@ test("StandaloneAnalysisService never lets a slow page listener stall the formal
     } as never,
     tasks: {
       importVideo: async () => { throw new Error("unused"); },
+      consumeVideoRecovery: async () => ({ status: "none" as const }),
       start: async () => { throw new Error("unused"); },
       getDetail: async () => detail(),
       setAnalysisStatus: async () => undefined,
@@ -322,6 +328,7 @@ test("StandaloneAnalysisService keeps three validated modules on module-four fai
     } as never,
     tasks: {
       importVideo: async () => { throw new Error("unused"); },
+      consumeVideoRecovery: async () => ({ status: "none" as const }),
       start: async () => { throw new Error("unused"); },
       getDetail: async () => detail(),
       setAnalysisStatus: async () => undefined,
@@ -390,6 +397,7 @@ test("StandaloneAnalysisService automatically runs ingest then formal analysis f
     } as never,
     tasks: {
       importVideo: async () => { calls.push("pick"); return localDetail.task; },
+      consumeVideoRecovery: async () => ({ status: "none" as const }),
       start: async () => {
         calls.push("ingest");
         return { taskId: "task-local", completion: Promise.resolve(localDetail.task), cancel: async () => undefined };
@@ -429,6 +437,7 @@ test("StandaloneAnalysisService stops a no-speech upload before starting a text-
     files: {} as never,
     tasks: {
       importVideo: async () => noSpeechTask,
+      consumeVideoRecovery: async () => ({ status: "none" as const }),
       start: async () => ({ taskId: noSpeechTask.id, completion: Promise.resolve(noSpeechTask), cancel: async () => undefined }),
       getDetail: async () => undefined,
       setAnalysisStatus: async () => { analysisRuns += 1; },
@@ -441,4 +450,33 @@ test("StandaloneAnalysisService stops a no-speech upload before starting a text-
     (error: unknown) => error instanceof Error && "code" in error && error.code === "AI_EMPTY_RESPONSE" && "action" in error && error.action === "select_media",
   );
   assert.equal(analysisRuns, 0);
+});
+
+test("StandaloneAnalysisService consumeVideoRecovery maps a failed native terminal without starting ingest", async () => {
+  let started = 0;
+  const service = new StandaloneAnalysisService({
+    files: {} as never,
+    tasks: {
+      importVideo: async () => { throw new Error("unused"); },
+      consumeVideoRecovery: async () => ({
+        status: "failed" as const,
+        issue: { code: "TASK_INTERRUPTED", severity: "error", userMessage: "视频选择在应用重建后无法恢复，请重新选择", retryable: false, action: "select_media", details: { nativeCode: "ERR_VIDEO_RECOVERY_FAILED" } },
+      }),
+      start: async () => {
+        started += 1;
+        throw new Error("unused");
+      },
+      getDetail: async () => undefined,
+      setAnalysisStatus: async () => undefined,
+    },
+    getProvider: async () => ({ generate: async () => ({ content: "", reasoning: "" }), transcribe: async () => "" }),
+  });
+
+  const recovered = await service.consumeVideoRecovery();
+
+  assert.equal(recovered.status, "failed");
+  if (recovered.status !== "failed") assert.fail("expected a failed video recovery");
+  assert.equal(recovered.issue.code, "TASK_INTERRUPTED");
+  assert.equal(recovered.issue.action, "select_media");
+  assert.equal(started, 0);
 });

@@ -1,3 +1,4 @@
+import { isTerminalTaskStatus } from "@hongtai/core";
 import type {
   AppTaskRecord,
   ContentAnalysisRecord,
@@ -160,11 +161,27 @@ export function buildTaskStagePresentations(
     }
 
     const isCurrentStage = task.status === "running" && task.currentStage === stage;
+    if (isCurrentStage) {
+      return {
+        stage,
+        label: stageLabels[stage],
+        status: "running",
+        statusLabel: stageStatusLabels.running,
+      };
+    }
+    if (isTerminalTaskStatus(task.status)) {
+      return {
+        stage,
+        label: stageLabels[stage],
+        status: "degraded",
+        statusLabel: "已跳过",
+      };
+    }
     return {
       stage,
       label: stageLabels[stage],
-      status: isCurrentStage ? "running" : "pending",
-      statusLabel: stageStatusLabels[isCurrentStage ? "running" : "pending"],
+      status: "pending",
+      statusLabel: stageStatusLabels.pending,
     };
   });
 }
