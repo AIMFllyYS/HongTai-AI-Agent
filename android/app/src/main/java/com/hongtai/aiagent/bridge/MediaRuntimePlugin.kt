@@ -34,19 +34,23 @@ class MediaRuntimePlugin : Plugin() {
       call.reject("uri is required.", NativeIssueCode.INVALID_ARGUMENT)
       return
     }
-    try {
-      val probe = mediaRuntime.probeNow(uri)
-      call.resolve(
-        JSObject()
-          .putOptional("durationMs", probe.durationMs)
-          .putOptional("mimeType", probe.mimeType)
-          .putOptional("hasAudio", probe.hasAudio)
-          .putOptional("hasVideo", probe.hasVideo),
-      )
-    } catch (error: IllegalArgumentException) {
-      call.reject("The media URI is not an available private file.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
-    } catch (error: MediaProbeException) {
-      call.reject("The private media file could not be probed.", NativeIssueCode.MEDIA_PROBE_FAILED, error)
+    runMediaOperation(call) {
+      try {
+        val probe = mediaRuntime.probeNow(uri)
+        call.resolve(
+          JSObject()
+            .putOptional("durationMs", probe.durationMs)
+            .putOptional("mimeType", probe.mimeType)
+            .putOptional("hasAudio", probe.hasAudio)
+            .putOptional("hasVideo", probe.hasVideo),
+        )
+      } catch (error: IllegalArgumentException) {
+        call.reject("The media URI is not an available private file.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
+      } catch (error: MediaProbeException) {
+        call.reject("The private media file could not be probed.", NativeIssueCode.MEDIA_PROBE_FAILED, error)
+      } catch (error: Exception) {
+        call.reject("The private media file could not be probed.", NativeIssueCode.MEDIA_PROBE_FAILED, error)
+      }
     }
   }
 
