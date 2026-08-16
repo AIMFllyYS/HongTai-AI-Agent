@@ -302,3 +302,42 @@ test("real task pages constrain technical text and expose persisted stage percen
   assert.match(css, /\.progress-step__detail[^}]*overflow-wrap:\s*anywhere/s);
   assert.match(css, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.task-page-actions[^}]*grid-template-columns:\s*1fr/);
 });
+
+test("LatestReadGuard current() does not retire a sibling read; begin/invalidate do", async () => {
+  const { LatestReadGuard, preferNewerByUpdatedAt } = await import("../apps/web/src/features/tasks/latest-read-guard");
+  const guard = new LatestReadGuard();
+  const load = guard.current();
+  const incremental = guard.current();
+  assert.equal(load, incremental);
+  assert.equal(guard.isCurrent(load), true);
+  assert.equal(guard.isCurrent(incremental), true);
+
+  const next = guard.begin();
+  assert.notEqual(next, load);
+  assert.equal(guard.isCurrent(load), false);
+  assert.equal(guard.isCurrent(next), true);
+
+  guard.invalidate();
+  assert.equal(guard.isCurrent(next), false);
+  assert.equal(guard.isCurrent(guard.current()), true);
+
+  const older = { id: "old", updatedAt: "2026-08-16T00:00:00.000Z" };
+  const newer = { id: "new", updatedAt: "2026-08-16T00:01:00.000Z" };
+  assert.equal(preferNewerByUpdatedAt(newer, older)?.id, "new");
+  assert.equal(preferNewerByUpdatedAt(older, newer)?.id, "new");
+  assert.equal(preferNewerByUpdatedAt(newer, undefined)?.id, "new");
+});
+
+test("processing load and subscribe share a non-bumping generation; analysis load keeps newer records", () => {
+  const processing = read("pages/TaskProcessingPage.tsx");
+  const analysis = read("pages/TaskAnalysisPage.tsx");
+
+  assert.match(processing, /const generation = latestRead\.current\.current\(\)/);
+  assert.doesNotMatch(processing, /latestRead\.current\.begin\(\)/);
+  assert.match(processing, /setTask\(\(current\) => preferNewerByUpdatedAt\(current, nextTask\)\)/);
+  assert.match(processing, /setEvents\(\(current\) => mergeEvents\(current, event\)\)/);
+  assert.match(processing, /latestRead\.current\.invalidate\(\)/);
+
+  assert.match(analysis, /setRecord\(\(current\) => preferNewerByUpdatedAt\(current, nextRecord\)\)/);
+  assert.match(analysis, /setRecord\(\(current\) => preferNewerByUpdatedAt\(current, event\.record\)\)/);
+});

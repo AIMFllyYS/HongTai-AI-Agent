@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { issueFromAppError, safeUrlForDisplay } from "@hongtai/core";
 import type { AppRuntime, ContentAnalysisRecord, StructuredGenerationProgressV1, TaskDetailRecord, TaskIssue } from "@hongtai/core";
 
@@ -12,6 +12,7 @@ import { EmptyState, ErrorState, LoadingState } from "../components/StatePanels"
 import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
 import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
 import { contentAnalysisModuleDefinitions } from "../features/tasks/content-analysis-module-progress";
+import { LatestReadGuard, preferNewerByUpdatedAt } from "../features/tasks/latest-read-guard";
 import { platformLabel, readContentAnalysis } from "../features/tasks/task-presenters";
 import { useAppResume } from "../hooks/useAppResume";
 import { aiSettingsPath, pathForRoute, taskDetailPath, type Navigate } from "../router";
@@ -29,20 +30,24 @@ export function TaskAnalysisPage({ runtime, taskId, navigate }: TaskAnalysisPage
   const [issue, setIssue] = useState<TaskIssue>();
   const [readIssue, setReadIssue] = useState<TaskIssue>();
   const [progress, setProgress] = useState<StructuredGenerationProgressV1>();
+  const latestRead = useRef(new LatestReadGuard());
 
   const load = useCallback(async () => {
+    const generation = latestRead.current.begin();
     try {
       const [nextDetail, nextRecord] = await Promise.all([
         runtime.tasks.getDetail(taskId),
         runtime.analysis.get(taskId),
       ]);
+      if (!latestRead.current.isCurrent(generation)) return;
       setDetail(nextDetail);
-      setRecord(nextRecord);
+      setRecord((current) => preferNewerByUpdatedAt(current, nextRecord));
       setReadIssue(undefined);
     } catch (error) {
+      if (!latestRead.current.isCurrent(generation)) return;
       setReadIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "内容拆解状态暂时无法读取", action: "none" }));
     } finally {
-      setLoading(false);
+      if (latestRead.current.isCurrent(generation)) setLoading(false);
     }
   }, [runtime, taskId]);
 
@@ -71,7 +76,7 @@ export function TaskAnalysisPage({ runtime, taskId, navigate }: TaskAnalysisPage
           void load();
         }
         if (event.type === "completed") {
-          setRecord(event.record);
+          setRecord((current) => preferNewerByUpdatedAt(current, event.record));
           setProgress(undefined);
           setIssue(undefined);
         }
@@ -80,6 +85,7 @@ export function TaskAnalysisPage({ runtime, taskId, navigate }: TaskAnalysisPage
       setReadIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "内容拆解自动更新暂时不可用", action: "none" }));
     }
     return () => {
+      latestRead.current.invalidate();
       unsubscribeTaskChange?.();
       unsubscribeAnalysis?.();
     };

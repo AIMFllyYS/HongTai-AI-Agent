@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { issueFromAppError, safeUrlForDisplay } from "@hongtai/core";
 import type { AppRuntime, MediaReference, StructuredGenerationProgressV1, TaskDetailRecord, TaskIssue } from "@hongtai/core";
 
@@ -13,6 +13,7 @@ import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
 import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
 import { contentAnalysisModuleDefinitions } from "../features/tasks/content-analysis-module-progress";
+import { LatestReadGuard } from "../features/tasks/latest-read-guard";
 import { contentTypeLabel, formatTaskTime, platformLabel } from "../features/tasks/task-presenters";
 import { useAppResume } from "../hooks/useAppResume";
 import { aiSettingsPath, pathForRoute, taskAnalysisPath, type Navigate } from "../router";
@@ -58,16 +59,20 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<"analysis" | "delete">();
   const [streamProgress, setStreamProgress] = useState<StructuredGenerationProgressV1>();
+  const latestRead = useRef(new LatestReadGuard());
 
   const load = useCallback(async () => {
+    const generation = latestRead.current.begin();
     try {
       const nextDetail = await runtime.tasks.getDetail(taskId);
+      if (!latestRead.current.isCurrent(generation)) return;
       setDetail(nextDetail);
       setReadIssue(undefined);
     } catch (error) {
+      if (!latestRead.current.isCurrent(generation)) return;
       setReadIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "任务详情暂时无法读取", action: "none" }));
     } finally {
-      setLoading(false);
+      if (latestRead.current.isCurrent(generation)) setLoading(false);
     }
   }, [runtime, taskId]);
 
@@ -104,6 +109,7 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
       setReadIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "任务自动更新暂时不可用", action: "none" }));
     }
     return () => {
+      latestRead.current.invalidate();
       unsubscribeTaskChange?.();
       unsubscribeAnalysis?.();
     };
