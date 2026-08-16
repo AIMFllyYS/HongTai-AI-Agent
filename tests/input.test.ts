@@ -19,6 +19,16 @@ const cases = [
     platform: "bilibili",
   },
   {
+    input: "av 号分P分享 https://www.bilibili.com/video/av12345?p=2",
+    url: "https://www.bilibili.com/video/av12345?p=2",
+    platform: "bilibili",
+  },
+  {
+    input: "https://bili2233.cn/abcdef",
+    url: "https://bili2233.cn/abcdef",
+    platform: "bilibili",
+  },
+  {
     input: "复制打开快手，看看这个作品 https://v.kuaishou.com/nvZAnXmn 更多分享文字",
     url: "https://v.kuaishou.com/nvZAnXmn",
     platform: "kuaishou",

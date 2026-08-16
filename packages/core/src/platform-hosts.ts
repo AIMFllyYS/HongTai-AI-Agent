@@ -13,6 +13,7 @@ export const SUPPORTED_PLATFORM_HOSTS: Readonly<Record<string, SupportedPlatform
   "bilibili.com": "bilibili",
   "m.bilibili.com": "bilibili",
   "b23.tv": "bilibili",
+  "bili2233.cn": "bilibili",
   "www.kuaishou.com": "kuaishou",
   "v.kuaishou.com": "kuaishou",
 };

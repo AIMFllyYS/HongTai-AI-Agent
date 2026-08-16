@@ -64,14 +64,24 @@ class NativeTextFetchClient {
           val status = connection.responseCode
           if (status in REDIRECT_STATUS_CODES) {
             phase = "redirect"
-            if (redirects >= options.maxRedirects) {
-              throw NativeNetworkException("ERR_LINK_REDIRECT_LIMIT", "The page source redirected too many times.")
-            }
             val location = connection.getHeaderField("Location")?.trim().orEmpty()
             if (location.isBlank()) {
               throw NativeNetworkException("ERR_LINK_REDIRECT_INVALID", "The page source returned an invalid redirect.")
             }
-            target = NativeNetworkPolicy.requireHttpsUrl(URL(target, location).toExternalForm(), "page fetch redirect")
+            val next = NativeNetworkPolicy.requireHttpsUrl(URL(target, location).toExternalForm(), "page fetch redirect")
+            NativeNetworkPolicy.requirePublicNetworkTarget(next, "page fetch redirect")
+            if (options.maxRedirects == 0) {
+              return NativeTextFetchResult(
+                finalUrl = next.toExternalForm(),
+                status = status,
+                headers = NativeNetworkPolicy.sanitizeResponseHeaders(connection.headerFields),
+                body = "",
+              )
+            }
+            if (redirects >= options.maxRedirects) {
+              throw NativeNetworkException("ERR_LINK_REDIRECT_LIMIT", "The page source redirected too many times.")
+            }
+            target = next
             redirects += 1
             continue
           }

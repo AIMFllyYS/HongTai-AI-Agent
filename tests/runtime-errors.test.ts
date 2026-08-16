@@ -130,6 +130,33 @@ test("HTTP客户端返回稳定的跳转超限错误码", async () => {
   }
 });
 
+test("HTTP客户端maxRedirects为0时只解析Location不读目标正文", async () => {
+  const originalFetch = globalThis.fetch;
+  const fetched: string[] = [];
+  globalThis.fetch = async (input) => {
+    fetched.push(String(input));
+    if (String(input).includes("/start")) {
+      return new Response("<html>short-link</html>", {
+        status: 302,
+        headers: { location: "https://www.bilibili.com/video/BV1xx411c7mD" },
+      });
+    }
+    return new Response("<html>final desktop page</html>", { status: 200 });
+  };
+  try {
+    const response = await new NodeHttpClient({ retryDelaysMs: [0] }).get({
+      url: "https://b23.tv/start",
+      maxRedirects: 0,
+    });
+    assert.equal(response.url, "https://www.bilibili.com/video/BV1xx411c7mD");
+    assert.equal(response.status, 302);
+    assert.equal(response.body, "");
+    assert.deepEqual(fetched, ["https://b23.tv/start"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Undici在响应体中断后使用Range续传剩余字节", async (context) => {
   const content = Buffer.from("video-data");
   const ranges: Array<string | undefined> = [];

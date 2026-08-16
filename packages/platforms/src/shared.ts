@@ -65,6 +65,24 @@ export async function fetchPage(
   return response;
 }
 
+/** Follow one Location hop. Callers must pass maxRedirects 0 via this helper, never read HTML. */
+export async function followRedirectLocation(
+  http: HttpClient,
+  url: string,
+  headers: Readonly<Record<string, string>>,
+): Promise<Pick<HttpResponse, "url" | "status">> {
+  const response = await http.get({ url, headers, maxRedirects: 0, timeoutMs: 30_000 });
+  if (response.status === 401 || response.status === 403) {
+    throw new TaskError({ code: "CONTENT_PRIVATE_OR_LOGIN_REQUIRED", message: "作品需要登录或没有访问权限", action: "edit_input", details: { httpStatus: response.status } });
+  }
+  if (response.status === 404) throw new TaskError({ code: "CONTENT_NOT_FOUND", message: "作品不存在或链接已经失效", action: "edit_input", details: { httpStatus: 404 } });
+  if (response.status === 410) throw new TaskError({ code: "CONTENT_REMOVED", message: "作品已经被删除", action: "edit_input", details: { httpStatus: 410 } });
+  if (response.status === 429) throw new TaskError({ code: "PLATFORM_API_RATE_LIMITED", message: "平台访问过于频繁，请稍后重试", retryable: true, action: "wait_and_retry", details: { httpStatus: 429 } });
+  if (response.status >= 500) throw new TaskError({ code: "PLATFORM_API_UNAVAILABLE", message: "平台服务暂时不可用", retryable: true, action: "wait_and_retry", details: { httpStatus: response.status } });
+  if (response.status >= 400) throw new TaskError({ code: "LINK_HTTP_ERROR", message: `页面请求失败：HTTP ${response.status}`, action: "retry", details: { httpStatus: response.status } });
+  return { url: response.url, status: response.status };
+}
+
 export function contentStateError(body: string, platformName: string): TaskError {
   const text = body.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 20_000).toLowerCase();
   if (/作品不存在|内容不存在|已删除|not found|does not exist/.test(text)) {

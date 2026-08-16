@@ -45,7 +45,7 @@ data class NativeTextFetchRequest(
   val headers: Map<String, String> = emptyMap(),
   /** Bounded UTF-8 JSON POST body only; never persisted by native. */
   val body: String? = null,
-  /** Zero is meaningful: reject the first redirect instead of following it. */
+  /** Zero means: resolve one Location and return that URL without reading a body or fetching the target. */
   val maxRedirects: Int? = null,
   /** Applies to both connection and read waits for this one parser request. */
   val timeoutMs: Int? = null,

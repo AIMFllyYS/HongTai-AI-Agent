@@ -11,6 +11,7 @@ import {
   platformRegistry,
   replaceUndefined,
 } from "../packages/platforms/src/index";
+import { signWbiQuery } from "../packages/platforms/src/bilibili/wbi";
 
 class FakeHttpClient implements HttpClient {
   readonly #handler: (request: HttpRequest | HttpPostRequest) => HttpResponse;
@@ -85,13 +86,59 @@ test("小红书笔记定位不会命中外层包装对象", async () => {
   assert.equal(content.images.some((image) => image.url.includes("wrapper")), false);
 });
 
-test("B站在URL中没有BV号时不从HTML推荐位采集", async () => {
+const BILIBILI_VIEW = {
+  bvid: "BV1xx411c7mD",
+  title: "测试B站",
+  desc: "简介",
+  duration: 60,
+  owner: { name: "作者丙" },
+  pages: [{ cid: 123, duration: 60 }],
+} as const;
+
+const BILIBILI_PLAY = {
+  dash: {
+    video: [{ id: 64, baseUrl: "https://video.example/video.m4s?signature=fake-sign", bandwidth: 800000, width: 1280, height: 720, codecs: "avc1" }],
+    audio: [{ id: 30216, baseUrl: "https://video.example/audio.m4s?signature=fake-sign", bandwidth: 128000, codecs: "mp4a" }],
+  },
+} as const;
+
+function jsonResponse(url: string, payload: unknown): HttpResponse {
+  return { url, status: 200, headers: { "content-type": "application/json" }, body: JSON.stringify(payload) };
+}
+
+function bilibiliClient(options: {
+  readonly view?: unknown;
+  readonly play?: unknown;
+  readonly nav?: unknown;
+  readonly onRequest?: (request: HttpRequest | HttpPostRequest) => void;
+  readonly resolve?: (request: HttpRequest | HttpPostRequest) => HttpResponse | undefined;
+} = {}): FakeHttpClient {
+  return new FakeHttpClient((request) => {
+    options.onRequest?.(request);
+    const custom = options.resolve?.(request);
+    if (custom) return custom;
+    if (request.url.includes("/x/web-interface/nav")) {
+      return jsonResponse(request.url, options.nav ?? { code: -101, data: {} });
+    }
+    if (request.url.includes("/x/web-interface/view")) {
+      return jsonResponse(request.url, { code: 0, data: options.view ?? BILIBILI_VIEW });
+    }
+    if (request.url.includes("playurl")) {
+      const play = options.play;
+      if (play && typeof play === "object" && "code" in play) return jsonResponse(request.url, play);
+      return jsonResponse(request.url, { code: 0, data: play ?? BILIBILI_PLAY });
+    }
+    return response(request.url, "<html>unexpected page fetch</html>");
+  });
+}
+
+test("B站在URL中没有BV或av号时不从HTML推荐位采集", async () => {
   const recommended = "BV1yyyyyyyy1";
   let apiCalls = 0;
   const client = new FakeHttpClient((request) => {
     if (request.url.includes("api.bilibili.com")) {
       apiCalls += 1;
-      return response(request.url, JSON.stringify({
+      return jsonResponse(request.url, {
         code: 0,
         data: {
           bvid: recommended,
@@ -100,19 +147,15 @@ test("B站在URL中没有BV号时不从HTML推荐位采集", async () => {
           duration: 60,
           owner: { name: "推荐作者" },
           pages: [{ cid: 999, duration: 60 }],
-          dash: {
-            video: [{ id: 80, baseUrl: "https://video.example/recommended.m4s", bandwidth: 1000, width: 640, height: 360 }],
-            audio: [],
-          },
         },
-      }));
+      });
     }
-    return response("https://www.bilibili.com/video/av12345", `<html><a href="/video/${recommended}">推荐</a></html>`);
+    return response("https://www.bilibili.com/video/", `<html><a href="/video/${recommended}">推荐</a></html>`);
   });
   await assert.rejects(
     () => new BilibiliAdapter().parse({
-      sourceUrl: "https://www.bilibili.com/video/av12345",
-      finalUrl: "https://www.bilibili.com/video/av12345",
+      sourceUrl: "https://www.bilibili.com/video/",
+      finalUrl: "https://www.bilibili.com/video/",
       status: 200,
       body: `<html><a href="/video/${recommended}">推荐</a></html>`,
     }, client),
@@ -132,6 +175,7 @@ const HOST_DECISIONS = [
   { url: "https://www.bilibili.com/video/BV1xx411c7mD", accepted: true, platform: "bilibili" },
   { url: "https://m.bilibili.com/video/BV1xx411c7mD", accepted: true, platform: "bilibili" },
   { url: "https://b23.tv/mIrEY6j", accepted: true, platform: "bilibili" },
+  { url: "https://bili2233.cn/abcdef", accepted: true, platform: "bilibili" },
   { url: "https://api.bilibili.com/x/web-interface/view", accepted: false },
   { url: "https://live.bilibili.com/123", accepted: false },
   { url: "https://creator.bilibili.com/", accepted: false },
@@ -497,41 +541,228 @@ test("B站API的HTTP 401/403映射为需要登录且不可自动重试", async (
 });
 
 test("B站适配器提取P1 DASH音视频", async () => {
-  const client = new FakeHttpClient((request) => {
-    if (request.url.includes("/x/web-interface/view")) {
-      return response(request.url, JSON.stringify({
-        code: 0,
-        data: {
-          bvid: "BV1xx411c7mD",
-          title: "测试B站",
-          desc: "简介",
-          duration: 60,
-          owner: { name: "作者丙" },
-          pages: [{ cid: 123, duration: 60 }],
-        },
-      }));
-    }
-    if (request.url.includes("/x/player/playurl")) {
-      return response(request.url, JSON.stringify({
-        code: 0,
-        data: {
-          Cookie: "synthetic-cookie",
-          Authorization: "Bearer SYNTHETIC",
-          dash: {
-            video: [{ id: 80, baseUrl: "https://video.example/video.m4s?signature=fake-sign", bandwidth: 2000000, width: 1920, height: 1080, codecs: "avc1" }],
-            audio: [{ id: 30280, baseUrl: "https://video.example/audio.m4s?signature=fake-sign", bandwidth: 192000, codecs: "mp4a" }],
-          },
-        },
-      }));
-    }
-    return response("https://www.bilibili.com/video/BV1xx411c7mD", "<html></html>");
+  const requests: string[] = [];
+  const client = bilibiliClient({
+    play: {
+      Cookie: "synthetic-cookie",
+      Authorization: "Bearer SYNTHETIC",
+      ...BILIBILI_PLAY,
+    },
+    onRequest: (request) => requests.push(request.url),
   });
   const adapter = new BilibiliAdapter();
   const resolved = await adapter.resolve("https://www.bilibili.com/video/BV1xx411c7mD", client);
   const content = await adapter.parse(resolved, client);
+  assert.equal(resolved.body, undefined);
+  assert.equal(requests.some((url) => !url.includes("api.bilibili.com")), false);
   assert.equal(content.platform, "bilibili");
   assert.equal(content.contentType, "video");
   assert.equal(content.videos.length, 1);
   assert.equal(content.audios.length, 1);
+  const playurl = requests.find((url) => url.includes("playurl"));
+  assert.match(playurl ?? "", /[?&]qn=64(?:&|$)/);
+  assert.doesNotMatch(playurl ?? "", /fourk=1/);
   assertWhitelistedRaw(content.raw);
+});
+
+test("B站URL已含BV时resolve不发HTTP", async () => {
+  let calls = 0;
+  const client = new FakeHttpClient(() => {
+    calls += 1;
+    return response("https://www.bilibili.com/video/BV1xx411c7mD", "<html>desktop page</html>");
+  });
+  const resolved = await new BilibiliAdapter().resolve(
+    "https://www.bilibili.com/video/BV1xx411c7mD?spm_id_from=333.1007",
+    client,
+  );
+  assert.equal(calls, 0);
+  assert.equal(resolved.finalUrl, "https://www.bilibili.com/video/BV1xx411c7mD?spm_id_from=333.1007");
+  assert.equal(resolved.body, undefined);
+  assert.equal(resolved.status, 200);
+});
+
+test("B站短链resolve只跟Location不读最终HTML", async () => {
+  const requests: HttpRequest[] = [];
+  const client = bilibiliClient({
+    resolve: (request) => {
+      requests.push(request);
+      if (request.url.includes("b23.tv")) {
+        return {
+          url: "https://bili2233.cn/hop",
+          status: 302,
+          headers: {},
+          body: "",
+        };
+      }
+      if (request.url.includes("bili2233.cn")) {
+        return {
+          url: "https://www.bilibili.com/video/BV1xx411c7mD?spm=1",
+          status: 302,
+          headers: {},
+          body: "<html>must-not-be-used-as-page-body</html>",
+        };
+      }
+      throw new Error(`unexpected fetch ${request.url}`);
+    },
+  });
+  const resolved = await new BilibiliAdapter().resolve("https://b23.tv/mIrEY6j", client);
+  assert.equal(resolved.finalUrl, "https://www.bilibili.com/video/BV1xx411c7mD?spm=1");
+  assert.equal(resolved.body, undefined);
+  assert.equal(requests.length, 2);
+  assert.equal(requests.every((request) => request.maxRedirects === 0), true);
+  assert.equal(requests.some((request) => request.url.includes("www.bilibili.com/video")), false);
+});
+
+test("B站短链跳转到未认可域名时失败", async () => {
+  const client = bilibiliClient({
+    resolve: () => ({
+      url: "https://evil.example/stolen",
+      status: 302,
+      headers: {},
+      body: "",
+    }),
+  });
+  await assert.rejects(
+    () => new BilibiliAdapter().resolve("https://b23.tv/mIrEY6j", client),
+    (error) => error instanceof TaskError && error.code === "LINK_REDIRECT_INVALID",
+  );
+});
+
+test("B站识别av号并走aid查询且不采信HTML推荐BV", async () => {
+  const requests: string[] = [];
+  const client = bilibiliClient({
+    view: {
+      ...BILIBILI_VIEW,
+      aid: 12345,
+      bvid: "BV1xx411c7mD",
+    },
+    onRequest: (request) => requests.push(request.url),
+  });
+  const content = await new BilibiliAdapter().parse({
+    sourceUrl: "https://www.bilibili.com/video/av12345",
+    finalUrl: "https://www.bilibili.com/video/av12345",
+    status: 200,
+    body: `<html><a href="/video/BV1yyyyyyyy1">推荐</a></html>`,
+  }, client);
+  const viewUrl = requests.find((url) => url.includes("/x/web-interface/view"));
+  assert.match(viewUrl ?? "", /[?&]aid=12345(?:&|$)/);
+  assert.doesNotMatch(viewUrl ?? "", /BV1yyyyyyyy1/);
+  assert.equal(content.id, "BV1xx411c7mD");
+  assert.equal(content.canonicalUrl, "https://www.bilibili.com/video/BV1xx411c7mD");
+  assert.equal(content.title, "测试B站");
+});
+
+test("B站识别分P参数并使用对应cid", async () => {
+  const requests: string[] = [];
+  const client = bilibiliClient({
+    view: {
+      ...BILIBILI_VIEW,
+      pages: [
+        { cid: 111, duration: 40 },
+        { cid: 222, duration: 30 },
+      ],
+    },
+    onRequest: (request) => requests.push(request.url),
+  });
+  const content = await new BilibiliAdapter().parse({
+    sourceUrl: "https://www.bilibili.com/video/BV1xx411c7mD?p=2",
+    finalUrl: "https://www.bilibili.com/video/BV1xx411c7mD?p=2",
+    status: 200,
+  }, client);
+  const playurl = requests.find((url) => url.includes("playurl"));
+  assert.match(playurl ?? "", /[?&]cid=222(?:&|$)/);
+  assert.equal(content.durationSeconds, 30);
+  assert.equal(content.canonicalUrl, "https://www.bilibili.com/video/BV1xx411c7mD?p=2");
+});
+
+test("B站分P超出范围时明确失败", async () => {
+  const client = bilibiliClient({
+    view: {
+      ...BILIBILI_VIEW,
+      pages: [{ cid: 111, duration: 40 }],
+    },
+  });
+  await assert.rejects(
+    () => new BilibiliAdapter().parse({
+      sourceUrl: "https://www.bilibili.com/video/BV1xx411c7mD?p=9",
+      finalUrl: "https://www.bilibili.com/video/BV1xx411c7mD?p=9",
+      status: 200,
+    }, client),
+    (error) => error instanceof TaskError
+      && error.code === "CONTENT_TYPE_UNSUPPORTED"
+      && error.action === "edit_input",
+  );
+});
+
+test("B站-352映射为PLATFORM_RISK_CONTROLLED且不可自动重试", async () => {
+  const client = bilibiliClient({
+    play: { code: -352, message: "风控校验失败" },
+  });
+  await assert.rejects(
+    () => new BilibiliAdapter().parse({
+      sourceUrl: "https://www.bilibili.com/video/BV1xx411c7mD",
+      finalUrl: "https://www.bilibili.com/video/BV1xx411c7mD",
+      status: 200,
+    }, client),
+    (error) => error instanceof TaskError
+      && error.code === "PLATFORM_RISK_CONTROLLED"
+      && error.retryable === false
+      && error.action === "wait_and_retry"
+      && error.details?.providerCode === -352,
+  );
+});
+
+test("B站空dash明确失败且不返回空视频源", async () => {
+  const client = bilibiliClient({
+    play: { code: 0, data: { dash: { video: [], audio: [] }, durl: [] } },
+  });
+  await assert.rejects(
+    () => new BilibiliAdapter().parse({
+      sourceUrl: "https://www.bilibili.com/video/BV1xx411c7mD",
+      finalUrl: "https://www.bilibili.com/video/BV1xx411c7mD",
+      status: 200,
+    }, client),
+    (error) => error instanceof TaskError
+      && error.code === "MEDIA_SOURCE_NOT_FOUND"
+      && error.action === "retry",
+  );
+});
+
+test("B站公开wbi签名与已知向量一致", () => {
+  const query = signWbiQuery(
+    { foo: "114", bar: "514", zab: 1_919_810 },
+    "7cd084941338484aae1ad9425b84077c",
+    "4932caff0ff746eab6f01bf08b70ac45",
+    1_702_204_169,
+  );
+  assert.match(query, /(?:^|&)w_rid=8f6f2b5b3d485fe1886cec6a0be8c5d4(?:&|$)/);
+  assert.match(query, /(?:^|&)wts=1702204169(?:&|$)/);
+});
+
+test("B站在拿到公开wbi口令后为playurl附加签名", async () => {
+  const requests: string[] = [];
+  const client = bilibiliClient({
+    nav: {
+      code: -101,
+      data: {
+        isLogin: false,
+        wbi_img: {
+          img_url: "https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png",
+          sub_url: "https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png",
+        },
+      },
+    },
+    onRequest: (request) => requests.push(request.url),
+  });
+  await new BilibiliAdapter().parse({
+    sourceUrl: "https://www.bilibili.com/video/BV1xx411c7mD",
+    finalUrl: "https://www.bilibili.com/video/BV1xx411c7mD",
+    status: 200,
+  }, client);
+  const playurl = requests.find((url) => url.includes("playurl"));
+  assert.match(playurl ?? "", /\/x\/player\/wbi\/playurl/);
+  assert.match(playurl ?? "", /[?&]w_rid=[0-9a-f]{32}(?:&|$)/);
+  assert.match(playurl ?? "", /[?&]wts=\d+(?:&|$)/);
+  assert.match(playurl ?? "", /[?&]qn=64(?:&|$)/);
+  assert.doesNotMatch(playurl ?? "", /fourk=1/);
 });

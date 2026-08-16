@@ -67,6 +67,15 @@ export class NodeHttpClient implements HttpClient {
         if (!location) {
           throw new TaskError({ code: "LINK_REDIRECT_INVALID", message: "平台跳转响应缺少目标地址", action: "retry" });
         }
+        const next = validateHttps(new URL(location, current).toString(), true);
+        if (maxRedirects === 0) {
+          return {
+            url: next.toString(),
+            status: response.status,
+            headers: Object.fromEntries(response.headers.entries()),
+            body: "",
+          };
+        }
         if (redirectCount === maxRedirects) {
           throw new TaskError({
             code: "LINK_REDIRECT_LIMIT",
@@ -75,7 +84,7 @@ export class NodeHttpClient implements HttpClient {
             details: { maxRedirects },
           });
         }
-        current = validateHttps(new URL(location, current).toString(), true);
+        current = next;
         continue;
       }
 
