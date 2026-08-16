@@ -65,6 +65,8 @@ internal class CloudNarrationSynthesizer(
   private val context: Context,
   private val store: ProductionMediaStore,
   private val configuration: CloudNarrationConfiguration,
+  private val miMoInstruction: String,
+  private val stepFunInstruction: String,
   private val secrets: AndroidKeystoreSecretStore = AndroidKeystoreSecretStore(context),
 ) : NarrationSynthesizer {
   override fun synthesize(projectId: String, plan: NativeProductionPlan): List<Pair<File, Long>> {
@@ -129,7 +131,7 @@ internal class CloudNarrationSynthesizer(
   }
 
   private fun writeMiMoAudio(output: File, narration: String, apiKey: CharArray) {
-    val payload = CloudTtsProtocol.miMoPayload(configuration.model, configuration.voice, narration)
+    val payload = CloudTtsProtocol.miMoPayload(configuration.model, configuration.voice, narration, miMoInstruction)
     openJsonRequest("chat/completions", payload, apiKey).useSuccessInput { input, _ ->
       val root = try {
         JSONObject(readUtf8Bounded(input, MAX_MIMO_JSON_BYTES))
@@ -154,7 +156,7 @@ internal class CloudNarrationSynthesizer(
   }
 
   private fun writeStepFunAudio(output: File, narration: String, speechRate: Float, apiKey: CharArray) {
-    val payload = CloudTtsProtocol.stepFunPayload(configuration.model, configuration.voice, narration, speechRate)
+    val payload = CloudTtsProtocol.stepFunPayload(configuration.model, configuration.voice, narration, speechRate, stepFunInstruction)
     openJsonRequest("audio/speech", payload, apiKey).useSuccessInput { input, contentType ->
       if (!contentType.startsWith("audio/", ignoreCase = true)) {
         throw ProductionException(ProductionFailureKind.TTS_SYNTHESIS_FAILED, "StepFun TTS did not return an audio response.")
@@ -272,18 +274,26 @@ internal class CloudNarrationSynthesizer(
 
 /** Exact vendor wire bodies, isolated for JVM contract tests. */
 internal object CloudTtsProtocol {
-  fun miMoPayload(model: String, voice: String, narration: String): JSONObject = JSONObject()
+  fun requireInstruction(value: String?): String {
+    val instruction = value?.trim().orEmpty()
+    if (instruction.isEmpty()) {
+      throw IllegalArgumentException("TTS instruction is required.")
+    }
+    return instruction
+  }
+
+  fun miMoPayload(model: String, voice: String, narration: String, instruction: String): JSONObject = JSONObject()
     .put("model", model)
     .put("messages", JSONArray()
-      .put(JSONObject().put("role", "user").put("content", "请以自然、清晰的普通话播报。"))
+      .put(JSONObject().put("role", "user").put("content", instruction))
       .put(JSONObject().put("role", "assistant").put("content", narration)))
     .put("audio", JSONObject().put("format", "wav").put("voice", voice))
 
-  fun stepFunPayload(model: String, voice: String, narration: String, speechRate: Float): JSONObject = JSONObject()
+  fun stepFunPayload(model: String, voice: String, narration: String, speechRate: Float, instruction: String): JSONObject = JSONObject()
     .put("model", model)
     .put("voice", voice)
     .put("input", narration)
     .put("response_format", "wav")
     .put("speed", speechRate.coerceIn(0.5f, 2f))
-    .put("instruction", "自然、清晰的中文视频旁白。")
+    .put("instruction", instruction)
 }

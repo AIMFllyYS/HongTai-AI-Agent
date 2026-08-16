@@ -4,6 +4,8 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { MIMO_CHAT_AUDIO_TTS_INSTRUCTION, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION } from "@hongtai/ai";
+
 import { createStandaloneAppRuntime } from "./standalone-app-runtime.js";
 import type { StandaloneAiConnection, StandaloneLocalProfile } from "./standalone-bridge.js";
 
@@ -82,6 +84,7 @@ test("cloud TTS remains in the AI connection and probes through the native rende
   let connection: StandaloneAiConnection | undefined;
   let secret = "";
   let ttsProbeCalls = 0;
+  let ttsProbeOptions: { readonly miMoInstruction?: string; readonly stepFunInstruction?: string } | undefined;
   const runtime = await createStandaloneAppRuntime({
     plugins: {
       secureSettings: {
@@ -107,7 +110,7 @@ test("cloud TTS remains in the AI connection and probes through the native rende
         pickAssets: async () => ({ assets: [] }),
         consumeAssetOperation: async () => ({ status: "none" as const }),
         render: async () => ({ uri: "file:///private/output.mp4", mimeType: "video/mp4", sizeBytes: 1, durationSeconds: 1 }),
-        probeTts: async () => { ttsProbeCalls += 1; },
+        probeTts: async (options) => { ttsProbeCalls += 1; ttsProbeOptions = options; },
       },
     },
     convertFileSrc: (uri) => `capacitor://localhost/${uri.slice("file:///".length)}`,
@@ -132,6 +135,8 @@ test("cloud TTS remains in the AI connection and probes through the native rende
   assert.equal(result.status, "succeeded");
   assert.equal(result.model, "mimo-v2.5-tts");
   assert.equal(ttsProbeCalls, 1);
+  assert.equal(ttsProbeOptions?.miMoInstruction, MIMO_CHAT_AUDIO_TTS_INSTRUCTION);
+  assert.equal(ttsProbeOptions?.stepFunInstruction, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION);
   assert.equal(connection?.ttsTransport, "mimo-chat-audio");
   assert.equal(JSON.stringify(connection).includes("write-only-key"), false);
 });

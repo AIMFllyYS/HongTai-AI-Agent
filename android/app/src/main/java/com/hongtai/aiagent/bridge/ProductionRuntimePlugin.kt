@@ -22,6 +22,7 @@ import com.hongtai.aiagent.production.AssetOperationTerminal
 import com.hongtai.aiagent.production.ImportedProductionAsset
 import com.hongtai.aiagent.production.CloudNarrationConfiguration
 import com.hongtai.aiagent.production.CloudNarrationSynthesizer
+import com.hongtai.aiagent.production.CloudTtsProtocol
 import com.hongtai.aiagent.production.ProductionException
 import com.hongtai.aiagent.production.ProductionFailureKind
 import com.hongtai.aiagent.production.ProductionImportSelection
@@ -159,17 +160,25 @@ class ProductionRuntimePlugin : Plugin() {
       call.reject("projectId and planJson are required.", NativeIssueCode.INVALID_ARGUMENT)
       return
     }
+    val cloudInstructions = if (mode == ProductionRenderMode.MONTAGE && narration == ProductionNarrationMode.PROVIDER) {
+      requiredCloudTtsInstructions(call) ?: return
+    } else {
+      null
+    }
     PRODUCTION_EXECUTOR.execute {
       try {
         val plan = ProductionPlanParser.parse(planJson, store.inputs(projectId), mode)
-        val synthesizer = when {
-          mode == ProductionRenderMode.MONTAGE && narration == ProductionNarrationMode.PROVIDER -> CloudNarrationSynthesizer(
+        val synthesizer = if (cloudInstructions != null) {
+          CloudNarrationSynthesizer(
             context,
             store,
             CloudNarrationConfiguration.from(preferences.readAiConnection()),
+            cloudInstructions.first,
+            cloudInstructions.second,
             secrets,
           )
-          else -> SystemNarrationSynthesizer(context, store)
+        } else {
+          SystemNarrationSynthesizer(context, store)
         }
         val output = renderer.render(projectId, plan, synthesizer) { progress, message ->
           notifyListeners("productionProgress", JSObject().put("projectId", projectId).put("progress", progress).put("message", message))
@@ -190,12 +199,15 @@ class ProductionRuntimePlugin : Plugin() {
 
   @PluginMethod
   fun probeTts(call: PluginCall) {
+    val instructions = requiredCloudTtsInstructions(call) ?: return
     PRODUCTION_EXECUTOR.execute {
       try {
         CloudNarrationSynthesizer(
           context,
           store,
           CloudNarrationConfiguration.from(preferences.readAiConnection()),
+          instructions.first,
+          instructions.second,
           secrets,
         ).probe()
         call.resolve()
@@ -338,6 +350,14 @@ class ProductionRuntimePlugin : Plugin() {
     "montage" -> ProductionRenderMode.MONTAGE
     "avatar" -> ProductionRenderMode.AVATAR
     else -> null
+  }
+
+  private fun requiredCloudTtsInstructions(call: PluginCall): Pair<String, String>? = try {
+    CloudTtsProtocol.requireInstruction(call.getString("miMoInstruction")) to
+      CloudTtsProtocol.requireInstruction(call.getString("stepFunInstruction"))
+  } catch (error: IllegalArgumentException) {
+    call.reject(error.message ?: "TTS instruction is required.", NativeIssueCode.INVALID_ARGUMENT)
+    null
   }
 
   private fun narrationMode(value: String?): ProductionNarrationMode? = when (value ?: "system") {

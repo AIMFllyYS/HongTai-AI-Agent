@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { AiProvider, ProductionPlanResultV2 } from "@hongtai/ai";
+import { MIMO_CHAT_AUDIO_TTS_INSTRUCTION, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, type AiProvider, type ProductionPlanResultV2 } from "@hongtai/ai";
 import type { ContentAnalysisRecord, TaskDetailRecord } from "@hongtai/core";
 
 import { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
@@ -57,7 +57,14 @@ function harness(narration: "system" | "provider" = "system") {
   const values = new Map<string, string>();
   const ids = new Set<string>();
   const pickCalls: Array<{ readonly projectId: string; readonly maxItems: number; readonly selection?: "visual" | "avatar" }> = [];
-  const renderCalls: Array<{ readonly projectId: string; readonly planJson: string; readonly mode?: "montage" | "avatar"; readonly narration?: "system" | "provider" }> = [];
+  const renderCalls: Array<{
+    readonly projectId: string;
+    readonly planJson: string;
+    readonly mode?: "montage" | "avatar";
+    readonly narration?: "system" | "provider";
+    readonly miMoInstruction?: string;
+    readonly stepFunInstruction?: string;
+  }> = [];
   const planningPrompts: string[] = [];
   const files = {
     ensureProduction: async ({ projectId }: { readonly projectId: string }) => { ids.add(projectId); },
@@ -88,7 +95,14 @@ function harness(narration: "system" | "provider" = "system") {
       { id: "asset-3", uri: "file:///private/productions/project-1/inputs/asset-3.png", kind: "image" as const, mimeType: "image/png", displayName: "细节.png", sizeBytes: 50 },
       ] };
     },
-    render: async (options: { readonly projectId: string; readonly planJson: string; readonly mode?: "montage" | "avatar"; readonly narration?: "system" | "provider" }) => {
+    render: async (options: {
+      readonly projectId: string;
+      readonly planJson: string;
+      readonly mode?: "montage" | "avatar";
+      readonly narration?: "system" | "provider";
+      readonly miMoInstruction?: string;
+      readonly stepFunInstruction?: string;
+    }) => {
       renderCalls.push(options);
       return { uri: "file:///private/productions/project-1/output.mp4", mimeType: "video/mp4" as const, sizeBytes: 1_024, durationSeconds: 20 };
     },
@@ -126,6 +140,8 @@ test("制作项目导入素材、生成计划和渲染结果后可在重启后�
   assert.equal(completed.status, "succeeded");
   assert.match(completed.output?.uri ?? "", /^capacitor:\/\//u);
   assert.equal(renderCalls[0]?.narration, "system");
+  assert.equal(renderCalls[0]?.miMoInstruction, undefined);
+  assert.equal(renderCalls[0]?.stepFunInstruction, undefined);
 
   const restored = await create().get("project-1");
   assert.equal(restored?.status, "succeeded");
@@ -142,6 +158,8 @@ test("已配置的云端 TTS 会明确交给原生渲染器合成旁白", async 
   await service.render("project-1");
 
   assert.equal(renderCalls[0]?.narration, "provider");
+  assert.equal(renderCalls[0]?.miMoInstruction, MIMO_CHAT_AUDIO_TTS_INSTRUCTION);
+  assert.equal(renderCalls[0]?.stepFunInstruction, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION);
 });
 
 test("制作计划失败时保留项目和已导入素材", async () => {

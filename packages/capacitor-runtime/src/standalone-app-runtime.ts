@@ -1,4 +1,4 @@
-import { OpenAiCompatibleProvider, reasoningDialectForBaseUrl, splitTranscriptRewriteChunks, TRANSCRIPT_REWRITE_SYSTEM_PROMPT } from "@hongtai/ai";
+import { MIMO_CHAT_AUDIO_TTS_INSTRUCTION, OpenAiCompatibleProvider, reasoningDialectForBaseUrl, splitTranscriptRewriteChunks, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, TRANSCRIPT_REWRITE_SYSTEM_PROMPT } from "@hongtai/ai";
 import { issueFromAppError, issueFromError, TaskError } from "@hongtai/core";
 import type {
   AiAsrTransport,
@@ -459,7 +459,10 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
             if (!config.ttsModel || !config.ttsTransport || !config.ttsVoice) throw taskError("AI_SETTINGS_INVALID", "未配置云端 TTS", "configure_ai");
             const native = options.plugins.productionRuntime;
             if (!native) throw taskError("APP_RUNTIME_UNAVAILABLE", "本地配音插件尚未加载", "retry");
-            await native.probeTts();
+            await native.probeTts({
+              miMoInstruction: MIMO_CHAT_AUDIO_TTS_INSTRUCTION,
+              stepFunInstruction: STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION,
+            });
           }
           result = { capability, status: "succeeded", checkedAt: startedAt, model: model ?? null };
         } catch (error) {
