@@ -1,4 +1,4 @@
-import { TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
+import { persistableSuccessRaw, TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
 import {
   DESKTOP_USER_AGENT,
   asArray,
@@ -150,6 +150,8 @@ export class BilibiliAdapter implements PlatformAdapter {
     if (!playData) throw new TaskError({ code: "MEDIA_SOURCE_NOT_FOUND", message: "B站播放信息为空", action: "retry" });
     const sources = dashSources(playData, link.finalUrl);
     const owner = asRecord(view.owner);
+    const title = asString(view.title);
+    const authorName = asString(owner?.name);
 
     return {
       platform: this.platform,
@@ -157,16 +159,26 @@ export class BilibiliAdapter implements PlatformAdapter {
       id: bvid,
       sourceUrl: link.sourceUrl,
       canonicalUrl: `https://www.bilibili.com/video/${bvid}`,
-      title: asString(view.title),
+      title,
       description: asString(view.desc),
-      author: asString(owner?.name),
+      author: authorName,
       coverUrl: normalizeHttpUrl(view.pic),
       durationSeconds: asNumber(firstPage?.duration) ?? asNumber(view.duration),
       videos: sources.videos,
       audios: sources.audios,
       images: [],
       subtitles: [],
-      raw: { view: viewPayload, play: playPayload },
+      raw: persistableSuccessRaw({
+        platform: this.platform,
+        id: bvid,
+        contentType: "video",
+        httpStatus: link.status,
+        hasAuthor: Boolean(authorName),
+        hasTitle: Boolean(title),
+        videos: sources.videos,
+        audios: sources.audios,
+        images: [],
+      }),
     };
   }
 }

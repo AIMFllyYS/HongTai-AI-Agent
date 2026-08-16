@@ -1,4 +1,4 @@
-import type { MediaSource } from "@hongtai/core";
+import { persistableHostPath, persistableSuccessRaw, type MediaSource } from "@hongtai/core";
 import {
   asArray,
   asNumber,
@@ -10,11 +10,6 @@ import {
 } from "../shared";
 import { KUAISHOU_OPERATION_NAME, type KuaishouDetailResult } from "./client";
 
-interface SafeUrl {
-  readonly host: string;
-  readonly path: string;
-}
-
 export interface ParsedKuaishouDetail {
   readonly id?: string;
   readonly title?: string;
@@ -23,15 +18,6 @@ export interface ParsedKuaishouDetail {
   readonly durationSeconds?: number;
   readonly videos: readonly MediaSource[];
   readonly raw: unknown;
-}
-
-function safeUrl(value: string): SafeUrl | undefined {
-  try {
-    const parsed = new URL(value);
-    return { host: parsed.hostname, path: parsed.pathname };
-  } catch {
-    return undefined;
-  }
 }
 
 function mediaKind(value: string): "mp4" | "hls" | undefined {
@@ -89,31 +75,41 @@ export function parseKuaishouDetail(result: KuaishouDetailResult, referer: strin
   const mp4Count = candidateUrls.filter((url) => mediaKind(url) === "mp4").length;
   const hlsCount = candidateUrls.filter((url) => mediaKind(url) === "hls").length;
   const durationMs = asNumber(photo.duration);
+  const id = asString(photo.id);
+  const title = asString(photo.caption);
+  const authorName = asString(author?.name);
 
   return {
-    id: asString(photo.id),
-    title: asString(photo.caption),
-    author: asString(author?.name),
+    id,
+    title,
+    author: authorName,
     coverUrl: normalizeHttpUrl(photo.coverUrl),
     durationSeconds: durationMs == null ? undefined : durationMs / 1_000,
     videos,
-    raw: {
-      operationName: KUAISHOU_OPERATION_NAME,
+    raw: persistableSuccessRaw({
+      platform: "kuaishou",
+      id,
+      contentType: "video",
       httpStatus: result.httpStatus,
-      status: asNumber(result.detail.status) ?? asString(result.detail.status),
-      type: asNumber(result.detail.type) ?? asString(result.detail.type),
-      hasAuthor: Boolean(author),
-      hasPhoto: Boolean(result.detail.photo),
-      graphqlErrorCount: result.graphqlErrorCount,
-      errorClassification: "none",
-      media: {
+      hasAuthor: Boolean(authorName),
+      hasTitle: Boolean(title),
+      videos,
+      audios: [],
+      images: [],
+      extras: {
+        operationName: KUAISHOU_OPERATION_NAME,
+        status: asNumber(result.detail.status) ?? asString(result.detail.status),
+        type: asNumber(result.detail.type) ?? asString(result.detail.type),
+        hasPhoto: Boolean(result.detail.photo),
+        graphqlErrorCount: result.graphqlErrorCount,
+        errorClassification: "none",
         mp4Count,
         hlsCount,
-        candidates: candidateUrls.flatMap((url) => {
-          const safe = safeUrl(url);
+        extraCandidates: candidateUrls.flatMap((url) => {
+          const safe = persistableHostPath(url);
           return safe ? [safe] : [];
         }),
       },
-    },
+    }),
   };
 }

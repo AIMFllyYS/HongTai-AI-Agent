@@ -1,4 +1,4 @@
-import { TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
+import { persistableSuccessRaw, TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
 import {
   DESKTOP_USER_AGENT,
   asArray,
@@ -129,23 +129,37 @@ export class DouyinAdapter implements PlatformAdapter {
     const cover = asRecord(video?.cover);
     const sources = videoSources(item, link.finalUrl);
     const durationMs = asNumber(video?.duration);
+    const id = asString(item.aweme_id) ?? awemeId;
+    const title = asString(item.desc);
+    const authorName = asString(author?.nickname);
+    const contentType = sources.length > 0 ? "video" as const : "unknown" as const;
 
     return {
       platform: this.platform,
-      contentType: sources.length > 0 ? "video" : "unknown",
-      id: asString(item.aweme_id) ?? awemeId,
+      contentType,
+      id,
       sourceUrl: link.sourceUrl,
       canonicalUrl: link.finalUrl,
-      title: asString(item.desc),
-      description: asString(item.desc),
-      author: asString(author?.nickname),
+      title,
+      description: title,
+      author: authorName,
       coverUrl: normalizeHttpUrl(firstString(cover?.url_list)),
       durationSeconds: durationMs ? durationMs / 1_000 : undefined,
       videos: sources,
       audios: [],
       images: [],
       subtitles: [],
-      raw: { item },
+      raw: persistableSuccessRaw({
+        platform: this.platform,
+        id,
+        contentType,
+        httpStatus: link.status,
+        hasAuthor: Boolean(authorName),
+        hasTitle: Boolean(title),
+        videos: sources,
+        audios: [],
+        images: [],
+      }),
     };
   }
 }

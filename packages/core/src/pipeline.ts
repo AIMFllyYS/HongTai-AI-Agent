@@ -17,6 +17,7 @@ import type {
 } from "./models";
 import { TaskError, issueFromError, safeUrlForDisplay, warningIssue } from "./errors";
 import { normalizeInput } from "./input";
+import { persistableSuccessRawFromContent } from "./persistable-raw";
 
 export const PIPELINE_STAGES = [
   ...TASK_STAGE_VALUES,
@@ -369,9 +370,6 @@ export class IngestPipeline {
         (value, elapsedMs) => `完成：最终链接 ${safeUrlForDisplay(value.finalUrl)}，耗时 ${elapsedMs}ms`,
       );
       resolvedLink = resolved;
-      if (resolved.body) {
-        await this.#dependencies.store.writeText(paths.rawPage, resolved.body);
-      }
 
       const content = await complete(
         "parse-content",
@@ -381,7 +379,7 @@ export class IngestPipeline {
           `完成：标题=${value.title || "未知"}，作者=${value.author || "未知"}，视频源=${value.videos.length}个，耗时 ${elapsedMs}ms`,
       );
       contentType = content.contentType;
-      await this.#dependencies.store.writeJson(paths.rawResponse, content.raw);
+      await this.#dependencies.store.writeJson(paths.rawResponse, persistableSuccessRawFromContent(content, resolved.status));
       await this.#dependencies.store.writeJson(paths.metadata, platformContentForStorage(content));
 
       if (content.contentType === "image_text") {

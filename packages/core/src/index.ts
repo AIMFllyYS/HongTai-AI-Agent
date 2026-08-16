@@ -3,6 +3,7 @@ export * from "./application-runtime";
 export * from "./errors";
 export * from "./input";
 export * from "./models";
+export * from "./persistable-raw";
 export * from "./pipeline";
 export * from "./runtime-id";
 export * from "./transcription";

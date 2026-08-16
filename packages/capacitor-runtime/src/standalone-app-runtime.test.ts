@@ -1,8 +1,21 @@
 import assert from "node:assert/strict";
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { createStandaloneAppRuntime } from "./standalone-app-runtime.js";
 import type { StandaloneAiConnection, StandaloneLocalProfile } from "./standalone-bridge.js";
+
+const nativeFetch = globalThis.fetch;
+globalThis.fetch = async (input, init) => {
+  const href = input instanceof URL ? input.href : typeof input === "string" ? input : input.url;
+  if (href.startsWith("file:") && href.includes("vision-probe.jpg")) {
+    const bytes = await readFile(fileURLToPath(href));
+    return new Response(bytes, { status: 200, headers: { "content-type": "image/jpeg" } });
+  }
+  return nativeFetch(input, init);
+};
 
 function deferred(): { readonly promise: Promise<void>; resolve(): void } {
   let resolve!: () => void;
@@ -340,8 +353,10 @@ test("vision probe sends a provider-compatible synthetic image fixture", async (
   const imageUrl = payload.messages?.[0]?.content?.[1]?.image_url?.url;
   const encoded = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(imageUrl ?? "")?.[1] ?? "";
   const bytes = Buffer.from(encoded, "base64");
+  const fixture = await readFile(new URL("./fixtures/vision-probe.jpg", import.meta.url));
   assert.equal(body?.kind, "json");
   assert.match(imageUrl ?? "", /^data:image\/jpeg;base64,/);
+  assert.equal(Buffer.compare(bytes, fixture), 0, "probe must send the on-disk JPEG fixture, not an embedded literal");
   assert.equal(bytes.subarray(0, 2).toString("hex"), "ffd8");
   assert.equal(bytes.length, 1_804, "fixture must retain its complete provider-tested JPEG payload");
   assert.equal(bytes.subarray(-2).toString("hex"), "ffd9");
@@ -349,4 +364,81 @@ test("vision probe sends a provider-compatible synthetic image fixture", async (
   assert.ok(startOfFrame >= 0, "fixture must contain a baseline JPEG frame");
   assert.equal(bytes.readUInt16BE(startOfFrame + 5), 512, "fixture height must meet the verified provider minimum");
   assert.equal(bytes.readUInt16BE(startOfFrame + 7), 512, "fixture width must meet the verified provider minimum");
+});
+
+test("capacitor-runtime production sources do not embed base64 image literals", async () => {
+  const srcDir = fileURLToPath(new URL(".", import.meta.url));
+  const files = (await readdir(srcDir, { recursive: true }))
+    .filter((name) => name.endsWith(".ts") && !name.endsWith(".test.ts"));
+  const mediaLiteral = /data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]{16,}/i;
+  for (const file of files) {
+    const source = await readFile(join(srcDir, file), "utf8");
+    assert.equal(mediaLiteral.test(source), false, `${file} must not embed a base64 image literal`);
+  }
+});
+
+test("vision probe fails closed when the JPEG fixture cannot be loaded", async () => {
+  let connection: StandaloneAiConnection | undefined;
+  let secret = "";
+  let listener: ((event: never) => void) | undefined;
+  const runtime = await createStandaloneAppRuntime({
+    plugins: {
+      secureSettings: {
+        writeSecret: async ({ value }) => { secret = value; },
+        hasSecret: async () => ({ exists: Boolean(secret) }),
+        removeSecret: async () => { secret = ""; },
+      },
+      localData: {
+        getProfile: async () => ({}),
+        saveProfile: async () => undefined,
+        getAiConnection: async () => ({ ...(connection ? { connection } : {}) }),
+        saveAiConnection: async (value) => { connection = value; },
+        compareAndSetAiProbeResults: async (value) => {
+          if (connection) connection = { ...connection, probeResultsJson: value.probeResultsJson, updatedAtEpochMs: value.updatedAtEpochMs };
+          return { applied: true };
+        },
+      },
+      localFiles: {} as never,
+      nativeNetwork: {
+        addListener: async (_eventName: string, callback: (event: never) => void) => {
+          listener = callback;
+          return { remove: async () => undefined };
+        },
+        startAiRequest: async (request: Readonly<Record<string, unknown>>) => {
+          queueMicrotask(() => {
+            listener?.({ type: "chunk", requestId: request.requestId, sequence: 1, chunk: 'data: {"choices":[{"delta":{"content":"OK"}}]}\n\n' } as never);
+            listener?.({ type: "completed", requestId: request.requestId, sequence: 2 } as never);
+          });
+          return { requestId: request.requestId, accepted: true, status: 200, headers: { "content-type": "text/event-stream" } };
+        },
+      } as never,
+      fileMedia: {} as never,
+      mediaRuntime: {} as never,
+    },
+    convertFileSrc: (uri) => `capacitor://localhost/${uri.slice("file:///".length)}`,
+    now: () => new Date("2026-08-07T00:00:00.000Z"),
+  });
+
+  await runtime.aiSettings.save({
+    baseUrl: "https://provider.example/v1",
+    textModel: "text-model",
+    visionModel: "vision-model",
+    asrModel: "asr-model",
+    asrTransport: "audio-transcriptions",
+    supportsJsonObject: true,
+    supportsJsonSchema: true,
+  });
+  await runtime.aiSettings.replaceApiKey("probe-key");
+
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new TypeError("vision probe fixture unavailable");
+  };
+  try {
+    const result = await runtime.aiSettings.probe("vision");
+    assert.equal(result.status, "failed");
+    assert.equal(result.issue?.code, "AI_CAPABILITY_PROBE_FAILED");
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
 });
