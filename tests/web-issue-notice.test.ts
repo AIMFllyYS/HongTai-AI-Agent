@@ -164,6 +164,7 @@ test("IssueNotice diagnostic copy wraps on desktop and about 390px instead of hi
 test("task, observation, and settings pages use the one IssueNotice action boundary", () => {
   const pages = [
     "pages/TaskHomePage.tsx",
+    "pages/TaskPage.tsx",
     "pages/TaskProcessingPage.tsx",
     "pages/TaskDetailPage.tsx",
     "pages/TaskAnalysisPage.tsx",
@@ -212,7 +213,8 @@ test("task, observation, and settings pages use the one IssueNotice action bound
   assert.match(processing, /task\.speechStatus/);
   assert.match(processing, /task\.status === "degraded"/);
   assert.match(processing, /task\.status === "succeeded"/);
-  assert.match(processing, /taskDetailPath\(task\.id\)/);
+  assert.match(processing, /onPartialResult/);
+  assert.doesNotMatch(processing, /taskDetailPath\(task\.id\)/);
   assert.match(detail, /partialResult:/);
   assert.match(detail, /id="task-detail-media"/);
   assert.match(detail, /id="task-detail-transcript"/);
@@ -221,7 +223,9 @@ test("task, observation, and settings pages use the one IssueNotice action bound
   assert.match(detail, /scrollIntoView/);
   assert.match(analysis, /partialResult:/);
   assert.match(analysis, /detail\.evidenceUnits\.length > 0/);
-  assert.match(analysis, /taskDetailPath\(taskId\)/);
+  assert.match(analysis, /task-detail-summary/);
+  assert.match(analysis, /scrollIntoView/);
+  assert.doesNotMatch(analysis, /taskDetailPath\(taskId\)/);
   assert.doesNotMatch(home, /partialResult:/);
   assert.doesNotMatch(create, /partialResult:/);
   assert.doesNotMatch(templates, /partialResult:/);

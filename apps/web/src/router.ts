@@ -53,6 +53,13 @@ export interface NavigateOptions {
 
 export type Navigate = (path: string, options?: NavigateOptions) => void;
 
+export const taskPageAliasKeys = ["task-processing", "task-detail", "task-analysis"] as const;
+export type TaskPageAliasKey = (typeof taskPageAliasKeys)[number];
+
+export function isTaskPageAlias(key: RouteKey): key is TaskPageAliasKey {
+  return (taskPageAliasKeys as readonly string[]).includes(key);
+}
+
 export const appRoutes: readonly AppRoute[] = [
   { path: "/", key: "home", navKey: "home" },
   { path: "/tasks/:taskId/processing", key: "task-processing", navKey: "home" },

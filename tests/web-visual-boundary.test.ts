@@ -9,7 +9,7 @@ import * as router from "../apps/web/src/router";
 const webRoot = join(process.cwd(), "apps", "web", "src");
 const read = (relativePath: string) => readFileSync(join(webRoot, relativePath), "utf8");
 
-const { appRoutes, matchRoute, pathForRoute, routeTransitionDirection } = router;
+const { appRoutes, isTaskPageAlias, matchRoute, pathForRoute, routeTransitionDirection, taskPageAliasKeys } = router;
 
 type DynamicRouteBuilders = {
   readonly taskProcessingPath: (taskId: string) => string;
@@ -67,6 +67,12 @@ test("dynamic task routes decode their identifiers and keep analysis as a distin
   const analysis = matchRoute("/tasks/task-42/analysis");
   assert.equal(analysis.key, "task-analysis");
   assert.deepEqual(analysis.params, { taskId: "task-42" });
+
+  assert.deepEqual([...taskPageAliasKeys], ["task-processing", "task-detail", "task-analysis"]);
+  assert.equal(isTaskPageAlias("task-processing"), true);
+  assert.equal(isTaskPageAlias("task-detail"), true);
+  assert.equal(isTaskPageAlias("task-analysis"), true);
+  assert.equal(isTaskPageAlias("home"), false);
 });
 
 test("route builders encode opaque task and observation identifiers", () => {

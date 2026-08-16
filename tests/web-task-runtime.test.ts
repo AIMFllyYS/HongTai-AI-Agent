@@ -218,6 +218,7 @@ test("content-analysis presenter renders only validated content-analysis.v1 fiel
 test("runtime task pages are wired to AppRuntime and static fixtures remain outside the live routes", () => {
   for (const relativePath of [
     "pages/TaskHomePage.tsx",
+    "pages/TaskPage.tsx",
     "pages/TaskProcessingPage.tsx",
     "pages/TaskDetailPage.tsx",
     "pages/TaskAnalysisPage.tsx",
@@ -227,27 +228,26 @@ test("runtime task pages are wired to AppRuntime and static fixtures remain outs
   }
 
   const app = read("App.tsx");
-  for (const component of ["TaskHomePage", "TaskProcessingPage", "TaskDetailPage", "TaskAnalysisPage"]) {
+  for (const component of ["TaskHomePage", "TaskPage"]) {
     assert.match(app, new RegExp(component));
   }
+  assert.doesNotMatch(app, /<TaskProcessingPage|<TaskDetailPage|<TaskAnalysisPage/);
   assert.match(read("pages/TaskHomePage.tsx"), /runtime\.tasks\.inspectInput/);
   assert.match(read("pages/TaskHomePage.tsx"), /submitLocalTask\(runtime\.tasks/);
   assert.match(read("pages/TaskHomePage.tsx"), /runtime\.analysis\.importVideo\(/);
   assert.match(read("pages/TaskHomePage.tsx"), /sourceKind === "local_video"/);
-  assert.match(read("pages/TaskProcessingPage.tsx"), /runtime\.tasks\.subscribe/);
-  assert.match(read("pages/TaskProcessingPage.tsx"), /runtime\.tasks\.listEvents/);
-  assert.match(read("pages/TaskDetailPage.tsx"), /runtime\.tasks\.getDetail/);
+  assert.match(read("pages/TaskPage.tsx"), /runtime\.tasks\.subscribe/);
+  assert.match(read("pages/TaskPage.tsx"), /runtime\.tasks\.listEvents/);
+  assert.match(read("pages/TaskPage.tsx"), /runtime\.tasks\.getDetail/);
+  assert.match(read("pages/TaskPage.tsx"), /runtime\.analysis\.get/);
   assert.match(read("pages/TaskDetailPage.tsx"), /runtime\.analysis\.run/);
-  assert.match(read("pages/TaskDetailPage.tsx"), /runtime\.tasks\.delete\(taskId\)/);
-  assert.match(read("pages/TaskAnalysisPage.tsx"), /runtime\.analysis\.get/);
+  assert.match(read("pages/TaskDetailPage.tsx"), /runtime\.tasks\.delete\(/);
 });
 
 test("every live task page re-reads its safe persisted DTOs after app resume", () => {
   const pages = new Map([
     ["pages/TaskHomePage.tsx", "loadHistory"],
-    ["pages/TaskProcessingPage.tsx", "load"],
-    ["pages/TaskDetailPage.tsx", "load"],
-    ["pages/TaskAnalysisPage.tsx", "load"],
+    ["pages/TaskPage.tsx", "load"],
   ]);
   for (const [relativePath, loader] of pages) {
     const source = read(relativePath);
@@ -259,17 +259,17 @@ test("every live task page re-reads its safe persisted DTOs after app resume", (
 
 test("task pages keep real events but never offer stop or lineage-retry controls", () => {
   const home = read("pages/TaskHomePage.tsx");
+  const page = read("pages/TaskPage.tsx");
   const processing = read("pages/TaskProcessingPage.tsx");
   const detail = read("pages/TaskDetailPage.tsx");
-  const analysis = read("pages/TaskAnalysisPage.tsx");
 
   assert.match(home, /runtime\.tasks\.inspectInput/);
   assert.match(home, /runtime\.tasks\.list/);
   assert.match(home, /disabled=\{!ingestAvailable \|\| !inspection\?\.ok \|\| submitting \|\| videoImporting\}/);
   assert.doesNotMatch(home, /if \(!ingestAvailable\) return/);
   assert.doesNotMatch(processing, /if \(!ingestAvailable\) return/);
-  assert.match(detail, /runtime\.tasks\.getDetail/);
-  assert.match(analysis, /runtime\.analysis\.get/);
+  assert.match(page, /runtime\.tasks\.getDetail/);
+  assert.match(page, /runtime\.analysis\.get/);
   assert.match(detail, /<IssueNotice actions=\{issueActions\} issue=\{activeIssue\}/);
   assert.doesNotMatch(processing, /runtime\.tasks\.(cancel|retry)/);
   assert.doesNotMatch(detail, /runtime\.tasks\.retry/);
@@ -329,15 +329,134 @@ test("LatestReadGuard current() does not retire a sibling read; begin/invalidate
 });
 
 test("processing load and subscribe share a non-bumping generation; analysis load keeps newer records", () => {
+  const page = read("pages/TaskPage.tsx");
+
+  assert.match(page, /const generation = latestRead\.current\.current\(\)/);
+  assert.doesNotMatch(page, /latestRead\.current\.begin\(\)/);
+  assert.match(page, /detailRead\.current\.begin\(\)/);
+  assert.match(page, /setTask\(\(current\) => preferNewerByUpdatedAt\(current, nextTask\)\)/);
+  assert.match(page, /setEvents\(\(current\) => mergeEvents\(current, event\)\)/);
+  assert.match(page, /latestRead\.current\.invalidate\(\)/);
+  assert.match(page, /detailRead\.current\.invalidate\(\)/);
+
+  assert.match(page, /setRecord\(\(current\) => preferNewerByUpdatedAt\(current, nextRecord\)\)/);
+  assert.match(page, /setRecord\(\(current\) => preferNewerByUpdatedAt\(current, event\.record\)\)/);
+});
+
+test("three task URL aliases mount one TaskPage and stay mounted after ingest completes", () => {
+  const app = read("App.tsx");
+  const page = read("pages/TaskPage.tsx");
   const processing = read("pages/TaskProcessingPage.tsx");
-  const analysis = read("pages/TaskAnalysisPage.tsx");
+  const swipe = read("components/SwipeRouteViewport.tsx");
+  const routerSource = read("router.ts");
 
-  assert.match(processing, /const generation = latestRead\.current\.current\(\)/);
-  assert.doesNotMatch(processing, /latestRead\.current\.begin\(\)/);
-  assert.match(processing, /setTask\(\(current\) => preferNewerByUpdatedAt\(current, nextTask\)\)/);
-  assert.match(processing, /setEvents\(\(current\) => mergeEvents\(current, event\)\)/);
-  assert.match(processing, /latestRead\.current\.invalidate\(\)/);
+  assert.match(routerSource, /export const taskPageAliasKeys/);
+  assert.match(routerSource, /"task-processing"/);
+  assert.match(routerSource, /"task-detail"/);
+  assert.match(routerSource, /"task-analysis"/);
+  assert.match(routerSource, /path:\s*"\/tasks\/:taskId\/processing"/);
+  assert.match(routerSource, /path:\s*"\/tasks\/:taskId"/);
+  assert.match(routerSource, /path:\s*"\/tasks\/:taskId\/analysis"/);
 
-  assert.match(analysis, /setRecord\(\(current\) => preferNewerByUpdatedAt\(current, nextRecord\)\)/);
-  assert.match(analysis, /setRecord\(\(current\) => preferNewerByUpdatedAt\(current, event\.record\)\)/);
+  assert.match(app, /isTaskPageAlias\(renderedRoute\.key\)/);
+  assert.match(app, /<TaskPage key=\{taskId\}/);
+  assert.equal([...app.matchAll(/<TaskPage\b/g)].length, 1);
+  assert.doesNotMatch(app, /<TaskProcessingPage|<TaskDetailPage|<TaskAnalysisPage/);
+
+  assert.match(page, /resolveTaskPageSurface/);
+  assert.doesNotMatch(page, /isTerminalTaskStatus/);
+  assert.doesNotMatch(page, /navigate\(taskDetailPath/);
+  assert.doesNotMatch(page, /navigate\(taskAnalysisPath/);
+  assert.doesNotMatch([page, processing, read("pages/TaskDetailPage.tsx"), read("pages/TaskAnalysisPage.tsx")].join("\n"), /查看任务详情|查看拆解结果|查看当前状态|查看拆解状态/);
+  assert.doesNotMatch(page, /contextualAction=/);
+  assert.match(processing, /进程在后台运行，可以放心离开此页/);
+  assert.match(processing, /<Button variant="secondary"[\s\S]*?开始执行/);
+  assert.doesNotMatch(processing, /<Button(?! variant="secondary")[\s\S]*?开始执行/);
+
+  const surface = [page, processing, read("pages/TaskDetailPage.tsx"), read("pages/TaskAnalysisPage.tsx")].join("\n");
+  assert.match(page, /LiveListReadReconciler<TaskChangeEventV1>/);
+  assert.match(page, /from "\.\.\/features\/tasks\/latest-read-guard"/);
+  assert.match(page, /from "\.\.\/hooks\/useAppResume"/);
+  assert.match(surface, /ContentAnalysisDocument/);
+  assert.match(surface, /TaskProgressSteps/);
+  assert.match(surface, /ValidatedModuleProgress/);
+  assert.match(surface, /RuntimeMediaFrame/);
+  assert.match(surface, /IssueNotice/);
+  assert.match(surface, /readContentAnalysis/);
+
+  assert.doesNotMatch(swipe, /TaskPage|TaskProcessingPage|TaskDetailPage|TaskAnalysisPage/);
+  assert.match(swipe, /SwipeRoutePreviewPane/);
+  assert.doesNotMatch(swipe, /runtime\.tasks\.subscribe|runtime\.analysis\.subscribe/);
+});
+
+test("applyTaskDetailChange only accepts newer upserts for the same taskId", async () => {
+  const { applyTaskDetailChange } = await import("../apps/web/src/pages/task-page-model") as {
+    applyTaskDetailChange: (
+      current: { readonly task: { readonly id: string; readonly updatedAt: string } } | undefined,
+      event:
+        | { readonly type: "upsert"; readonly task: { readonly id: string; readonly updatedAt: string } }
+        | { readonly type: "deleted"; readonly taskId: string },
+      taskId: string,
+    ) => { readonly task: { readonly id: string; readonly updatedAt: string } } | undefined;
+  };
+
+  const current = { task: { id: "task-1", updatedAt: "2026-08-17T00:01:00.000Z" } };
+  const older = { type: "upsert" as const, task: { id: "task-1", updatedAt: "2026-08-17T00:00:00.000Z" } };
+  const newer = { type: "upsert" as const, task: { id: "task-1", updatedAt: "2026-08-17T00:02:00.000Z" } };
+  const other = { type: "upsert" as const, task: { id: "task-2", updatedAt: "2026-08-17T00:03:00.000Z" } };
+
+  assert.equal(applyTaskDetailChange(current, older, "task-1")?.task.updatedAt, current.task.updatedAt);
+  assert.equal(applyTaskDetailChange(current, newer, "task-1")?.task.updatedAt, newer.task.updatedAt);
+  assert.equal(applyTaskDetailChange(current, other, "task-1")?.task.id, "task-1");
+  assert.equal(applyTaskDetailChange(current, { type: "deleted", taskId: "task-1" }, "task-1"), undefined);
+  assert.equal(applyTaskDetailChange(current, { type: "deleted", taskId: "task-2" }, "task-1")?.task.id, "task-1");
+});
+
+test("打开已完成任务在两次读取结束前保持 loading，不闪缺失", async () => {
+  const { resolveTaskPageSurface } = await import("../apps/web/src/pages/task-page-model") as {
+    resolveTaskPageSurface?: (input: {
+      readonly loading: boolean;
+      readonly status?: string;
+      readonly hasDetail: boolean;
+    }) => string;
+  };
+  assert.equal(typeof resolveTaskPageSurface, "function");
+  assert.equal(resolveTaskPageSurface?.({ loading: true, status: "succeeded", hasDetail: false }), "loading");
+  assert.notEqual(resolveTaskPageSurface?.({ loading: true, status: "succeeded", hasDetail: false }), "completed-missing");
+  assert.equal(resolveTaskPageSurface?.({ loading: false, status: "succeeded", hasDetail: true }), "completed");
+  assert.equal(resolveTaskPageSurface?.({ loading: false, status: "degraded", hasDetail: true }), "completed");
+
+  const page = read("pages/TaskPage.tsx");
+  const processingFn = page.slice(page.indexOf("const loadProcessing"), page.indexOf("const loadDetail"));
+  const loadFn = page.slice(page.indexOf("const load = useCallback"), page.indexOf("useAppResume(load)"));
+  assert.doesNotMatch(processingFn, /setLoading\(false\)/);
+  assert.match(loadFn, /loadProcessing/);
+  assert.match(loadFn, /loadDetail/);
+  assert.match(loadFn, /setLoading\(false\)/);
+  assert.match(page, /resolveTaskPageSurface/);
+});
+
+test("failed interrupted cancelled 仍走处理页", async () => {
+  const { isCompletedTaskSurface, resolveTaskPageSurface } = await import("../apps/web/src/pages/task-page-model") as {
+    isCompletedTaskSurface?: (status: string) => boolean;
+    resolveTaskPageSurface?: (input: {
+      readonly loading: boolean;
+      readonly status?: string;
+      readonly hasDetail: boolean;
+    }) => string;
+  };
+  assert.equal(typeof isCompletedTaskSurface, "function");
+  assert.equal(typeof resolveTaskPageSurface, "function");
+  for (const status of ["failed", "interrupted", "cancelled"] as const) {
+    assert.equal(isCompletedTaskSurface?.(status), false);
+    assert.equal(resolveTaskPageSurface?.({ loading: false, status, hasDetail: false }), "processing");
+  }
+  assert.equal(isCompletedTaskSurface?.("succeeded"), true);
+  assert.equal(isCompletedTaskSurface?.("degraded"), true);
+  assert.equal(isCompletedTaskSurface?.("running"), false);
+  assert.equal(isCompletedTaskSurface?.("queued"), false);
+
+  const page = read("pages/TaskPage.tsx");
+  assert.match(page, /resolveTaskPageSurface/);
+  assert.doesNotMatch(page, /isTerminalTaskStatus/);
 });

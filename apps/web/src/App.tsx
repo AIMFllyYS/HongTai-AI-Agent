@@ -8,16 +8,14 @@ import { SwipeRouteViewport } from "./components/SwipeRouteViewport";
 import type { VisualDataAdapter } from "./data/visual-adapter";
 import { useInteractionFeedback } from "./hooks/useInteractionFeedback";
 import { useBrowserRoute } from "./hooks/useBrowserRoute";
-import { matchRoute } from "./router";
+import { isTaskPageAlias, matchRoute } from "./router";
 import { TemplatesPage } from "./pages/TemplatesPage";
 import { CreatePage } from "./pages/CreatePage";
 import { HomePage } from "./pages/HomePage";
 import { ObservationReportPage } from "./pages/ObservationReportPage";
 import { ObservationStartPage } from "./pages/ObservationStartPage";
-import { TaskAnalysisPage } from "./pages/TaskAnalysisPage";
-import { TaskDetailPage } from "./pages/TaskDetailPage";
 import { TaskHomePage } from "./pages/TaskHomePage";
-import { TaskProcessingPage } from "./pages/TaskProcessingPage";
+import { TaskPage } from "./pages/TaskPage";
 import { AiSettingsPage } from "./pages/AiSettingsPage";
 import { ApplicationInfoPage } from "./pages/ApplicationInfoPage";
 import { ProfileSettingsPage } from "./pages/ProfileSettingsPage";
@@ -65,22 +63,10 @@ export function App({ runtime, visualData }: AppProps = {}) {
         : <RuntimePendingPage description="版本信息暂时无法读取，请重新打开应用。" navigate={navigate} title="应用信息暂时不可用" />;
     }
     if (runtime && renderedRoute.key === "home") return <TaskHomePage navigate={navigate} runtime={runtime} />;
-    if (runtime && renderedRoute.key === "task-processing") {
+    if (runtime && isTaskPageAlias(renderedRoute.key)) {
       const taskId = renderedRoute.params.taskId;
       return taskId
-        ? <TaskProcessingPage key={taskId} navigate={navigate} runtime={runtime} taskId={taskId} />
-        : <RuntimePendingPage description="这个任务链接不完整，请返回任务列表重新进入。" navigate={navigate} title="无法打开任务" />;
-    }
-    if (runtime && renderedRoute.key === "task-detail") {
-      const taskId = renderedRoute.params.taskId;
-      return taskId
-        ? <TaskDetailPage key={taskId} navigate={navigate} runtime={runtime} taskId={taskId} />
-        : <RuntimePendingPage description="这个任务链接不完整，请返回任务列表重新进入。" navigate={navigate} title="无法打开任务" />;
-    }
-    if (runtime && renderedRoute.key === "task-analysis") {
-      const taskId = renderedRoute.params.taskId;
-      return taskId
-        ? <TaskAnalysisPage key={taskId} navigate={navigate} runtime={runtime} taskId={taskId} />
+        ? <TaskPage key={taskId} navigate={navigate} runtime={runtime} taskId={taskId} />
         : <RuntimePendingPage description="这个任务链接不完整，请返回任务列表重新进入。" navigate={navigate} title="无法打开任务" />;
     }
     if (runtime && renderedRoute.key === "observation-new") {

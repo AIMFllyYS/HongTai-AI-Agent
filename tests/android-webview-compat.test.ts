@@ -35,6 +35,7 @@ test("WebView 89 runtime paths avoid newer browser-only helpers", () => {
     read("packages/ai/src/flows/content-analysis/content-analysis-flow.ts"),
     read("packages/ai/src/flows/diagnosis/diagnosis-flow.ts"),
     read("packages/capacitor-runtime/src/standalone-production-service.ts"),
+    read("apps/web/src/pages/TaskPage.tsx"),
     read("apps/web/src/pages/TaskDetailPage.tsx"),
     read("apps/web/src/pages/TaskProcessingPage.tsx"),
   ].join("\n");

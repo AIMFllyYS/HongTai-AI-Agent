@@ -194,9 +194,7 @@ test("legacy raw-json stream preview residue is removed from runtime and web UI"
 
 test("live generation pages use narrow subscriptions with no healthy-state manual refresh", () => {
   const home = read("pages/TaskHomePage.tsx");
-  const processing = read("pages/TaskProcessingPage.tsx");
-  const detail = read("pages/TaskDetailPage.tsx");
-  const analysis = read("pages/TaskAnalysisPage.tsx");
+  const taskPage = read("pages/TaskPage.tsx");
   const observationStart = read("pages/ObservationStartPage.tsx");
   const observationReport = read("pages/ObservationReportPage.tsx");
   const component = read("components/ValidatedModuleProgress.tsx");
@@ -207,11 +205,11 @@ test("live generation pages use narrow subscriptions with no healthy-state manua
   assert.match(home, /taskHistoryReads\.current\.record\(event\)/);
   assert.match(home, /if \(reconciled === undefined\) return;/);
   assert.match(home, /runtime\.analysis\.importVideo\([^)]*event/);
-  assert.match(processing, /runtime\.tasks\.subscribe/);
-  assert.match(detail, /runtime\.tasks\.subscribeChanges/);
-  assert.match(detail, /runtime\.analysis\.subscribe\(taskId/);
-  assert.match(analysis, /runtime\.tasks\.subscribeChanges/);
-  assert.match(analysis, /runtime\.analysis\.subscribe\(taskId/);
+  assert.match(taskPage, /runtime\.tasks\.subscribe/);
+  assert.match(taskPage, /runtime\.tasks\.subscribeChanges/);
+  assert.match(taskPage, /runtime\.analysis\.subscribe\(taskId/);
+  assert.match(taskPage, /LiveListReadReconciler<TaskChangeEventV1>/);
+  assert.match(taskPage, /if \(reconciled === undefined\) return;/);
   assert.match(observationStart, /runtime\.diagnosis\.subscribeReport/);
   assert.match(observationStart, /if \(subscriptions\.has\(sessionId\)\) continue/);
   assert.match(observationStart, /wantedIds\.has\(sessionId\)[\s\S]*subscriptions\.delete\(sessionId\)/);
@@ -224,12 +222,12 @@ test("live generation pages use narrow subscriptions with no healthy-state manua
   assert.match(observationReport, /reportWaitingForStart[\s\S]*开始生成报告/);
   assert.match(observationReport, /reportIsActive \? <ValidatedModuleProgress/);
 
-  for (const source of [home, detail, analysis, observationStart, observationReport]) {
+  for (const source of [home, taskPage, observationStart, observationReport]) {
     assert.doesNotMatch(source, /setInterval|setTimeout|WebSocket/);
     assert.doesNotMatch(source, />刷新</);
     assert.doesNotMatch(source, /刷新本地详情|刷新本地结果/);
   }
-  assert.doesNotMatch([home, detail, analysis, observationStart, observationReport, component].join("\n"), /StructuredStreamProgress|已接收\s*\d*\s*个字符/);
+  assert.doesNotMatch([home, taskPage, observationStart, observationReport, component].join("\n"), /StructuredStreamProgress|已接收\s*\d*\s*个字符/);
   assert.match(component, /aria-atomic="true" aria-live="polite"[\s\S]*role="status"/);
   assert.match(component, /没有完成，后续内容暂未开始/);
   assert.doesNotMatch(component, /<code>\{row\.issue\?\.code\}<\/code>/);

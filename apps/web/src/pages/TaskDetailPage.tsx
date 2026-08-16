@@ -1,27 +1,28 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { issueFromAppError, safeUrlForDisplay } from "@hongtai/core";
 import type { AppRuntime, MediaReference, StructuredGenerationProgressV1, TaskDetailRecord, TaskIssue } from "@hongtai/core";
 
-import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { RuntimeMediaFrame } from "../components/RuntimeMediaFrame";
-import { EmptyState, ErrorState, LoadingState } from "../components/StatePanels";
+import { EmptyState } from "../components/StatePanels";
 import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
 import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
 import { contentAnalysisModuleDefinitions } from "../features/tasks/content-analysis-module-progress";
-import { LatestReadGuard } from "../features/tasks/latest-read-guard";
 import { contentTypeLabel, formatTaskTime, platformLabel } from "../features/tasks/task-presenters";
-import { useAppResume } from "../hooks/useAppResume";
-import { aiSettingsPath, pathForRoute, taskAnalysisPath, type Navigate } from "../router";
+import { aiSettingsPath, pathForRoute, type Navigate } from "../router";
 
 export interface TaskDetailPageProps {
   readonly runtime: AppRuntime;
-  readonly taskId: string;
+  readonly detail: TaskDetailRecord;
   readonly navigate: Navigate;
+  readonly readIssue?: TaskIssue;
+  readonly issue?: TaskIssue;
+  readonly streamProgress?: StructuredGenerationProgressV1;
+  readonly onReload: () => void;
 }
 
 function hasPersistedPartial(detail: TaskDetailRecord): boolean {
@@ -50,80 +51,19 @@ function uniqueMedia(media: readonly MediaReference[]): readonly MediaReference[
   });
 }
 
-export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProps) {
-  const [detail, setDetail] = useState<TaskDetailRecord>();
-  const [loading, setLoading] = useState(true);
-  const [issue, setIssue] = useState<TaskIssue>();
-  const [readIssue, setReadIssue] = useState<TaskIssue>();
+export function TaskDetailPage({ runtime, detail, navigate, readIssue, issue, streamProgress, onReload }: TaskDetailPageProps) {
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<"analysis" | "delete">();
-  const [streamProgress, setStreamProgress] = useState<StructuredGenerationProgressV1>();
-  const latestRead = useRef(new LatestReadGuard());
-
-  const load = useCallback(async () => {
-    const generation = latestRead.current.begin();
-    try {
-      const nextDetail = await runtime.tasks.getDetail(taskId);
-      if (!latestRead.current.isCurrent(generation)) return;
-      setDetail(nextDetail);
-      setReadIssue(undefined);
-    } catch (error) {
-      if (!latestRead.current.isCurrent(generation)) return;
-      setReadIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "任务详情暂时无法读取", action: "none" }));
-    } finally {
-      if (latestRead.current.isCurrent(generation)) setLoading(false);
-    }
-  }, [runtime, taskId]);
-
-  useAppResume(load);
-
-  useEffect(() => {
-    void load();
-    let unsubscribeTaskChange: (() => void) | undefined;
-    let unsubscribeAnalysis: (() => void) | undefined;
-    try {
-      unsubscribeTaskChange = runtime.tasks.subscribeChanges((event) => {
-        if (event.type === "deleted" && event.taskId === taskId) {
-          setDetail(undefined);
-          return;
-        }
-        if (event.type === "upsert" && event.task.id === taskId) {
-          setDetail((current) => current ? { ...current, task: event.task } : current);
-          void load();
-        }
-      });
-      unsubscribeAnalysis = runtime.analysis.subscribe(taskId, (event) => {
-        if (event.type === "progress") setStreamProgress(event.progress);
-        if (event.type === "failed") {
-          setStreamProgress(event.progress);
-          setIssue(event.issue);
-          void load();
-        }
-        if (event.type === "completed") {
-          setStreamProgress(undefined);
-          void load();
-        }
-      });
-    } catch (error) {
-      setReadIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "任务自动更新暂时不可用", action: "none" }));
-    }
-    return () => {
-      latestRead.current.invalidate();
-      unsubscribeTaskChange?.();
-      unsubscribeAnalysis?.();
-    };
-  }, [load, runtime, taskId]);
+  const [localIssue, setLocalIssue] = useState<TaskIssue>();
 
   const runAnalysis = async () => {
     setPendingAction("analysis");
-    setIssue(undefined);
-    setStreamProgress(undefined);
+    setLocalIssue(undefined);
     try {
-      await runtime.analysis.run(taskId);
-      navigate(taskAnalysisPath(taskId));
+      await runtime.analysis.run(detail.task.id);
     } catch (error) {
-      setIssue(issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "内容拆解无法开始", action: "none" }));
+      setLocalIssue(issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "内容拆解无法开始", action: "none" }));
     } finally {
       setPendingAction(undefined);
       setConfirmationOpen(false);
@@ -132,38 +72,29 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
 
   const deleteTask = async () => {
     setPendingAction("delete");
-    setIssue(undefined);
+    setLocalIssue(undefined);
     try {
-      await runtime.tasks.delete(taskId);
+      await runtime.tasks.delete(detail.task.id);
       navigate(pathForRoute("home"));
     } catch (error) {
-      setIssue(issueFromAppError(error, { code: "STORAGE_WRITE_FAILED", message: "任务和视频没有删除完成", action: "retry" }));
+      setLocalIssue(issueFromAppError(error, { code: "STORAGE_WRITE_FAILED", message: "任务和视频没有删除完成", action: "retry" }));
     } finally {
       setPendingAction(undefined);
       setDeleteConfirmationOpen(false);
     }
   };
 
-  const imageMedia = useMemo(() => detail ? uniqueMedia([
+  const imageMedia = useMemo(() => uniqueMedia([
     ...detail.media.filter((item) => item.kind === "image"),
     ...(detail.content.cover ? [detail.content.cover] : []),
-  ]) : [], [detail]);
-  const video = detail?.media.find((item) => item.kind === "video");
-  const audio = detail?.media.find((item) => item.kind === "audio");
-
-  if (loading) {
-    return <AppShell activeNav="home" backPath="/" navigate={navigate} title="任务详情"><LoadingState description="正在读取已保存的内容" title="加载任务详情" /></AppShell>;
-  }
-  if (!detail) {
-    const unavailableIssue = readIssue ?? issue;
-    return <AppShell activeNav="home" backPath="/" navigate={navigate} title="任务详情"><div className="page-stack page-task-detail">{unavailableIssue ? <IssueNotice issue={unavailableIssue} /> : null}<ErrorState description={unavailableIssue?.userMessage ?? "该任务不存在，或没有可展示的本地详情。"} title="找不到任务详情" /></div></AppShell>;
-  }
-
+  ]), [detail]);
+  const video = detail.media.find((item) => item.kind === "video");
+  const audio = detail.media.find((item) => item.kind === "audio");
   const task = detail.task;
   const localVideo = task.sourceKind === "local_video";
   const platform = localVideo ? "本地上传" : platformLabel(task.platform);
   const contentType = contentTypeLabel(task.contentType);
-  const activeIssue = readIssue ?? issue ?? task.issues[task.issues.length - 1];
+  const activeIssue = readIssue ?? localIssue ?? issue ?? task.issues[task.issues.length - 1];
   const needsNewSubmission = task.status === "failed" || task.status === "interrupted" || task.status === "cancelled";
   const hasEvidence = detail.evidenceUnits.length > 0;
   const terminalWithOutput = task.status === "succeeded" || task.status === "degraded";
@@ -176,74 +107,72 @@ export function TaskDetailPage({ runtime, taskId, navigate }: TaskDetailPageProp
   };
 
   return (
-    <AppShell activeNav="home" backPath="/" navigate={navigate} title="任务详情">
-      <div className="page-stack page-task-detail">
-        <TaskCapabilityNotice capability={runtime.features.ingest} feature="ingest" />
-        {activeIssue ? <IssueNotice actions={issueActions} issue={activeIssue} /> : null}
+    <>
+      <TaskCapabilityNotice capability={runtime.features.ingest} feature="ingest" />
+      {activeIssue ? <IssueNotice actions={issueActions} issue={activeIssue} /> : null}
 
-        <GlassCard className="task-detail-summary" id="task-detail-summary">
-          <div className="task-detail-summary__heading"><div><span className="eyebrow">LOCAL TASK</span><h2>{detail.content.title ?? (localVideo ? "本地上传视频" : "未提供标题")}</h2></div><TaskStatusBadge status={task.status} /></div>
-          <p className="technical-value">{localVideo ? "本地上传 · 私有任务文件" : safeUrlForDisplay(detail.content.canonicalUrl ?? task.sourceUrl)}</p>
-          <div className="task-detail-summary__facts">
-            {platform ? <span><Icon name="language" size={15} />{platform}</span> : null}
-            {contentType ? <span><Icon name={task.contentType === "image_text" ? "grid" : "video_file"} size={15} />{contentType}</span> : null}
-            {detail.content.author ? <span><Icon name="face" size={15} />{detail.content.author}</span> : null}
-            {detail.content.durationSeconds === undefined ? null : <span><Icon name="update" size={15} />{detail.content.durationSeconds} 秒</span>}
-            {formatTaskTime(task.updatedAt) ? <span><Icon name="history" size={15} />{formatTaskTime(task.updatedAt)}</span> : null}
-          </div>
-          {detail.content.description ? <div className="task-detail-summary__description">{detail.content.description}</div> : null}
-        </GlassCard>
+      <GlassCard className="task-detail-summary" id="task-detail-summary">
+        <div className="task-detail-summary__heading"><div><span className="eyebrow">LOCAL TASK</span><h2>{detail.content.title ?? (localVideo ? "本地上传视频" : "未提供标题")}</h2></div><TaskStatusBadge status={task.status} /></div>
+        <p className="technical-value">{localVideo ? "本地上传 · 私有任务文件" : safeUrlForDisplay(detail.content.canonicalUrl ?? task.sourceUrl)}</p>
+        <div className="task-detail-summary__facts">
+          {platform ? <span><Icon name="language" size={15} />{platform}</span> : null}
+          {contentType ? <span><Icon name={task.contentType === "image_text" ? "grid" : "video_file"} size={15} />{contentType}</span> : null}
+          {detail.content.author ? <span><Icon name="face" size={15} />{detail.content.author}</span> : null}
+          {detail.content.durationSeconds === undefined ? null : <span><Icon name="update" size={15} />{detail.content.durationSeconds} 秒</span>}
+          {formatTaskTime(task.updatedAt) ? <span><Icon name="history" size={15} />{formatTaskTime(task.updatedAt)}</span> : null}
+        </div>
+        {detail.content.description ? <div className="task-detail-summary__description">{detail.content.description}</div> : null}
+      </GlassCard>
 
-        <section className="page-section" id="task-detail-media">
-          <div className="section-heading"><h3>{task.contentType === "image_text" ? "已保存图片" : "已保存媒体"}</h3><span className="analysis-count">{detail.media.length} 个文件</span></div>
-          {task.contentType === "image_text" ? (
-            imageMedia.length === 0 ? <EmptyState description="任务没有可展示的已保存图片。" icon="folder_open" title="暂无图片" /> : <div className="runtime-image-gallery">{imageMedia.map((media) => <RuntimeMediaFrame className="runtime-image-gallery__item" key={media.uri} label={media.displayName ?? "已保存图片"} media={media} />)}</div>
-          ) : video ? <RuntimeMediaFrame className="runtime-video-frame" label={detail.content.title ?? "已保存视频"} media={video} /> : detail.content.cover ? <RuntimeMediaFrame className="runtime-video-frame" label={detail.content.title ?? "已保存封面"} media={detail.content.cover} /> : <EmptyState description="任务没有可展示的已保存视频或封面。" icon="folder_open" title="暂无媒体" />}
-          {audio ? <RuntimeMediaFrame className="runtime-audio-frame" label={audio.displayName ?? "已保存音频"} media={audio} /> : null}
-        </section>
-
-        {task.contentType === "video" ? (
-          <section className="page-section" id="task-detail-transcript">
-            <div className="section-heading"><h3>原始文稿</h3>{task.speechStatus ? <span className="analysis-count">{task.speechStatus === "transcribed" ? "已转写" : task.speechStatus === "no_speech" ? "未检测到口播" : "转写未完成"}</span> : null}</div>
-            {task.speechStatus === "no_speech" ? <EmptyState description="本次媒体没有检测到有效口播。这是正常结果，不会用平台描述伪装成语音转写。" icon="voice" title="未检测到有效口播" /> : detail.transcript && (detail.transcript.text || detail.transcript.segments.length > 0) ? (
-              <GlassCard className="runtime-transcript-card">
-                {detail.transcript.text ? <p className="runtime-transcript-card__full">{detail.transcript.text}</p> : null}
-                {detail.transcript.segments.length > 0 ? <ol>{detail.transcript.segments.map((segment) => <li key={segment.id}><time>{segment.startSeconds === undefined ? "" : `${segment.startSeconds}s`}</time><p>{segment.text}</p></li>)}</ol> : null}
-              </GlassCard>
-            ) : <EmptyState description={task.speechStatus === "failed" ? "文稿处理未完成，未找到可安全展示的部分文稿。" : "任务尚未保存可展示的文稿。"} icon="record_voice_over" title="暂无文稿" />}
-          </section>
-        ) : null}
-
+      <section className="page-section" id="task-detail-media">
+        <div className="section-heading"><h3>{task.contentType === "image_text" ? "已保存图片" : "已保存媒体"}</h3><span className="analysis-count">{detail.media.length} 个文件</span></div>
         {task.contentType === "image_text" ? (
-          <section className="page-section" id="task-detail-image-text">
-            <div className="section-heading"><h3>图文正文</h3><span className="analysis-count">{detail.imageText?.paragraphs.length ?? 0} 段</span></div>
-            {detail.imageText?.text || detail.imageText?.paragraphs.length ? <GlassCard className="runtime-transcript-card"><p className="runtime-transcript-card__full">{detail.imageText?.text}</p>{detail.imageText?.paragraphs.length ? <ol>{detail.imageText.paragraphs.map((paragraph) => <li key={paragraph.id}><p>{paragraph.text}</p></li>)}</ol> : null}</GlassCard> : <EmptyState description="任务没有保存可展示的图文正文。" icon="file" title="暂无正文" />}
-          </section>
-        ) : null}
+          imageMedia.length === 0 ? <EmptyState description="任务没有可展示的已保存图片。" icon="folder_open" title="暂无图片" /> : <div className="runtime-image-gallery">{imageMedia.map((media) => <RuntimeMediaFrame className="runtime-image-gallery__item" key={media.uri} label={media.displayName ?? "已保存图片"} media={media} />)}</div>
+        ) : video ? <RuntimeMediaFrame className="runtime-video-frame" label={detail.content.title ?? "已保存视频"} media={video} /> : detail.content.cover ? <RuntimeMediaFrame className="runtime-video-frame" label={detail.content.title ?? "已保存封面"} media={detail.content.cover} /> : <EmptyState description="任务没有可展示的已保存视频或封面。" icon="folder_open" title="暂无媒体" />}
+        {audio ? <RuntimeMediaFrame className="runtime-audio-frame" label={audio.displayName ?? "已保存音频"} media={audio} /> : null}
+      </section>
 
-        <section className="page-section">
-          <div className="section-heading"><div><span className="eyebrow">CONTENT-ANALYSIS.V1</span><h3>AI 自动拆解</h3></div><span className="analysis-count">{hasEvidence ? `${detail.evidenceUnits.length} 条证据` : "无可用证据"}</span></div>
-          <TaskCapabilityNotice capability={runtime.features.contentAnalysis} feature="contentAnalysis" />
-          {!hasEvidence ? <EmptyState description="该任务没有可展示的文稿或图文证据，不能生成缺少依据的拆解结论。" icon="folder_open" title="暂不能拆解" /> : null}
-          {task.analysisStatus === "succeeded" ? <GlassCard className="analysis-request-card"><p>内容拆解已经完成并保存在本机。</p><Button icon={<Icon name="analytics" size={18} />} onClick={() => navigate(taskAnalysisPath(task.id))}>查看拆解结果</Button></GlassCard> : null}
-          {task.analysisStatus === "running" ? <GlassCard className="analysis-request-card"><Icon name="sync" size={22} /><p>内容拆解正在进行，请稍候。</p><Button onClick={() => navigate(taskAnalysisPath(task.id))} variant="secondary">查看当前状态</Button></GlassCard> : null}
-          {task.analysisStatus === "failed" ? <GlassCard className="analysis-request-card"><Icon name="error" size={22} /><p>上一次内容拆解没有完成。你可以查看原因，并重新尝试。</p><Button onClick={() => navigate(taskAnalysisPath(task.id))} variant="secondary">查看拆解状态</Button></GlassCard> : null}
-          {canRequestAnalysis ? (
-            confirmationOpen ? <GlassCard className="analysis-confirm-card"><strong>开始 AI 内容拆解？</strong><p>AI 将根据已经获取的 {detail.evidenceUnits.length} 段内容，整理主题、结构和创作方法。</p><div className="analysis-confirm-card__actions mobile-action-group"><Button className={pendingAction === "analysis" ? "is-busy" : ""} disabled={pendingAction === "analysis"} onClick={() => void runAnalysis()}>{pendingAction === "analysis" ? "AI 正在生成完整拆解" : "开始拆解"}</Button><Button disabled={pendingAction === "analysis"} onClick={() => setConfirmationOpen(false)} variant="quiet">暂不运行</Button></div></GlassCard> : <Button disabled={pendingAction !== undefined} icon={<Icon name="auto_awesome" size={18} />} onClick={() => setConfirmationOpen(true)}>{task.analysisStatus === "failed" ? "重新运行 AI 拆解" : "AI 自动拆解"}</Button>
-          ) : task.analysisStatus === "not_started" && analysisAvailable && !terminalWithOutput ? <EmptyState description="采集任务完成或部分完成后，才可以确认运行内容拆解。" icon="pending" title="等待可用产物" /> : null}
-          {pendingAction === "analysis" || streamProgress || task.analysisStatus === "running" ? <ValidatedModuleProgress definitions={contentAnalysisModuleDefinitions} failedTitle="内容拆解未完成" issue={issue} progress={streamProgress} title="AI 正在拆解真实证据" /> : null}
+      {task.contentType === "video" ? (
+        <section className="page-section" id="task-detail-transcript">
+          <div className="section-heading"><h3>原始文稿</h3>{task.speechStatus ? <span className="analysis-count">{task.speechStatus === "transcribed" ? "已转写" : task.speechStatus === "no_speech" ? "未检测到口播" : "转写未完成"}</span> : null}</div>
+          {task.speechStatus === "no_speech" ? <EmptyState description="本次媒体没有检测到有效口播。这是正常结果，不会用平台描述伪装成语音转写。" icon="voice" title="未检测到有效口播" /> : detail.transcript && (detail.transcript.text || detail.transcript.segments.length > 0) ? (
+            <GlassCard className="runtime-transcript-card">
+              {detail.transcript.text ? <p className="runtime-transcript-card__full">{detail.transcript.text}</p> : null}
+              {detail.transcript.segments.length > 0 ? <ol>{detail.transcript.segments.map((segment) => <li key={segment.id}><time>{segment.startSeconds === undefined ? "" : `${segment.startSeconds}s`}</time><p>{segment.text}</p></li>)}</ol> : null}
+            </GlassCard>
+          ) : <EmptyState description={task.speechStatus === "failed" ? "文稿处理未完成，未找到可安全展示的部分文稿。" : "任务尚未保存可展示的文稿。"} icon="record_voice_over" title="暂无文稿" />}
         </section>
+      ) : null}
 
-        {needsNewSubmission ? <GlassCard className="analysis-request-card"><Icon name="sync" size={22} /><p>本版本不会继续或复制旧任务。若需再次处理，请返回首页重新提交链接。</p><Button icon={<Icon name="arrow_back" size={18} />} onClick={() => navigate(pathForRoute("home"))} variant="secondary">重新提交链接</Button></GlassCard> : null}
-        {terminalTask ? deleteConfirmationOpen ? (
-          <GlassCard className="task-delete-confirm" role="alert">
-            <strong>确认删除这个任务{localVideo ? "及上传视频" : "及全部产物"}？</strong>
-            <p>将永久删除本机任务目录中的媒体、文稿、拆解与事件；已经复制保存的模板不会级联删除。</p>
-            <div className="mobile-action-group"><Button disabled={pendingAction !== undefined} onClick={() => void deleteTask()}>{pendingAction === "delete" ? "正在删除" : "确认删除任务"}</Button><Button disabled={pendingAction !== undefined} onClick={() => setDeleteConfirmationOpen(false)} variant="quiet">取消</Button></div>
-          </GlassCard>
-        ) : <Button aria-label={localVideo ? "删除本地上传视频任务" : "删除任务"} disabled={pendingAction !== undefined} icon={<Icon name="close" size={17} />} onClick={() => setDeleteConfirmationOpen(true)} variant="quiet">删除任务</Button> : null}
-        {readIssue ? <Button icon={<Icon name="update" size={18} />} onClick={() => void load()} variant="quiet">重新读取任务详情</Button> : null}
-      </div>
-    </AppShell>
+      {task.contentType === "image_text" ? (
+        <section className="page-section" id="task-detail-image-text">
+          <div className="section-heading"><h3>图文正文</h3><span className="analysis-count">{detail.imageText?.paragraphs.length ?? 0} 段</span></div>
+          {detail.imageText?.text || detail.imageText?.paragraphs.length ? <GlassCard className="runtime-transcript-card"><p className="runtime-transcript-card__full">{detail.imageText?.text}</p>{detail.imageText?.paragraphs.length ? <ol>{detail.imageText.paragraphs.map((paragraph) => <li key={paragraph.id}><p>{paragraph.text}</p></li>)}</ol> : null}</GlassCard> : <EmptyState description="任务没有保存可展示的图文正文。" icon="file" title="暂无正文" />}
+        </section>
+      ) : null}
+
+      <section className="page-section">
+        <div className="section-heading"><div><span className="eyebrow">CONTENT-ANALYSIS.V1</span><h3>AI 自动拆解</h3></div><span className="analysis-count">{hasEvidence ? `${detail.evidenceUnits.length} 条证据` : "无可用证据"}</span></div>
+        <TaskCapabilityNotice capability={runtime.features.contentAnalysis} feature="contentAnalysis" />
+        {!hasEvidence ? <EmptyState description="该任务没有可展示的文稿或图文证据，不能生成缺少依据的拆解结论。" icon="folder_open" title="暂不能拆解" /> : null}
+        {task.analysisStatus === "succeeded" ? <GlassCard className="analysis-request-card"><p>内容拆解已经完成并保存在本机。</p></GlassCard> : null}
+        {task.analysisStatus === "running" ? <GlassCard className="analysis-request-card"><Icon name="sync" size={22} /><p>内容拆解正在进行，请稍候。</p></GlassCard> : null}
+        {task.analysisStatus === "failed" ? <GlassCard className="analysis-request-card"><Icon name="error" size={22} /><p>上一次内容拆解没有完成。你可以查看原因，并重新尝试。</p></GlassCard> : null}
+        {canRequestAnalysis ? (
+          confirmationOpen ? <GlassCard className="analysis-confirm-card"><strong>开始 AI 内容拆解？</strong><p>AI 将根据已经获取的 {detail.evidenceUnits.length} 段内容，整理主题、结构和创作方法。</p><div className="analysis-confirm-card__actions mobile-action-group"><Button className={pendingAction === "analysis" ? "is-busy" : ""} disabled={pendingAction === "analysis"} onClick={() => void runAnalysis()}>{pendingAction === "analysis" ? "AI 正在生成完整拆解" : "开始拆解"}</Button><Button disabled={pendingAction === "analysis"} onClick={() => setConfirmationOpen(false)} variant="quiet">暂不运行</Button></div></GlassCard> : <Button disabled={pendingAction !== undefined} icon={<Icon name="auto_awesome" size={18} />} onClick={() => setConfirmationOpen(true)}>{task.analysisStatus === "failed" ? "重新运行 AI 拆解" : "AI 自动拆解"}</Button>
+        ) : task.analysisStatus === "not_started" && analysisAvailable && !terminalWithOutput ? <EmptyState description="采集任务完成或部分完成后，才可以确认运行内容拆解。" icon="pending" title="等待可用产物" /> : null}
+        {pendingAction === "analysis" || streamProgress || task.analysisStatus === "running" ? <ValidatedModuleProgress definitions={contentAnalysisModuleDefinitions} failedTitle="内容拆解未完成" issue={localIssue ?? issue} progress={streamProgress} title="AI 正在拆解真实证据" /> : null}
+      </section>
+
+      {needsNewSubmission ? <GlassCard className="analysis-request-card"><Icon name="sync" size={22} /><p>本版本不会继续或复制旧任务。若需再次处理，请返回首页重新提交链接。</p><Button icon={<Icon name="arrow_back" size={18} />} onClick={() => navigate(pathForRoute("home"))} variant="secondary">重新提交链接</Button></GlassCard> : null}
+      {terminalTask ? deleteConfirmationOpen ? (
+        <GlassCard className="task-delete-confirm" role="alert">
+          <strong>确认删除这个任务{localVideo ? "及上传视频" : "及全部产物"}？</strong>
+          <p>将永久删除本机任务目录中的媒体、文稿、拆解与事件；已经复制保存的模板不会级联删除。</p>
+          <div className="mobile-action-group"><Button disabled={pendingAction !== undefined} onClick={() => void deleteTask()}>{pendingAction === "delete" ? "正在删除" : "确认删除任务"}</Button><Button disabled={pendingAction !== undefined} onClick={() => setDeleteConfirmationOpen(false)} variant="quiet">取消</Button></div>
+        </GlassCard>
+      ) : <Button aria-label={localVideo ? "删除本地上传视频任务" : "删除任务"} disabled={pendingAction !== undefined} icon={<Icon name="close" size={17} />} onClick={() => setDeleteConfirmationOpen(true)} variant="quiet">删除任务</Button> : null}
+      {readIssue ? <Button icon={<Icon name="update" size={18} />} onClick={() => void onReload()} variant="quiet">重新读取任务详情</Button> : null}
+    </>
   );
 }
