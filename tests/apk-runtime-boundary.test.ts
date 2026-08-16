@@ -16,3 +16,13 @@ test("APK entry loads only the standalone runtime and never a Node or .env depen
     assert.doesNotMatch(source, /node:|\.env|@hongtai\/node-runtime|FileArtifactStore|FfmpegMediaTools|TerminalProgressReporter/);
   }
 });
+
+test("组合层引用共享文稿改写导出，不再内联 Prompt 字面量", () => {
+  const runtime = read("packages/capacitor-runtime/src/standalone-app-runtime.ts");
+  assert.match(runtime, /TRANSCRIPT_REWRITE_SYSTEM_PROMPT/);
+  assert.match(runtime, /splitTranscriptRewriteChunks/);
+  assert.doesNotMatch(runtime, /将以下文稿整理为清晰、忠实的中文稿/);
+  assert.doesNotMatch(runtime, /你是短视频文稿整理助手/);
+  assert.doesNotMatch(runtime, /只根据原始语音转写整理/);
+  assert.doesNotMatch(runtime, /只返回整理后的正文/);
+});

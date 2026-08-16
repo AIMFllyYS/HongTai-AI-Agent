@@ -468,9 +468,19 @@ export interface ProductionProjectRecord {
   readonly updatedAt: string;
 }
 
+export const PRODUCTION_RENDER_STAGE_VALUES = [
+  "validate_avatar_audio",
+  "synthesize_narration",
+  "compile_shots",
+  "export",
+  "saved",
+] as const;
+
+export type ProductionRenderStage = typeof PRODUCTION_RENDER_STAGE_VALUES[number];
+
 export type ProductionEvent =
   | { readonly type: "state"; readonly project: ProductionProjectRecord }
-  | { readonly type: "render-progress"; readonly projectId: string; readonly progress: number; readonly message: string };
+  | { readonly type: "render-progress"; readonly projectId: string; readonly progress: number; readonly stage: string };
 
 export type ProductionAssetRecovery =
   | { readonly status: "none" }

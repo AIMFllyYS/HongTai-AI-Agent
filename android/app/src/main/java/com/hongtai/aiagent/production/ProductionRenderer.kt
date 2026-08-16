@@ -47,9 +47,9 @@ internal class ProductionRenderer(private val context: Context, private val stor
     onProgress: (Int, String) -> Unit,
   ): ProductionRenderResult {
     val progress = ProductionRenderProgressGate(onProgress)
-    progress.emit(5, if (plan.renderMode == ProductionRenderMode.AVATAR) "正在校验数字人口播原声" else "正在生成旁白")
+    progress.emit(5, if (plan.renderMode == ProductionRenderMode.AVATAR) ProductionRenderStage.VALIDATE_AVATAR_AUDIO.wireName else ProductionRenderStage.SYNTHESIZE_NARRATION.wireName)
     val narration = if (plan.renderMode == ProductionRenderMode.MONTAGE) narrationSynthesizer.synthesize(projectId, plan) else emptyList()
-    progress.emit(25, "正在编排镜头")
+    progress.emit(25, ProductionRenderStage.COMPILE_SHOTS.wireName)
     val composition = compile(plan, narration)
     val (temporary, output) = store.outputTarget(projectId)
     temporary.delete()
@@ -76,7 +76,7 @@ internal class ProductionRenderer(private val context: Context, private val stor
         finished.countDown()
       }
     }
-    progress.emit(35, "正在本地合成")
+    progress.emit(35, ProductionRenderStage.EXPORT.wireName)
     val watch = ProductionExportWatchdog(progress).awaitExport(
       finished,
       onPoll = {
@@ -86,7 +86,7 @@ internal class ProductionRenderer(private val context: Context, private val stor
           handler.post {
             val holder = ProgressHolder()
             if (transformer.getProgress(holder) == Transformer.PROGRESS_STATE_AVAILABLE) {
-              progress.offerSample(35 + (holder.progress * 0.64f).toInt(), "正在本地合成")
+              progress.offerSample(35 + (holder.progress * 0.64f).toInt(), ProductionRenderStage.EXPORT.wireName)
             }
           }
         }
@@ -115,7 +115,7 @@ internal class ProductionRenderer(private val context: Context, private val stor
         // output. A codec/container failure must leave that existing MP4 intact.
         val durationSeconds = verifyOutput(temporary)
         finalizeOutput(temporary, output)
-        progress.emit(100, "成片已保存")
+        progress.emit(100, ProductionRenderStage.SAVED.wireName)
         return ProductionRenderResult(Uri.fromFile(output).toString(), output.length(), durationSeconds)
       }
     }

@@ -14,6 +14,8 @@ export * from "./structured-output/json-schema";
 export * from "./structured-output/generate-structured-module";
 export * from "./structured-output/reasoning-progress";
 export * from "./structured-output/top-level-json-field-stream";
+export * from "./prompts/cloud-tts";
+export * from "./prompts/transcript-rewrite";
 export * from "./providers/openai-compatible-provider";
 
 export const AI_PACKAGE_STATUS = "AI应用能力层已初始化";

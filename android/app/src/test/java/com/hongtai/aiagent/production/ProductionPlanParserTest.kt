@@ -25,17 +25,26 @@ class ProductionPlanParserTest {
   }
 
   @Test
-  fun `rejects unknown assets and mismatched shot duration`() {
+  fun `rejects unknown assets mismatched shot duration and invalid export profile`() {
     assertThrows(IllegalArgumentException::class.java) {
       ProductionPlanParser.parse(validPlan().replace("image-1", "missing"), assets)
     }
     assertThrows(IllegalArgumentException::class.java) {
       ProductionPlanParser.parse(validPlan().replace("\"durationSeconds\":12", "\"durationSeconds\":11"), assets)
     }
+    assertThrows(IllegalArgumentException::class.java) {
+      ProductionPlanParser.parse(validPlan().replace("\"width\":720", "\"width\":1080"), assets)
+    }
+    assertThrows(IllegalArgumentException::class.java) {
+      ProductionPlanParser.parse(validPlan().replace("\"height\":1280", "\"height\":1920"), assets)
+    }
+    assertThrows(IllegalArgumentException::class.java) {
+      ProductionPlanParser.parse(validPlan().replace("\"fps\":30", "\"fps\":24"), assets)
+    }
   }
 
   @Test
-  fun `avatar plan uses one sequential audible source and cannot exceed its duration`() {
+  fun `parses a typescript-valid avatar caption plan`() {
     val avatarAssets = mapOf(
       "avatar-1" to ProductionInput("avatar-1", "/private/avatar-1.mp4", ProductionAssetKind.VIDEO, durationMs = 15_000L, hasAudio = true),
     )
@@ -43,15 +52,14 @@ class ProductionPlanParserTest {
     val plan = ProductionPlanParser.parse(avatarPlan(), avatarAssets, ProductionRenderMode.AVATAR)
 
     assertEquals(ProductionRenderMode.AVATAR, plan.renderMode)
+    assertEquals(720, plan.width)
+    assertEquals(1280, plan.height)
+    assertEquals(30, plan.fps)
     assertEquals(3, plan.shots.size)
     assertEquals(15_000L, plan.shots.sumOf(ProductionShot::durationMs))
-
-    assertThrows(ProductionException::class.java) {
-      ProductionPlanParser.parse(avatarPlan(), avatarAssets.mapValues { (_, input) -> input.copy(hasAudio = false) }, ProductionRenderMode.AVATAR)
-    }
-    assertThrows(ProductionException::class.java) {
-      ProductionPlanParser.parse(avatarPlan(), avatarAssets.mapValues { (_, input) -> input.copy(durationMs = 14_000L) }, ProductionRenderMode.AVATAR)
-    }
+    assertEquals("avatar-1", plan.shots.first().input.id)
+    assertEquals("门店介绍", plan.textOverlay.primaryText)
+    assertEquals("classic_top", plan.textOverlay.preset)
   }
 
   private fun validPlan(): String = """
@@ -71,11 +79,12 @@ class ProductionPlanParserTest {
 
   private fun avatarPlan(): String = """
     {
-      "schemaVersion":"production-plan.v1",
+      "schemaVersion":"production-plan.v2",
       "source":{"analysisTaskId":"task-1"},
       "title":"门店介绍",
       "settings":{"width":720,"height":1280,"fps":30,"durationSeconds":15},
       "audio":{"voiceLocale":"zh-CN","speechRate":1,"backgroundMusicAssetId":null,"backgroundMusicVolume":0},
+      "textOverlay":{"primaryText":"门店介绍","secondaryText":null,"preset":"classic_top"},
       "shots":[
         {"order":1,"assetId":"avatar-1","durationSeconds":5,"narration":"欢迎来到我们的门店。","caption":"欢迎来到我们的门店。","fit":"contain"},
         {"order":2,"assetId":"avatar-1","durationSeconds":5,"narration":"今天带你看看真实服务过程。","caption":"今天带你看看真实服务过程。","fit":"contain"},

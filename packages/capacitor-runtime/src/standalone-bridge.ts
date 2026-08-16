@@ -198,7 +198,7 @@ export interface NativeProductionResult {
 export interface NativeProductionProgressEvent {
   readonly projectId: string;
   readonly progress: number;
-  readonly message: string;
+  readonly stage: string;
 }
 
 export type NativeAssetOperationResult =
@@ -209,9 +209,16 @@ export type NativeAssetOperationResult =
 export interface StandaloneProductionRuntimePlugin {
   pickAssets(options: { readonly projectId: string; readonly maxItems: number; readonly selection?: "visual" | "avatar" }): Promise<{ readonly assets: readonly NativeProductionAsset[] }>;
   consumeAssetOperation(): Promise<NativeAssetOperationResult>;
-  render(options: { readonly projectId: string; readonly planJson: string; readonly mode?: "montage" | "avatar"; readonly narration?: "system" | "provider" }): Promise<NativeProductionResult>;
+  render(options: {
+    readonly projectId: string;
+    readonly planJson: string;
+    readonly mode?: "montage" | "avatar";
+    readonly narration?: "system" | "provider";
+    readonly miMoInstruction?: string;
+    readonly stepFunInstruction?: string;
+  }): Promise<NativeProductionResult>;
   /** Runs a short non-personal synthesis request using the saved protected key. */
-  probeTts(): Promise<void>;
+  probeTts(options: { readonly miMoInstruction: string; readonly stepFunInstruction: string }): Promise<void>;
   addListener?(
     eventName: "productionProgress",
     listener: (event: NativeProductionProgressEvent) => void,

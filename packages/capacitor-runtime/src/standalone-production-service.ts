@@ -1,4 +1,4 @@
-import { contentAnalysisResultSchema, createAvatarCaptionPlan, ProductionPlanningFlow, productionPlanResultSchema, type AiProvider, type ProductionPlanResult } from "@hongtai/ai";
+import { contentAnalysisResultSchema, createAvatarCaptionPlan, MIMO_CHAT_AUDIO_TTS_INSTRUCTION, ProductionPlanningFlow, productionPlanResultSchema, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, type AiProvider, type ProductionPlanResult } from "@hongtai/ai";
 import { createRuntimeId, issueFromAppError, TaskError } from "@hongtai/core";
 import type {
   AnalysisService,
@@ -360,11 +360,21 @@ export class StandaloneProductionService implements ProductionService {
     void _issue;
     project = await this.#persist({ ...renderBase, status: "rendering" });
     const handle = await this.#options.native.addListener?.("productionProgress", (event) => {
-      if (event.projectId === projectId) void this.#emit(projectId, { type: "render-progress", ...event });
+      if (event.projectId !== projectId) return;
+      const stage = typeof event.stage === "string" ? event.stage : "";
+      void this.#emit(projectId, { type: "render-progress", projectId: event.projectId, progress: event.progress, stage });
     });
     try {
       const narration = project.mode === "montage" ? await this.#options.getNarrationMode() : "system";
-      const output = await this.#options.native.render({ projectId, planJson: JSON.stringify(project.plan), mode: project.mode, narration });
+      const output = await this.#options.native.render({
+        projectId,
+        planJson: JSON.stringify(project.plan),
+        mode: project.mode,
+        narration,
+        ...(narration === "provider"
+          ? { miMoInstruction: MIMO_CHAT_AUDIO_TTS_INSTRUCTION, stepFunInstruction: STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION }
+          : {}),
+      });
       return this.#project(await this.#persist({ ...project, status: "succeeded", output }));
     } catch (error) {
       const failure = productionTaskError(error, "本地视频合成没有完成");
