@@ -183,6 +183,71 @@ test("StandaloneDiagnosisService distinguishes external photo work from in-proce
   assert.deepEqual(operations.list(), []);
 });
 
+test("StandaloneDiagnosisService queues two same-session follow-ups so both rounds survive restart", async () => {
+  const native = memoryFiles();
+  const firstEntered = deferred();
+  const firstRelease = deferred();
+  let textCalls = 0;
+  const answers = new Map([
+    ["第一轮追问", "第一轮回复"],
+    ["第二轮追问", "第二轮回复"],
+  ]);
+  const lastUserQuestion = (request: AiGenerateRequest): string => {
+    const lastUser = [...request.messages].reverse().find((message) => message.role === "user");
+    return typeof lastUser?.content === "string" ? lastUser.content : "";
+  };
+  const createService = () => new StandaloneDiagnosisService({
+    files: native.plugin,
+    fileMedia: {
+      pickPhoto: async () => ({ uri: "file:///private/media/imported.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      capturePhoto: async () => ({ uri: "file:///private/media/captured.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      consumePhotoOperation: async () => ({ status: "none" }),
+    },
+    getProvider: async () => ({
+      generate: async (request) => {
+        if (request.output === "json") return { content: diagnosisModuleContent(request), reasoning: "" };
+        textCalls += 1;
+        if (textCalls === 1) {
+          firstEntered.resolve();
+          await firstRelease.promise;
+        }
+        return { content: answers.get(lastUserQuestion(request)) ?? "未匹配回复", reasoning: "" };
+      },
+      transcribe: async () => "",
+    }),
+    toDisplayUri: (value) => value,
+    createSessionId: () => "session-follow-up-queue",
+  });
+
+  const service = createService();
+  const image = await service.pickImage();
+  const session = await service.createSession({ mode: "tongue", image });
+  await service.runReport(session.sessionId);
+
+  const first = service.followUp(session.sessionId, "第一轮追问");
+  const second = service.followUp(session.sessionId, "第二轮追问");
+  await firstEntered.promise;
+  assert.notStrictEqual(second, first);
+  assert.equal(textCalls, 1, "the second follow-up must wait for the first chat and persist to finish");
+
+  firstRelease.resolve();
+  const [firstAnswer, secondAnswer] = await Promise.all([first, second]);
+  assert.equal(firstAnswer.content, "第一轮回复");
+  assert.equal(secondAnswer.content, "第二轮回复");
+  assert.equal(textCalls, 2);
+
+  const expectedRounds = [
+    { role: "user", content: "第一轮追问" },
+    { role: "assistant", content: "第一轮回复" },
+    { role: "user", content: "第二轮追问" },
+    { role: "assistant", content: "第二轮回复" },
+  ] as const;
+  assert.deepEqual((await service.listMessages(session.sessionId)).map(({ role, content }) => ({ role, content })), [...expectedRounds]);
+
+  const restarted = createService();
+  assert.deepEqual((await restarted.listMessages(session.sessionId)).map(({ role, content }) => ({ role, content })), [...expectedRounds]);
+});
+
 test("StandaloneDiagnosisService single-flights report generation and replays runtime-only reasoning", async () => {
   const native = memoryFiles();
   const entered = deferred();

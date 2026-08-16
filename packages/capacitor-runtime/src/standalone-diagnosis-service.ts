@@ -199,6 +199,7 @@ export class StandaloneDiagnosisService implements DiagnosisService {
   readonly #operations?: RuntimeOperationRegistry;
   readonly #picked = new Map<string, { readonly nativeUri: string; readonly mimeType: string; readonly sizeBytes: number }>();
   readonly #activeReports = new Map<string, Promise<DiagnosisReportRecord>>();
+  readonly #followUpQueues = new Map<string, Promise<unknown>>();
   readonly #reportListeners = new Map<string, Set<DiagnosisReportEventListener>>();
   readonly #reportSnapshots = new Map<string, StructuredGenerationProgressV1>();
 
@@ -408,10 +409,20 @@ export class StandaloneDiagnosisService implements DiagnosisService {
   }
 
   async followUp(sessionId: string, question: string, onEvent?: (event: DiagnosisStreamEvent) => void | Promise<void>): Promise<DiagnosisMessage> {
-    return this.#track(
+    return this.#queueFollowUp(sessionId, () => this.#track(
       { kind: "transient-operation", id: `diagnosis-follow-up:${sessionId}`, execution: "in-process" },
       () => this.#followUp(sessionId, question, onEvent),
-    );
+    ));
+  }
+
+  #queueFollowUp<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.#followUpQueues.get(sessionId) ?? Promise.resolve();
+    const queued = previous.then(operation, operation);
+    this.#followUpQueues.set(sessionId, queued);
+    void queued.finally(() => {
+      if (this.#followUpQueues.get(sessionId) === queued) this.#followUpQueues.delete(sessionId);
+    }).catch(() => undefined);
+    return queued;
   }
 
   async #followUp(sessionId: string, question: string, onEvent?: (event: DiagnosisStreamEvent) => void | Promise<void>): Promise<DiagnosisMessage> {
