@@ -13,6 +13,7 @@ interface TaskPresenters {
   buildTaskStagePresentations(task: AppTaskRecord, events: readonly TaskEventRecord[]): readonly {
     readonly stage: string;
     readonly status: string;
+    readonly statusLabel: string;
     readonly detail?: string;
     readonly progress?: number;
     readonly sequence?: number;
@@ -126,6 +127,61 @@ test("task UI presents only the persisted seven stages in monotonic event order"
   assert.equal(steps?.[4]?.detail, "正在下载");
   assert.equal(steps?.[4]?.progress, 47);
   assert.equal(steps?.[4]?.sequence, 4);
+  assert.equal(steps?.[5]?.status, "pending");
+  assert.equal(steps?.[5]?.statusLabel, "等待中");
+});
+
+test("终态任务缺阶段事件时不渲染等待中且不推断已完成", async () => {
+  const subject = await presenters();
+  assert.equal(typeof subject.buildTaskStagePresentations, "function");
+
+  const degradedTask = {
+    id: "task-degraded",
+    sourceUrl: "https://www.douyin.com/note/1",
+    status: "degraded",
+    currentStage: "save-artifacts",
+    analysisStatus: "not_started",
+    media: [],
+    createdAt: "2026-08-16T00:00:00.000Z",
+    updatedAt: "2026-08-16T00:01:00.000Z",
+    issues: [],
+  } as AppTaskRecord;
+  const degradedEvents = [
+    { taskId: "task-degraded", sequence: 1, stage: "detect-platform", status: "succeeded", message: "完成", timestamp: "2026-08-16T00:00:01.000Z" },
+    { taskId: "task-degraded", sequence: 2, stage: "resolve-link", status: "succeeded", message: "完成", timestamp: "2026-08-16T00:00:02.000Z" },
+    { taskId: "task-degraded", sequence: 3, stage: "parse-content", status: "succeeded", message: "完成", timestamp: "2026-08-16T00:00:03.000Z" },
+    { taskId: "task-degraded", sequence: 4, stage: "select-media", status: "degraded", message: "没有视频源", timestamp: "2026-08-16T00:00:04.000Z" },
+    { taskId: "task-degraded", sequence: 5, stage: "save-artifacts", status: "succeeded", message: "完成", timestamp: "2026-08-16T00:00:05.000Z" },
+  ] as const satisfies readonly TaskEventRecord[];
+
+  const degradedSteps = subject.buildTaskStagePresentations?.(degradedTask, degradedEvents);
+  assert.equal(degradedSteps?.[3]?.status, "degraded");
+  assert.equal(degradedSteps?.[4]?.status, "degraded");
+  assert.notEqual(degradedSteps?.[4]?.status, "succeeded");
+  assert.notEqual(degradedSteps?.[4]?.statusLabel, "等待中");
+  assert.equal(degradedSteps?.[5]?.status, "degraded");
+  assert.notEqual(degradedSteps?.[5]?.status, "succeeded");
+  assert.notEqual(degradedSteps?.[5]?.statusLabel, "等待中");
+  assert.equal(degradedSteps?.[6]?.status, "succeeded");
+
+  const failedTask = {
+    ...degradedTask,
+    id: "task-failed",
+    status: "failed",
+    currentStage: "resolve-link",
+  } as AppTaskRecord;
+  const failedEvents = [
+    { taskId: "task-failed", sequence: 1, stage: "detect-platform", status: "succeeded", message: "完成", timestamp: "2026-08-16T00:00:01.000Z" },
+    { taskId: "task-failed", sequence: 2, stage: "resolve-link", status: "failed", message: "失败", timestamp: "2026-08-16T00:00:02.000Z" },
+  ] as const satisfies readonly TaskEventRecord[];
+
+  const failedSteps = subject.buildTaskStagePresentations?.(failedTask, failedEvents);
+  assert.equal(failedSteps?.[1]?.status, "failed");
+  for (const step of failedSteps?.slice(2) ?? []) {
+    assert.notEqual(step.status, "pending");
+    assert.notEqual(step.status, "succeeded");
+    assert.notEqual(step.statusLabel, "等待中");
+  }
 });
 
 test("content-analysis presenter renders only validated content-analysis.v1 fields and evidence references", async () => {

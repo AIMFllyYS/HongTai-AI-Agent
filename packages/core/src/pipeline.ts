@@ -23,6 +23,11 @@ export const PIPELINE_STAGES = [
   ...TASK_STAGE_VALUES,
 ] as const;
 
+function stagesAfter(stage: TaskStage): TaskStage[] {
+  const index = PIPELINE_STAGES.indexOf(stage);
+  return index === -1 ? [] : PIPELINE_STAGES.slice(index + 1);
+}
+
 const DEFAULT_MAX_DURATION_SECONDS = 1_200;
 const SEGMENT_SECONDS = 30;
 
@@ -155,7 +160,7 @@ export class IngestPipeline {
     ): Promise<void> => {
       const stageChanged = currentStage !== stage;
       currentStage = stage;
-      if (stageChanged) await writeTask("running");
+      if (stageChanged && status === "running") await writeTask("running");
       const event: ProgressEvent = {
         taskId,
         sequence: ++progressSequence,
@@ -469,6 +474,8 @@ export class IngestPipeline {
         const issue = warningIssue("MEDIA_SOURCE_NOT_FOUND", "select-media", "页面已解析，但没有找到可下载的视频源", { action: "view_partial_result", platform });
         issues.push(issue);
         await report("select-media", "degraded", issue.userMessage, {}, issue);
+        await report("download-media", "succeeded", "无视频源，无需下载");
+        await report("obtain-transcript", "succeeded", "无视频源，无需转写");
         await report("save-artifacts", "running", "开始保存降级任务结果");
         await writeTask("degraded");
         await report("save-artifacts", "succeeded", `完成：${paths.root}`);
@@ -520,6 +527,9 @@ export class IngestPipeline {
         });
       }
       await writeTask("failed");
+      for (const stage of stagesAfter(failureStage)) {
+        await report(stage, "succeeded", "上游阶段已失败，已跳过");
+      }
       await report(failureStage, "failed", `失败：${issue.userMessage}`, {}, issue);
       return {
         taskId,

@@ -10,7 +10,7 @@ import type {
   ProgressEvent,
   TaskPaths,
 } from "../packages/core/src/index";
-import { IngestPipeline, TaskError } from "../packages/core/src/index";
+import { IngestPipeline, PIPELINE_STAGES, TaskError } from "../packages/core/src/index";
 
 const paths: TaskPaths = {
   root: "task",
@@ -30,6 +30,23 @@ const paths: TaskPaths = {
   transcriptJson: "task/transcript/transcript.json",
   draft: "task/transcript/draft.txt",
 };
+
+function latestEventByStage(events: readonly ProgressEvent[]): Map<ProgressEvent["stage"], ProgressEvent> {
+  const latest = new Map<ProgressEvent["stage"], ProgressEvent>();
+  for (const event of events) latest.set(event.stage, event);
+  return latest;
+}
+
+function assertSevenStagesTerminal(events: readonly ProgressEvent[]): Map<ProgressEvent["stage"], ProgressEvent> {
+  const latest = latestEventByStage(events);
+  for (const stage of PIPELINE_STAGES) {
+    const event = latest.get(stage);
+    assert.ok(event, `stage ${stage} must have a terminal event`);
+    assert.notEqual(event.status, "pending", `${stage} must not stay pending`);
+    assert.notEqual(event.status, "running", `${stage} must not stay running`);
+  }
+  return latest;
+}
 
 class MemoryStore implements ArtifactStore {
   readonly values = new Map<string, string>();
@@ -189,7 +206,9 @@ test("任务事件先持久化投影和事件日志再通知页面", async () =>
 test("失败事件通知前已经持久化失败终态", async () => {
   const setup = dependencies(true);
   const base = setup.dependencies.adapters[0]!;
+  const notified: ProgressEvent[] = [];
   const failedSnapshots: Array<{ readonly logContainsEvent: boolean; readonly taskStatus?: string }> = [];
+  const skipSnapshots: Array<string | undefined> = [];
   const pipeline = new IngestPipeline({
     ...setup.dependencies,
     adapters: [{
@@ -200,17 +219,20 @@ test("失败事件通知前已经持久化失败终态", async () => {
     }],
     reporter: {
       report: (event) => {
-        if (event.status !== "failed") return;
+        notified.push(event);
         const persistedEvents = (setup.store.values.get(paths.log) ?? "")
           .split(/\r?\n/u)
           .filter(Boolean)
           .map((line) => JSON.parse(line) as ProgressEvent);
         const taskValue = setup.store.values.get(paths.task);
+        const taskStatus = taskValue
+          ? (JSON.parse(taskValue) as { readonly status?: string }).status
+          : undefined;
+        if (event.message === "上游阶段已失败，已跳过") skipSnapshots.push(taskStatus);
+        if (event.status !== "failed") return;
         failedSnapshots.push({
           logContainsEvent: persistedEvents.some((item) => item.sequence === event.sequence),
-          taskStatus: taskValue
-            ? (JSON.parse(taskValue) as { readonly status?: string }).status
-            : undefined,
+          taskStatus,
         });
       },
     },
@@ -220,6 +242,13 @@ test("失败事件通知前已经持久化失败终态", async () => {
 
   assert.equal(result.status, "failed");
   assert.deepEqual(failedSnapshots, [{ logContainsEvent: true, taskStatus: "failed" }]);
+  assert.ok(skipSnapshots.length > 0);
+  assert.equal(skipSnapshots.every((status) => status === "failed"), true);
+  assert.equal(notified.at(-1)?.status, "failed");
+  assert.equal(notified.at(-1)?.stage, "resolve-link");
+  const task = JSON.parse(setup.store.values.get(paths.task) ?? "{}") as { readonly status?: string; readonly currentStage?: string };
+  assert.equal(task.status, "failed");
+  assert.equal(task.currentStage, "resolve-link");
 });
 
 test("已创建的本地任务可把固定任务ID交给共享流水线而不重新生成记录", async () => {
@@ -435,10 +464,84 @@ test("成功落盘只保留白名单投影且不写整页HTML", async () => {
 
 test("没有视频源时返回降级并保存任务", async () => {
   const setup = dependencies(false);
-  const result = await new IngestPipeline(setup.dependencies).run({ input: "https://www.douyin.com/note/1" });
+  let downloaderCalled = false;
+  let transcriberCalled = false;
+  const result = await new IngestPipeline({
+    ...setup.dependencies,
+    downloader: { download: async () => { downloaderCalled = true; } },
+    transcriber: { transcribe: async () => { transcriberCalled = true; return { status: "failed", text: "", segments: [] }; } },
+  }).run({ input: "https://www.douyin.com/note/1" });
+  const latest = assertSevenStagesTerminal(setup.events);
+  const task = JSON.parse(setup.store.values.get(paths.task) ?? "{}") as { readonly status?: string };
+
   assert.equal(result.status, "degraded");
   assert.equal(result.videoPath, undefined);
   assert.ok(setup.store.values.has(paths.task));
+  assert.equal(task.status, "degraded");
+  assert.equal(downloaderCalled, false);
+  assert.equal(transcriberCalled, false);
+  assert.equal(latest.get("select-media")?.status, "degraded");
+  assert.equal(latest.get("download-media")?.status, "succeeded");
+  assert.equal(latest.get("download-media")?.message, "无视频源，无需下载");
+  assert.equal(latest.get("obtain-transcript")?.status, "succeeded");
+  assert.equal(latest.get("obtain-transcript")?.message, "无视频源，无需转写");
+  assert.equal(latest.get("save-artifacts")?.status, "succeeded");
+  assert.equal(setup.events.some((event) => event.stage === "download-media" && /下载 \d+%/.test(event.message)), false);
+});
+
+test("解析链接或内容早期失败后后续阶段都有可解释终态", async () => {
+  const resolveSetup = dependencies(true);
+  const resolveBase = resolveSetup.dependencies.adapters[0]!;
+  const resolveResult = await new IngestPipeline({
+    ...resolveSetup.dependencies,
+    adapters: [{
+      ...resolveBase,
+      resolve: async () => {
+        throw new TaskError({ code: "LINK_TIMEOUT", message: "页面抓取超时，请检查网络后重试", action: "check_network" });
+      },
+    }],
+  }).run({ input: "https://www.douyin.com/video/1" });
+  const resolveLatest = assertSevenStagesTerminal(resolveSetup.events);
+  const resolveTask = JSON.parse(resolveSetup.store.values.get(paths.task) ?? "{}") as {
+    readonly status?: string;
+    readonly currentStage?: string;
+  };
+
+  assert.equal(resolveResult.status, "failed");
+  assert.equal(resolveTask.status, "failed");
+  assert.equal(resolveTask.currentStage, "resolve-link");
+  assert.equal(resolveLatest.get("detect-platform")?.status, "succeeded");
+  assert.equal(resolveLatest.get("resolve-link")?.status, "failed");
+  for (const stage of ["parse-content", "select-media", "download-media", "obtain-transcript", "save-artifacts"] as const) {
+    assert.equal(resolveLatest.get(stage)?.status, "succeeded");
+    assert.equal(resolveLatest.get(stage)?.message, "上游阶段已失败，已跳过");
+  }
+
+  const parseSetup = dependencies(true);
+  const parseBase = parseSetup.dependencies.adapters[0]!;
+  const parseResult = await new IngestPipeline({
+    ...parseSetup.dependencies,
+    adapters: [{
+      ...parseBase,
+      parse: async () => {
+        throw new TaskError({ code: "CONTENT_SCHEMA_CHANGED", message: "页面结构已经变化", action: "retry" });
+      },
+    }],
+  }).run({ input: "https://www.douyin.com/video/1" });
+  const parseLatest = assertSevenStagesTerminal(parseSetup.events);
+  const parseTask = JSON.parse(parseSetup.store.values.get(paths.task) ?? "{}") as {
+    readonly status?: string;
+    readonly currentStage?: string;
+  };
+
+  assert.equal(parseResult.status, "failed");
+  assert.equal(parseTask.status, "failed");
+  assert.equal(parseTask.currentStage, "parse-content");
+  assert.equal(parseLatest.get("parse-content")?.status, "failed");
+  for (const stage of ["select-media", "download-media", "obtain-transcript", "save-artifacts"] as const) {
+    assert.equal(parseLatest.get(stage)?.status, "succeeded");
+    assert.equal(parseLatest.get(stage)?.message, "上游阶段已失败，已跳过");
+  }
 });
 
 test("小红书图文保存正文和全部图片后正常成功", async () => {
