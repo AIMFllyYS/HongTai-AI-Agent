@@ -303,6 +303,32 @@ test("上下文超过窗口80%时摘要较早消息并保留最近六条", async
   assert.doesNotMatch(JSON.stringify(provider.calls[1]?.messages), /第0条/);
 });
 
+test("正式报告拦截确诊概率或处方建议且进度板块不先放出越界句", async () => {
+  const cases = [
+    { ...validSingleResponse, wellnessReferences: [{ title: "错误结论", statement: "可能确诊为糖尿病，患病概率80%。" }] },
+    { ...validSingleResponse, advice: "建议按处方服用，每次500mg。" },
+  ];
+  for (const payload of cases) {
+    const repository = new MemoryRepository();
+    const progress: StructuredGenerationProgressV1[] = [];
+    const flow = new DiagnosisFlow({
+      provider: new SequenceProvider([JSON.stringify(payload), JSON.stringify(payload)]),
+      repository,
+      contextWindowTokens: 32_000,
+      onProgress: (event) => { progress.push(event); },
+    });
+    await assert.rejects(
+      () => flow.analyze({ mode: "tongue", image: { mimeType: "image/jpeg", data: new Uint8Array([1]) } }),
+      /修复/u,
+    );
+    assert.equal(repository.report, undefined);
+    const published = JSON.stringify(progress.flatMap((snapshot) => (
+      snapshot.modules.filter((module) => module.status === "succeeded").map((module) => module.result)
+    )));
+    assert.doesNotMatch(published, /确诊|患病概率80%|处方|500mg/u);
+  }
+});
+
 test("图片不可用时Schema拒绝模型虚构可见观察项", async () => {
   const repository = new MemoryRepository();
   const invalid = JSON.stringify({ ...validSingleResponse, quality: "unusable", qualityNote: "严重失焦。", advice: "虚构建议" });
