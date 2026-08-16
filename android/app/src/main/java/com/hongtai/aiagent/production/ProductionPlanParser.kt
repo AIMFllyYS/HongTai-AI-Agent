@@ -102,19 +102,6 @@ internal object ProductionPlanParser {
     } else {
       ProductionTextOverlay(root.getString("title").trim().take(24), null, "classic_top")
     }
-    if (renderMode == ProductionRenderMode.AVATAR) {
-      if (music != null || musicVolume != 0f) throw ProductionException(ProductionFailureKind.MEDIA_SOURCE_INVALID, "Avatar production cannot mix background music.")
-      if (shots.any { it.input.kind != ProductionAssetKind.VIDEO || !it.input.hasAudio }) {
-        throw ProductionException(ProductionFailureKind.MEDIA_SOURCE_INVALID, "Avatar production needs a video with an audible source track.")
-      }
-      val source = shots.first().input
-      if (shots.any { it.input.id != source.id }) {
-        throw ProductionException(ProductionFailureKind.MEDIA_SOURCE_INVALID, "Avatar production must use one continuous source video.")
-      }
-      if (source.durationMs == null || durationMs > source.durationMs) {
-        throw ProductionException(ProductionFailureKind.MEDIA_SOURCE_INVALID, "Avatar production duration exceeds the selected source video.")
-      }
-    }
     return NativeProductionPlan(width, height, fps, durationMs, locale, speechRate, music, musicVolume, shots, textOverlay, renderMode)
   }
 
