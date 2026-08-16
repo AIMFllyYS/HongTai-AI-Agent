@@ -10,7 +10,7 @@
   "scripts": {
     "cli": "pnpm --filter @hongtai/cli dev",
     "knowledge:generate": "node scripts/generate-diagnosis-knowledge-module.mjs",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "tsx --test tests/*.test.ts && pnpm --filter @hongtai/capacitor-runtime test",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "check": "pnpm typecheck && pnpm lint && pnpm test"
