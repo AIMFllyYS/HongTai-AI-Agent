@@ -1,4 +1,4 @@
-import { persistableSuccessRaw, TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
+import { persistableSuccessRaw, platformForHost, TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
 import {
   MOBILE_USER_AGENT,
   asArray,
@@ -13,8 +13,6 @@ import {
   mediaHeaders,
   normalizeHttpUrl,
 } from "../shared";
-
-const XHS_HOST = /(^|\.)(xiaohongshu\.com|xhslink\.com|xhslink\.cn)$/i;
 
 function extractNoteId(url: string): string | undefined {
   return url.match(/\/(?:explore|note)\/([a-f0-9]+)/i)?.[1]
@@ -75,7 +73,7 @@ export class XiaohongshuAdapter implements PlatformAdapter {
 
   matches(url: string): boolean {
     try {
-      return XHS_HOST.test(new URL(url).hostname);
+      return platformForHost(new URL(url).hostname) === "xiaohongshu";
     } catch {
       return false;
     }

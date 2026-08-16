@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { HttpClient, HttpPostRequest, HttpRequest, HttpResponse } from "../packages/core/src/index";
-import { TaskError } from "../packages/core/src/index";
+import { inspectInput, TaskError } from "../packages/core/src/index";
 import {
   BilibiliAdapter,
   DouyinAdapter,
@@ -65,6 +65,44 @@ test("extractAssignedJson支持嵌套对象和undefined", () => {
     ["window.__INITIAL_STATE__"],
   );
   assert.deepEqual(value, { note: { value: null, nested: { ok: true } } });
+});
+
+const HOST_DECISIONS = [
+  { url: "https://www.douyin.com/video/7600000000000000000", accepted: true, platform: "douyin" },
+  { url: "https://v.douyin.com/P3q_lN_8d84/", accepted: true, platform: "douyin" },
+  { url: "https://m.douyin.com/video/7600000000000000000", accepted: true, platform: "douyin" },
+  { url: "https://www.iesdouyin.com/share/video/7600000000000000000", accepted: true, platform: "douyin" },
+  { url: "https://api.douyin.com/aweme/v1/play/", accepted: false },
+  { url: "https://live.douyin.com/123", accepted: false },
+  { url: "https://creator.douyin.com/studio", accepted: false },
+  { url: "https://www.bilibili.com/video/BV1xx411c7mD", accepted: true, platform: "bilibili" },
+  { url: "https://m.bilibili.com/video/BV1xx411c7mD", accepted: true, platform: "bilibili" },
+  { url: "https://b23.tv/mIrEY6j", accepted: true, platform: "bilibili" },
+  { url: "https://api.bilibili.com/x/web-interface/view", accepted: false },
+  { url: "https://live.bilibili.com/123", accepted: false },
+  { url: "https://creator.bilibili.com/", accepted: false },
+  { url: "https://www.xiaohongshu.com/explore/abc123", accepted: true, platform: "xiaohongshu" },
+  { url: "https://m.xiaohongshu.com/explore/abc123", accepted: true, platform: "xiaohongshu" },
+  { url: "https://xhslink.cn/o/example", accepted: true, platform: "xiaohongshu" },
+  { url: "https://api.xiaohongshu.com/api", accepted: false },
+  { url: "https://live.xiaohongshu.com/live", accepted: false },
+  { url: "https://creator.xiaohongshu.com/", accepted: false },
+  { url: "https://v.kuaishou.com/nvZAnXmn", accepted: true, platform: "kuaishou" },
+  { url: "https://www.kuaishou.com/short-video/3xk22yucqvrwx64", accepted: true, platform: "kuaishou" },
+  { url: "https://www.kuaishou.com/graphql", accepted: false },
+] as const;
+
+test("入口与适配器对同一链接给出相同主机判定", () => {
+  for (const item of HOST_DECISIONS) {
+    const inspection = inspectInput(item.url);
+    const adapter = platformRegistry.find(item.url);
+    assert.equal(inspection.ok, item.accepted, `inspectInput ${item.url}`);
+    assert.equal(Boolean(adapter), item.accepted, `matches ${item.url}`);
+    if (item.accepted && inspection.ok) {
+      assert.equal(inspection.value.platform, item.platform);
+      assert.equal(adapter?.platform, item.platform);
+    }
+  }
 });
 
 test("现有平台显式标记为稳定支持", () => {

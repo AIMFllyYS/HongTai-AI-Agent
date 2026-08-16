@@ -1,9 +1,8 @@
-import { TaskError, type HttpClient, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
+import { platformForHost, TaskError, type HttpClient, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
 import { DESKTOP_USER_AGENT, fetchPage } from "../shared";
 import { fetchKuaishouDetail } from "./client";
 import { parseKuaishouDetail } from "./parser";
 
-const INPUT_HOST = /^(?:www|v)\.kuaishou\.com$/i;
 const RESOLVED_HOSTS = new Set(["www.kuaishou.com", "v.kuaishou.com", "v.m.chenzhongtech.com"]);
 
 function extractPhotoId(value: string): string | undefined {
@@ -17,7 +16,7 @@ export class KuaishouAdapter implements PlatformAdapter {
   matches(url: string): boolean {
     try {
       const parsed = new URL(url);
-      if (!INPUT_HOST.test(parsed.hostname)) return false;
+      if (platformForHost(parsed.hostname) !== "kuaishou") return false;
       const host = parsed.hostname.toLowerCase();
       return host === "v.kuaishou.com"
         ? /^\/[A-Za-z0-9_-]+\/?$/.test(parsed.pathname)

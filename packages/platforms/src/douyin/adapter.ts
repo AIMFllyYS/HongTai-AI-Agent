@@ -1,4 +1,4 @@
-import { persistableSuccessRaw, TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
+import { persistableSuccessRaw, platformForHost, TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
 import {
   DESKTOP_USER_AGENT,
   asArray,
@@ -15,7 +15,6 @@ import {
   normalizeHttpUrl,
 } from "../shared";
 
-const DOUYIN_HOST = /(^|\.)(douyin\.com|iesdouyin\.com)$/i;
 const MOBILE_USER_AGENT =
   "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
 
@@ -101,7 +100,7 @@ export class DouyinAdapter implements PlatformAdapter {
 
   matches(url: string): boolean {
     try {
-      return DOUYIN_HOST.test(new URL(url).hostname);
+      return platformForHost(new URL(url).hostname) === "douyin";
     } catch {
       return false;
     }

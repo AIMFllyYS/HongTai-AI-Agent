@@ -1,4 +1,4 @@
-import { persistableSuccessRaw, TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
+import { persistableSuccessRaw, platformForHost, TaskError, type HttpClient, type MediaSource, type PlatformAdapter, type PlatformContent, type ResolvedLink } from "@hongtai/core";
 import {
   DESKTOP_USER_AGENT,
   asArray,
@@ -10,8 +10,6 @@ import {
   mediaHeaders,
   normalizeHttpUrl,
 } from "../shared";
-
-const BILIBILI_HOST = /(^|\.)(bilibili\.com|b23\.tv)$/i;
 
 function extractBvid(url: string): string | undefined {
   return url.match(/\b(BV[0-9A-Za-z]{10})\b/i)?.[1];
@@ -111,7 +109,7 @@ export class BilibiliAdapter implements PlatformAdapter {
 
   matches(url: string): boolean {
     try {
-      return BILIBILI_HOST.test(new URL(url).hostname);
+      return platformForHost(new URL(url).hostname) === "bilibili";
     } catch {
       return false;
     }
