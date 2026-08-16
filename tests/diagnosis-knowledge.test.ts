@@ -9,7 +9,8 @@ import { FIVE_ORGANS_OBSERVATION_KNOWLEDGE } from "../packages/ai/src/knowledge/
 import { diagnosisSingleResponseSchema } from "../packages/ai/src/schemas/diagnosis-report";
 
 const root = resolve(import.meta.dirname, "..");
-const markdown = readFileSync(resolve(root, "packages/ai/src/knowledge/five-organs-observation.md"), "utf8");
+// 与生成脚本一致地归一化为 LF：注入 Prompt 的内容不得随检出平台的行尾转换而变化。
+const markdown = readFileSync(resolve(root, "packages/ai/src/knowledge/five-organs-observation.md"), "utf8").replace(/\r\n/gu, "\n");
 
 test("五脏六腑观察知识库以独立 Markdown 为唯一权威并完整注入诊察 Prompt", () => {
   assert.equal(FIVE_ORGANS_OBSERVATION_KNOWLEDGE, markdown);
