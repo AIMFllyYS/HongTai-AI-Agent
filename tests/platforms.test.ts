@@ -9,6 +9,7 @@ import {
   XiaohongshuAdapter,
   extractAssignedJson,
   platformRegistry,
+  replaceUndefined,
 } from "../packages/platforms/src/index";
 
 class FakeHttpClient implements HttpClient {
@@ -65,6 +66,59 @@ test("extractAssignedJson支持嵌套对象和undefined", () => {
     ["window.__INITIAL_STATE__"],
   );
   assert.deepEqual(value, { note: { value: null, nested: { ok: true } } });
+});
+
+test("replaceUndefined不改写undefined前缀的字段名", () => {
+  assert.equal(replaceUndefined("{undefinedKey:undefined}"), "{undefinedKey:null}");
+  assert.equal(replaceUndefined('{"value":undefined}'), '{"value":null}');
+});
+
+test("小红书笔记定位不会命中外层包装对象", async () => {
+  const html = `<script>window.__INITIAL_STATE__={"imageList":[{"urlDefault":"https://img.example/wrapper.jpg"}],"note":{"noteDetailMap":{"abc123":{"note":{"noteId":"abc123","title":"真实笔记","desc":"正文","user":{"nickname":"作者乙"},"imageList":[{"urlDefault":"https://img.example/real.jpg"}]}}}}};</script>`;
+  const client = new FakeHttpClient(() => response("https://www.xiaohongshu.com/explore/abc123", html));
+  const adapter = new XiaohongshuAdapter();
+  const resolved = await adapter.resolve("https://www.xiaohongshu.com/explore/abc123", client);
+  const content = await adapter.parse(resolved, client);
+  assert.equal(content.title, "真实笔记");
+  assert.equal(content.author, "作者乙");
+  assert.equal(content.images[0]?.url, "https://img.example/real.jpg");
+  assert.equal(content.images.some((image) => image.url.includes("wrapper")), false);
+});
+
+test("B站在URL中没有BV号时不从HTML推荐位采集", async () => {
+  const recommended = "BV1yyyyyyyy1";
+  let apiCalls = 0;
+  const client = new FakeHttpClient((request) => {
+    if (request.url.includes("api.bilibili.com")) {
+      apiCalls += 1;
+      return response(request.url, JSON.stringify({
+        code: 0,
+        data: {
+          bvid: recommended,
+          title: "推荐位视频",
+          desc: "简介",
+          duration: 60,
+          owner: { name: "推荐作者" },
+          pages: [{ cid: 999, duration: 60 }],
+          dash: {
+            video: [{ id: 80, baseUrl: "https://video.example/recommended.m4s", bandwidth: 1000, width: 640, height: 360 }],
+            audio: [],
+          },
+        },
+      }));
+    }
+    return response("https://www.bilibili.com/video/av12345", `<html><a href="/video/${recommended}">推荐</a></html>`);
+  });
+  await assert.rejects(
+    () => new BilibiliAdapter().parse({
+      sourceUrl: "https://www.bilibili.com/video/av12345",
+      finalUrl: "https://www.bilibili.com/video/av12345",
+      status: 200,
+      body: `<html><a href="/video/${recommended}">推荐</a></html>`,
+    }, client),
+    (error) => error instanceof TaskError && error.code === "INPUT_URL_INVALID",
+  );
+  assert.equal(apiCalls, 0);
 });
 
 const HOST_DECISIONS = [
@@ -400,11 +454,11 @@ test("小红书适配器提取H264视频流", async () => {
 });
 
 test("小红书适配器识别图文笔记", async () => {
-  const html = `<script>window.__INITIAL_STATE__={"note":{"noteDetailMap":{"img123":{"note":{"noteId":"img123","title":"图文测试","desc":"正文","user":{"nickname":"作者戊"},"imageList":[{"urlDefault":"https://img.example/1.jpg"},{"urlDefault":"https://img.example/2.jpg"}]}}}}};</script>`;
-  const client = new FakeHttpClient(() => response("https://www.xiaohongshu.com/discovery/item/img123", html));
+  const html = `<script>window.__INITIAL_STATE__={"note":{"noteDetailMap":{"def456":{"note":{"noteId":"def456","title":"图文测试","desc":"正文","user":{"nickname":"作者戊"},"imageList":[{"urlDefault":"https://img.example/1.jpg"},{"urlDefault":"https://img.example/2.jpg"}]}}}}};</script>`;
+  const client = new FakeHttpClient(() => response("https://www.xiaohongshu.com/discovery/item/def456", html));
   const adapter = new XiaohongshuAdapter();
   assert.equal(adapter.matches("https://xhslink.cn/o/example"), true);
-  const resolved = await adapter.resolve("https://www.xiaohongshu.com/discovery/item/img123", client);
+  const resolved = await adapter.resolve("https://www.xiaohongshu.com/discovery/item/def456", client);
   const content = await adapter.parse(resolved, client);
   assert.equal(content.contentType, "image_text");
   assert.equal(content.images.length, 2);

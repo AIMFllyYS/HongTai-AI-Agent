@@ -21,10 +21,11 @@ function extractNoteId(url: string): string | undefined {
 }
 
 function extractNote(root: unknown, noteId?: string): Record<string, unknown> | undefined {
+  if (!noteId) return undefined;
   return findRecord(root, (record) => {
     const id = asString(record.noteId) ?? asString(record.id);
     const hasMedia = Boolean(asRecord(record.video) || Array.isArray(record.imageList));
-    return hasMedia && (!noteId || id === noteId || id == null);
+    return hasMedia && id === noteId;
   });
 }
 

@@ -127,7 +127,7 @@ export class BilibiliAdapter implements PlatformAdapter {
   }
 
   async parse(link: ResolvedLink, http: HttpClient): Promise<PlatformContent> {
-    const bvid = extractBvid(link.finalUrl) ?? extractBvid(link.body ?? "");
+    const bvid = extractBvid(link.finalUrl) ?? extractBvid(link.sourceUrl);
     if (!bvid) throw new TaskError({ code: "INPUT_URL_INVALID", message: "无法从B站链接中提取BV号", action: "edit_input" });
     const viewPayload = await getApi(
       http,
