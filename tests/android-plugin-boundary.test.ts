@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { inflateSync } from "node:zlib";
 
 const root = process.cwd();
 const read = (relativePath: string) => readFileSync(join(root, relativePath), "utf8");
@@ -271,16 +273,184 @@ test("client APK builds are identifiable and never log bridge payloads", () => {
   assert.doesNotMatch(appBuild, /versionName\s*=\s*"0\.1\.0"/);
 });
 
-test("release candidate v0.1.13 advances to versionCode 21 and packages the dedicated HongTai launcher icon", () => {
+const WEB_BRAND_ICON_SHA256 = "b7666580d788a694be1a331f4dac36aebfb06b1000190cef6eb542bb49afceac";
+const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
+
+type DecodedPng = {
+  readonly width: number;
+  readonly height: number;
+  readonly colorType: number;
+  readonly pixels: Uint8Array;
+};
+
+const paethPredictor = (left: number, up: number, upperLeft: number) => {
+  const estimate = left + up - upperLeft;
+  const leftDist = Math.abs(estimate - left);
+  const upDist = Math.abs(estimate - up);
+  const upperLeftDist = Math.abs(estimate - upperLeft);
+  if (leftDist <= upDist && leftDist <= upperLeftDist) {
+    return left;
+  }
+  return upDist <= upperLeftDist ? up : upperLeft;
+};
+
+const readPng = (buffer: Buffer): DecodedPng => {
+  assert.deepEqual([...buffer.subarray(0, 8)], PNG_SIGNATURE, "icon assets must stay PNG");
+  let offset = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  const idat: Buffer[] = [];
+  while (offset + 8 <= buffer.length) {
+    const length = buffer.readUInt32BE(offset);
+    const type = buffer.subarray(offset + 4, offset + 8).toString("ascii");
+    const data = buffer.subarray(offset + 8, offset + 8 + length);
+    if (type === "IHDR") {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      bitDepth = data[8] ?? 0;
+      colorType = data[9] ?? 0;
+    } else if (type === "IDAT") {
+      idat.push(data);
+    } else if (type === "IEND") {
+      break;
+    }
+    offset += 12 + length;
+  }
+  assert.equal(bitDepth, 8, "launcher PNGs must be 8-bit");
+  assert.ok(colorType === 2 || colorType === 6, "launcher PNGs must be RGB or RGBA");
+  const bytesPerPixel = colorType === 6 ? 4 : 3;
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * bytesPerPixel;
+  const pixels = new Uint8Array(width * height * 4);
+  const previous = new Uint8Array(stride);
+  const row = new Uint8Array(stride);
+  let source = 0;
+  for (let y = 0; y < height; y += 1) {
+    const filter = raw[source] ?? 0;
+    source += 1;
+    for (let index = 0; index < stride; index += 1) {
+      const value = raw[source + index] ?? 0;
+      const left = index >= bytesPerPixel ? (row[index - bytesPerPixel] ?? 0) : 0;
+      const up = previous[index] ?? 0;
+      const upperLeft = index >= bytesPerPixel ? (previous[index - bytesPerPixel] ?? 0) : 0;
+      let reconstructed = value;
+      if (filter === 1) {
+        reconstructed = (value + left) & 255;
+      } else if (filter === 2) {
+        reconstructed = (value + up) & 255;
+      } else if (filter === 3) {
+        reconstructed = (value + ((left + up) >> 1)) & 255;
+      } else if (filter === 4) {
+        reconstructed = (value + paethPredictor(left, up, upperLeft)) & 255;
+      } else {
+        assert.equal(filter, 0, "PNG filter must be 0-4");
+      }
+      row[index] = reconstructed;
+    }
+    source += stride;
+    for (let x = 0; x < width; x += 1) {
+      const sourceIndex = x * bytesPerPixel;
+      const destIndex = (y * width + x) * 4;
+      pixels[destIndex] = row[sourceIndex] ?? 0;
+      pixels[destIndex + 1] = row[sourceIndex + 1] ?? 0;
+      pixels[destIndex + 2] = row[sourceIndex + 2] ?? 0;
+      pixels[destIndex + 3] = colorType === 6 ? (row[sourceIndex + 3] ?? 0) : 255;
+    }
+    previous.set(row);
+  }
+  return { width, height, colorType, pixels };
+};
+
+const isNearWhite = (red: number, green: number, blue: number, alpha = 255) => {
+  if (alpha < 200) {
+    return false;
+  }
+  const min = Math.min(red, green, blue);
+  const saturation = Math.max(red, green, blue) - min;
+  return min >= 230 && saturation <= 25;
+};
+
+const opaqueBounds = (image: DecodedPng, alphaThreshold = 16) => {
+  let minX = image.width;
+  let minY = image.height;
+  let maxX = -1;
+  let maxY = -1;
+  let transparent = 0;
+  let opaque = 0;
+  let keptNearWhite = 0;
+  for (let y = 0; y < image.height; y += 1) {
+    for (let x = 0; x < image.width; x += 1) {
+      const index = (y * image.width + x) * 4;
+      const alpha = image.pixels[index + 3] ?? 0;
+      if (alpha <= alphaThreshold) {
+        transparent += 1;
+        continue;
+      }
+      opaque += 1;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+      if (isNearWhite(image.pixels[index] ?? 0, image.pixels[index + 1] ?? 0, image.pixels[index + 2] ?? 0, alpha)) {
+        keptNearWhite += 1;
+      }
+    }
+  }
+  return { minX, minY, maxX, maxY, transparent, opaque, keptNearWhite };
+};
+
+test("release candidate v0.1.13 keeps the HongTai brand source and ships an adaptive launcher icon", () => {
   const appBuild = read("android/app/build.gradle.kts");
   const manifest = read("android/app/src/main/AndroidManifest.xml");
+  const adaptive = read("android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml");
+  const adaptiveRound = read("android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml");
+  const background = read("android/app/src/main/res/drawable/ic_launcher_background.xml");
   const sourcePath = join(root, "apps/web/public/brand/hongtai-app-icon.png");
-  const iconPath = join(root, "android/app/src/main/res/drawable-nodpi/hongtai_launcher.png");
+  const foregroundPath = join(root, "android/app/src/main/res/drawable-nodpi/ic_launcher_foreground.png");
+  const legacyPath = join(root, "android/app/src/main/res/mipmap-nodpi/ic_launcher.png");
+  const sourceBytes = readFileSync(sourcePath);
+  const source = readPng(sourceBytes);
+  const foreground = readPng(readFileSync(foregroundPath));
+  const legacy = readPng(readFileSync(legacyPath));
+  const bounds = opaqueBounds(foreground);
+  const inset = (foreground.width * 21) / 108;
 
   assert.match(appBuild, /versionCode\s*=\s*21\b/);
   assert.match(appBuild, /versionName\s*=\s*"0\.1\.13"/);
-  assert.match(manifest, /android:icon="@drawable\/hongtai_launcher"/);
-  assert.match(manifest, /android:roundIcon="@drawable\/hongtai_launcher"/);
-  assert.equal(existsSync(iconPath), true, "the Android launcher icon must be packaged from the design asset");
-  assert.deepEqual(readFileSync(iconPath), readFileSync(sourcePath), "the launcher icon must match the public cropped source");
+  assert.equal(createHash("sha256").update(sourceBytes).digest("hex"), WEB_BRAND_ICON_SHA256, "the public brand PNG remains the cropped source");
+  assert.equal(source.colorType, 2, "the web brand source stays an opaque RGB canvas");
+  assert.match(manifest, /android:icon="@mipmap\/ic_launcher"/);
+  assert.match(manifest, /android:roundIcon="@mipmap\/ic_launcher_round"/);
+  assert.match(adaptive, /<adaptive-icon[\s\S]*<background\s+android:drawable="@drawable\/ic_launcher_background"/);
+  assert.match(adaptive, /<foreground\s+android:drawable="@drawable\/ic_launcher_foreground"/);
+  assert.match(adaptiveRound, /<adaptive-icon[\s\S]*<background\s+android:drawable="@drawable\/ic_launcher_background"/);
+  assert.match(adaptiveRound, /<foreground\s+android:drawable="@drawable\/ic_launcher_foreground"/);
+  assert.match(background, /<gradient[\s\S]*android:startColor=/);
+  assert.doesNotMatch(background, /#(F{3}|F{6}|[Ff]{3}|[Ff]{6})\b/);
+  assert.equal(foreground.colorType, 6, "adaptive foreground must be a layered RGBA asset");
+  assert.ok(bounds.transparent > 0, "adaptive foreground must have knocked-out alpha");
+  assert.ok(bounds.opaque > 0, "adaptive foreground must keep the brand artwork");
+  assert.ok(bounds.keptNearWhite > 1000, "white helmet and 宏泰AI glyphs must survive knockout");
+  assert.ok(bounds.minX >= inset - 1 && bounds.minY >= inset - 1, "artwork must stay inside the 66/108 safe zone");
+  assert.ok(bounds.maxX <= foreground.width - inset + 1 && bounds.maxY <= foreground.height - inset + 1, "artwork must not spill outside the 66/108 safe zone");
+  assert.equal(existsSync(legacyPath), true, "API 24-25 still needs a leftover launcher bitmap");
+  assert.notDeepEqual(readFileSync(legacyPath), sourceBytes, "Android bitmaps are no longer a byte-identical copy of the white-canvas web source");
+  const midX = Math.floor(legacy.width / 2);
+  const midY = Math.floor(legacy.height / 2);
+  const edgePixels = [
+    [midX, 0],
+    [midX, legacy.height - 1],
+    [0, midY],
+    [legacy.width - 1, midY],
+  ] as const;
+  for (const [x, y] of edgePixels) {
+    const index = (y * legacy.width + x) * 4;
+    assert.equal(
+      isNearWhite(legacy.pixels[index] ?? 0, legacy.pixels[index + 1] ?? 0, legacy.pixels[index + 2] ?? 0, legacy.pixels[index + 3] ?? 0),
+      false,
+      `legacy bitmap edge ${x},${y} must not keep a white seam`,
+    );
+  }
 });

@@ -41,8 +41,13 @@
 - 底栏：UIAutomator 读取到 AI、拆解、制作、模板、设置和富迪素材库六项，素材库按钮边界为 `[885,2189][1061,2340]`。
 - 弹层：点击“富迪素材库”后 UIAutomator 同时读取到弹层标题、`富迪素材库宣传图` 图片替代文本和关闭按钮；截图确认纵向宣传图完整采用 `contain` 方式显示，点击关闭按钮后图片节点消失。
 
+## 2026-08-17 增补：#92 adaptive icon
+
+v0.1.10 当时把裁剪后的 RGB 白底图原样作为 `@drawable/hongtai_launcher`，桌面再套一层系统遮罩就会露出白缝。#92 起 Android 启动图标改为 `mipmap-anydpi-v26` 分层 adaptive icon：从现有品牌图只抠白底得到 RGBA 前景，图案缩进 66/108 安全区；背景为非白品牌渐变（`#1C96E9` → `#C7F4B1`）。API 24–25 使用 `mipmap-nodpi/ic_launcher.png` 一张自身无白边的遗留位图。Manifest 的 `icon` / `roundIcon` 指向 `@mipmap/ic_launcher` 与 `@mipmap/ic_launcher_round`。Web 品牌源 `apps/web/public/brand/hongtai-app-icon.png` 仍保持 SHA-256 `b7666580d788a694be1a331f4dac36aebfb06b1000190cef6eb542bb49afceac`，测试不再要求 Android 位图与该 PNG 字节相等。真机桌面截图待验证。
+
 ## 明确未验证
 
+- #92 真机桌面截图待验证：顶部/左侧/右侧无白缝，以及至少两种 OEM launcher 遮罩形状。
 - 没有物理 Android 手机，不能声称 OEM launcher mask、桌面图标视觉、物理屏色彩、真实触控或正常升级已通过。
 - Android 系统返回键未作为本阶段弹层关闭契约；已验证的是弹层内关闭按钮。Esc 键关闭只属于桌面可访问性实现。
 - 没有更新 `download.html`，也没有公开上传 v0.1.10 或从公网重新下载核对哈希。
