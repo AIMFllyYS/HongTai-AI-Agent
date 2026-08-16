@@ -12,6 +12,7 @@ import { TaskProgressSteps } from "../components/TaskProgressSteps";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
 import { buildTaskStagePresentations, platformLabel } from "../features/tasks/task-presenters";
 import { aiSettingsPath, pathForRoute, type Navigate } from "../router";
+import { showProcessingLeaveHint } from "./task-page-model";
 
 export interface TaskProcessingPageProps {
   readonly runtime: AppRuntime;
@@ -85,7 +86,7 @@ export function TaskProcessingPage({
         {task.status === "queued" ? <Button variant="secondary" disabled={!ingestAvailable || actionPending !== undefined} icon={<Icon name="bolt" size={18} />} onClick={() => void start()}>{actionPending === "start" ? "正在启动" : "开始执行"}</Button> : null}
         {task.status === "failed" || task.status === "interrupted" || task.status === "cancelled" ? <Button icon={<Icon name="sync" size={18} />} onClick={() => navigate(pathForRoute("home"))} variant="secondary">{localVideo ? "重新选择视频" : "重新提交链接"}</Button> : null}
       </div>
-      <p className="task-processing-leave-hint">进程在后台运行，可以放心离开此页</p>
+      {showProcessingLeaveHint(task.status) ? <p className="task-processing-leave-hint">进程在后台运行，可以放心离开此页</p> : null}
     </div>
   );
 }

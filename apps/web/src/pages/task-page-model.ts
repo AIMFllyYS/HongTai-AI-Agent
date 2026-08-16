@@ -44,12 +44,73 @@ export function sourceIdFromSearch(search: string): string {
   }
 }
 
+function searchWithoutSourceId(search: string): string {
+  const raw = search.startsWith("?") ? search.slice(1) : search;
+  try {
+    const params = new URLSearchParams(raw);
+    params.delete("sourceId");
+    const next = params.toString();
+    return next ? `?${next}` : "";
+  } catch {
+    return "";
+  }
+}
+
+export function consumeCreateSourceIdFromSearch(): string {
+  if (typeof window === "undefined") return "";
+  const requested = sourceIdFromSearch(window.location.search);
+  if (!requested) return "";
+  const nextSearch = searchWithoutSourceId(window.location.search);
+  const nextUrl = `${window.location.pathname}${nextSearch}${window.location.hash ?? ""}`;
+  if (`${window.location.pathname}${window.location.search}${window.location.hash ?? ""}` !== nextUrl) {
+    window.history.replaceState(window.history.state ?? {}, "", nextUrl);
+  }
+  return requested;
+}
+
 export function navigateToCreateWithSource(navigate: Navigate, taskId: string): void {
   navigate(pathForRoute("create"));
   if (typeof window === "undefined") return;
   const next = createPagePathWithSource(taskId);
   if (`${window.location.pathname}${window.location.search}` === next) return;
   window.history.replaceState(window.history.state ?? {}, "", next);
+}
+
+export function showProcessingLeaveHint(status: TaskStatus): boolean {
+  return status === "queued" || status === "running";
+}
+
+export function isEligibleCreateSourceTask(status: TaskStatus): boolean {
+  return status === "succeeded" || status === "degraded";
+}
+
+export function resolveCreateWorkbenchEntry(input: {
+  readonly requestedSourceId: string;
+  readonly availableSourceIds: readonly string[];
+  readonly currentSourceId?: string;
+  readonly composingNew?: boolean;
+}): {
+  readonly composingNew: boolean;
+  readonly sourceId: string;
+  readonly sourceMatchFailed: boolean;
+} {
+  if (input.requestedSourceId) {
+    const matched = input.availableSourceIds.includes(input.requestedSourceId);
+    return {
+      composingNew: true,
+      sourceId: matched ? input.requestedSourceId : "",
+      sourceMatchFailed: !matched,
+    };
+  }
+  const current = input.currentSourceId ?? "";
+  if (input.composingNew && !current) {
+    return { composingNew: true, sourceId: "", sourceMatchFailed: false };
+  }
+  return {
+    composingNew: Boolean(input.composingNew),
+    sourceId: input.availableSourceIds.includes(current) ? current : (input.availableSourceIds[0] ?? ""),
+    sourceMatchFailed: false,
+  };
 }
 
 export type TaskCompletedBarAction = TaskCompletedPrimaryAction | "confirm-analysis";

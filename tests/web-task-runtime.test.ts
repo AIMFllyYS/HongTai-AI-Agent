@@ -462,6 +462,23 @@ test("failed interrupted cancelled 仍走处理页", async () => {
   assert.doesNotMatch(page, /isTerminalTaskStatus/);
 });
 
+test("处理页离开提示只在 queued/running 出现，失败态不伪造成进行中", async () => {
+  const { showProcessingLeaveHint } = await import("../apps/web/src/pages/task-page-model") as {
+    showProcessingLeaveHint?: (status: string) => boolean;
+  };
+  assert.equal(typeof showProcessingLeaveHint, "function");
+  assert.equal(showProcessingLeaveHint?.("queued"), true);
+  assert.equal(showProcessingLeaveHint?.("running"), true);
+  for (const status of ["failed", "interrupted", "cancelled", "succeeded", "degraded"] as const) {
+    assert.equal(showProcessingLeaveHint?.(status), false);
+  }
+
+  const processing = read("pages/TaskProcessingPage.tsx");
+  assert.match(processing, /showProcessingLeaveHint\(task\.status\) \? <p className="task-processing-leave-hint">进程在后台运行，可以放心离开此页<\/p> : null/);
+  assert.match(processing, /TaskProgressSteps/);
+  assert.match(processing, /IssueNotice/);
+});
+
 test("完成态用共享 Tabs 恢复 URL 分栏，并按阶段给出底部主操作", async () => {
   const model = await import("../apps/web/src/pages/task-page-model") as {
     sourceTabLabel?: (contentType?: string) => string;
@@ -543,7 +560,7 @@ test("完成态用共享 Tabs 恢复 URL 分栏，并按阶段给出底部主操
   assert.doesNotMatch(detail, /<Button[^>]*>删除任务</);
   assert.doesNotMatch(detail, /<Button[^>]*>重新拆解</);
   assert.doesNotMatch(analysis, /前往模板管理保存结构/);
-  assert.match(create, /sourceIdFromSearch/);
+  assert.match(create, /consumeCreateSourceIdFromSearch/);
   assert.match(home, /from "\.\.\/components\/Tabs"/);
   assert.match(home, /<Tabs\b/);
   assert.match(home, /"粘贴链接"/);

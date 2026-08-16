@@ -141,3 +141,139 @@ test("制作页用 contextualAction 单主按钮、三 Tab 与 9:16 预览，完
   assert.match(css, /padding-bottom:\s*calc\(/);
   assert.doesNotMatch(surface, /时间轴|逐帧|转场编辑/);
 });
+
+test("带 sourceId 进入制作页强制新建并选中该来源，匹配失败不换一条", async () => {
+  const { resolveCreateWorkbenchEntry } = await import("./task-page-model") as {
+    resolveCreateWorkbenchEntry?: (input: {
+      readonly requestedSourceId: string;
+      readonly availableSourceIds: readonly string[];
+      readonly currentSourceId?: string;
+      readonly composingNew?: boolean;
+    }) => {
+      readonly composingNew: boolean;
+      readonly sourceId: string;
+      readonly sourceMatchFailed: boolean;
+    };
+  };
+  assert.equal(typeof resolveCreateWorkbenchEntry, "function");
+
+  assert.deepEqual(resolveCreateWorkbenchEntry?.({
+    requestedSourceId: "task-degraded",
+    availableSourceIds: ["task-degraded", "task-other"],
+    currentSourceId: "",
+    composingNew: false,
+  }), { composingNew: true, sourceId: "task-degraded", sourceMatchFailed: false });
+
+  assert.deepEqual(resolveCreateWorkbenchEntry?.({
+    requestedSourceId: "task-missing",
+    availableSourceIds: ["task-other"],
+    currentSourceId: "",
+    composingNew: false,
+  }), { composingNew: true, sourceId: "", sourceMatchFailed: true });
+
+  assert.deepEqual(resolveCreateWorkbenchEntry?.({
+    requestedSourceId: "",
+    availableSourceIds: ["task-other"],
+    currentSourceId: "",
+    composingNew: false,
+  }), { composingNew: false, sourceId: "task-other", sourceMatchFailed: false });
+
+  assert.deepEqual(resolveCreateWorkbenchEntry?.({
+    requestedSourceId: "",
+    availableSourceIds: ["task-other"],
+    currentSourceId: "task-kept",
+    composingNew: true,
+  }), { composingNew: true, sourceId: "task-other", sourceMatchFailed: false });
+
+  assert.deepEqual(resolveCreateWorkbenchEntry?.({
+    requestedSourceId: "",
+    availableSourceIds: ["task-kept", "task-other"],
+    currentSourceId: "task-kept",
+    composingNew: true,
+  }), { composingNew: true, sourceId: "task-kept", sourceMatchFailed: false });
+
+  const page = read("pages/CreatePage.tsx");
+  const model = read("pages/task-page-model.ts");
+  assert.match(page, /resolveCreateWorkbenchEntry/);
+  assert.match(page, /status:\s*"degraded"/);
+  assert.match(page, /sourceMatchFailed/);
+  assert.match(page, /CONTENT_NOT_FOUND/);
+  assert.match(model, /status === "degraded"|status === 'degraded'/);
+  const again = page.slice(page.indexOf("primary.stage === \"has-output\""), page.indexOf("primary.stage === \"failed\""));
+  assert.match(again, /setComposingNew\(true\)/);
+  assert.doesNotMatch(again, /deleteProject|production\.delete/);
+});
+
+test("带 sourceId 首次进入会新建，同一地址再次 load 不再强制新建", async () => {
+  const model = await import("./task-page-model") as {
+    consumeCreateSourceIdFromSearch?: () => string;
+    resolveCreateWorkbenchEntry?: (input: {
+      readonly requestedSourceId: string;
+      readonly availableSourceIds: readonly string[];
+      readonly currentSourceId?: string;
+      readonly composingNew?: boolean;
+    }) => {
+      readonly composingNew: boolean;
+      readonly sourceId: string;
+      readonly sourceMatchFailed: boolean;
+    };
+    sourceIdFromSearch?: (search: string) => string;
+  };
+  assert.equal(typeof model.consumeCreateSourceIdFromSearch, "function");
+  assert.equal(typeof model.resolveCreateWorkbenchEntry, "function");
+
+  const location = { pathname: "/create", search: "?sourceId=task-1&keep=yes", hash: "" };
+  const previousWindow = (globalThis as { window?: unknown }).window;
+  (globalThis as { window: unknown }).window = {
+    location,
+    history: {
+      state: {},
+      replaceState(_data: unknown, _title: string, url: string) {
+        const parsed = new URL(url, `https://hongtai.local${location.pathname}${location.search}`);
+        location.pathname = parsed.pathname;
+        location.search = parsed.search;
+        location.hash = parsed.hash;
+      },
+    },
+  };
+
+  try {
+    const firstRequested = model.consumeCreateSourceIdFromSearch?.() ?? "";
+    assert.equal(firstRequested, "task-1");
+    assert.equal(location.pathname, "/create");
+    assert.doesNotMatch(location.pathname, /\?|sourceId=/);
+    assert.equal(location.search, "?keep=yes");
+    assert.equal(model.sourceIdFromSearch?.(location.search), "");
+    assert.deepEqual(model.resolveCreateWorkbenchEntry?.({
+      requestedSourceId: firstRequested,
+      availableSourceIds: ["task-1", "task-other"],
+      currentSourceId: "",
+      composingNew: false,
+    }), { composingNew: true, sourceId: "task-1", sourceMatchFailed: false });
+
+    const resumeRequested = model.consumeCreateSourceIdFromSearch?.() ?? "";
+    assert.equal(resumeRequested, "");
+    assert.equal(location.pathname, "/create");
+    assert.equal(location.search, "?keep=yes");
+    assert.deepEqual(model.resolveCreateWorkbenchEntry?.({
+      requestedSourceId: resumeRequested,
+      availableSourceIds: ["task-1", "task-other"],
+      currentSourceId: "task-1",
+      composingNew: false,
+    }), { composingNew: false, sourceId: "task-1", sourceMatchFailed: false });
+
+    assert.deepEqual(model.resolveCreateWorkbenchEntry?.({
+      requestedSourceId: "",
+      availableSourceIds: ["task-other"],
+      currentSourceId: "",
+      composingNew: true,
+    }), { composingNew: true, sourceId: "", sourceMatchFailed: false });
+  } finally {
+    if (previousWindow === undefined) delete (globalThis as { window?: unknown }).window;
+    else (globalThis as { window: unknown }).window = previousWindow;
+  }
+
+  const page = read("pages/CreatePage.tsx");
+  assert.match(page, /consumeCreateSourceIdFromSearch/);
+  assert.doesNotMatch(page, /sourceIdFromSearch\(window\.location\.search\)/);
+});

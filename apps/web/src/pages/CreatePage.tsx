@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { issueFromAppError, TaskError } from "@hongtai/core";
 import type { AppRuntime, AppTaskRecord, ProductionMode, ProductionProjectRecord, ProductionTextPreset, TaskIssue } from "@hongtai/core";
 
@@ -23,7 +23,7 @@ import {
   resolveProductionRetryKind,
   resolveProductionRetryOperation,
 } from "./production-workbench-model";
-import { sourceIdFromSearch } from "./task-page-model";
+import { consumeCreateSourceIdFromSearch, isEligibleCreateSourceTask, resolveCreateWorkbenchEntry } from "./task-page-model";
 
 export { productionRenderStageCopy };
 
@@ -84,24 +84,46 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [issue, setIssue] = useState<TaskIssue>();
+  const composingNewRef = useRef(composingNew);
+  composingNewRef.current = composingNew;
 
   const load = useCallback(async () => {
+    const requestedSourceId = consumeCreateSourceIdFromSearch();
     try {
-      const [tasks, savedProjects] = await Promise.all([
+      const [succeededTasks, degradedTasks, savedProjects] = await Promise.all([
         runtime.tasks.list({ status: "succeeded", limit: 20 }),
+        runtime.tasks.list({ status: "degraded", limit: 20 }),
         runtime.production.list(),
       ]);
+      const tasks = [...succeededTasks, ...degradedTasks].filter((task) => isEligibleCreateSourceTask(task.status));
       const records = await Promise.all(tasks.map(async (task) => ({ task, analysis: await runtime.analysis.get(task.id) })));
       const available = records.filter(({ analysis }) => analysis?.status === "succeeded" && analysis.result?.schemaVersion === "content-analysis.v1")
         .map(({ task }) => ({ task, label: sourceCardLabel(task) }));
       setSources(available);
       setProjects(savedProjects);
-      const requestedSourceId = typeof window === "undefined" ? "" : sourceIdFromSearch(window.location.search);
-      setSourceId((current) => current || (available.some((item) => item.task.id === requestedSourceId) ? requestedSourceId : "") || available[0]?.task.id || "");
+      const availableSourceIds = available.map((item) => item.task.id);
+      if (requestedSourceId) {
+        const entry = resolveCreateWorkbenchEntry({
+          requestedSourceId,
+          availableSourceIds,
+        });
+        setComposingNew(true);
+        setSourceId(entry.sourceId);
+        setIssue(entry.sourceMatchFailed
+          ? issueFromAppError(new TaskError({ code: "CONTENT_NOT_FOUND", message: "没有找到这条可用于制作的拆解", action: "none" }), { code: "CONTENT_NOT_FOUND", message: "没有找到这条可用于制作的拆解", action: "none" })
+          : undefined);
+      } else {
+        setSourceId((current) => resolveCreateWorkbenchEntry({
+          requestedSourceId: "",
+          availableSourceIds,
+          currentSourceId: current,
+          composingNew: composingNewRef.current,
+        }).sourceId);
+        setIssue(undefined);
+      }
       setProject((current) => current
         ? savedProjects.find((candidate) => candidate.projectId === current.projectId) ?? savedProjects[0]
         : savedProjects[0]);
-      setIssue(undefined);
     } catch (error) {
       setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "本地制作数据暂时无法读取", action: "none" }));
     } finally {
