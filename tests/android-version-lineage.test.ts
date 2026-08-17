@@ -21,15 +21,15 @@ function compareVersion(left: string, right: string): number {
   return 0;
 }
 
-test("the published v0.1.14/code 22 download entry matches the Gradle version authority", () => {
+test("the published v0.1.14/code 22 download entry stays public while source advances to 0.1.15", () => {
   const gradle = readFileSync(join(root, "android", "app", "build.gradle.kts"), "utf8");
   const downloadPage = readFileSync(join(root, "download.html"), "utf8");
   const sourceCode = Number(requireMatch(gradle, /versionCode\s*=\s*(\d+)/u, "Android versionCode"));
   const sourceName = requireMatch(gradle, /versionName\s*=\s*"([^"]+)"/u, "Android versionName");
   const publishedName = requireMatch(downloadPage, /aria-label="当前推荐版本 v([0-9.]+)"/u, "published download version");
 
-  assert.equal(sourceCode, 22);
-  assert.equal(sourceName, "0.1.14");
+  assert.equal(sourceCode, 23);
+  assert.equal(sourceName, "0.1.15");
   assert.equal(publishedName, "0.1.14");
   assert.ok(compareVersion(sourceName, publishedName) >= 0, "source version must never fall behind the published download");
   assert.match(downloadPage, /versionCode:\s*"22"/u);
@@ -37,6 +37,7 @@ test("the published v0.1.14/code 22 download entry matches the Gradle version au
   assert.match(downloadPage, /D091EDCAA6B7F09CC3A2DB28364CD8C46719412364A7F03F1E010B12BA8E8579/iu);
   assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.14\.apk/u);
   assert.match(downloadPage, /正式 Release · v0\.1\.14 \/ code22 · 公网哈希已回验/u);
+  assert.doesNotMatch(downloadPage, /HongTai-AI-Agent-release-v0\.1\.15\.apk/u);
 });
 
 test("the superseded v0.1.13/code 21 release stays archived instead of being overwritten", () => {
@@ -88,10 +89,12 @@ test("the repository maintains a changelog and a patch-only default version poli
   assert.match(changelog, /^## \[0\.1\.12\] - 2026-08-15/mu);
   assert.match(changelog, /^## \[0\.1\.13\] - 2026-08-17/mu);
   assert.match(changelog, /^## \[0\.1\.14\] - 2026-08-17/mu);
+  assert.match(changelog, /^## \[0\.1\.15\] - 2026-08-18/mu);
   assert.match(changelog, /^## \[0\.1\.7\] - 2026-08-14/mu);
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.12` \/ `versionCode=20`/u);
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.13` \/ `versionCode=21`/u);
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.14` \/ `versionCode=22`/u);
+  assert.match(changelog, /Android 源码版本推进为 `0\.1\.15` \/ `versionCode=23`/u);
   assert.match(changelog, /默认只递增第三位补丁版本/u);
   assert.match(changelog, /第一位或第二位版本号.*明确授权/u);
 });

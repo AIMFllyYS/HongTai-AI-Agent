@@ -64,10 +64,10 @@ test("Android device settings bridge exposes build identity without creating a s
 test("application information explains recent improvements in product language", () => {
   const page = read("apps/web/src/pages/ApplicationInfoPage.tsx");
 
+  assert.match(page, /B 站公开链接可以采集到标题、封面和口播/u);
+  assert.match(page, /成功拆解后可以生成制作计划/u);
+  assert.match(page, /从拆解进入制作时，列表第一次读取失败也不会丢掉要制作的那条内容/u);
   assert.match(page, /拆解首页用「粘贴链接 \/ 上传视频」切换来源/u);
   assert.match(page, /制作页改为竖屏预览和按阶段变化的唯一主按钮/u);
-  assert.match(page, /底栏回到五项；富迪素材库改到制作页右上角/u);
-  assert.match(page, /合成失败会说明更具体的原因，并可从制作页重试/u);
-  assert.match(page, /启动图标改为分层图标，减少桌面白边/u);
   assert.doesNotMatch(page, /紧凑结构化生成|字段校验|整文校正|半截 JSON|私有地址/u);
 });
