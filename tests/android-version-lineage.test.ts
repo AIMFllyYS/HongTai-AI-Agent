@@ -21,22 +21,39 @@ function compareVersion(left: string, right: string): number {
   return 0;
 }
 
-test("the published v0.1.12/code 20 download entry stays public while source advances to 0.1.13/code 21", () => {
+test("the published v0.1.14/code 22 download entry matches the Gradle version authority", () => {
   const gradle = readFileSync(join(root, "android", "app", "build.gradle.kts"), "utf8");
   const downloadPage = readFileSync(join(root, "download.html"), "utf8");
   const sourceCode = Number(requireMatch(gradle, /versionCode\s*=\s*(\d+)/u, "Android versionCode"));
   const sourceName = requireMatch(gradle, /versionName\s*=\s*"([^"]+)"/u, "Android versionName");
   const publishedName = requireMatch(downloadPage, /aria-label="当前推荐版本 v([0-9.]+)"/u, "published download version");
 
-  assert.equal(sourceCode, 21);
-  assert.equal(sourceName, "0.1.13");
-  assert.equal(publishedName, "0.1.12");
+  assert.equal(sourceCode, 22);
+  assert.equal(sourceName, "0.1.14");
+  assert.equal(publishedName, "0.1.14");
   assert.ok(compareVersion(sourceName, publishedName) >= 0, "source version must never fall behind the published download");
+  assert.match(downloadPage, /versionCode:\s*"22"/u);
+  assert.match(downloadPage, /28,986,082 bytes/u);
+  assert.match(downloadPage, /D091EDCAA6B7F09CC3A2DB28364CD8C46719412364A7F03F1E010B12BA8E8579/iu);
+  assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.14\.apk/u);
+});
+
+test("the superseded v0.1.13/code 21 release stays archived instead of being overwritten", () => {
+  const downloadPage = readFileSync(join(root, "download.html"), "utf8");
+
+  assert.match(downloadPage, /versionCode:\s*"21"/u);
+  assert.match(downloadPage, /28,567,582 bytes/u);
+  assert.match(downloadPage, /1C8AB9484245D75D6EE834716A32FBEBFA328B0C031CDF4C3C13B49D5FCB3C52/iu);
+  assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.13\.apk/u);
+});
+
+test("the superseded v0.1.12/code 20 release stays archived instead of being overwritten", () => {
+  const downloadPage = readFileSync(join(root, "download.html"), "utf8");
+
   assert.match(downloadPage, /versionCode:\s*"20"/u);
   assert.match(downloadPage, /28,958,194 bytes/u);
   assert.match(downloadPage, /F48C3920113DFF48404F3C6454085AE4F30A7C79F8C0EA3F1334E6258FF408CE/iu);
   assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.12\.apk/u);
-  assert.doesNotMatch(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.13\.apk/u);
 });
 
 test("the superseded v0.1.11/code 19 release stays archived instead of being overwritten", () => {
@@ -69,9 +86,11 @@ test("the repository maintains a changelog and a patch-only default version poli
   assert.match(changelog, /^## \[0\.1\.11\] - 2026-08-15/mu);
   assert.match(changelog, /^## \[0\.1\.12\] - 2026-08-15/mu);
   assert.match(changelog, /^## \[0\.1\.13\] - 2026-08-17/mu);
+  assert.match(changelog, /^## \[0\.1\.14\] - 2026-08-17/mu);
   assert.match(changelog, /^## \[0\.1\.7\] - 2026-08-14/mu);
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.12` \/ `versionCode=20`/u);
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.13` \/ `versionCode=21`/u);
+  assert.match(changelog, /Android 源码版本推进为 `0\.1\.14` \/ `versionCode=22`/u);
   assert.match(changelog, /默认只递增第三位补丁版本/u);
   assert.match(changelog, /第一位或第二位版本号.*明确授权/u);
 });
