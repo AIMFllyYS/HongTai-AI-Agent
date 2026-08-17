@@ -44,6 +44,11 @@ Thumbs.db
 # Playwright CLI 会话快照（任意层级）。已入库的 output/playwright/ 验收图不受影响。
 .playwright-cli/
 
+# 浏览器端测本地 I/O（仅 Vite serve，不得入库）。
+apps/web/.tmp/
+.tmp/hongtai-browser-io/
+output/browser-e2e/
+
 # 本地 APK 与端测证据保留在主项目目录，但不进入 Git。
 # output/playwright/ 里已跟踪的验收截图与脚本继续纳入版本管理。
 output/apk-archive/*.apk

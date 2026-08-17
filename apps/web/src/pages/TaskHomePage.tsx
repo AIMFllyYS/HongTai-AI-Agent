@@ -324,7 +324,7 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
                 {videoImporting || videoProgress ? <ValidatedModuleProgress definitions={contentAnalysisModuleDefinitions} failedTitle="这次拆解没有完成" issue={submitIssue} progress={videoProgress} title="正在整理视频内容" /> : null}
               </>
             )}
-            {submitIssue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), editInput: focusTaskShareInput }} issue={submitIssue} /> : null}
+            {submitIssue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), editInput: focusTaskShareInput, retry: () => void submit() }} issue={submitIssue} /> : null}
           </TabPanel>
         </GlassCard>
 

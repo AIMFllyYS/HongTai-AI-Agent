@@ -1,8 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+import { hongtaiBrowserIo } from "./vite-hongtai-browser-io";
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), hongtaiBrowserIo()],
   build: {
     target: "chrome89",
   },

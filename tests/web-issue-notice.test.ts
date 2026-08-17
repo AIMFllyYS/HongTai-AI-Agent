@@ -98,6 +98,7 @@ test("IssueNotice combines the stable application code with a safe native code",
 test("IssueNotice presents product language while keeping technical codes out of the visible notification", () => {
   assert.equal(issueTitle({ code: "AI_NETWORK_FAILED", userMessage: "文稿生成失败" }), "暂时无法连接 AI 服务");
   assert.equal(issueTitle({ code: "MEDIA_PROBE_FAILED", userMessage: "本地转写音频目标无效" }), "无法处理这个视频");
+  assert.equal(issueTitle({ code: "PLATFORM_RISK_CONTROLLED", userMessage: "B站触发风控，暂时无法获取公开播放信息" }), "平台暂时限制了这次访问");
 
   const notice = read("components/IssueNotice.tsx");
   const top = read("components/TopNotification.tsx");

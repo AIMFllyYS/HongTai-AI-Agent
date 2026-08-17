@@ -56,6 +56,11 @@ function searchWithoutSourceId(search: string): string {
   }
 }
 
+export function peekCreateSourceIdFromSearch(): string {
+  if (typeof window === "undefined") return "";
+  return sourceIdFromSearch(window.location.search);
+}
+
 export function consumeCreateSourceIdFromSearch(): string {
   if (typeof window === "undefined") return "";
   const requested = sourceIdFromSearch(window.location.search);

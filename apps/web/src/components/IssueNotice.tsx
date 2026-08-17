@@ -41,7 +41,7 @@ const actionDescriptors: Readonly<Record<TaskIssue["action"], IssueActionDescrip
     handler: "retry",
   },
   wait_and_retry: {
-    guidance: "请求有些频繁，请稍后再试。",
+    guidance: "请稍后再试，不要连续重复提交。",
   },
   check_network: {
     guidance: "请确认手机可以正常上网，然后再试一次。",
@@ -205,6 +205,7 @@ const issueTitles: Partial<Readonly<Record<TaskIssue["code"], string>>> = {
   ASR_PARTIAL_FAILURE: "部分语音没有识别成功",
   MEDIA_SELECTION_CANCELLED: "已取消选择",
   MEDIA_SOURCE_NOT_FOUND: "没有找到可用的媒体",
+  PLATFORM_RISK_CONTROLLED: "平台暂时限制了这次访问",
   MEDIA_IMPORT_FAILED: "视频导入没有完成",
   MEDIA_READ_FAILED: "无法读取这个文件",
   MEDIA_PROBE_FAILED: "无法处理这个视频",

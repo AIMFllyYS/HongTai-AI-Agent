@@ -206,6 +206,7 @@ test("带 sourceId 进入制作页强制新建并选中该来源，匹配失败�
 
 test("带 sourceId 首次进入会新建，同一地址再次 load 不再强制新建", async () => {
   const model = await import("./task-page-model") as {
+    peekCreateSourceIdFromSearch?: () => string;
     consumeCreateSourceIdFromSearch?: () => string;
     resolveCreateWorkbenchEntry?: (input: {
       readonly requestedSourceId: string;
@@ -219,6 +220,7 @@ test("带 sourceId 首次进入会新建，同一地址再次 load 不再强制�
     };
     sourceIdFromSearch?: (search: string) => string;
   };
+  assert.equal(typeof model.peekCreateSourceIdFromSearch, "function");
   assert.equal(typeof model.consumeCreateSourceIdFromSearch, "function");
   assert.equal(typeof model.resolveCreateWorkbenchEntry, "function");
 
@@ -238,25 +240,28 @@ test("带 sourceId 首次进入会新建，同一地址再次 load 不再强制�
   };
 
   try {
+    const peeked = model.peekCreateSourceIdFromSearch?.() ?? "";
+    assert.equal(peeked, "task-1");
+    assert.equal(location.search, "?sourceId=task-1&keep=yes");
+    assert.equal(model.sourceIdFromSearch?.(location.search), "task-1");
+    assert.deepEqual(model.resolveCreateWorkbenchEntry?.({
+      requestedSourceId: peeked,
+      availableSourceIds: ["task-1", "task-other"],
+      currentSourceId: "",
+      composingNew: false,
+    }), { composingNew: true, sourceId: "task-1", sourceMatchFailed: false });
+
     const firstRequested = model.consumeCreateSourceIdFromSearch?.() ?? "";
     assert.equal(firstRequested, "task-1");
     assert.equal(location.pathname, "/create");
     assert.doesNotMatch(location.pathname, /\?|sourceId=/);
     assert.equal(location.search, "?keep=yes");
     assert.equal(model.sourceIdFromSearch?.(location.search), "");
-    assert.deepEqual(model.resolveCreateWorkbenchEntry?.({
-      requestedSourceId: firstRequested,
-      availableSourceIds: ["task-1", "task-other"],
-      currentSourceId: "",
-      composingNew: false,
-    }), { composingNew: true, sourceId: "task-1", sourceMatchFailed: false });
 
-    const resumeRequested = model.consumeCreateSourceIdFromSearch?.() ?? "";
-    assert.equal(resumeRequested, "");
-    assert.equal(location.pathname, "/create");
-    assert.equal(location.search, "?keep=yes");
+    const resumePeeked = model.peekCreateSourceIdFromSearch?.() ?? "";
+    assert.equal(resumePeeked, "");
     assert.deepEqual(model.resolveCreateWorkbenchEntry?.({
-      requestedSourceId: resumeRequested,
+      requestedSourceId: resumePeeked,
       availableSourceIds: ["task-1", "task-other"],
       currentSourceId: "task-1",
       composingNew: false,
@@ -274,6 +279,45 @@ test("带 sourceId 首次进入会新建，同一地址再次 load 不再强制�
   }
 
   const page = read("pages/CreatePage.tsx");
+  assert.match(page, /peekCreateSourceIdFromSearch/);
   assert.match(page, /consumeCreateSourceIdFromSearch/);
   assert.doesNotMatch(page, /sourceIdFromSearch\(window\.location\.search\)/);
+  const load = page.slice(page.indexOf("const load = useCallback"), page.indexOf("}, [runtime]);"));
+  assert.match(load, /peekCreateSourceIdFromSearch\(\)/);
+  assert.ok(load.indexOf("peekCreateSourceIdFromSearch") < load.indexOf("runtime.tasks.list"));
+  assert.ok(load.indexOf("runtime.tasks.list") < load.indexOf("consumeCreateSourceIdFromSearch"));
+  assert.ok(load.indexOf("consumeCreateSourceIdFromSearch") < load.indexOf("} catch (error)"));
+});
+
+test("制作页首次列表失败时保留 sourceId，成功或明确未找到后再消费", async () => {
+  const model = await import("./task-page-model") as {
+    peekCreateSourceIdFromSearch?: () => string;
+    consumeCreateSourceIdFromSearch?: () => string;
+    sourceIdFromSearch?: (search: string) => string;
+  };
+  const location = { pathname: "/create", search: "?sourceId=task-kept", hash: "" };
+  const previousWindow = (globalThis as { window?: unknown }).window;
+  (globalThis as { window: unknown }).window = {
+    location,
+    history: {
+      state: {},
+      replaceState(_data: unknown, _title: string, url: string) {
+        const parsed = new URL(url, `https://hongtai.local${location.pathname}${location.search}`);
+        location.pathname = parsed.pathname;
+        location.search = parsed.search;
+        location.hash = parsed.hash;
+      },
+    },
+  };
+  try {
+    assert.equal(model.peekCreateSourceIdFromSearch?.(), "task-kept");
+    assert.equal(location.search, "?sourceId=task-kept");
+    assert.equal(model.sourceIdFromSearch?.(location.search), "task-kept");
+    assert.equal(model.peekCreateSourceIdFromSearch?.(), "task-kept");
+    assert.equal(model.consumeCreateSourceIdFromSearch?.(), "task-kept");
+    assert.equal(location.search, "");
+  } finally {
+    if (previousWindow === undefined) delete (globalThis as { window?: unknown }).window;
+    else (globalThis as { window: unknown }).window = previousWindow;
+  }
 });

@@ -29,19 +29,28 @@ document.documentElement.dataset.platform = Capacitor.getPlatform();
 let runtimePromise: Promise<AppRuntime> | undefined;
 
 function initializeRuntime(): Promise<AppRuntime> {
-  runtimePromise ??= createStandaloneAppRuntime({
-    plugins: registerStandaloneNativePlugins(registerPlugin),
-    convertFileSrc: Capacitor.convertFileSrc,
-  }).then(async (runtime) => {
-    // Every state owner terminates snapshots left active by a prior WebView;
-    // startup never attempts to replay a partially completed workflow.
+  runtimePromise ??= (async () => {
+    const native = Capacitor.isNativePlatform();
+    const plugins = native
+      ? registerStandaloneNativePlugins(registerPlugin)
+      : (await import("./runtime/browser-native/create-browser-plugins")).createBrowserStandalonePlugins();
+    const convertFileSrc = native
+      ? Capacitor.convertFileSrc
+      : (await import("./runtime/browser-native/create-browser-plugins")).browserConvertFileSrc;
+    const runtime = await createStandaloneAppRuntime({ plugins, convertFileSrc });
     await runtime.recovery.recoverInterruptedWork();
     await installAppLifecycleCoordinator({
-      subscribe: (listener) => CapacitorApp.addListener("appStateChange", listener),
+      subscribe: async (listener) => {
+        try {
+          return await CapacitorApp.addListener("appStateChange", listener);
+        } catch {
+          return { remove: async () => undefined };
+        }
+      },
       notifyResume: () => window.dispatchEvent(new Event("hongtai:app-resumed")),
     });
     return runtime;
-  });
+  })();
   return runtimePromise;
 }
 

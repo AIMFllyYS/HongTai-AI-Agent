@@ -694,6 +694,26 @@ test("B站分P超出范围时明确失败", async () => {
   );
 });
 
+test("B站HTTP 412映射为可稍后重试的访问限制", async () => {
+  const client = new FakeHttpClient((request) => {
+    if (request.url.includes("/x/web-interface/nav")) return jsonResponse(request.url, { code: -101, data: {} });
+    if (request.url.includes("/x/web-interface/view")) return jsonResponse(request.url, { code: 0, data: BILIBILI_VIEW });
+    return { url: request.url, status: 412, headers: { "content-type": "text/plain" }, body: "Risk control" };
+  });
+  await assert.rejects(
+    () => new BilibiliAdapter().parse({
+      sourceUrl: "https://www.bilibili.com/video/BV1xx411c7mD",
+      finalUrl: "https://www.bilibili.com/video/BV1xx411c7mD",
+      status: 200,
+    }, client),
+    (error) => error instanceof TaskError
+      && error.code === "PLATFORM_API_RATE_LIMITED"
+      && error.retryable === true
+      && error.action === "wait_and_retry"
+      && error.details?.httpStatus === 412,
+  );
+});
+
 test("B站-352映射为PLATFORM_RISK_CONTROLLED且不可自动重试", async () => {
   const client = bilibiliClient({
     play: { code: -352, message: "风控校验失败" },

@@ -23,7 +23,7 @@ import {
   resolveProductionRetryKind,
   resolveProductionRetryOperation,
 } from "./production-workbench-model";
-import { consumeCreateSourceIdFromSearch, isEligibleCreateSourceTask, resolveCreateWorkbenchEntry } from "./task-page-model";
+import { consumeCreateSourceIdFromSearch, isEligibleCreateSourceTask, peekCreateSourceIdFromSearch, resolveCreateWorkbenchEntry } from "./task-page-model";
 
 export { productionRenderStageCopy };
 
@@ -88,7 +88,7 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
   composingNewRef.current = composingNew;
 
   const load = useCallback(async () => {
-    const requestedSourceId = consumeCreateSourceIdFromSearch();
+    const requestedSourceId = peekCreateSourceIdFromSearch();
     try {
       const [succeededTasks, degradedTasks, savedProjects] = await Promise.all([
         runtime.tasks.list({ status: "succeeded", limit: 20 }),
@@ -112,6 +112,7 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
         setIssue(entry.sourceMatchFailed
           ? issueFromAppError(new TaskError({ code: "CONTENT_NOT_FOUND", message: "没有找到这条可用于制作的拆解", action: "none" }), { code: "CONTENT_NOT_FOUND", message: "没有找到这条可用于制作的拆解", action: "none" })
           : undefined);
+        consumeCreateSourceIdFromSearch();
       } else {
         setSourceId((current) => resolveCreateWorkbenchEntry({
           requestedSourceId: "",

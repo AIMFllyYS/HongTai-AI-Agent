@@ -260,6 +260,53 @@ test("制作计划失败时保留项目和已导入素材", async () => {
   assert.equal(persisted?.assets.length, 3);
 });
 
+test("没有正式拆解时生成计划失败且不得进入 ready", async () => {
+  const { create, files } = harness();
+  const seeded = create();
+  await seeded.create({ analysisTaskId: "task-1", brief: "真实门店", targetDurationSeconds: 20 });
+  await seeded.importAssets("project-1");
+  const missing = new StandaloneProductionService({
+    files,
+    native: { pickAssets: async () => ({ assets: [] }), consumeAssetOperation: async () => ({ status: "none" as const }), render: async () => { throw new Error("unused"); }, probeTts: async () => undefined },
+    analysis: { get: async () => undefined, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
+    tasks,
+    getProvider: async () => ({ generate: async () => ({ content: JSON.stringify(plan), reasoning: "" }), transcribe: async () => "" }),
+    getNarrationMode: async () => "system",
+    toDisplayUri: (uri) => uri,
+  });
+  await assert.rejects(() => missing.generatePlan("project-1"), /正式拆解/u);
+  const persisted = await missing.get("project-1");
+  assert.equal(persisted?.status, "failed");
+  assert.equal(persisted?.plan, undefined);
+});
+
+test("来源任务没有原文时生成计划失败且不得进入 ready", async () => {
+  const { create, files } = harness();
+  const seeded = create();
+  await seeded.create({ analysisTaskId: "task-1", brief: "真实门店", targetDurationSeconds: 20 });
+  await seeded.importAssets("project-1");
+  const emptyDetail = {
+    task: { id: "task-1" },
+    content: {},
+    media: [],
+    transcript: { source: "asr", text: "", segments: [] },
+    evidenceUnits: [],
+  } as unknown as TaskDetailRecord;
+  const missing = new StandaloneProductionService({
+    files,
+    native: { pickAssets: async () => ({ assets: [] }), consumeAssetOperation: async () => ({ status: "none" as const }), render: async () => { throw new Error("unused"); }, probeTts: async () => undefined },
+    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
+    tasks: { getDetail: async () => emptyDetail },
+    getProvider: async () => ({ generate: async () => ({ content: JSON.stringify(plan), reasoning: "" }), transcribe: async () => "" }),
+    getNarrationMode: async () => "system",
+    toDisplayUri: (uri) => uri,
+  });
+  await assert.rejects(() => missing.generatePlan("project-1"), /原始文稿/u);
+  const persisted = await missing.get("project-1");
+  assert.equal(persisted?.status, "failed");
+  assert.equal(persisted?.plan, undefined);
+});
+
 test("制作项目恢复中断的规划状态并保留已导入素材", async () => {
   const { create, values } = harness();
   const service = create();
