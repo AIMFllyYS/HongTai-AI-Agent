@@ -1,5 +1,5 @@
 import { contentAnalysisResultSchema, createAvatarCaptionPlan, MIMO_CHAT_AUDIO_TTS_INSTRUCTION, ProductionPlanningFlow, productionPlanResultSchema, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, type AiProvider, type ProductionPlanResult } from "@hongtai/ai";
-import { createRuntimeId, issueFromAppError, TaskError } from "@hongtai/core";
+import { createRuntimeId, issueFromAppError, subtitleTemplateById, TaskError } from "@hongtai/core";
 import type {
   AnalysisService,
   JsonObject,
@@ -70,6 +70,16 @@ function taskError(message: string, action: "retry" | "select_media" = "retry"):
 
 function defaultAssetRole(value: Pick<NativeProductionAsset, "kind">): ProductionAssetRole {
   return value.kind === "audio" ? "music" : "visual";
+}
+
+/**
+ * Hands the renderer the subtitle template the plan already committed to. The template is looked
+ * up rather than re-resolved, because degrading a template that needs word-level timing is a
+ * planning decision that must already be recorded in the plan the user approved.
+ */
+function subtitleTemplatePayload(plan: ProductionPlanResult): { readonly subtitleTemplateJson?: string } {
+  if (plan.schemaVersion !== "production-plan.v3") return {};
+  return { subtitleTemplateJson: JSON.stringify(subtitleTemplateById(plan.subtitle.templateId)) };
 }
 
 const TEXT_PRESETS = ["classic_top", "clean_card", "aqua_accent"] as const;
@@ -356,7 +366,8 @@ export class StandaloneProductionService implements ProductionService {
 
   async #render(projectId: string): Promise<ProductionProjectRecord> {
     let project = await this.#required(projectId);
-    if (!project.plan) throw taskError("请先生成可执行制作计划");
+    const plan = project.plan;
+    if (!plan) throw taskError("请先生成可执行制作计划");
     // A retry must not hide a previously verified MP4 while the replacement is
     // rendering. Native rendering writes and validates a temporary file first;
     // keep this metadata until a new output succeeds as well.
@@ -372,7 +383,8 @@ export class StandaloneProductionService implements ProductionService {
       const narration = project.mode === "montage" ? await this.#options.getNarrationMode() : "system";
       const output = await this.#options.native.render({
         projectId,
-        planJson: JSON.stringify(project.plan),
+        planJson: JSON.stringify(plan),
+        ...subtitleTemplatePayload(plan),
         mode: project.mode,
         narration,
         ...(narration === "provider"

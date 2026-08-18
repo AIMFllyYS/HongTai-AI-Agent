@@ -212,6 +212,8 @@ export interface StandaloneProductionRuntimePlugin {
   render(options: {
     readonly projectId: string;
     readonly planJson: string;
+    /** Resolved `subtitle-template.v1` object; required by `production-plan.v3` plans only. */
+    readonly subtitleTemplateJson?: string;
     readonly mode?: "montage" | "avatar";
     readonly narration?: "system" | "provider";
     readonly miMoInstruction?: string;

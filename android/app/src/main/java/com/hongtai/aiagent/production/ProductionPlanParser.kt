@@ -20,6 +20,8 @@ internal data class ProductionShot(
   val narration: String,
   val caption: String,
   val fit: String,
+  /** Timed caption lines; empty on plans older than v3, which burn one static caption instead. */
+  val cues: List<SubtitleCue> = emptyList(),
 )
 
 internal data class ProductionTextOverlay(
@@ -40,19 +42,30 @@ internal data class NativeProductionPlan(
   val shots: List<ProductionShot>,
   val textOverlay: ProductionTextOverlay = ProductionTextOverlay("", null, "classic_top"),
   val renderMode: ProductionRenderMode = ProductionRenderMode.MONTAGE,
+  /** Resolved subtitle template for v3 plans; null keeps the legacy static caption path. */
+  val subtitleTemplate: SubtitleTemplateSpec? = null,
+  val decorations: List<ProductionDecorationSpec> = emptyList(),
 )
 
 /** Strict parser for the small, versioned TypeScript-to-Kotlin render contract. */
 internal object ProductionPlanParser {
+  /**
+   * @param subtitleTemplateJson the `subtitle-template.v1` object the shared TypeScript layer
+   *   resolved for this plan. Required by v3 plans and rejected by older ones, because the template
+   *   is the only place a caption's look is decided and Kotlin must not carry a second copy of it.
+   */
   fun parse(
     json: String,
     assets: Map<String, ProductionInput>,
     renderMode: ProductionRenderMode = ProductionRenderMode.MONTAGE,
+    subtitleTemplateJson: String? = null,
   ): NativeProductionPlan {
     require(json.toByteArray(Charsets.UTF_8).size <= MAX_PLAN_BYTES) { "The production plan is too large." }
     val root = JSONObject(json)
     val schemaVersion = root.getString("schemaVersion")
-    require(schemaVersion == "production-plan.v1" || schemaVersion == "production-plan.v2") { "Unsupported production plan version." }
+    require(schemaVersion in SUPPORTED_SCHEMA_VERSIONS) { "Unsupported production plan version." }
+    val timedCaptions = schemaVersion == "production-plan.v3"
+    require(timedCaptions == (subtitleTemplateJson != null)) { "A subtitle template is required by v3 plans only." }
     val settings = root.getJSONObject("settings")
     val width = settings.getInt("width")
     val height = settings.getInt("height")
@@ -87,10 +100,15 @@ internal object ProductionPlanParser {
       require(narration.isNotEmpty() && narration.length <= 160) { "A production narration line is invalid." }
       require(caption.isNotEmpty() && caption.length <= 40) { "A production caption is invalid." }
       require(fit == "cover" || fit == "contain") { "A production fit mode is invalid." }
-      ProductionShot(order, input, shotDurationMs, narration, caption, fit)
+      val cues = if (timedCaptions) {
+        SubtitleRenderSpecParser.parseCues(value.getJSONArray("cues"), shotDurationMs)
+      } else {
+        emptyList()
+      }
+      ProductionShot(order, input, shotDurationMs, narration, caption, fit, cues)
     }
     require(shots.sumOf(ProductionShot::durationMs) == durationMs) { "Production shot durations do not match the total duration." }
-    val textOverlay = if (schemaVersion == "production-plan.v2") {
+    val textOverlay = if (schemaVersion != "production-plan.v1") {
       val value = root.getJSONObject("textOverlay")
       val primaryText = value.getString("primaryText").trim()
       val secondaryText = value.optString("secondaryText").trim().takeIf { it.isNotEmpty() && it != "null" }
@@ -102,7 +120,33 @@ internal object ProductionPlanParser {
     } else {
       ProductionTextOverlay(root.getString("title").trim().take(24), null, "classic_top")
     }
-    return NativeProductionPlan(width, height, fps, durationMs, locale, speechRate, music, musicVolume, shots, textOverlay, renderMode)
+    val template = subtitleTemplateJson?.let { parseSubtitleTemplate(it, root, shots) }
+    val decorations = if (timedCaptions) {
+      SubtitleRenderSpecParser.parseDecorations(
+        root.getJSONArray("decorations"),
+        shots.associate { it.order to it.durationMs },
+      )
+    } else {
+      emptyList()
+    }
+    return NativeProductionPlan(
+      width, height, fps, durationMs, locale, speechRate, music, musicVolume, shots, textOverlay, renderMode,
+      template, decorations,
+    )
+  }
+
+  private fun parseSubtitleTemplate(json: String, root: JSONObject, shots: List<ProductionShot>): SubtitleTemplateSpec {
+    require(json.toByteArray(Charsets.UTF_8).size <= MAX_TEMPLATE_BYTES) { "The subtitle template is too large." }
+    val template = SubtitleRenderSpecParser.parseTemplate(JSONObject(json))
+    require(template.id == root.getJSONObject("subtitle").getString("templateId")) {
+      "The subtitle template does not match the plan."
+    }
+    // A karaoke sweep without word timings would have to guess which word is being spoken, so the
+    // shared layer degrades the template instead. Reaching here means that contract was broken.
+    require(template.wordReveal != "karaoke" || shots.all { shot -> shot.cues.all { it.words != null } }) {
+      "A karaoke subtitle template needs word level timings on every cue."
+    }
+    return template
   }
 
   private fun secondsToMs(value: Double): Long {
@@ -110,5 +154,8 @@ internal object ProductionPlanParser {
     return (value * 1_000.0).toLong()
   }
 
+  private val SUPPORTED_SCHEMA_VERSIONS =
+    setOf("production-plan.v1", "production-plan.v2", "production-plan.v3")
   private const val MAX_PLAN_BYTES = 128 * 1024
+  private const val MAX_TEMPLATE_BYTES = 8 * 1024
 }

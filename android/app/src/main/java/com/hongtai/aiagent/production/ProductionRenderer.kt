@@ -24,6 +24,7 @@ import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.Presentation
 import androidx.media3.effect.StaticOverlaySettings
 import androidx.media3.effect.TextOverlay
+import androidx.media3.effect.TextureOverlay
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.EditedMediaItem
@@ -197,6 +198,7 @@ internal class ProductionRenderer(private val context: Context, private val stor
   }
 
   private fun visualItems(plan: NativeProductionPlan, shot: ProductionShot, sourceOffsetMs: Long = 0L): List<EditedMediaItem> {
+    var shotOffsetMs = 0L
     val durations = when (shot.input.kind) {
       ProductionAssetKind.IMAGE -> listOf(shot.durationMs)
       ProductionAssetKind.VIDEO -> {
@@ -214,11 +216,27 @@ internal class ProductionRenderer(private val context: Context, private val stor
         plan.width, plan.height,
         if (shot.fit == "cover") Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP else Presentation.LAYOUT_SCALE_TO_FIT,
       )
-      val overlay = OverlayEffect(headlineOverlays(plan.textOverlay) + captionOverlays(shot.caption))
+      val overlay = OverlayEffect(headlineOverlays(plan.textOverlay) + subtitleOverlays(plan, shot, shotOffsetMs))
+      shotOffsetMs += duration
       EditedMediaItem.Builder(media).setRemoveAudio(plan.renderMode == ProductionRenderMode.MONTAGE)
         .apply { if (shot.input.kind == ProductionAssetKind.IMAGE) setFrameRate(plan.fps) }
         .setEffects(Effects(emptyList(), listOf(presentation, overlay))).build()
     }
+  }
+
+  /**
+   * v3 plans burn a template driven caption plus its bounded decorations; older plans keep the
+   * static caption they were exported with so a re-render of an old project looks unchanged.
+   *
+   * @param shotOffsetMs where this media item starts inside its shot, which is non-zero only when a
+   *   clip shorter than the shot is repeated to fill it.
+   */
+  private fun subtitleOverlays(plan: NativeProductionPlan, shot: ProductionShot, shotOffsetMs: Long): List<TextureOverlay> {
+    val template = plan.subtitleTemplate ?: return captionOverlays(shot.caption)
+    val decorations = plan.decorations.filter { it.shotOrder == shot.order }.map { decoration ->
+      ProductionDecorationOverlay(decoration, template, plan.width, plan.height, shotOffsetMs)
+    }
+    return listOf(ProductionCaptionOverlay(template, shot.cues, plan.width, plan.height, shotOffsetMs)) + decorations
   }
 
   private fun headlineOverlays(value: ProductionTextOverlay): List<TextOverlay> {

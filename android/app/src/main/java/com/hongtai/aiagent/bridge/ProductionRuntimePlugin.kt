@@ -167,7 +167,7 @@ class ProductionRuntimePlugin : Plugin() {
     }
     PRODUCTION_EXECUTOR.execute {
       try {
-        val plan = ProductionPlanParser.parse(planJson, store.inputs(projectId), mode)
+        val plan = ProductionPlanParser.parse(planJson, store.inputs(projectId), mode, call.getString("subtitleTemplateJson"))
         val synthesizer = if (cloudInstructions != null) {
           CloudNarrationSynthesizer(
             context,
