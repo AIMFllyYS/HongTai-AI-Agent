@@ -1175,3 +1175,29 @@
     animation: none !important;
   }
 }
+
+.brand-splash {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  background: var(--surface-vitality-low);
+}
+
+.brand-splash__plate {
+  width: 7.5rem;
+  height: 7.5rem;
+  padding: 0.4rem;
+  border-radius: 1.85rem;
+  background: #eef4ef;
+  box-shadow:
+    0.45rem 0.45rem 1.1rem rgba(0, 77, 64, 0.12),
+    -0.3rem -0.3rem 0.85rem rgba(255, 255, 255, 0.88);
+}
+
+.brand-splash__plate img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 1.45rem;
+}

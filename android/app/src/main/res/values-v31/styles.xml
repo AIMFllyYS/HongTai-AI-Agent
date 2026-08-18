@@ -4,5 +4,8 @@
     <item name="android:fontFamily">sans</item>
     <item name="android:colorAccent">#173A32</item>
     <item name="android:windowBackground">@drawable/launch_background</item>
+    <item name="android:windowSplashScreenBackground">@color/brand_splash_background</item>
+    <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+    <item name="android:windowSplashScreenIconBackgroundColor">@color/brand_splash_background</item>
   </style>
 </resources>

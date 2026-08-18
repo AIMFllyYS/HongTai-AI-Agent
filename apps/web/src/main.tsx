@@ -7,10 +7,12 @@ import type { AppRuntime } from "@hongtai/core";
 
 import { App } from "./App";
 import { AppShell } from "./components/AppShell";
+import { BrandSplash } from "./components/BrandSplash";
 import { Button } from "./components/Buttons";
-import { ErrorState, LoadingState } from "./components/StatePanels";
+import { ErrorState } from "./components/StatePanels";
 import { NotificationProvider } from "./notifications/NotificationProvider";
 import { installAppLifecycleCoordinator } from "./runtime/app-lifecycle";
+import { useBrandSplashReady } from "./runtime/brand-splash";
 import { installVisualViewportInset } from "./runtime/visual-viewport-inset";
 import "./styles/tokens.css";
 import "./styles/global.css";
@@ -59,6 +61,7 @@ function initializeRuntime(): Promise<AppRuntime> {
 function RuntimeBootstrap() {
   const [runtime, setRuntime] = useState<AppRuntime>();
   const [failed, setFailed] = useState(false);
+  const splashReady = useBrandSplashReady();
 
   useEffect(() => {
     let active = true;
@@ -75,19 +78,20 @@ function RuntimeBootstrap() {
     };
   }, []);
 
-  if (runtime) return <App runtime={runtime} />;
-
-  return (
-    <AppShell navigate={() => undefined} showNav={false} title="宏泰AI智能体">
-      {failed ? (
+  if (failed) {
+    return (
+      <AppShell navigate={() => undefined} showNav={false} title="宏泰AI智能体">
         <ErrorState
           action={<Button onClick={() => window.location.reload()} variant="secondary">重新打开应用</Button>}
           description="应用暂时没有正常启动，请重新打开。如果仍然失败，请保留当前页面并联系维护人员。"
           title="应用启动失败"
         />
-      ) : <LoadingState description="正在准备你的本地内容" title="正在启动应用" />}
-    </AppShell>
-  );
+      </AppShell>
+    );
+  }
+
+  if (runtime && splashReady) return <App runtime={runtime} />;
+  return <BrandSplash />;
 }
 
 createRoot(root).render(
