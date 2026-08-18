@@ -1,6 +1,7 @@
+import { lazy, Suspense } from "react";
 import type { AppRuntime } from "@hongtai/core";
 
-import { EmptyState } from "./components/StatePanels";
+import { EmptyState, LoadingState } from "./components/StatePanels";
 import { activeNavForRoute, BottomNav } from "./components/BottomNav";
 import { AppShell, AppShellNavigationProvider, visualThemeForRoute } from "./components/AppShell";
 import { RouteTransition } from "./components/RouteTransition";
@@ -9,17 +10,18 @@ import type { VisualDataAdapter } from "./data/visual-adapter";
 import { useInteractionFeedback } from "./hooks/useInteractionFeedback";
 import { useBrowserRoute } from "./hooks/useBrowserRoute";
 import { isTaskPageAlias, matchRoute } from "./router";
-import { TemplatesPage } from "./pages/TemplatesPage";
-import { CreatePage } from "./pages/CreatePage";
 import { HomePage } from "./pages/HomePage";
-import { ObservationReportPage } from "./pages/ObservationReportPage";
-import { ObservationStartPage } from "./pages/ObservationStartPage";
 import { TaskHomePage } from "./pages/TaskHomePage";
-import { TaskPage } from "./pages/TaskPage";
-import { AiSettingsPage } from "./pages/AiSettingsPage";
-import { ApplicationInfoPage } from "./pages/ApplicationInfoPage";
-import { ProfileSettingsPage } from "./pages/ProfileSettingsPage";
-import { SettingsPage } from "./pages/SettingsPage";
+
+const TemplatesPage = lazy(async () => ({ default: (await import("./pages/TemplatesPage")).TemplatesPage }));
+const CreatePage = lazy(async () => ({ default: (await import("./pages/CreatePage")).CreatePage }));
+const ObservationReportPage = lazy(async () => ({ default: (await import("./pages/ObservationReportPage")).ObservationReportPage }));
+const ObservationStartPage = lazy(async () => ({ default: (await import("./pages/ObservationStartPage")).ObservationStartPage }));
+const TaskPage = lazy(async () => ({ default: (await import("./pages/TaskPage")).TaskPage }));
+const AiSettingsPage = lazy(async () => ({ default: (await import("./pages/AiSettingsPage")).AiSettingsPage }));
+const ApplicationInfoPage = lazy(async () => ({ default: (await import("./pages/ApplicationInfoPage")).ApplicationInfoPage }));
+const ProfileSettingsPage = lazy(async () => ({ default: (await import("./pages/ProfileSettingsPage")).ProfileSettingsPage }));
+const SettingsPage = lazy(async () => ({ default: (await import("./pages/SettingsPage")).SettingsPage }));
 
 export interface AppProps {
   /** Real application runtime supplied only by the application composition root. */
@@ -104,7 +106,9 @@ export function App({ runtime, visualData }: AppProps = {}) {
   return (
     <AppShellNavigationProvider>
       <SwipeRouteViewport active={activeNav} currentPath={pathname} navigate={navigate}>
-        <RouteTransition direction={direction} pathname={pathname} transitionMode={transitionMode}>{renderRoute(pathname)}</RouteTransition>
+        <RouteTransition direction={direction} pathname={pathname} transitionMode={transitionMode}>
+          <Suspense fallback={<LoadingState title="正在打开页面" />}>{renderRoute(pathname)}</Suspense>
+        </RouteTransition>
       </SwipeRouteViewport>
       <BottomNav active={activeNav} navigate={navigate} visualTheme={visualTheme} />
     </AppShellNavigationProvider>

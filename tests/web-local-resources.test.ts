@@ -47,7 +47,9 @@ test("page brand mark stays transparent while the app icon keeps its frame", () 
 test("Chinese UI font is bundled locally for web and future APK packaging", () => {
   const fontPath = join(root, "apps/web/public/fonts/NotoSansSC-VF.woff2");
   assert.equal(existsSync(fontPath), true, "Noto Sans SC variable font should be bundled");
-  assert.ok(statSync(fontPath).size > 100_000, "bundled font should not be a placeholder");
+  const fontSize = statSync(fontPath).size;
+  assert.ok(fontSize > 100_000, "bundled font should not be a placeholder");
+  assert.ok(fontSize < 1_000_000, "bundled font should stay a UI subset, not the full 7.5MB VF");
 
   const foundation = read("apps/web/src/styles/foundation.css");
   const tokens = read("apps/web/src/styles/tokens.css");
