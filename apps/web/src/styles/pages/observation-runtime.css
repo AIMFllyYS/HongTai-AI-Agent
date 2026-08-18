@@ -448,7 +448,7 @@
 
 .observation-question-composer {
   position: sticky;
-  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + var(--space-3));
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--keyboard-inset) + var(--space-3));
   display: grid;
   gap: var(--space-2);
   margin-top: var(--space-4);

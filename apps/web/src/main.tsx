@@ -11,6 +11,7 @@ import { Button } from "./components/Buttons";
 import { ErrorState, LoadingState } from "./components/StatePanels";
 import { NotificationProvider } from "./notifications/NotificationProvider";
 import { installAppLifecycleCoordinator } from "./runtime/app-lifecycle";
+import { installVisualViewportInset } from "./runtime/visual-viewport-inset";
 import "./styles/tokens.css";
 import "./styles/global.css";
 
@@ -22,9 +23,10 @@ if (!root) {
 
 // Android WebView does not consistently expose safe-area env values even
 // while target-SDK edge-to-edge is enforced.  The shell uses this narrowly
-// scoped baseline only for its fixed header; devices that expose a larger
-// inset still win through CSS max().
+// scoped baseline for the fixed header and bottom chrome; devices that
+// expose a larger inset still win through CSS max().
 document.documentElement.dataset.platform = Capacitor.getPlatform();
+installVisualViewportInset();
 
 let runtimePromise: Promise<AppRuntime> | undefined;
 

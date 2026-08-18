@@ -58,6 +58,28 @@ test("Android WebView has one safe-area owner and never double-pads the page", (
   assert.match(mainActivity, /isAppearanceLightNavigationBars\s*=\s*true/);
 });
 
+test("keyboard and bottom chrome use Android nav fallback without dvh", () => {
+  const manifest = readFileSync(join(process.cwd(), "android", "app", "src", "main", "AndroidManifest.xml"), "utf8");
+  const shell = read("styles/shell.css");
+  const components = read("styles/components.css");
+  const observation = read("styles/pages/observation-runtime.css");
+  const main = read("main.tsx");
+  const inset = read("runtime/visual-viewport-inset.ts");
+
+  assert.match(manifest, /android:name="\.MainActivity"[\s\S]*android:windowSoftInputMode="adjustResize"/);
+  assert.match(shell, /--safe-bottom:\s*max\(env\(safe-area-inset-bottom\),\s*var\(--native-nav-bar-inset\)\)/);
+  assert.match(shell, /:root\[data-platform="android"\]\s*\{[^}]*--native-nav-bar-inset:\s*24px/s);
+  assert.match(shell, /\.app-shell--with-nav\s*\{[^}]*var\(--safe-bottom\)[^;]*var\(--keyboard-inset\)/s);
+  assert.match(components, /\.bottom-nav\s*\{[^}]*padding:[^;]*var\(--safe-bottom\)/s);
+  assert.doesNotMatch(components, /\.bottom-nav\s*\{[^}]*--keyboard-inset/s);
+  assert.match(components, /\.contextual-action\s*\{[^}]*var\(--safe-bottom\)/s);
+  assert.match(observation, /\.observation-question-composer\s*\{[^}]*--safe-bottom[^;]*--keyboard-inset/s);
+  assert.match(main, /installVisualViewportInset\(\)/);
+  assert.match(inset, /visualViewport/);
+  assert.match(inset, /removeProperty\("--keyboard-inset"\)/);
+  assert.doesNotMatch(`${shell}\n${components}\n${observation}`, /\b(?:d|s|l)vh\b/);
+});
+
 test("template cards keep a two-column layout and do not stretch the delete pill", () => {
   const analysis = read("styles/pages/analysis.css");
   const library = read("styles/pages/library.css");

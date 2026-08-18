@@ -165,7 +165,7 @@ test("observation controls stay compact and clear above the fixed Android naviga
   assert.match(start, /observation-capture-card__actions mobile-action-group/);
   assert.match(report, /observation-question-composer__actions/);
   assert.match(css, /\.observation-capture-card__actions \.button--primary\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s);
-  assert.match(css, /\.observation-question-composer\s*\{[^}]*bottom:\s*calc\([^;]*--nav-height[^;]*safe-area-inset-bottom/s);
+  assert.match(css, /\.observation-question-composer\s*\{[^}]*bottom:\s*calc\([^;]*--nav-height[^;]*--safe-bottom[^;]*--keyboard-inset/s);
   assert.match(css, /\.observation-message p\s*\{[^}]*overflow-wrap:\s*anywhere/s);
   assert.match(css, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.observation-question-composer__actions[^}]*grid-template-columns:\s*1fr/);
 });

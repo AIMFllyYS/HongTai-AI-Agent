@@ -172,7 +172,7 @@
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   min-height: var(--nav-height);
-  padding: var(--space-2) var(--space-2) env(safe-area-inset-bottom);
+  padding: var(--space-2) var(--space-2) var(--safe-bottom);
   background: rgba(248, 250, 247, 0.9);
   border-top: 1px solid rgba(191, 201, 196, 0.3);
   box-shadow: var(--shadow-nav);
@@ -276,7 +276,7 @@
   z-index: 45;
   display: grid;
   place-items: center;
-  padding: max(var(--space-4), env(safe-area-inset-top)) var(--space-4) max(var(--space-4), env(safe-area-inset-bottom));
+  padding: max(var(--space-4), env(safe-area-inset-top)) var(--space-4) max(var(--space-4), var(--safe-bottom));
   background: rgba(13, 25, 22, 0.68);
   backdrop-filter: blur(0.35rem);
 }
@@ -503,7 +503,7 @@
 .contextual-action {
   position: fixed;
   right: var(--page-gutter);
-  bottom: calc(var(--nav-height) + var(--space-3) + env(safe-area-inset-bottom));
+  bottom: calc(var(--nav-height) + var(--space-3) + var(--safe-bottom));
   left: var(--page-gutter);
   z-index: 25;
   display: flex;
