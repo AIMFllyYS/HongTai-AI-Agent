@@ -21,7 +21,7 @@ function compareVersion(left: string, right: string): number {
   return 0;
 }
 
-test("the published v0.1.14/code 22 download entry stays public while source advances to 0.1.15", () => {
+test("the published v0.1.15/code 23 download entry matches the Gradle version authority", () => {
   const gradle = readFileSync(join(root, "android", "app", "build.gradle.kts"), "utf8");
   const downloadPage = readFileSync(join(root, "download.html"), "utf8");
   const sourceCode = Number(requireMatch(gradle, /versionCode\s*=\s*(\d+)/u, "Android versionCode"));
@@ -30,14 +30,22 @@ test("the published v0.1.14/code 22 download entry stays public while source adv
 
   assert.equal(sourceCode, 23);
   assert.equal(sourceName, "0.1.15");
-  assert.equal(publishedName, "0.1.14");
+  assert.equal(publishedName, "0.1.15");
   assert.ok(compareVersion(sourceName, publishedName) >= 0, "source version must never fall behind the published download");
+  assert.match(downloadPage, /versionCode:\s*"23"/u);
+  assert.match(downloadPage, /28,989,075 bytes/u);
+  assert.match(downloadPage, /75FD98F67918DEF783951B08DD4E5743C9DF6FA2C75A00E8C4C45F739E47E8C0/iu);
+  assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.15\.apk/u);
+  assert.match(downloadPage, /正式 Release · v0\.1\.15 \/ code23 · 公网哈希已回验/u);
+});
+
+test("the superseded v0.1.14/code 22 release stays archived instead of being overwritten", () => {
+  const downloadPage = readFileSync(join(root, "download.html"), "utf8");
+
   assert.match(downloadPage, /versionCode:\s*"22"/u);
   assert.match(downloadPage, /28,986,082 bytes/u);
   assert.match(downloadPage, /D091EDCAA6B7F09CC3A2DB28364CD8C46719412364A7F03F1E010B12BA8E8579/iu);
   assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.14\.apk/u);
-  assert.match(downloadPage, /正式 Release · v0\.1\.14 \/ code22 · 公网哈希已回验/u);
-  assert.doesNotMatch(downloadPage, /HongTai-AI-Agent-release-v0\.1\.15\.apk/u);
 });
 
 test("the superseded v0.1.13/code 21 release stays archived instead of being overwritten", () => {
