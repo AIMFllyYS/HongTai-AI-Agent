@@ -217,6 +217,54 @@ test("渲染进度只转发原生 stage 和百分比，不补文案也不回传 
   assert.equal(JSON.stringify(progress).includes("正在"), false);
 });
 
+test("StandaloneProductionService listener failures never rewrite a succeeded render", async () => {
+  const { create, values } = harness();
+  const deleted: string[] = [];
+  const files = {
+    ensureProduction: async () => undefined,
+    writeProductionText: async ({ projectId, relativePath, value }: { readonly projectId: string; readonly relativePath: string; readonly value: string }) => {
+      values.set(`${projectId}/${relativePath}`, value);
+    },
+    readProductionText: async ({ projectId, relativePath }: { readonly projectId: string; readonly relativePath: string }) => ({ value: values.get(`${projectId}/${relativePath}`) }),
+    listProductionIds: async () => ({ projectIds: ["project-1"] }),
+    deleteProductionFile: async ({ projectId, relativePath }: { readonly projectId: string; readonly relativePath: string }) => {
+      deleted.push(`${projectId}/${relativePath}`);
+    },
+    deleteProduction: async () => undefined,
+  };
+  const service = create();
+  await service.create({ analysisTaskId: "task-1", brief: "突出真实服务", targetDurationSeconds: 20 });
+  await service.importAssets("project-1");
+  await service.generatePlan("project-1");
+  const isolated = new StandaloneProductionService({
+    files,
+    native: {
+      pickAssets: async () => ({ assets: [] }),
+      consumeAssetOperation: async () => ({ status: "none" as const }),
+      probeTts: async () => undefined,
+      render: async () => ({ uri: "file:///private/productions/project-1/output.mp4", mimeType: "video/mp4", sizeBytes: 1_024, durationSeconds: 20 }),
+    },
+    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
+    tasks,
+    getProvider: async () => ({ generate: async () => ({ content: JSON.stringify(plan), reasoning: "" }), transcribe: async () => "" }),
+    getNarrationMode: async () => "system",
+    toDisplayUri: (uri) => uri.replace("file:///private/", "capacitor://localhost/private/"),
+    createProjectId: () => "project-1",
+    now: () => new Date("2026-08-08T00:00:00.000Z"),
+  });
+  isolated.subscribe("project-1", () => { throw new Error("broken production view"); });
+
+  const completed = await isolated.render("project-1");
+  const persisted = JSON.parse(values.get("project-1/project.json") ?? "{}") as { readonly status?: string; readonly output?: { readonly uri?: string } };
+
+  assert.equal(completed.status, "succeeded");
+  assert.equal(completed.output?.uri, "capacitor://localhost/private/productions/project-1/output.mp4");
+  assert.equal(persisted.status, "succeeded");
+  assert.equal(persisted.output?.uri, "file:///private/productions/project-1/output.mp4");
+  assert.deepEqual(deleted, []);
+  assert.equal((await isolated.get("project-1"))?.status, "succeeded");
+});
+
 test("已配置的云端 TTS 会明确交给原生渲染器合成旁白", async () => {
   const { create, renderCalls } = harness("provider");
   const service = create();

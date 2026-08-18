@@ -525,6 +525,6 @@ export class StandaloneProductionService implements ProductionService {
   }
 
   async #emit(projectId: string, event: ProductionEvent): Promise<void> {
-    await Promise.all([...(this.#listeners.get(projectId) ?? [])].map((listener) => listener(event)));
+    await Promise.allSettled([...(this.#listeners.get(projectId) ?? [])].map(async (listener) => { await listener(event); }));
   }
 }
