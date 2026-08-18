@@ -57,7 +57,7 @@ export interface ProductionPrimaryAction {
 }
 
 export function productionRenderStageCopy(stage: string): string {
-  return Object.hasOwn(PRODUCTION_RENDER_STAGE_COPY, stage)
+  return Object.prototype.hasOwnProperty.call(PRODUCTION_RENDER_STAGE_COPY, stage)
     ? PRODUCTION_RENDER_STAGE_COPY[stage as keyof typeof PRODUCTION_RENDER_STAGE_COPY]
     : "正在本地合成";
 }

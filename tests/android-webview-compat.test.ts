@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
@@ -30,18 +30,30 @@ test("the production web bundle targets the declared Chromium floor", () => {
   assert.match(vite, /build:\s*\{[\s\S]*target:\s*"chrome89"[\s\S]*\}/);
 });
 
-test("WebView 89 runtime paths avoid newer browser-only helpers", () => {
-  const browserRuntime = [
-    read("packages/ai/src/flows/content-analysis/content-analysis-flow.ts"),
-    read("packages/ai/src/flows/diagnosis/diagnosis-flow.ts"),
-    read("packages/capacitor-runtime/src/standalone-production-service.ts"),
-    read("apps/web/src/pages/TaskPage.tsx"),
-    read("apps/web/src/pages/TaskDetailPage.tsx"),
-    read("apps/web/src/pages/TaskProcessingPage.tsx"),
-  ].join("\n");
+function listApkRuntimeSources(relativeDir: string): string[] {
+  const directory = join(root, relativeDir);
+  return readdirSync(directory, { recursive: true, encoding: "utf8" })
+    .filter((entry) => {
+      const relative = entry.replaceAll("\\", "/");
+      if (!relative.endsWith(".ts") && !relative.endsWith(".tsx")) return false;
+      if (relative.endsWith(".test.ts") || relative.endsWith(".test.tsx")) return false;
+      if (relative.includes("/browser-native/") || relative.startsWith("browser-native/")) return false;
+      return true;
+    })
+    .map((entry) => join(relativeDir, entry).replaceAll("\\", "/"));
+}
 
-  assert.doesNotMatch(browserRuntime, /crypto\.randomUUID\(/);
-  assert.doesNotMatch(browserRuntime, /\.at\(/);
+test("WebView 89 runtime paths avoid newer browser-only helpers", () => {
+  const apkRuntimeFiles = [
+    ...listApkRuntimeSources("apps/web/src"),
+    ...listApkRuntimeSources("packages/capacitor-runtime/src"),
+  ];
+  assert.ok(apkRuntimeFiles.some((path) => path.endsWith("production-workbench-model.ts")));
+  assert.ok(apkRuntimeFiles.some((path) => path.endsWith("standalone-analysis-service.ts")));
+
+  const forbidden = /crypto\.randomUUID\(|Object\.hasOwn\(|\.at\(/;
+  const offenders = apkRuntimeFiles.filter((path) => forbidden.test(read(path)));
+  assert.deepEqual(offenders, []);
 });
 
 test("the unsupported WebView page is local static Chinese HTML", () => {

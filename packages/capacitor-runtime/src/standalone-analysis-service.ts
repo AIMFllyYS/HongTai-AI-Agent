@@ -108,7 +108,7 @@ export function localVideoFailureIssue(issues: readonly TaskIssue[]): TaskIssue 
       return issue;
     }
   }
-  return original ?? issues.at(-1);
+  return original ?? issues[issues.length - 1];
 }
 
 /**
