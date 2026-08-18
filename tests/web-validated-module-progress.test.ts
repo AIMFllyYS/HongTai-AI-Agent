@@ -254,6 +254,8 @@ test("live generation renders runtime-only deep thinking and keeps busy primary 
   assert.match(thinking, /本次生成期间[\s\S]*不会保存/);
   assert.doesNotMatch(thinking, /dangerouslySetInnerHTML|localStorage|sessionStorage/);
   assert.match(css, /\.deep-thinking-panel/);
+  assert.match(css, /\.deep-thinking-panel\s*\{[^}]*margin:\s*var\(--space-3\)\s+var\(--space-4\)\s*;/);
+  assert.doesNotMatch(css, /\.deep-thinking-panel\s*\{[^}]*margin:\s*var\(--space-3\)\s+var\(--space-4\)\s+0\s*;/);
   assert.match(css, /\.button--primary\.is-busy:disabled[\s\S]*color:\s*#000[\s\S]*opacity:\s*1/);
   assert.match(observationStart, /className=\{loading \? "is-busy" : ""\}/);
   assert.match(detail, /className=\{pendingAction === "analysis" \? "is-busy" : ""\}/);

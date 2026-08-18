@@ -707,7 +707,7 @@
 }
 
 .deep-thinking-panel {
-  margin: var(--space-3) var(--space-4) 0;
+  margin: var(--space-3) var(--space-4);
   overflow: hidden;
   background:
     linear-gradient(135deg, rgba(230, 248, 242, 0.94), rgba(248, 252, 249, 0.92)),
