@@ -89,8 +89,8 @@ android {
     applicationId = "com.hongtai.aiagent"
     minSdk = 24
     targetSdk = 36
-    versionCode = 23
-    versionName = "0.1.15"
+    versionCode = 24
+    versionName = "0.1.16"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     ndk {
