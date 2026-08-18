@@ -1,6 +1,16 @@
 import { z } from "zod";
 
 import { toProviderJsonSchema } from "../structured-output/json-schema";
+import { productionDecorationSchema, productionSubtitleSettingsSchema, subtitleCueSchema } from "./production-plan-overlays";
+
+const productionShotBaseSchema = z.object({
+  order: z.number().int().positive(),
+  assetId: z.string().min(1),
+  durationSeconds: z.number().min(1).max(20),
+  narration: z.string().min(1).max(160),
+  caption: z.string().min(1).max(40),
+  fit: z.enum(["cover", "contain"]),
+});
 
 const productionPlanBaseSchema = z.object({
   source: z.object({ analysisTaskId: z.string().min(1) }),
@@ -17,14 +27,13 @@ const productionPlanBaseSchema = z.object({
     backgroundMusicAssetId: z.string().min(1).nullable(),
     backgroundMusicVolume: z.number().min(0).max(0.35),
   }),
-  shots: z.array(z.object({
-    order: z.number().int().positive(),
-    assetId: z.string().min(1),
-    durationSeconds: z.number().min(1).max(20),
-    narration: z.string().min(1).max(160),
-    caption: z.string().min(1).max(40),
-    fit: z.enum(["cover", "contain"]),
-  })).min(1).max(12),
+  shots: z.array(productionShotBaseSchema).min(1).max(12),
+});
+
+const textOverlaySchema = z.object({
+  primaryText: z.string().min(1).max(24),
+  secondaryText: z.string().min(1).max(32).nullable(),
+  preset: z.enum(["classic_top", "clean_card", "aqua_accent"]),
 });
 
 export const productionPlanResultV1Schema = productionPlanBaseSchema.extend({
@@ -33,15 +42,34 @@ export const productionPlanResultV1Schema = productionPlanBaseSchema.extend({
 
 export const productionPlanResultV2Schema = productionPlanBaseSchema.extend({
   schemaVersion: z.literal("production-plan.v2"),
-  textOverlay: z.object({
-    primaryText: z.string().min(1).max(24),
-    secondaryText: z.string().min(1).max(32).nullable(),
-    preset: z.enum(["classic_top", "clean_card", "aqua_accent"]),
-  }),
+  textOverlay: textOverlaySchema,
 });
 
-export const productionPlanResultSchema = z.union([productionPlanResultV1Schema, productionPlanResultV2Schema]);
+/**
+ * v3 keeps every v2 field and adds the subtitle template reference, a per-shot caption
+ * timeline and a bounded decoration layer. Cue and decoration timestamps are relative to the
+ * shot that owns them, so a shot can be re-timed without rewriting the whole plan.
+ */
+export const productionPlanResultV3Schema = productionPlanBaseSchema.extend({
+  schemaVersion: z.literal("production-plan.v3"),
+  textOverlay: textOverlaySchema,
+  subtitle: productionSubtitleSettingsSchema,
+  shots: z.array(productionShotBaseSchema.extend({
+    cues: z.array(subtitleCueSchema).min(1).max(12),
+  })).min(1).max(12),
+  decorations: z.array(productionDecorationSchema).max(6),
+});
+
+export const productionPlanResultSchema = z.union([
+  productionPlanResultV1Schema,
+  productionPlanResultV2Schema,
+  productionPlanResultV3Schema,
+]);
+
 export type ProductionPlanResultV1 = z.infer<typeof productionPlanResultV1Schema>;
 export type ProductionPlanResultV2 = z.infer<typeof productionPlanResultV2Schema>;
+export type ProductionPlanResultV3 = z.infer<typeof productionPlanResultV3Schema>;
 export type ProductionPlanResult = z.infer<typeof productionPlanResultSchema>;
+
 export const productionPlanResultJsonSchema = toProviderJsonSchema(productionPlanResultV2Schema);
+export const productionPlanResultV3JsonSchema = toProviderJsonSchema(productionPlanResultV3Schema);

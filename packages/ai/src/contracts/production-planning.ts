@@ -19,6 +19,10 @@ export interface ProductionPlanInput {
   /** Optional user override; blank lets the planner generate a short main line. */
   readonly headlineText?: string;
   readonly textPreset: "classic_top" | "clean_card" | "aqua_accent";
+  /** Subtitle template the user picked; the plan must reference exactly this one. */
+  readonly subtitleTemplateId?: string;
+  /** Decoration manifest ids the planner may reference. Empty or absent forbids decorations. */
+  readonly allowedDecorationIds?: readonly string[];
   /** User-provided script that must match the uploaded avatar video. */
   readonly avatarScript?: string;
   readonly targetDurationSeconds: number;

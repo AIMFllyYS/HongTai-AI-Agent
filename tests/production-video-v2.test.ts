@@ -8,6 +8,7 @@ test("production v2 prompt separates original copy from analysis and forbids spo
   const contract = read("packages/ai/src/contracts/production-planning.ts");
   const prompt = read("packages/ai/src/prompts/production-planning.ts");
   const flow = read("packages/ai/src/flows/production/production-planning-flow.ts");
+  const validation = read("packages/ai/src/flows/production/production-plan-validation.ts");
 
   assert.match(contract, /originalSourceText/u);
   assert.match(contract, /headlineText/u);
@@ -16,7 +17,8 @@ test("production v2 prompt separates original copy from analysis and forbids spo
   assert.match(prompt, /不得把原文或拆解中的句子当作本次口播内容/u);
   assert.match(prompt, /爆款原文（参考，不可作为口播）/u);
   assert.match(prompt, /正式爆款拆解（参考，不可照抄）/u);
-  assert.match(flow, /assertOriginalNarration/u);
+  assert.match(validation, /assertOriginalNarration/u);
+  assert.match(flow, /validateProductionPlan/u);
 });
 
 test("production v2 UI captures main text preset and Media3 renders top and bottom overlays", () => {

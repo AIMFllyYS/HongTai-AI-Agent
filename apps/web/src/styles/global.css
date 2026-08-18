@@ -3,6 +3,7 @@
 @import "./foundation.css" layer(reset);
 @import "./shell.css" layer(shell);
 @import "./components.css" layer(components);
+@import "./components/subtitle-template.css" layer(components);
 @import "./pages/home.css" layer(pages);
 @import "./pages/analysis.css" layer(pages);
 @import "./pages/tasks-runtime.css" layer(pages);

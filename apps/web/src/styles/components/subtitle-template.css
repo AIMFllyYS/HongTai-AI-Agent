@@ -1,0 +1,159 @@
+/* Subtitle preview and template picker. Every colour, size and timing arrives as an inline
+   value derived from the subtitle template contract; this file only owns layout and keyframes. */
+
+.subtitle-preview {
+  pointer-events: none;
+}
+
+.subtitle-preview--frame {
+  position: absolute;
+  z-index: 2;
+}
+
+.subtitle-preview--band {
+  position: relative;
+  display: grid;
+  align-items: center;
+  min-height: 100%;
+}
+
+.subtitle-preview__caption {
+  display: inline-block;
+  max-width: 100%;
+  font-family: var(--font-display);
+  animation-fill-mode: both;
+}
+
+.subtitle-preview__caption[data-entrance="fade"] {
+  animation-name: subtitle-entrance-fade;
+}
+
+.subtitle-preview__caption[data-entrance="slide_up"] {
+  animation-name: subtitle-entrance-slide;
+}
+
+.subtitle-preview__caption[data-entrance="pop"] {
+  animation-name: subtitle-entrance-pop;
+}
+
+.subtitle-preview__row {
+  display: block;
+}
+
+.subtitle-preview__line {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.subtitle-preview__spoken {
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: var(--subtitle-spoken-color);
+  white-space: nowrap;
+}
+
+.subtitle-preview__emphasis {
+  font-style: normal;
+  color: var(--subtitle-emphasis-color);
+}
+
+.subtitle-preview__caption[data-emphasis="scale"] .subtitle-preview__emphasis {
+  display: inline-block;
+  font-size: calc(1em * var(--subtitle-emphasis-peak));
+}
+
+.subtitle-preview__caption[data-emphasis="bounce"] .subtitle-preview__emphasis {
+  display: inline-block;
+  animation: subtitle-emphasis-bounce var(--subtitle-emphasis-duration) var(--subtitle-emphasis-easing) both;
+}
+
+.subtitle-preview__caption[data-emphasis="none"] .subtitle-preview__emphasis {
+  color: inherit;
+}
+
+@keyframes subtitle-entrance-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes subtitle-entrance-slide {
+  from { opacity: 0; transform: translateY(var(--subtitle-entrance-travel)); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes subtitle-entrance-pop {
+  from { opacity: 0; transform: scale(0.86); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes subtitle-emphasis-bounce {
+  0% { transform: scale(1); }
+  45% { transform: scale(var(--subtitle-emphasis-peak)); }
+  100% { transform: scale(1); }
+}
+
+/* Template picker: one full-width live caption band per template. */
+.subtitle-template-picker {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.subtitle-template-option {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--color-outline-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+  text-align: left;
+}
+
+.subtitle-template-option.is-selected {
+  border-color: var(--color-action-secondary);
+  box-shadow: 0 0 0 1px var(--color-action-secondary);
+}
+
+.subtitle-template-option__stage {
+  position: relative;
+  display: grid;
+  min-height: 5.5rem;
+  overflow: hidden;
+  border-radius: var(--radius-control);
+  background: linear-gradient(160deg, #123a33 0%, #1f5b4d 52%, #2b7a66 100%);
+}
+
+.subtitle-template-option__head {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.subtitle-template-option__name {
+  font-size: var(--text-label);
+  line-height: var(--text-label-line);
+  font-weight: 600;
+}
+
+.subtitle-template-option__summary {
+  font-size: var(--text-meta);
+  line-height: var(--text-meta-line);
+  color: var(--color-text-muted);
+}
+
+.subtitle-template-notice {
+  font-size: var(--text-meta);
+  line-height: var(--text-meta-line);
+  color: var(--color-status-warning);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subtitle-preview__caption,
+  .subtitle-preview__caption[data-emphasis="bounce"] .subtitle-preview__emphasis {
+    animation: none;
+  }
+}
