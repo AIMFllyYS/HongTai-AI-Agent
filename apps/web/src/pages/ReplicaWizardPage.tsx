@@ -188,7 +188,7 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
         <ul>
           <li>共 {blueprint.requirements.length} 项素材，清单建议合计 {blueprint.totalSuggestedSeconds} 秒。</li>
           <li>成片时长按清单合计定下，不用再从固定档位里挑。</li>
-          <li>素材齐了以后生成口播、配音和字幕计划，确认微调后再回制作页合成成片。</li>
+          <li>素材齐了以后生成口播、配音和字幕计划；云端配音不可用时会回退到系统语音。确认微调后再回制作页合成成片。</li>
         </ul>
       </GlassCard>
 

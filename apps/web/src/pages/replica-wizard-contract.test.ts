@@ -54,6 +54,7 @@ test("素材齐了以后进微调页，而不是假装已经出片", () => {
   assert.match(page, /generatePlan\(project\.projectId\)/u);
   assert.match(page, /navigate\(productionEditPath\(ready\.projectId\)\)/u);
   assert.match(page, /再回制作页合成成片/u, "要说清这一步只出脚本和字幕，成片还没做");
+  assert.match(page, /系统语音/u, "要说清云端配音失败时会回退系统语音，而不是假装一定有云端旁白");
   assert.doesNotMatch(page, /素材齐了以后自动生成/u, "向导不能把生成计划和本地合成说成同一个自动步骤");
 });
 
