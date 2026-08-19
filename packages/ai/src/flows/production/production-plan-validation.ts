@@ -67,6 +67,9 @@ function validateSubtitleTiming(plan: ProductionPlanResultV3, constraints: Produ
 
 function validateCues(plan: ProductionPlanResultV3): void {
   for (const shot of plan.shots) {
+    // A shot without cues renders as a silent gap and is rejected by both the plan schema and
+    // the Android parser, so it must never reach persistence.
+    if (shot.cues.length === 0) throw invalidPlan("每个镜头都必须有至少一条字幕");
     const shotEndMs = Math.round(shot.durationSeconds * 1000) + CUE_TAIL_TOLERANCE_MS;
     let previousEndMs = -1;
     for (const cue of shot.cues) {

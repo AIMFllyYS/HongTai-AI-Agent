@@ -6,7 +6,7 @@ import {
   type SubtitleTimingSource,
 } from "@hongtai/core";
 
-import type { ProductionPlanResultV3 } from "../../schemas/production-plan";
+import { productionPlanResultV3Schema, type ProductionPlanResultV3 } from "../../schemas/production-plan";
 
 /**
  * Avatar captions are cut from the pasted script, so nothing about the recorded voice is
@@ -101,7 +101,7 @@ export function createAvatarCaptionPlan(input: AvatarCaptionPlanInput): Producti
   const precision = subtitleTimingPrecision(AVATAR_TIMING_SOURCE);
   const resolved = resolveTemplateForPrecision({ requestedId: input.subtitleTemplateId ?? "", precision });
 
-  return {
+  const plan = {
     schemaVersion: "production-plan.v3",
     source: { analysisTaskId: input.analysisTaskId },
     title: input.brief.trim().slice(0, 80),
@@ -135,4 +135,10 @@ export function createAvatarCaptionPlan(input: AvatarCaptionPlanInput): Producti
     }),
     decorations: [],
   };
+
+  // A plan that fails its own schema would still persist, and the project could no longer be
+  // opened afterwards, so the failure has to surface here while the user can still edit input.
+  const parsed = productionPlanResultV3Schema.safeParse(plan);
+  if (!parsed.success) throw invalid("数字人口播稿无法生成可执行的字幕时间轴，请调整口播稿。");
+  return parsed.data;
 }

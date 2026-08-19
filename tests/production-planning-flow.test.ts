@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   ProductionPlanningFlow,
+  productionPlanResultV3Schema,
   type AiGenerateRequest,
   type AiProvider,
   type ProductionPlanInput,
@@ -132,4 +133,36 @@ test("数字人口播模式只允许一个上传数字人视频，并保留原�
   assert.equal(result.shots.every((shot) => shot.assetId === "avatar-video"), true);
   assert.equal(result.audio.backgroundMusicAssetId, null);
   assert.match(String(provider.calls[0]?.messages[0]?.content), /数字人口播模式/u);
+});
+
+test("制作规划把模型的 v2 结果升级为可执行的 v3 逐句时间轴", async () => {
+  const provider = new SequenceProvider([JSON.stringify(plan())]);
+
+  const result = await new ProductionPlanningFlow({ provider }).run(input);
+
+  const parsed = productionPlanResultV3Schema.safeParse(result);
+  assert.ok(parsed.success, JSON.stringify(parsed.success ? {} : parsed.error.issues));
+  assert.equal(result.schemaVersion, "production-plan.v3");
+  assert.deepEqual(result.subtitle.timing, { precision: "estimated", source: "script_estimate" });
+  assert.equal(result.subtitle.degradedFromTemplateId, null);
+  assert.deepEqual(result.decorations, []);
+
+  for (const [index, shot] of result.shots.entries()) {
+    const source = plan().shots[index];
+    assert.ok(shot.cues.length >= 1, "每个镜头都必须有字幕");
+    assert.equal(shot.cues.at(-1)?.endMs, Math.round(shot.durationSeconds * 1_000), "字幕必须铺满镜头且不越界");
+    assert.equal(shot.cues.map((cue) => cue.text).join(""), source?.narration, "字幕必须逐字来自旁白");
+    assert.equal(shot.cues.every((cue) => cue.words === null), true, "没有真实语音时间时不能给出词级时间");
+  }
+});
+
+test("制作规划拒绝切不出字幕的旁白，而不是产出打不开的项目", async () => {
+  const blank = plan();
+  // A whitespace-only narration satisfies the v2 schema but yields no cues. Persisting such a
+  // plan used to leave the project unreadable and undeletable on the next launch.
+  blank.shots[0]!.narration = "\u3000";
+  const provider = new SequenceProvider([JSON.stringify(blank), JSON.stringify(blank)]);
+
+  await assert.rejects(() => new ProductionPlanningFlow({ provider }).run(input), /修复/u);
+  assert.equal(provider.calls.length, 2, "无法生成字幕时应先尝试修复一次");
 });

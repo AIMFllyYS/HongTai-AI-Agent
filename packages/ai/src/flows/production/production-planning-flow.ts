@@ -11,6 +11,7 @@ import { productionPlanningPrompt, productionPlanningRepairPrompt } from "../../
 import {
   productionPlanResultJsonSchema,
   productionPlanResultV2Schema,
+  productionPlanResultV3Schema,
   type ProductionPlanResultV2,
   type ProductionPlanResultV3,
 } from "../../schemas/production-plan";
@@ -27,11 +28,16 @@ const MONTAGE_TIMING_SOURCE: SubtitleTimingSource = "script_estimate";
 /**
  * The model decides shots and copy; cue milliseconds are derived here, because asking a
  * language model for timestamp arithmetic produces plausible numbers that do not add up.
+ *
+ * The derived plan is parsed against its own schema before it leaves this function. Without
+ * that, a shot whose narration carries no readable characters would yield an empty cue list
+ * that only fails later, when the plan is read back from disk and the project can no longer
+ * be opened.
  */
 function withDerivedCues(plan: ProductionPlanResultV2, requestedTemplateId: string | undefined): ProductionPlanResultV3 {
   const precision = subtitleTimingPrecision(MONTAGE_TIMING_SOURCE);
   const resolved = resolveTemplateForPrecision({ requestedId: requestedTemplateId ?? "", precision });
-  return {
+  const derived = {
     ...plan,
     schemaVersion: "production-plan.v3",
     subtitle: {
@@ -49,6 +55,9 @@ function withDerivedCues(plan: ProductionPlanResultV2, requestedTemplateId: stri
     })),
     decorations: [],
   };
+  const parsed = productionPlanResultV3Schema.safeParse(derived);
+  if (!parsed.success) throw invalidPlan("制作计划无法生成可执行的字幕时间轴", parsed.error);
+  return parsed.data;
 }
 
 function validateInput(input: ProductionPlanInput): void {
