@@ -23,6 +23,14 @@ test("微调页有自己的路由，项目标识始终编码后进入路径", ()
   assert.equal(pathForRoute("create"), "/create");
 });
 
+test("回到前台会重新读取项目，未保存草稿不 adopt，卡住状态仍能解锁", () => {
+  assert.match(page, /useAppResume\(\(\) => \{\s*void load\(\);/u);
+  assert.match(page, /applyFetched\(next\)/u);
+  assert.match(page, /if \(dirty\) setConflict\(next\);\s*\n\s*else adopt\(next\);/u);
+  assert.match(page, /runtime\.production\.get\(projectId\)/u);
+  assert.doesNotMatch(page, /useAppResume\(\(\) => \{\s*setLoading\(true\)/u);
+});
+
 test("版本过期不走共享通知，改用能说清后果、也能执行的冲突提示", () => {
   assert.match(page, /issue\.code !== "PRODUCTION_PLAN_VERSION_STALE"/u, "过期码不能交给把 retry 当成本地合成的共享通知");
   assert.match(page, /现在保存会被拒绝/u, "必须说清保留旧版本号意味着这次保存不会落盘");

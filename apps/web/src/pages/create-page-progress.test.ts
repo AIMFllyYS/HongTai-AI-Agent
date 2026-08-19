@@ -186,6 +186,7 @@ test("制作页回到前台会消费素材恢复，且成功或失败才清 busy
   const page = read("pages/CreatePage.tsx");
   assert.match(page, /useAppResume\(\(\) => \{\s*void load\(\);\s*void applyAssetRecovery\(\);/u);
   assert.match(page, /runtime\.production\.consumeAssetRecovery\(\)/u);
+  assert.match(page, /runtime\.production\.list\(\)/u, "list 会把 SPA 内卡住的 planning/rendering 收成可重试失败");
   const apply = page.slice(page.indexOf("const applyAssetRecovery"), page.indexOf("useAppResume(() =>"));
   assert.match(apply, /recovered\.status === "succeeded"/u);
   assert.match(apply, /recovered\.status === "failed"/u);

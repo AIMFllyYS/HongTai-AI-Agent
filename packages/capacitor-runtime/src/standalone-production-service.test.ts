@@ -798,6 +798,81 @@ test("制作项目恢复中断的渲染状态并保留正式计划", async () =>
   assert.equal(recovered?.issue?.code, "TASK_INTERRUPTED");
 });
 
+test("制作项目 list 与 get 会恢复 SPA 内卡住的渲染和规划", async () => {
+  const { create, values } = harness();
+  const service = create();
+  await service.create({ analysisTaskId: "task-1", brief: "真实门店", targetDurationSeconds: 20 });
+  await service.importAssets("project-1");
+  await service.generatePlan("project-1");
+  const stored = JSON.parse(values.get("project-1/project.json") ?? "{}") as Record<string, unknown>;
+  values.set("project-1/project.json", JSON.stringify({ ...stored, status: "rendering" }));
+
+  assert.equal((await service.inspectUnfinishedWork()).length, 1);
+  const listed = await service.list();
+  assert.equal(listed[0]?.status, "failed");
+  assert.equal(listed[0]?.issue?.code, "TASK_INTERRUPTED");
+  assert.equal(listed[0]?.assets.length, 3);
+  assert.equal((await service.inspectUnfinishedWork()).length, 0);
+
+  const afterList = JSON.parse(values.get("project-1/project.json") ?? "{}") as Record<string, unknown>;
+  values.set("project-1/project.json", JSON.stringify({ ...afterList, status: "planning" }));
+  const opened = await service.get("project-1");
+  assert.equal(opened?.status, "failed");
+  assert.equal(opened?.issue?.code, "TASK_INTERRUPTED");
+});
+
+test("正在渲染时 list 与 recover 不得把项目标成中断", async () => {
+  const values = new Map<string, string>();
+  const ids = new Set<string>();
+  const renderEntered = deferred();
+  const renderRelease = deferred();
+  const service = new StandaloneProductionService({
+    files: {
+      ensureProduction: async ({ projectId }) => { ids.add(projectId); },
+      writeProductionText: async ({ projectId, relativePath, value }) => { values.set(`${projectId}/${relativePath}`, value); },
+      readProductionText: async ({ projectId, relativePath }) => ({ value: values.get(`${projectId}/${relativePath}`) }),
+      listProductionIds: async () => ({ projectIds: [...ids] }),
+      deleteProductionFile: async () => undefined,
+      deleteProduction: async () => undefined,
+    },
+    native: {
+      pickAssets: async () => ({ assets: [
+        { id: "asset-1", uri: "file:///private/a.jpg", kind: "image", mimeType: "image/jpeg", displayName: "a.jpg", sizeBytes: 100 },
+        { id: "asset-2", uri: "file:///private/b.mp4", kind: "video", mimeType: "video/mp4", displayName: "b.mp4", sizeBytes: 200 },
+        { id: "asset-3", uri: "file:///private/c.png", kind: "image", mimeType: "image/png", displayName: "c.png", sizeBytes: 100 },
+      ] }),
+      render: async () => {
+        renderEntered.resolve();
+        await renderRelease.promise;
+        return { uri: "file:///private/output.mp4", mimeType: "video/mp4", sizeBytes: 1_024, durationSeconds: 20 };
+      },
+      consumeAssetOperation: async () => ({ status: "none" as const }),
+      probeTts: async () => undefined,
+    },
+    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
+    tasks,
+    getProvider: async () => ({ generate: async () => ({ content: JSON.stringify(plan), reasoning: "" }), transcribe: async () => "" }),
+    getNarrationMode: async () => "system",
+    toDisplayUri: (uri) => uri,
+    createProjectId: () => "project-live",
+  });
+
+  await service.create({ analysisTaskId: "task-1", brief: "真实制作", targetDurationSeconds: 20 });
+  await service.importAssets("project-live");
+  await service.generatePlan("project-live");
+  const rendering = service.render("project-live");
+  await renderEntered.promise;
+
+  assert.equal((await service.inspectUnfinishedWork()).length, 1);
+  assert.equal((await service.recoverInterruptedWork()).length, 0);
+  assert.equal((await service.get("project-live"))?.status, "rendering");
+  assert.equal((await service.list())[0]?.status, "rendering");
+
+  renderRelease.resolve();
+  assert.equal((await rendering).status, "succeeded");
+  assert.equal((await service.get("project-live"))?.status, "succeeded");
+});
+
 test("制作服务按真实 Promise 区分系统素材选择、计划与渲染", async () => {
   const values = new Map<string, string>();
   const ids = new Set<string>();

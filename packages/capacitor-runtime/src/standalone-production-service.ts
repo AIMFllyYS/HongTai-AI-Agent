@@ -336,14 +336,24 @@ export class StandaloneProductionService implements ProductionService {
   }
 
   async get(projectId: string): Promise<ProductionProjectRecord | undefined> {
-    const response = await this.#options.files.readProductionText({ projectId, relativePath: PROJECT_PATH });
-    const project = response.value ? parseProject(response.value, projectId) : undefined;
+    await this.#recoverProject(projectId);
+    const project = await this.#readPersisted(projectId);
     return project ? this.#project(project) : undefined;
   }
 
   async list(): Promise<readonly ProductionProjectRecord[]> {
     const { projectIds } = await this.#options.files.listProductionIds();
-    const projects = await Promise.all(projectIds.map((id) => this.get(id)));
+    await Promise.all(projectIds.map(async (id) => {
+      try {
+        await this.#recoverProject(id);
+      } catch {
+        // One stuck project must not hide the rest of the workbench.
+      }
+    }));
+    const projects = await Promise.all(projectIds.map(async (id) => {
+      const project = await this.#readPersisted(id);
+      return project ? this.#project(project) : undefined;
+    }));
     return projects.filter((value): value is ProductionProjectRecord => Boolean(value)).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   }
 
@@ -731,7 +741,7 @@ export class StandaloneProductionService implements ProductionService {
     const { projectIds } = await this.#options.files.listProductionIds();
     const unfinished: RuntimeUnfinishedWork[] = [];
     for (const projectId of projectIds) {
-      const project = await this.get(projectId);
+      const project = await this.#readPersisted(projectId);
       if (project?.status === "planning") {
         unfinished.push(persistedRuntimeWork("production-plan", projectId));
       } else if (project?.status === "rendering") {
@@ -745,10 +755,7 @@ export class StandaloneProductionService implements ProductionService {
     const unfinished = await this.inspectUnfinishedWork();
     const recovered: RuntimeUnfinishedWork[] = [];
     for (const work of unfinished) {
-      const project = await this.#required(work.id);
-      if (project.status !== "planning" && project.status !== "rendering") continue;
-      await this.#persist({ ...project, status: "failed", issue: runtimeInterruptedIssue() });
-      recovered.push(work);
+      if (await this.#recoverProject(work.id)) recovered.push(work);
     }
     return recovered;
   }
@@ -815,9 +822,33 @@ export class StandaloneProductionService implements ProductionService {
     return this.#options.operations ? this.#options.operations.track(operation, run) : run();
   }
 
-  async #required(projectId: string): Promise<PersistedProject> {
+  async #readPersisted(projectId: string): Promise<PersistedProject | undefined> {
     const response = await this.#options.files.readProductionText({ projectId, relativePath: PROJECT_PATH });
-    const project = response.value ? parseProject(response.value, projectId) : undefined;
+    return response.value ? parseProject(response.value, projectId) : undefined;
+  }
+
+  async #recoverProject(projectId: string): Promise<boolean> {
+    const project = await this.#readPersisted(projectId);
+    if (!project || (project.status !== "planning" && project.status !== "rendering")) return false;
+    if (this.#mutations.has(projectId)) return false;
+    const operation = this.#failInterrupted(projectId);
+    this.#mutations.set(projectId, operation);
+    try {
+      return await operation;
+    } finally {
+      if (this.#mutations.get(projectId) === operation) this.#mutations.delete(projectId);
+    }
+  }
+
+  async #failInterrupted(projectId: string): Promise<boolean> {
+    const project = await this.#required(projectId);
+    if (project.status !== "planning" && project.status !== "rendering") return false;
+    await this.#persist({ ...project, status: "failed", issue: runtimeInterruptedIssue() });
+    return true;
+  }
+
+  async #required(projectId: string): Promise<PersistedProject> {
+    const project = await this.#readPersisted(projectId);
     if (!project) throw taskError("制作项目不存在或已损坏");
     return project;
   }

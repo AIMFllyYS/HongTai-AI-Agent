@@ -21,6 +21,7 @@ import {
   type PlanDraft,
 } from "../features/production/plan-edit-model";
 import { readProductionPlan } from "../features/production/production-plan-view";
+import { useAppResume } from "../hooks/useAppResume";
 import { pathForRoute, type Navigate } from "../router";
 
 export interface ProductionEditPageProps {
@@ -45,6 +46,7 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
   const [issue, setIssue] = useState<TaskIssue>();
   const [saved, setSaved] = useState(false);
   const inFlight = useRef(false);
+  const live = useRef({ updatedAt: "", dirty: false });
 
   const adopt = useCallback((next: ProductionProjectRecord) => {
     setBase(next);
@@ -52,24 +54,40 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
     setConflict(undefined);
   }, []);
 
+  const applyFetched = useCallback((next: ProductionProjectRecord) => {
+    const { updatedAt, dirty } = live.current;
+    if (!updatedAt) {
+      adopt(next);
+      return;
+    }
+    if (updatedAt === next.updatedAt) return;
+    if (dirty) setConflict(next);
+    else adopt(next);
+  }, [adopt]);
+
   const load = useCallback(async () => {
-    setLoading(true);
     try {
       const next = await runtime.production.get(projectId);
       if (!next) {
         setBase(undefined);
         return;
       }
-      adopt(next);
+      applyFetched(next);
       setIssue(undefined);
     } catch (error) {
       setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "这个制作项目暂时无法读取", action: "none" }));
     } finally {
       setLoading(false);
     }
-  }, [adopt, projectId, runtime]);
+  }, [applyFetched, projectId, runtime]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    setLoading(true);
+    void load();
+  }, [load]);
+  useAppResume(() => {
+    void load();
+  });
 
   const plan = readProductionPlan(base?.plan);
   const total = draft ? draftTotalMilliseconds(draft.shots) : 0;
@@ -80,8 +98,7 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
   const busy = saving || !base || Boolean(conflict) || !editableStatus(base);
 
   // Read inside the subscription callback, which closes over the state of the render that installed
-  // it and must not resubscribe on every keystroke.
-  const live = useRef({ updatedAt: "", dirty: false });
+  // it and must not resubscribe on every keystroke. Resume refetch uses the same dirty rule.
   useEffect(() => { live.current = { updatedAt: base?.updatedAt ?? "", dirty: Boolean(update) }; });
 
   useEffect(() => {
