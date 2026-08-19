@@ -7,6 +7,7 @@ import type {
   ContentAnalysisRunRecord,
 } from "../../contracts/content-analysis";
 import type { AiStreamEvent } from "../../contracts/provider";
+import { assertEvidenceRefs } from "../../evidence";
 import {
   CONTENT_ANALYSIS_SINGLE_PROMPT_VERSION,
   contentAnalysisSinglePrompt,
@@ -74,10 +75,7 @@ function structuredIssue(message: string, cause?: unknown): TaskError {
 }
 
 function validateEvidenceRefs(references: readonly string[], input: ContentAnalysisInput): void {
-  const validIds = new Set(input.evidenceUnits.map((item) => item.id));
-  if (references.some((id) => !validIds.has(id))) {
-    throw structuredIssue("内容拆解引用了不存在的原文证据");
-  }
+  assertEvidenceRefs({ references, units: input.evidenceUnits, message: "内容拆解引用了不存在的原文证据" });
 }
 
 function validateModuleEvidence(

@@ -1,6 +1,7 @@
 import { resolveTemplateForPrecision, subtitleTimingPrecision, TaskError } from "@hongtai/core";
 
 import type { ProductionPlanningAsset } from "../../contracts/production-planning";
+import { sharesVerbatimRun } from "../../originality";
 import { MAX_DECORATIONS_PER_PLAN, MAX_DECORATIONS_PER_SHOT } from "../../schemas/production-plan-overlays";
 import type { ProductionPlanResult, ProductionPlanResultV3 } from "../../schemas/production-plan";
 
@@ -32,20 +33,12 @@ export function isWholeMilliseconds(seconds: number): boolean {
   return Math.abs(milliseconds - Math.round(milliseconds)) < 1e-6;
 }
 
-function normalizedCopy(value: string): string {
-  return value.toLocaleLowerCase("zh-CN").replace(/[^\p{Letter}\p{Number}]/gu, "");
-}
-
 /** Rejects plans that lift twelve or more consecutive characters straight from the reference copy. */
 export function assertOriginalNarration(plan: ProductionPlanResult, constraints: ProductionPlanConstraints): void {
   if (constraints.mode !== "montage" || !constraints.originalSourceText) return;
-  const original = normalizedCopy(constraints.originalSourceText);
-  const narration = normalizedCopy(plan.shots.map((shot) => shot.narration).join(""));
-  if (original.length < 12 || narration.length < 12) return;
-  for (let index = 0; index <= narration.length - 12; index += 1) {
-    if (original.includes(narration.slice(index, index + 12))) {
-      throw invalidPlan("制作口播与参考原文存在连续重复，请重新组织原创表达");
-    }
+  const narration = plan.shots.map((shot) => shot.narration).join("");
+  if (sharesVerbatimRun(narration, constraints.originalSourceText)) {
+    throw invalidPlan("制作口播与参考原文存在连续重复，请重新组织原创表达");
   }
 }
 

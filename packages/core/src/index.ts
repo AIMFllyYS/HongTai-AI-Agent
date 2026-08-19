@@ -6,6 +6,7 @@ export * from "./models";
 export * from "./persistable-raw";
 export * from "./platform-hosts";
 export * from "./pipeline";
+export * from "./production-bounds";
 export * from "./runtime-id";
 export * from "./subtitle-template";
 export * from "./subtitle-template-presets";

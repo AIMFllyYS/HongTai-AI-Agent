@@ -1,4 +1,11 @@
-import { MAX_CUES_PER_SHOT } from "@hongtai/core";
+import {
+  MAX_CUES_PER_SHOT,
+  MAX_PRODUCTION_DURATION_SECONDS,
+  MAX_SHOT_DURATION_SECONDS,
+  MAX_SHOTS_PER_PRODUCTION,
+  MIN_PRODUCTION_DURATION_SECONDS,
+  MIN_SHOT_DURATION_SECONDS,
+} from "@hongtai/core";
 import { z } from "zod";
 
 import { toProviderJsonSchema } from "../structured-output/json-schema";
@@ -7,7 +14,7 @@ import { productionDecorationSchema, productionSubtitleSettingsSchema, subtitleC
 const productionShotBaseSchema = z.object({
   order: z.number().int().positive(),
   assetId: z.string().min(1),
-  durationSeconds: z.number().min(1).max(20),
+  durationSeconds: z.number().min(MIN_SHOT_DURATION_SECONDS).max(MAX_SHOT_DURATION_SECONDS),
   narration: z.string().min(1).max(160),
   caption: z.string().min(1).max(40),
   fit: z.enum(["cover", "contain"]),
@@ -20,7 +27,7 @@ const productionPlanBaseSchema = z.object({
     width: z.literal(720),
     height: z.literal(1280),
     fps: z.literal(30),
-    durationSeconds: z.number().min(15).max(60),
+    durationSeconds: z.number().min(MIN_PRODUCTION_DURATION_SECONDS).max(MAX_PRODUCTION_DURATION_SECONDS),
   }),
   audio: z.object({
     voiceLocale: z.literal("zh-CN"),
@@ -28,7 +35,7 @@ const productionPlanBaseSchema = z.object({
     backgroundMusicAssetId: z.string().min(1).nullable(),
     backgroundMusicVolume: z.number().min(0).max(0.35),
   }),
-  shots: z.array(productionShotBaseSchema).min(1).max(12),
+  shots: z.array(productionShotBaseSchema).min(1).max(MAX_SHOTS_PER_PRODUCTION),
 });
 
 const textOverlaySchema = z.object({
@@ -57,7 +64,7 @@ export const productionPlanResultV3Schema = productionPlanBaseSchema.extend({
   subtitle: productionSubtitleSettingsSchema,
   shots: z.array(productionShotBaseSchema.extend({
     cues: z.array(subtitleCueSchema).min(1).max(MAX_CUES_PER_SHOT),
-  })).min(1).max(12),
+  })).min(1).max(MAX_SHOTS_PER_PRODUCTION),
   decorations: z.array(productionDecorationSchema).max(6),
 });
 
