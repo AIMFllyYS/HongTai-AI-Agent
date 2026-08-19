@@ -274,8 +274,30 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
   const composerPrimaryVisible = (agentComposer || replicaComposer) && sources.length > 0;
   const showHistory = projects.length > 1 || composingNew && projects.length > 0;
 
+  const enterComposer = (flow: ComposerFlow) => {
+    // A leftover Agent create failure must not follow the user onto the picker or into 复刻 —
+    // retry on those screens would either rebuild the abandoned project or jump into the wizard.
+    setIssue(undefined);
+    if (flow !== "agent") setMode("montage");
+    if (flow === "replica") setSourceId((current) => current || sources[0]?.task.id || "");
+    setComposerFlow(flow);
+  };
+
+  const startNewProduction = () => {
+    setComposingNew(true);
+    setIssue(undefined);
+    setMode("montage");
+    setBrief("");
+    setHeadlineText("");
+    setAvatarScript("");
+    setComposerFlow("pick");
+    setProgress(0);
+    setProgressMessage("");
+  };
+
   const retryCurrent = () => {
     if (!activeProject) {
+      if (composerFlow === "pick") return;
       if (composerFlow === "replica") {
         if (sourceId) navigate(replicaWizardPath(sourceId));
         return;
@@ -325,11 +347,7 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
       return;
     }
     if (primary.stage === "has-output") {
-      setComposingNew(true);
-      setComposerFlow("pick");
-      setBrief("");
-      setHeadlineText("");
-      setAvatarScript("");
+      startNewProduction();
       return;
     }
     if (primary.stage === "failed") retryCurrent();
@@ -373,8 +391,8 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
   return (
     <AppShell activeNav="create" contextualAction={contextualAction} headerAction={<MaterialLibraryHeaderAction />} leadingAction={<span className="page-header-icon"><Icon name="movie_edit" size={24} /></span>} navigate={navigate} title="制作">
       <div className="page-stack page-create production-workbench" data-composer-flow={showComposer ? composerFlow : "project"} data-production-stage={primary.stage}>
-        {issue ? <IssueNotice actions={issueActions} issue={issue} /> : null}
-        {issue && issue.action !== "edit_input" && showComposer ? (
+        {issue && !(showComposer && issue.action === "none") ? <IssueNotice actions={issueActions} issue={issue} /> : null}
+        {issue && showComposer && issue.action === "none" ? (
           <aside className={`issue-notice issue-notice--${issue.severity}`} role={issue.severity === "error" ? "alert" : "status"}>
             <strong>{issueTitle(issue)}</strong>
             <small>{issue.userMessage}</small>
@@ -388,11 +406,11 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
                 <h2>这次走哪条路？</h2>
                 <p>先选一种做法。两条路要准备的东西不一样。</p>
               </section>
-              <ProductionModeEntry onSelect={setComposerFlow} />
+              <ProductionModeEntry onSelect={enterComposer} />
             </>
           ) : (
             <>
-              <button className="production-entry-switch" onClick={() => setComposerFlow("pick")} type="button">
+              <button className="production-entry-switch" onClick={() => enterComposer("pick")} type="button">
                 <Icon name={composerFlow === "agent" ? "movie_edit" : "list"} size={19} />
                 <span>{composerFlow === "agent" ? "Agent 模式" : "爆款复刻"}</span>
                 <small>更换</small>
@@ -407,6 +425,7 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
                   onAvatarScript={setAvatarScript}
                   onBrief={setBrief}
                   onDuration={setDuration}
+                  onGoAnalyze={() => navigate(pathForRoute("home"))}
                   onHeadlineText={setHeadlineText}
                   onMode={setMode}
                   onSourceId={setSourceId}
@@ -440,6 +459,14 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
             progressMessage={progressMessage}
             project={activeProject}
           />
+        ) : null}
+
+        {activeProject && primary.stage !== "has-output" ? (
+          <button className="production-entry-switch" onClick={startNewProduction} type="button">
+            <Icon name="sparkle" size={19} />
+            <span>再做一条</span>
+            <small>换一种做法</small>
+          </button>
         ) : null}
 
         {showHistory ? (
@@ -490,6 +517,7 @@ function AgentSetupForm({
   onAvatarScript,
   onBrief,
   onDuration,
+  onGoAnalyze,
   onHeadlineText,
   onMode,
   onSourceId,
@@ -506,6 +534,7 @@ function AgentSetupForm({
   readonly onAvatarScript: (value: string) => void;
   readonly onBrief: (value: string) => void;
   readonly onDuration: (value: number) => void;
+  readonly onGoAnalyze: () => void;
   readonly onHeadlineText: (value: string) => void;
   readonly onMode: (value: ProductionMode) => void;
   readonly onSourceId: (id: string) => void;
@@ -523,6 +552,17 @@ function AgentSetupForm({
       <GlassCard className="production-setup">
         {sources.length > 0 ? (
           <>
+            {avatarOn ? (
+              <p className="production-hint">
+                <Icon name="info" size={16} />
+                上传一条已经录好自己声音的 MP4，并粘贴口播稿。应用只按稿烧字幕，不合成语音，也不改原声。字幕必须跟口播稿一致；生成后不能改口播和单镜时长。切分按字数估算，不是对着录音识别的。
+              </p>
+            ) : (
+              <p className="production-hint">
+                <Icon name="info" size={16} />
+                这台安装不一定能看画面：看不到就按拆解结构写，能看到才会参考画面里看得见的内容。生成后微调页会告诉你是哪一种。两种情况都不会核对文字是否对得上每个镜头，需要你逐镜核对，看不清的素材要重拍。
+              </p>
+            )}
             <label className="field-label" htmlFor="production-brief">{avatarOn ? "视频标题与制作需求" : "你的经营需求"}</label>
             <textarea id="production-brief" maxLength={500} onChange={(event) => onBrief(event.target.value)} placeholder={avatarOn ? "例如：介绍门店的新服务，语气自然可信，不夸大承诺。" : "例如：面向附近上班族，突出真实环境、服务过程和到店体验，不夸大承诺。"} rows={4} value={brief} />
             <small className="production-field-help">{brief.length}/500</small>
@@ -535,17 +575,6 @@ function AgentSetupForm({
                 <small>改用已录好原声的 MP4，只烧字幕、不配音</small>
               </span>
             </button>
-            {avatarOn ? (
-              <p className="production-hint">
-                <Icon name="info" size={16} />
-                上传一条已经录好自己声音的 MP4，并粘贴口播稿。应用只按稿烧字幕，不合成语音，也不改原声。字幕必须跟口播稿一致；生成后不能改口播和单镜时长。切分按字数估算，不是对着录音识别的。
-              </p>
-            ) : (
-              <p className="production-hint">
-                <Icon name="info" size={16} />
-                能看到画面时，旁白会参考画面里看得见的内容；看不到就按拆解结构写，生成后微调页会告诉你是哪一种。两种情况都不会核对文字是否对得上每个镜头，需要你逐镜核对，看不清的素材要重拍。
-              </p>
-            )}
             <label className="field-label" htmlFor="production-headline">主文字（可选）</label>
             <input id="production-headline" maxLength={24} onChange={(event) => onHeadlineText(event.target.value)} placeholder="例如：你出时间，我出货" value={headlineText} />
             <small className="production-field-help">留空时由 AI 根据你的真实需求生成；填写后成片会逐字使用。</small>
@@ -567,7 +596,14 @@ function AgentSetupForm({
             </select>
             {avatarOn ? <small className="production-field-help">口播视频时长不能短于这个目标。旁白语速和单镜时长之后也不能改。</small> : null}
           </>
-        ) : <EmptyState description="先完成一个采集任务，并在任务详情中手动运行 AI 自动拆解。" icon="analytics" title="还没有可用于制作的拆解" />}
+        ) : (
+          <EmptyState
+            action={<Button onClick={onGoAnalyze}>去拆解一条</Button>}
+            description="先完成一个采集任务，并在任务详情中手动运行 AI 自动拆解。"
+            icon="analytics"
+            title="还没有可用于制作的拆解"
+          />
+        )}
       </GlassCard>
     </>
   );

@@ -47,6 +47,12 @@ test("内置贴纸清单与 PNG 一一对应，没有多余文件，且尺寸字
     assert.ok(statSync(assetPath).size <= DECORATION_MAX_BYTES, `${item.id} 超出字节上限`);
     assert.ok(item.label.length > 0 && item.tags.length > 0);
   }
+
+  const distDir = join(root, "apps", "web", "dist", DECORATION_PUBLIC_DIR);
+  if (existsSync(distDir)) {
+    const distFiles = readdirSync(distDir).filter((name) => name.endsWith(".png")).sort();
+    assert.deepEqual(distFiles, [...listed].sort(), "Vite dist 必须带上与清单相同的七张 PNG");
+  }
 });
 
 test("Web 预览与 Kotlin 使用同一份相对路径和锚点 inset", () => {
@@ -57,6 +63,8 @@ test("Web 预览与 Kotlin 使用同一份相对路径和锚点 inset", () => {
 
   assert.match(preview, /decorationPublicUrl\(item\.assetRef\)/);
   assert.doesNotMatch(preview, /@hongtai\/ai/);
+  const previewCss = readFileSync(join(root, "apps/web/src/styles/components/decoration-preview.css"), "utf8");
+  assert.doesNotMatch(previewCss, /max-width:\s*50%/u, "预览尺寸由 decorationPreviewBox 决定，不能再盖一层 50% 让烧录比预览大");
   assert.match(kotlinAssets, /ASSET_PREFIX = "public"/);
   assert.match(kotlinAssets, /RELATIVE_DIR = "decorations"/);
   assert.match(kotlinAssets, /\$ASSET_PREFIX\/\$RELATIVE_DIR\/\$id\.png/);
@@ -65,4 +73,12 @@ test("Web 预览与 Kotlin 使用同一份相对路径和锚点 inset", () => {
   assert.match(kotlinGeometry, new RegExp(`DECORATION_TOP_INSET_PX = ${DECORATION_TOP_INSET_PX}f`));
   assert.match(kotlinGeometry, new RegExp(`DECORATION_CAPTION_GAP_PX = ${DECORATION_CAPTION_GAP_PX}f`));
   assert.match(kotlinGeometry, new RegExp(`DECORATION_MAX_WIDTH_SHARE = ${DECORATION_MAX_WIDTH_SHARE}f`));
+});
+
+test("若 Web dist 已生成，随包贴纸必须与公开清单是同一批 PNG", () => {
+  const distDir = join(root, "apps", "web", "dist", DECORATION_PUBLIC_DIR);
+  if (!existsSync(distDir)) return;
+  const expected = [...DECORATION_IDS].map((id) => `${id}.png`).sort();
+  const distFiles = readdirSync(distDir).filter((name) => name.endsWith(".png")).sort();
+  assert.deepEqual(distFiles, expected, "release 副本路径 apps/web/dist/decorations 必须与公开清单同一 7 张 PNG");
 });

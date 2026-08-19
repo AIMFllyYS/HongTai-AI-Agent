@@ -206,6 +206,7 @@ test("video production returns stable safe errors and exports an AAC audio track
   const issueCodes = read("android/app/src/main/java/com/hongtai/aiagent/bridge/NativeIssueCode.kt");
 
   for (const code of [
+    "INVALID_ARGUMENT",
     "MEDIA_SELECTION_CANCELLED",
     "MEDIA_SOURCE_INVALID",
     "TTS_UNAVAILABLE",
@@ -217,6 +218,7 @@ test("video production returns stable safe errors and exports an AAC audio track
     "MEDIA_OUTPUT_INVALID",
     "MEDIA_EXPORT_FAILED",
     "OUTPUT_FINALIZATION_FAILED",
+    "DECORATION_ASSET_MISSING",
   ]) assert.match(issueCodes, new RegExp(code));
   for (const code of [
     "MEDIA_SOURCE_INVALID",
@@ -229,11 +231,14 @@ test("video production returns stable safe errors and exports an AAC audio track
     "MEDIA_OUTPUT_INVALID",
     "MEDIA_EXPORT_FAILED",
     "OUTPUT_FINALIZATION_FAILED",
+    "DECORATION_ASSET_MISSING",
   ]) assert.match(failureKinds, new RegExp(code));
   assert.match(plugin, /ProductionFailureKind\.MEDIA_ENCODER_UNAVAILABLE -> NativeIssueCode\.MEDIA_ENCODER_UNAVAILABLE/);
   assert.match(plugin, /ProductionFailureKind\.MEDIA_DECODE_FAILED -> NativeIssueCode\.MEDIA_DECODE_FAILED/);
   assert.match(plugin, /ProductionFailureKind\.MEDIA_RENDER_PIPELINE_FAILED -> NativeIssueCode\.MEDIA_RENDER_PIPELINE_FAILED/);
   assert.match(plugin, /ProductionFailureKind\.MEDIA_OUTPUT_INVALID -> NativeIssueCode\.MEDIA_OUTPUT_INVALID/);
+  assert.match(plugin, /ProductionFailureKind\.OUTPUT_FINALIZATION_FAILED -> NativeIssueCode\.OUTPUT_FINALIZATION_FAILED/);
+  assert.match(plugin, /ProductionFailureKind\.DECORATION_ASSET_MISSING -> NativeIssueCode\.DECORATION_ASSET_MISSING/);
   assert.match(plugin, /call\.reject\("Production asset selection was cancelled\."\s*,\s*NativeIssueCode\.MEDIA_SELECTION_CANCELLED\)/);
   assert.doesNotMatch(plugin, /call\.reject\([^\n]*,\s*error\)/);
   assert.match(renderer, /setAudioMimeType\(MimeTypes\.AUDIO_AAC\)/);

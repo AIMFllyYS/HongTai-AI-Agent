@@ -1003,6 +1003,7 @@ test("制作服务将导出失败拆成可区分的稳定错误且不再提示�
     ["ERR_MEDIA_RENDER_PIPELINE_FAILED", "MEDIA_RENDER_PIPELINE_FAILED", "retry"],
     ["ERR_MEDIA_OUTPUT_INVALID", "MEDIA_OUTPUT_INVALID", "retry"],
     ["ERR_MEDIA_EXPORT_FAILED", "MEDIA_EXPORT_FAILED", "retry"],
+    ["ERR_DECORATION_ASSET_MISSING", "PRODUCTION_DECORATION_MISSING", "none"],
   ] as const;
 
   for (const [nativeCode, code, action] of cases) {

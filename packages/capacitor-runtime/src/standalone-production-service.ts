@@ -259,12 +259,13 @@ function productionTaskError(error: unknown, fallbackMessage: string): TaskError
   const mapped: Readonly<Record<string, Readonly<{
     code: TaskIssue["code"];
     message: string;
-    action: "retry" | "select_media" | "free_storage" | "edit_input";
+    action: "retry" | "select_media" | "free_storage" | "edit_input" | "none";
     retryable: boolean;
   }>>> = {
     // The renderer rejected the plan itself. Retrying the same plan can only fail again, so this
     // must not be dressed up as a transient render failure.
     ERR_INVALID_ARGUMENT: { code: "PRODUCTION_PLAN_EDIT_INVALID", message: "当前制作计划无法被本地渲染器执行，请调整镜头时长或文案后重新生成计划。", action: "edit_input", retryable: false },
+    ERR_DECORATION_ASSET_MISSING: { code: "PRODUCTION_DECORATION_MISSING", message: "这台安装缺少成片要用的贴纸文件，改镜头或文案解决不了。请重新安装完整应用后再导出。", action: "none", retryable: false },
     ERR_MEDIA_SELECTION_CANCELLED: { code: "MEDIA_SELECTION_CANCELLED", message: "已取消选择制作素材。", action: "select_media", retryable: false },
     ERR_MEDIA_SOURCE_MISSING: { code: "MEDIA_SOURCE_NOT_FOUND", message: "系统没有返回可读取的制作素材。", action: "select_media", retryable: false },
     ERR_MEDIA_READ_FAILED: { code: "MEDIA_READ_FAILED", message: "所选制作素材无法读取，请重新选择。", action: "select_media", retryable: false },

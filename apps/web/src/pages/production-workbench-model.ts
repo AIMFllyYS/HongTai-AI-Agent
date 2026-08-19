@@ -13,7 +13,7 @@ export type ProductionWorkbenchStage =
   | "failed";
 
 export const PRODUCTION_PRIMARY_LABELS = {
-  "no-project": "一键制作视频",
+  "no-project": "创建制作项目",
   "no-assets": "添加素材",
   "no-plan": "AI 生成制作计划",
   "no-output": "开始本地合成",

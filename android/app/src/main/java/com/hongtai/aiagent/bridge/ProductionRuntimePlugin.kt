@@ -417,6 +417,7 @@ class ProductionRuntimePlugin : Plugin() {
     ProductionFailureKind.MEDIA_OUTPUT_INVALID -> NativeIssueCode.MEDIA_OUTPUT_INVALID
     ProductionFailureKind.MEDIA_EXPORT_FAILED -> NativeIssueCode.MEDIA_EXPORT_FAILED
     ProductionFailureKind.OUTPUT_FINALIZATION_FAILED -> NativeIssueCode.OUTPUT_FINALIZATION_FAILED
+    ProductionFailureKind.DECORATION_ASSET_MISSING -> NativeIssueCode.DECORATION_ASSET_MISSING
   }
 
   private companion object {

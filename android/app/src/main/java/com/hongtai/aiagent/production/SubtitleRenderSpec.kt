@@ -225,7 +225,12 @@ internal object SubtitleRenderSpecParser {
       if (kind == "sticker") {
         require(assetRef != null && text == null) { "A sticker decoration needs a catalogue reference and no text." }
         require(BUNDLED_ASSET_REF.matches(assetRef)) { "A sticker reference is not a catalogue id." }
-        require(stickerExists(assetRef)) { "A sticker PNG is missing from the packaged catalogue." }
+        if (!stickerExists(assetRef)) {
+          throw ProductionException(
+            ProductionFailureKind.DECORATION_ASSET_MISSING,
+            "A sticker PNG is missing from the packaged catalogue.",
+          )
+        }
       } else {
         require(text != null && assetRef == null) { "A floating text decoration needs text and no catalogue reference." }
         require(text.length <= 12) { "A floating text decoration is too long." }

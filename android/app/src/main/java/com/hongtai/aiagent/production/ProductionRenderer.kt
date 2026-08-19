@@ -264,7 +264,14 @@ internal class ProductionRenderer(private val context: Context, private val stor
 
   private fun decodeStickers(plan: NativeProductionPlan): Map<String, Bitmap> {
     val ids = plan.decorations.mapNotNull { spec -> spec.assetRef.takeIf { spec.kind == "sticker" } }.toSet()
-    return ids.associateWith { DecorationAssets.decode(context.assets, it) }
+    val decoded = linkedMapOf<String, Bitmap>()
+    try {
+      for (id in ids) decoded[id] = DecorationAssets.decode(context.assets, id)
+    } catch (error: Exception) {
+      decoded.values.forEach { bitmap -> if (!bitmap.isRecycled) bitmap.recycle() }
+      throw error
+    }
+    return decoded
   }
 
   private fun headlineOverlays(value: ProductionTextOverlay): List<TextOverlay> {

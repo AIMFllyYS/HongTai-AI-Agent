@@ -59,8 +59,13 @@
   gap: var(--space-3);
   min-height: 44px;
   padding: var(--space-4);
-  overflow: hidden;
+  overflow: visible;
   text-align: left;
+}
+
+.production-entry-card:focus-visible {
+  outline: 3px solid rgba(38, 166, 154, 0.4);
+  outline-offset: 3px;
 }
 
 .production-entry-card__head {

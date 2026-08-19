@@ -218,6 +218,7 @@ const issueTitles: Partial<Readonly<Record<TaskIssue["code"], string>>> = {
   TASK_INTERRUPTED: "上次处理已中断",
   PRODUCTION_PLAN_EDIT_INVALID: "这次微调不能这样保存",
   PRODUCTION_PLAN_VERSION_STALE: "制作计划已经变了",
+  PRODUCTION_DECORATION_MISSING: "这台安装缺少成片贴纸",
   STORAGE_WRITE_FAILED: "内容保存失败",
   STORAGE_READ_FAILED: "本机内容读不出来",
   APP_RUNTIME_UNAVAILABLE: "应用暂时无法完成操作",

@@ -29,8 +29,15 @@ internal object DecorationAssets {
     val bitmap = try {
       assets.open(assetManagerPath(id)).use { stream -> BitmapFactory.decodeStream(stream) }
     } catch (error: IOException) {
-      throw IllegalArgumentException("A sticker PNG is missing from the packaged catalogue.", error)
+      throw ProductionException(
+        ProductionFailureKind.DECORATION_ASSET_MISSING,
+        "A sticker PNG is missing from the packaged catalogue.",
+        error,
+      )
     }
-    return requireNotNull(bitmap) { "A sticker PNG could not be decoded." }
+    return bitmap ?: throw ProductionException(
+      ProductionFailureKind.DECORATION_ASSET_MISSING,
+      "A sticker PNG could not be decoded.",
+    )
   }
 }

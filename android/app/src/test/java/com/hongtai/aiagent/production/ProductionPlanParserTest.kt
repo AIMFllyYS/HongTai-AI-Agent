@@ -134,10 +134,11 @@ class ProductionPlanParserTest {
       "{\"kind\":\"sticker\",\"assetRef\":\"arrow_right\",\"text\":null",
     )
 
-    val error = assertThrows(IllegalArgumentException::class.java) {
+    val error = assertThrows(ProductionException::class.java) {
       ProductionPlanParser.parse(sticker, assets, ProductionRenderMode.MONTAGE, classicLineTemplate())
     }
     assertEquals("A sticker PNG is missing from the packaged catalogue.", error.message)
+    assertEquals(ProductionFailureKind.DECORATION_ASSET_MISSING, error.kind)
   }
 
   @Test

@@ -31,19 +31,19 @@ test("数字人口播只作为 Agent 流程里的二次选项，不改服务契�
   assert.match(page, /onMode\(avatarOn \? "montage" : "avatar"\)/u);
   assert.match(page, /mode === "avatar" \? \{ avatarScript \}/u, "提交给 production.create 的仍是既有 mode + avatarScript");
   assert.doesNotMatch(page, /production-mode-grid/u, "不再用两列顶层单选把数字人和素材剪辑并列");
-  assert.match(entry, /也可以改用数字人口播/u, "入口卡只提示下一步有这个选项，本身不是第三张卡");
+  assert.match(entry, /数字人口播是下一步里的开关/u, "入口卡只提示下一步有这个选项，本身不是第三张卡");
 });
 
 test("Agent 文案不声称看懂或理解素材，并要求逐镜核对", () => {
-  assert.match(entry, /旁白会参考画面里看得见的内容/u);
+  const caveat = entry.slice(entry.indexOf("production-entry-card__caveat"));
+  const fallbackAt = caveat.indexOf("看不到就按拆解结构写");
+  const referenceAt = caveat.indexOf("参考画面里看得见的内容");
+  assert.ok(fallbackAt >= 0 && referenceAt >= 0 && fallbackAt < referenceAt, "盲配回退必须写在「会参考画面」前面");
+  assert.match(entry, /不会核对文字是否对得上每个镜头/u);
   assert.match(entry, /逐镜核对/u);
-  assert.match(page, /逐镜核对/u);
   assert.match(page, /不会核对文字是否对得上每个镜头/u);
-
-  // 看不看得到画面取决于运行环境：浏览器和没有取帧插件的旧 APK 一律盲配。
-  // 承诺「会参考画面」在那些环境里是空话，所以两张卡都要把回退说在前面。
-  assert.match(entry, /看不到就按拆解结构写/u);
-  assert.match(page, /看不到就按拆解结构写/u);
+  assert.match(page, /这台安装不一定能看画面/u);
+  assert.doesNotMatch(entry, /并在本地合成/u);
   assert.doesNotMatch(surface, /看懂/u);
   assert.doesNotMatch(surface, /理解你的素材/u);
   assert.doesNotMatch(surface, /智能识别并匹配/u);
@@ -69,12 +69,33 @@ test("数字人口播不承诺素材剪辑才有的能力", () => {
   assert.match(page, /切分按字数估算，不是对着录音识别的/u);
   assert.doesNotMatch(page, /数字人口播[\s\S]{0,80}TTS/u);
   assert.doesNotMatch(page, /数字人口播[\s\S]{0,80}至少 3/u);
+  assert.doesNotMatch(entry, /数字人口播[\s\S]{0,80}至少 3/u);
+  assert.match(entry, /不需要 \{MIN_MONTAGE_VISUAL_ASSETS\} 份素材/u);
 });
 
 test("入口卡与二次选项的触达高度不小于 44px", () => {
   assert.match(css, /\.production-entry-card \{[^}]*min-height: 44px/u);
+  assert.match(css, /\.production-entry-card:focus-visible/u);
   assert.match(css, /\.production-entry-switch \{[^}]*min-height: 44px/u);
   assert.match(css, /\.production-avatar-option \{[^}]*min-height: 44px/u);
   assert.match(css, /\.production-entry-grid \{[^}]*grid/u);
   assert.doesNotMatch(css, /\.production-entry-grid \{[^}]*grid-template-columns:\s*repeat\(2/u, "390px 下两张长文案卡必须上下排，不能挤成两列");
+});
+
+test("离开 Agent 会清掉失败，重试不会在选择屏上重建项目", () => {
+  const enter = page.slice(page.indexOf("const enterComposer ="), page.indexOf("const startNewProduction"));
+  assert.match(enter, /setIssue\(undefined\)/u);
+  assert.match(enter, /if \(flow !== "agent"\) setMode\("montage"\)/u);
+  assert.match(page, /if \(composerFlow === "pick"\) return/u);
+  assert.match(page, /startNewProduction/u);
+  assert.match(page, /换一种做法/u);
+  assert.match(page, /issue && !\(showComposer && issue\.action === "none"\)/u);
+  assert.match(page, /issue && showComposer && issue\.action === "none"/u);
+});
+
+test("用它做视频会跳过两张卡，直接进入 Agent 表单", () => {
+  const load = page.slice(page.indexOf("const load = useCallback"), page.indexOf("}, [runtime]);"));
+  assert.match(load, /setComposingNew\(true\)/u);
+  assert.ok(load.indexOf("setComposingNew(true)") < load.indexOf("setComposerFlow(\"agent\")"));
+  assert.match(load, /setComposerFlow\("agent"\)/u);
 });

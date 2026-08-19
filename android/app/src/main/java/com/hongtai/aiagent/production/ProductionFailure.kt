@@ -12,6 +12,7 @@ internal enum class ProductionFailureKind {
   MEDIA_OUTPUT_INVALID,
   MEDIA_EXPORT_FAILED,
   OUTPUT_FINALIZATION_FAILED,
+  DECORATION_ASSET_MISSING,
 }
 
 internal class ProductionException(

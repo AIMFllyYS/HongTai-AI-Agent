@@ -32,7 +32,7 @@ test("制作进度文案只按稳定 stage 白名单映射，未知 stage 不猜
 test("制作页主按钮只使用 Issue 七行阶段，文案不得自创", () => {
   assert.deepEqual(PRODUCTION_WORKBENCH_TABS, ["预览", "文案", "素材"]);
   assert.deepEqual(PRODUCTION_PRIMARY_LABELS, {
-    "no-project": "一键制作视频",
+    "no-project": "创建制作项目",
     "no-assets": "添加素材",
     "no-plan": "AI 生成制作计划",
     "no-output": "开始本地合成",
@@ -51,7 +51,7 @@ test("制作页主按钮只使用 Issue 七行阶段，文案不得自创", () =
   assert.equal(resolveProductionWorkbenchStage({ project: { status: "failed", assets: [{}], plan: {}, output: {} } }), "failed");
   assert.equal(resolveProductionWorkbenchStage({ project: { status: "planning", assets: [{}] } }), "no-plan");
 
-  assert.equal(resolveProductionPrimaryAction({}).label, "一键制作视频");
+  assert.equal(resolveProductionPrimaryAction({}).label, "创建制作项目");
   assert.equal(resolveProductionPrimaryAction({ project: { status: "draft", assets: [] } }).label, "添加素材");
   assert.equal(resolveProductionPrimaryAction({ project: { status: "draft", assets: [] } }).disabled, false);
   assert.equal(resolveProductionPrimaryAction({ project: { status: "draft", assets: [] }, importBlocked: true }).disabled, true);
@@ -111,7 +111,7 @@ test("制作页用 contextualAction 单主按钮、三 Tab 与 9:16 预览，完
   assert.match(page, /contextualAction=\{/);
   assert.match(page, /resolveProductionPrimaryAction/);
   assert.match(page, /setComposingNew\(true\)/);
-  assert.match(page, /一键制作视频|primary\.label/);
+  assert.match(page, /创建制作项目|primary\.label/);
   assert.match(page, /runtime\.production\.create/);
   assert.match(page, /runtime\.production\.importAssets/);
   assert.match(page, /runtime\.production\.generatePlan/);
@@ -200,7 +200,7 @@ test("带 sourceId 进入制作页强制新建并选中该来源，匹配失败�
   assert.match(page, /CONTENT_NOT_FOUND/);
   assert.match(model, /status === "degraded"|status === 'degraded'/);
   const again = page.slice(page.indexOf("primary.stage === \"has-output\""), page.indexOf("primary.stage === \"failed\""));
-  assert.match(again, /setComposingNew\(true\)/);
+  assert.match(again, /startNewProduction\(\)/);
   assert.doesNotMatch(again, /deleteProject|production\.delete/);
 });
 
