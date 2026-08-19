@@ -182,6 +182,16 @@ test("制作页用 contextualAction 单主按钮、三 Tab 与 9:16 预览，完
   assert.doesNotMatch(surface, /时间轴|逐帧|转场编辑/);
 });
 
+test("制作页回到前台会消费素材恢复，且成功或失败才清 busy", () => {
+  const page = read("pages/CreatePage.tsx");
+  assert.match(page, /useAppResume\(\(\) => \{\s*void load\(\);\s*void applyAssetRecovery\(\);/u);
+  assert.match(page, /runtime\.production\.consumeAssetRecovery\(\)/u);
+  const apply = page.slice(page.indexOf("const applyAssetRecovery"), page.indexOf("useAppResume(() =>"));
+  assert.match(apply, /recovered\.status === "succeeded"/u);
+  assert.match(apply, /recovered\.status === "failed"/u);
+  assert.doesNotMatch(apply, /finally \{\s*setBusy\(false\)/u);
+});
+
 test("带 sourceId 进入制作页强制新建并选中该来源，匹配失败不换一条", async () => {
   const { resolveCreateWorkbenchEntry } = await import("./task-page-model") as {
     resolveCreateWorkbenchEntry?: (input: {

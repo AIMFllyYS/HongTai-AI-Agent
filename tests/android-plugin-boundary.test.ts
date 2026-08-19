@@ -119,6 +119,18 @@ test("a resumed activity terminates a photo operation whose external result was 
   );
 });
 
+test("production picker resume must not drop a live Capacitor call", () => {
+  const plugin = read("android/app/src/main/java/com/hongtai/aiagent/bridge/ProductionRuntimePlugin.kt");
+  const policy = read("android/app/src/main/java/com/hongtai/aiagent/production/AssetPickerResumePolicy.kt");
+  const resumeStart = plugin.indexOf("override fun handleOnResume");
+  const resume = plugin.slice(resumeStart, plugin.indexOf("@PluginMethod", resumeStart));
+
+  assert.match(policy, /fun shouldFailAwaitingPicker\(originalCallLive: Boolean\): Boolean = !originalCallLive/);
+  assert.match(resume, /AssetPickerResumePolicy\.shouldFailAwaitingPicker\(isLiveOriginalCall\(assetOriginalCall\)\)/);
+  assert.match(resume, /finishAssetFailure\(assetOriginalCall, awaiting\.operationId, NativeIssueCode\.ASSET_RECOVERY_FAILED\)/);
+  assert.doesNotMatch(resume, /finishAssetFailure\(null,/);
+});
+
 test("picker recovery retains the granted read URI permission until the private copy reaches a terminal", () => {
   const fileMedia = read("android/app/src/main/java/com/hongtai/aiagent/bridge/FileMediaPlugin.kt");
   const pickerStart = fileMedia.indexOf("private fun onPhotoPicked");

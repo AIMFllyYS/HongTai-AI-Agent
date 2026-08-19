@@ -17,6 +17,7 @@ import {
   wizardReadiness,
 } from "../features/replica/replica-blueprint-view";
 import { pathForRoute, productionEditPath, taskDetailPath, type Navigate } from "../router";
+import { useAppResume } from "../hooks/useAppResume";
 
 export interface ReplicaWizardPageProps {
   readonly taskId: string;
@@ -73,15 +74,26 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
 
   useEffect(() => { void load(); }, [load]);
 
+  const applyAssetRecovery = useCallback(async () => {
+    const recovered = await runtime.production.consumeAssetRecovery().catch(() => ({ status: "none" as const }));
+    if (recovered.status === "succeeded") {
+      setProject(recovered.project);
+      setPending(undefined);
+    } else if (recovered.status === "failed") {
+      setIssue(recovered.issue);
+      setPending(undefined);
+    }
+  }, [runtime]);
+
+  useAppResume(() => {
+    void applyAssetRecovery();
+  });
+
   // An external picker can rebuild the WebView, so the returned file is claimed on arrival. The item
   // it belongs to was written down before the picker opened, so it survives the rebuild.
   useEffect(() => {
-    void (async () => {
-      const recovered = await runtime.production.consumeAssetRecovery().catch(() => ({ status: "none" as const }));
-      if (recovered.status === "succeeded") setProject(recovered.project);
-      else if (recovered.status === "failed") setIssue(recovered.issue);
-    })();
-  }, [runtime]);
+    void applyAssetRecovery();
+  }, [applyAssetRecovery]);
 
   const run = async (kind: Exclude<Pending, undefined>, operation: () => Promise<void>, fallback: string) => {
     if (pending) return;

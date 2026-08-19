@@ -24,6 +24,12 @@ test("向导有自己的路由，任务标识编码后进入路径，且不吃�
   assert.equal(matchRoute(taskDetailPath("task-1")).key, "task-detail");
 });
 
+test("向导回到前台会消费素材恢复，失败时清掉 pending", () => {
+  assert.match(page, /useAppResume\(\(\) => \{\s*void applyAssetRecovery\(\);/u);
+  assert.doesNotMatch(page, /useAppResume\(\(\) => \{\s*void load\(\);/u);
+  assert.match(page, /recovered\.status === "failed"[\s\S]*setPending\(undefined\)/u);
+});
+
 test("向导逐项绑定，不打开批量选择器", () => {
   assert.match(page, /importAssets\(project\.projectId, \{ requirementOrder: order \}\)/u, "每次导入都要说明这是哪一项的素材");
   assert.doesNotMatch(page, /importAssets\((?!project\.projectId, \{ requirementOrder)/u, "向导里不能出现不带清单项的导入");

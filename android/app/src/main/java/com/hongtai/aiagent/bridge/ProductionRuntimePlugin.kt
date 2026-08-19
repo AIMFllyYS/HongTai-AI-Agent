@@ -19,6 +19,7 @@ import com.hongtai.aiagent.production.AssetOperationImporting
 import com.hongtai.aiagent.production.AssetOperationStateStore
 import com.hongtai.aiagent.production.AssetOperationSucceeded
 import com.hongtai.aiagent.production.AssetOperationTerminal
+import com.hongtai.aiagent.production.AssetPickerResumePolicy
 import com.hongtai.aiagent.production.ImportedProductionAsset
 import com.hongtai.aiagent.production.CloudNarrationConfiguration
 import com.hongtai.aiagent.production.CloudNarrationSynthesizer
@@ -60,7 +61,8 @@ class ProductionRuntimePlugin : Plugin() {
   override fun handleOnResume() {
     super.handleOnResume()
     val awaiting = assetOperations.current() as? AssetOperationAwaitingResult ?: return
-    finishAssetFailure(null, awaiting.operationId, NativeIssueCode.ASSET_RECOVERY_FAILED)
+    if (!AssetPickerResumePolicy.shouldFailAwaitingPicker(isLiveOriginalCall(assetOriginalCall))) return
+    finishAssetFailure(assetOriginalCall, awaiting.operationId, NativeIssueCode.ASSET_RECOVERY_FAILED)
   }
 
   @PluginMethod

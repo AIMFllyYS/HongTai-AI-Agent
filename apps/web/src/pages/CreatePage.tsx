@@ -139,34 +139,36 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
     }
   }, [runtime]);
 
-  useAppResume(load);
+  const applyAssetRecovery = useCallback(async () => {
+    try {
+      const recovered = await runtime.production.consumeAssetRecovery();
+      if (recovered.status === "succeeded") {
+        setComposingNew(false);
+        setProject(recovered.project);
+        setProjects(await runtime.production.list());
+        setBusy(false);
+      }
+      if (recovered.status === "failed") {
+        setIssue(recovered.issue);
+        setBusy(false);
+      }
+    } catch (error) {
+      setIssue(issueFromAppError(error, { code: "TASK_INTERRUPTED", message: "素材选择恢复失败，请重新选择", action: "select_media" }));
+      setBusy(false);
+    }
+  }, [runtime]);
+
+  useAppResume(() => {
+    void load();
+    void applyAssetRecovery();
+  });
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
     if (loading) return undefined;
-    let active = true;
-    const consumeRecovery = async () => {
-      try {
-        const recovered = await runtime.production.consumeAssetRecovery();
-        if (!active) return;
-        if (recovered.status === "succeeded") {
-          setBusy(true);
-          setComposingNew(false);
-          setProject(recovered.project);
-          setProjects(await runtime.production.list());
-        }
-        if (recovered.status === "failed") setIssue(recovered.issue);
-      } catch (error) {
-        if (active) {
-          setIssue(issueFromAppError(error, { code: "TASK_INTERRUPTED", message: "素材选择恢复失败，请重新选择", action: "select_media" }));
-        }
-      } finally {
-        if (active) setBusy(false);
-      }
-    };
-    void consumeRecovery();
-    return () => { active = false; };
-  }, [loading, runtime]);
+    void applyAssetRecovery();
+    return undefined;
+  }, [applyAssetRecovery, loading]);
   useEffect(() => {
     const projectId = project?.projectId;
     setProgress(0);
