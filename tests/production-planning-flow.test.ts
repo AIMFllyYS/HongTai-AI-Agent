@@ -156,6 +156,65 @@ test("制作规划把模型的 v2 结果升级为可执行的 v3 逐句时间轴
   }
 });
 
+test("没人看过素材时计划如实记成盲配，界面才能说清这条视频是怎么来的", async () => {
+  const provider = new SequenceProvider([JSON.stringify(plan())]);
+
+  const result = await new ProductionPlanningFlow({ provider }).run(input);
+
+  assert.deepEqual(result.grounding, { visual: "blind", describedAssetIds: [] });
+  assert.match(provider.calls[0]?.messages[0]?.content as string, /没有任何素材的画面被识别过/u);
+});
+
+test("素材被识别过时记下是哪几个，并告诉模型哪些素材仍然没看过", async () => {
+  const provider = new SequenceProvider([JSON.stringify(plan())]);
+  const described: ProductionPlanInput = {
+    ...input,
+    assets: input.assets.map((asset) => (asset.id === "asset-video"
+      ? asset
+      : { ...asset, insight: { description: "店员在前台后面对镜头说话", subject: "operator", tags: ["前台"] } })),
+  };
+
+  const result = await new ProductionPlanningFlow({ provider }).run(described);
+
+  assert.deepEqual(result.grounding, { visual: "asset_insight", describedAssetIds: ["asset-image", "asset-detail"] });
+  const prompt = provider.calls[0]?.messages[0]?.content as string;
+  assert.match(prompt, /只能讲insight里确实提到的东西/u);
+  assert.match(prompt, /没有画面识别结果.*asset-video/su, "混合列表里必须点名哪些素材不能描述画面");
+});
+
+test("素材理解不得改变清单绑定的镜头顺序", async () => {
+  // Bound assets stay in list order: insight informs what the narration may say, never where the
+  // shot goes, or the checklist the user filmed against would become a suggestion.
+  const insight = (description: string) => ({ description, subject: "operator", tags: ["门店"] });
+  const bound: ProductionPlanInput = {
+    ...input,
+    assets: [
+      { ...input.assets[0]!, insight: insight("服务细节特写"), requirement: { order: 3, visualDescription: "服务细节", contentHint: "细节特写", suggestedDurationSeconds: 6 } },
+      { ...input.assets[1]!, insight: insight("门店门口全景"), requirement: { order: 2, visualDescription: "门口全景", contentHint: "门口", suggestedDurationSeconds: 6 } },
+      { ...input.assets[2]!, insight: insight("店员出镜开场"), requirement: { order: 1, visualDescription: "店员开场", contentHint: "出镜开场", suggestedDurationSeconds: 8 } },
+    ],
+  };
+  const listOrder = ["asset-video", "asset-detail", "asset-image"];
+  const ordered = plan();
+  ordered.shots = listOrder.map((assetId, index) => ({
+    order: index + 1,
+    assetId,
+    durationSeconds: index === 0 ? 8 : 6,
+    narration: `第${index + 1}段真实记录的门店画面说明文字。`,
+    caption: `第${index + 1}段`,
+    fit: "cover",
+  }));
+
+  const result = await new ProductionPlanningFlow({ provider: new SequenceProvider([JSON.stringify(ordered)]) }).run(bound);
+  assert.deepEqual(result.shots.map((shot) => shot.assetId), listOrder);
+  assert.equal(result.grounding?.visual, "asset_insight");
+
+  // The same insights must not rescue a plan that follows the pictures instead of the list.
+  const reordered = { ...ordered, shots: [...ordered.shots].reverse().map((shot, index) => ({ ...shot, order: index + 1 })) };
+  const wrong = new SequenceProvider([JSON.stringify(reordered), JSON.stringify(reordered)]);
+  await assert.rejects(() => new ProductionPlanningFlow({ provider: wrong }).run(bound), /修复/u);
+});
+
 test("制作规划拒绝切不出字幕的旁白，而不是产出打不开的项目", async () => {
   const blank = plan();
   // A whitespace-only narration satisfies the v2 schema but yields no cues. Persisting such a

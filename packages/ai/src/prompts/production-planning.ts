@@ -32,16 +32,33 @@ function requirementRules(input: ProductionPlanInput): string {
   return `用户是按素材需求清单逐项拍摄的，镜头必须严格按下表使用素材：共${bound.length}个镜头，第shotOrder个镜头的assetId必须逐字等于表中对应值，不得增删镜头、不得换顺序、不得让一个素材出现在两个镜头。建议秒数只是清单参考，实际镜头时长仍必须之和精确等于目标时长；用户跳过的清单项已不在表中，其时长由剩下的镜头吸收。每个镜头的口播和字幕要贴合该镜头的画面意图。\n镜头素材对应表：${JSON.stringify(list)}`;
 }
 
+/**
+ * Assets carrying an `insight` were actually looked at, so their narration may name what is in the
+ * frame. Assets without one were not, and the planner has to be told that plainly: given a mixed
+ * list it will otherwise describe the undescribed pictures with the same confidence.
+ */
+function insightRules(input: ProductionPlanInput): string {
+  const described = input.assets.filter((asset) => asset.insight !== undefined);
+  if (described.length === 0) {
+    return "没有任何素材的画面被识别过。旁白和字幕只能讲用户的经营需求与拆解结构，不得描述任何具体画面内容，不得声称画面里有某个人、某件物品或某个场景。";
+  }
+  const blind = input.assets.filter((asset) => asset.role === "visual" && asset.insight === undefined);
+  const blindRule = blind.length === 0
+    ? ""
+    : `\n以下素材没有画面识别结果，为它们写的旁白不得描述具体画面内容：${JSON.stringify(blind.map((asset) => asset.id))}`;
+  return `部分素材带有insight字段，那是系统对该素材真实画面的识别结果。为这些镜头写旁白和字幕时，只能讲insight里确实提到的东西，不得补充insight没有提到的人物、物品、品牌、地点或数字。insight与拆解内容冲突时以insight为准，因为画面是用户真正拍到的。${blindRule}`;
+}
+
 export function productionPlanningPrompt(input: ProductionPlanInput): string {
   const modeRules = input.mode === "avatar"
     ? "当前是数字人口播模式：只使用role为avatar的单个视频；保留其原始口播声音，不生成TTS或背景音乐。目标时长不得超过该视频时长；必须按用户提供的口播稿顺序切分镜头，caption与narration均不得偏离这份口播稿。"
     : "当前是素材剪辑模式：使用图片/视频作为视觉素材，为每个镜头写可由zh-CN系统TTS朗读的旁白；字幕应与旁白一致或忠实概括。";
-  return `${RULES}\n${modeRules}\n${requirementRules(input)}\n${CONTRACT}\n${REFERENCE_PREFIX}\n真实来源和需求：${JSON.stringify({ analysisTaskId: input.analysisTaskId, brief: input.brief, targetDurationSeconds: input.targetDurationSeconds, mode: input.mode, headlineText: input.headlineText ?? null, textPreset: input.textPreset, ...(input.avatarScript ? { avatarScript: input.avatarScript } : {}) })}\n爆款原文（参考，不可作为口播）：${input.originalSourceText}\n正式爆款拆解（参考，不可照抄）：${JSON.stringify(input.analysis)}\n可用素材：${JSON.stringify(input.assets)}`;
+  return `${RULES}\n${modeRules}\n${requirementRules(input)}\n${insightRules(input)}\n${CONTRACT}\n${REFERENCE_PREFIX}\n真实来源和需求：${JSON.stringify({ analysisTaskId: input.analysisTaskId, brief: input.brief, targetDurationSeconds: input.targetDurationSeconds, mode: input.mode, headlineText: input.headlineText ?? null, textPreset: input.textPreset, ...(input.avatarScript ? { avatarScript: input.avatarScript } : {}) })}\n爆款原文（参考，不可作为口播）：${input.originalSourceText}\n正式爆款拆解（参考，不可照抄）：${JSON.stringify(input.analysis)}\n可用素材：${JSON.stringify(input.assets)}`;
 }
 
 export function productionPlanningRepairPrompt(raw: string, input: ProductionPlanInput): string {
   const modeRules = input.mode === "avatar"
     ? `数字人口播模式：只能引用role为avatar的单个视频，保留原声，backgroundMusicAssetId必须为null且backgroundMusicVolume必须为0。口播稿：${input.avatarScript ?? ""}`
     : "素材剪辑模式：每条narration都会由zh-CN系统TTS朗读。";
-  return `${RULES}\n${modeRules}\n${requirementRules(input)}\n${CONTRACT}\n${REFERENCE_PREFIX}\n下面结果不符合Schema、原创性或执行约束。只修复计划，不新增素材。\n真实任务ID：${input.analysisTaskId}\n目标时长：${input.targetDurationSeconds}\n主文字：${input.headlineText ?? "由模型生成"}\n文字预设：${input.textPreset}\n爆款原文（参考，不可作为口播）：${input.originalSourceText}\n正式爆款拆解（参考，不可照抄）：${JSON.stringify(input.analysis)}\n合法素材：${JSON.stringify(input.assets)}\n原始响应：${raw.slice(0, 32_000)}`;
+  return `${RULES}\n${modeRules}\n${requirementRules(input)}\n${insightRules(input)}\n${CONTRACT}\n${REFERENCE_PREFIX}\n下面结果不符合Schema、原创性或执行约束。只修复计划，不新增素材。\n真实任务ID：${input.analysisTaskId}\n目标时长：${input.targetDurationSeconds}\n主文字：${input.headlineText ?? "由模型生成"}\n文字预设：${input.textPreset}\n爆款原文（参考，不可作为口播）：${input.originalSourceText}\n正式爆款拆解（参考，不可照抄）：${JSON.stringify(input.analysis)}\n合法素材：${JSON.stringify(input.assets)}\n原始响应：${raw.slice(0, 32_000)}`;
 }

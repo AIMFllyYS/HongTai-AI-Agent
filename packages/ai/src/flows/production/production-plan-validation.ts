@@ -124,6 +124,30 @@ function validateDecorations(plan: ProductionPlanResultV3, constraints: Producti
 }
 
 /**
+ * Keeps the record of "did the planner see the material" internally consistent.
+ *
+ * The field is derived rather than model-authored, so this guards a coding mistake instead of a
+ * lying model — but it is the field the export screen uses to tell the user their video was matched
+ * blind, and a wrong value there is worse than no field at all.
+ */
+function validateGrounding(plan: ProductionPlanResultV3, constraints: ProductionPlanConstraints): void {
+  const grounding = plan.grounding;
+  if (!grounding) return;
+  const described = grounding.describedAssetIds;
+  if (grounding.visual === "asset_insight") {
+    if (described.length === 0) throw invalidPlan("声明已识别画面时必须列出被识别的素材");
+  } else if (described.length > 0) {
+    throw invalidPlan("未识别画面时不能列出被识别的素材");
+  }
+  if (new Set(described).size !== described.length) throw invalidPlan("被识别的素材不能重复");
+  const known = new Set(constraints.assets.map((asset) => asset.id));
+  if (described.some((assetId) => !known.has(assetId))) throw invalidPlan("被识别的素材必须是本项目已导入的素材");
+  if (constraints.mode === "avatar" && grounding.visual !== "not_applicable") {
+    throw invalidPlan("数字人口播模式的字幕来自用户口播稿，不应声明画面识别状态");
+  }
+}
+
+/**
  * Keeps the finished video in the order the user filmed for.
  *
  * When assets arrive from a replica blueprint, each one was shot for a numbered item on a list the
@@ -180,6 +204,7 @@ export function validateProductionPlan(plan: ProductionPlanResult, constraints: 
     validateSubtitleTiming(plan, constraints);
     validateCues(plan);
     validateDecorations(plan, constraints);
+    validateGrounding(plan, constraints);
   }
 
   validateRequirementOrder(plan, constraints);

@@ -14,6 +14,19 @@ export interface ProductionAssetRequirement {
   readonly suggestedDurationSeconds: number;
 }
 
+/**
+ * What the material actually shows, when its frames were described before planning.
+ *
+ * Only the descriptive half of `asset-insight.v1` reaches the planner. Whether the frames were
+ * judged usable is a message for the user about reshooting, not an instruction the planner should
+ * act on by writing around a picture the user chose to keep.
+ */
+export interface ProductionAssetInsight {
+  readonly description: string;
+  readonly subject: string;
+  readonly tags: readonly string[];
+}
+
 export interface ProductionPlanningAsset {
   readonly id: string;
   readonly kind: "image" | "video" | "audio";
@@ -22,6 +35,8 @@ export interface ProductionPlanningAsset {
   readonly displayName: string;
   readonly durationSeconds?: number;
   readonly requirement?: ProductionAssetRequirement;
+  /** Absent means nobody looked at this asset, so narration for it must stay generic. */
+  readonly insight?: ProductionAssetInsight;
 }
 
 export interface ProductionPlanInput {

@@ -115,6 +115,24 @@ test("production-plan.v3 承载字幕模板、逐句时间轴与装饰层，且�
   assert.ok(jsonSchema.properties?.decorations);
 });
 
+test("画面识别记录必须自洽，缺这条记录的老计划仍然打得开", () => {
+  const described = plan();
+  described.grounding = { visual: "asset_insight", describedAssetIds: ["asset-image", "asset-video"] };
+  validateProductionPlan(described, constraints);
+
+  rejects((draft) => { draft.grounding = { visual: "asset_insight", describedAssetIds: [] }; }, /必须列出被识别的素材/u);
+  rejects((draft) => { draft.grounding = { visual: "blind", describedAssetIds: ["asset-image"] }; }, /不能列出被识别的素材/u);
+  rejects((draft) => { draft.grounding = { visual: "asset_insight", describedAssetIds: ["asset-image", "asset-image"] }; }, /不能重复/u);
+  rejects((draft) => { draft.grounding = { visual: "asset_insight", describedAssetIds: ["asset-ghost"] }; }, /必须是本项目已导入的素材/u);
+
+  // Plans written before this field existed had no vision at all; refusing them would take away
+  // projects the user already made.
+  const legacy = plan();
+  delete legacy.grounding;
+  assert.equal(productionPlanResultV3Schema.safeParse(legacy).success, true);
+  validateProductionPlan(legacy, constraints);
+});
+
 test("v3 校验拒绝越界、重叠或与音频不一致的字幕时间轴", () => {
   rejects((draft) => { draft.shots[0]!.cues[1]!.startMs = 1000; }, /重叠或倒序/u);
   rejects((draft) => { draft.shots[0]!.cues[1]!.endMs = 12_000; }, /超出所属镜头时长/u);

@@ -54,6 +54,9 @@ test("数字人口播计划产出可执行的 v3 逐句时间轴，并说明时�
   assert.equal(plan.subtitle.templateId, "keyword_pop");
   assert.deepEqual(plan.subtitle.timing, { precision: "estimated", source: "script_estimate" });
   assert.equal(plan.subtitle.degradedFromTemplateId, null);
+  // The words are the user's own script over their own recording, so there is no material to match
+  // and the plan must not be labelled as blindly matched.
+  assert.deepEqual(plan.grounding, { visual: "not_applicable", describedAssetIds: [] });
 
   for (const shot of plan.shots) {
     const shotEndMs = Math.round(shot.durationSeconds * 1_000);

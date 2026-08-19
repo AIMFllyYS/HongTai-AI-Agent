@@ -115,6 +115,9 @@ export function createAvatarCaptionPlan(input: AvatarCaptionPlanInput): Producti
       })),
     },
     source: AVATAR_TIMING_SOURCE,
+    // The captions are the user's own script over their own recording, so there is no material to
+    // look at and "blind" would misdescribe a mode that never needed to see anything.
+    grounding: { visual: "not_applicable", describedAssetIds: [] },
     ...(input.subtitleTemplateId === undefined ? {} : { requestedTemplateId: input.subtitleTemplateId }),
     invalid: () => invalid("数字人口播稿无法生成可执行的字幕时间轴，请调整口播稿。"),
   });

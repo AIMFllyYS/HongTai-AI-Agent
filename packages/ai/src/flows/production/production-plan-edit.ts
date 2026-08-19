@@ -173,10 +173,14 @@ export function applyProductionPlanEdit(input: ProductionPlanEditInput): Product
   assertShotDurationsFillPlan(edited);
 
   const requestedTemplateId = edit.subtitleTemplateId ?? requestedSubtitleTemplateId(input.plan);
+  // Carried across explicitly rather than left to survive the spread: an edit does not look at the
+  // material again, so the plan keeps saying exactly how much the planner had seen.
+  const grounding = input.plan.schemaVersion === "production-plan.v3" ? input.plan.grounding : undefined;
   const next = withSubtitleTimeline({
     plan: edited,
     source: EDIT_TIMING_SOURCE,
     ...(requestedTemplateId === undefined ? {} : { requestedTemplateId }),
+    ...(grounding === undefined ? {} : { grounding }),
     invalid: (cause) => invalidEdit("这次微调无法生成可播放的字幕，请检查镜头文案和时长。", cause),
   });
   // The shared gate reports every failure as an AI output problem, which would tell the UI to

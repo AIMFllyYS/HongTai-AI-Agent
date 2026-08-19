@@ -26,6 +26,7 @@ import {
 import { generateStructuredModule } from "../../structured-output/generate-structured-module";
 import { StructuredGenerationProgressTracker } from "../../structured-output/structured-generation-progress";
 import { TopLevelJsonFieldStream, type CompletedTopLevelJsonField } from "../../structured-output/top-level-json-field-stream";
+import { visionUnavailable } from "../../vision";
 import { conversationMessagesForFollowUp } from "./diagnosis-context-compression";
 import {
   acceptDiagnosisField,
@@ -102,12 +103,6 @@ function imageMessage(image: DiagnosisImageInput) {
     return { type: "image_url" as const, imageUrl: `data:${image.mimeType};base64,${base64(data)}` };
   }
   return { type: "image_uri" as const, uri: image.uri, mimeType: image.mimeType };
-}
-
-function diagnosisVisualFailure(error: unknown): unknown {
-  return error instanceof TaskError && error.code === "AI_PERMISSION_DENIED"
-    ? new TaskError({ code: "AI_VISION_UNAVAILABLE", message: "当前AI连接没有可用的视觉模型能力", action: "configure_ai", cause: error })
-    : error;
 }
 
 export class DiagnosisFlow {
@@ -242,7 +237,7 @@ export class DiagnosisFlow {
         },
         repairPrompt: (raw) => diagnosisSingleRepairPrompt(raw, session.mode),
         failureMessage: "诊察报告修复后仍不符合紧凑Schema或安全边界",
-        mapInitialError: diagnosisVisualFailure,
+        mapInitialError: visionUnavailable,
         onRepairing: async () => {
           repairingAttempt = true;
           contentStarted = false;

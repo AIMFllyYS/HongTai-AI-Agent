@@ -1,6 +1,7 @@
 import {
   MAX_PRODUCTION_DURATION_SECONDS,
   MAX_SHOTS_PER_PRODUCTION,
+  MIN_MONTAGE_VISUAL_ASSETS,
   MIN_PRODUCTION_DURATION_SECONDS,
   TaskError,
   type SubtitleTimingSource,
@@ -11,6 +12,7 @@ import { productionPlanningPrompt, productionPlanningRepairPrompt } from "../../
 import {
   productionPlanResultJsonSchema,
   productionPlanResultV2Schema,
+  type ProductionPlanGrounding,
   type ProductionPlanResultV2,
   type ProductionPlanResultV3,
 } from "../../schemas/production-plan";
@@ -25,10 +27,29 @@ import { withSubtitleTimeline } from "./production-subtitle-timeline";
  */
 const MONTAGE_TIMING_SOURCE: SubtitleTimingSource = "script_estimate";
 
-function withDerivedCues(plan: ProductionPlanResultV2, requestedTemplateId: string | undefined): ProductionPlanResultV3 {
+/**
+ * Reads how much of the material was actually described. Derived from the run rather than asked of
+ * the model, so a plan cannot claim to have been grounded in pictures nobody opened.
+ */
+function groundingOf(input: ProductionPlanInput): ProductionPlanGrounding {
+  // Avatar mode cuts the user's own script over their own recording, so there is no material to
+  // match and describing it as blind would invite the export screen to warn about a non-problem.
+  if (input.mode === "avatar") return { visual: "not_applicable", describedAssetIds: [] };
+  const describedAssetIds = input.assets.filter((asset) => asset.insight !== undefined).map((asset) => asset.id);
+  return describedAssetIds.length === 0
+    ? { visual: "blind", describedAssetIds: [] }
+    : { visual: "asset_insight", describedAssetIds };
+}
+
+function withDerivedCues(
+  plan: ProductionPlanResultV2,
+  requestedTemplateId: string | undefined,
+  grounding: ProductionPlanGrounding,
+): ProductionPlanResultV3 {
   return withSubtitleTimeline({
     plan,
     source: MONTAGE_TIMING_SOURCE,
+    grounding,
     ...(requestedTemplateId === undefined ? {} : { requestedTemplateId }),
     invalid: (cause) => invalidPlan("制作计划无法生成可执行的字幕时间轴", cause),
   });
@@ -43,7 +64,9 @@ function validateInput(input: ProductionPlanInput): void {
   if (!input.originalSourceText.trim() || input.originalSourceText.length > 12_000) throw invalidPlan("爆款原文必须在1到12000字符之间");
   if (input.headlineText !== undefined && (!input.headlineText.trim() || input.headlineText.trim().length > 24)) throw invalidPlan("主文字必须在1到24字符之间");
   if (input.analysis.source.taskId !== input.analysisTaskId) throw invalidPlan("正式拆解与制作来源任务不一致");
-  if (input.mode === "montage" && input.assets.length < 3) throw invalidPlan("素材剪辑模式至少需要3个制作素材");
+  if (input.mode === "montage" && input.assets.length < MIN_MONTAGE_VISUAL_ASSETS) {
+    throw invalidPlan(`素材剪辑模式至少需要${MIN_MONTAGE_VISUAL_ASSETS}个制作素材`);
+  }
   if (input.mode === "avatar") {
     if (!input.avatarScript?.trim()) throw invalidPlan("数字人口播模式需要填写与视频一致的口播稿");
     const avatars = input.assets.filter((asset) => asset.role === "avatar" && asset.kind === "video");
@@ -85,16 +108,17 @@ export class ProductionPlanningFlow {
       messages: [{ role: "system", content: prompt }],
       ...(this.#dependencies.onEvent ? { onEvent: this.#dependencies.onEvent } : {}),
     });
+    const grounding = groundingOf(input);
     const initial = await request(productionPlanningPrompt(input));
     try {
-      const result = withDerivedCues(parseStructuredOutput(initial.content, productionPlanResultV2Schema), input.subtitleTemplateId);
+      const result = withDerivedCues(parseStructuredOutput(initial.content, productionPlanResultV2Schema), input.subtitleTemplateId, grounding);
       validateProductionPlan(result, constraints);
       return result;
     } catch (error) {
       if (!(error instanceof TaskError) || error.code !== "AI_STRUCTURED_OUTPUT_INVALID") throw error;
       const repaired = await request(productionPlanningRepairPrompt(initial.content, input));
       try {
-        const result = withDerivedCues(parseStructuredOutput(repaired.content, productionPlanResultV2Schema), input.subtitleTemplateId);
+        const result = withDerivedCues(parseStructuredOutput(repaired.content, productionPlanResultV2Schema), input.subtitleTemplateId, grounding);
         validateProductionPlan(result, constraints);
         return result;
       } catch (repairError) {

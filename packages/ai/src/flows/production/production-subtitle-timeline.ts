@@ -6,7 +6,12 @@ import {
   type TaskError,
 } from "@hongtai/core";
 
-import { productionPlanResultV3Schema, type ProductionPlanResultV2, type ProductionPlanResultV3 } from "../../schemas/production-plan";
+import {
+  productionPlanResultV3Schema,
+  type ProductionPlanGrounding,
+  type ProductionPlanResultV2,
+  type ProductionPlanResultV3,
+} from "../../schemas/production-plan";
 
 export interface SubtitleTimelineInput {
   /** A plan carrying every v2 field; the subtitle timeline is derived from its shots. */
@@ -15,6 +20,12 @@ export interface SubtitleTimelineInput {
   readonly source: SubtitleTimingSource;
   /** Template the user picked; degraded automatically when it needs word-level timing. */
   readonly requestedTemplateId?: string;
+  /**
+   * How this run matched narration to material. Omitted by an edit, which reuses whatever the plan
+   * already recorded: rewriting a caption does not make the planner have seen the pictures, and it
+   * does not un-see them either.
+   */
+  readonly grounding?: ProductionPlanGrounding;
   /** How this caller reports a plan it cannot make executable, since recovery differs per mode. */
   readonly invalid: (cause: unknown) => TaskError;
 }
@@ -47,6 +58,7 @@ export function withSubtitleTimeline(input: SubtitleTimelineInput): ProductionPl
       }).map((cue) => ({ ...cue, emphasisWords: [...cue.emphasisWords] })),
     })),
     decorations: [],
+    ...(input.grounding === undefined ? {} : { grounding: input.grounding }),
   };
 
   const parsed = productionPlanResultV3Schema.safeParse(derived);

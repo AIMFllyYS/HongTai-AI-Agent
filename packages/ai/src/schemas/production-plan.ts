@@ -38,6 +38,26 @@ const productionPlanBaseSchema = z.object({
   shots: z.array(productionShotBaseSchema).min(1).max(MAX_SHOTS_PER_PRODUCTION),
 });
 
+/**
+ * Whether the planner had seen the material when it wrote this narration.
+ *
+ * Derived from the run, never asked of the model: a plan that could claim its own grounding would
+ * claim the flattering value. `blind` is the honest label for matching narration to filenames and
+ * durations, which is all the planner ever had before asset insight existed.
+ */
+export const PRODUCTION_VISUAL_GROUNDINGS = [
+  "asset_insight",
+  "blind",
+  /** Avatar mode: the words are the user's own script over their own recording, so nothing is matched. */
+  "not_applicable",
+] as const;
+
+const productionGroundingSchema = z.object({
+  visual: z.enum(PRODUCTION_VISUAL_GROUNDINGS),
+  /** Assets whose real frames were described. Empty unless `visual` is `asset_insight`. */
+  describedAssetIds: z.array(z.string().min(1)).max(MAX_SHOTS_PER_PRODUCTION),
+});
+
 const textOverlaySchema = z.object({
   primaryText: z.string().min(1).max(24),
   secondaryText: z.string().min(1).max(32).nullable(),
@@ -66,6 +86,12 @@ export const productionPlanResultV3Schema = productionPlanBaseSchema.extend({
     cues: z.array(subtitleCueSchema).min(1).max(MAX_CUES_PER_SHOT),
   })).min(1).max(MAX_SHOTS_PER_PRODUCTION),
   decorations: z.array(productionDecorationSchema).max(6),
+  /**
+   * Optional so plans written before asset insight existed still parse. Those runs had no vision at
+   * all, so a reader may treat an absent record as `blind` — refusing to open them instead would
+   * take away projects the user already made.
+   */
+  grounding: productionGroundingSchema.optional(),
 });
 
 export const productionPlanResultSchema = z.union([
@@ -74,6 +100,7 @@ export const productionPlanResultSchema = z.union([
   productionPlanResultV3Schema,
 ]);
 
+export type ProductionPlanGrounding = z.infer<typeof productionGroundingSchema>;
 export type ProductionPlanResultV1 = z.infer<typeof productionPlanResultV1Schema>;
 export type ProductionPlanResultV2 = z.infer<typeof productionPlanResultV2Schema>;
 export type ProductionPlanResultV3 = z.infer<typeof productionPlanResultV3Schema>;
