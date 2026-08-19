@@ -31,10 +31,10 @@
 
 ### 发布边界
 
-- Android 源码版本推进为 `0.1.17` / `versionCode=25`；正式签名 Release 候选已按 `HongTai-AI-Agent-release-v0.1.17.apk` 独立归档。
+- Android 源码版本推进为 `0.1.17` / `versionCode=25`；正式签名 Release 已按 `HongTai-AI-Agent-release-v0.1.17.apk` 独立归档并上传到固定公网地址。
 - 本地归档为 21,932,117 字节、SHA-256 `1358DFA5D16FB6C4F25C2684E4A23B3773296167FE51069CE5B466A1A9212B53`；证书锚点与既有 Release 身份一致。
-- 主机侧 Release JVM、`lintRelease`、四 ABI `assembleRelease`、16 KiB zipalign、包身份与签名后验已通过；物理真机上的两条制作主链、数字人口播、贴纸与微调烧录仍待用户端测。
-- 当前仍是 Release 候选；在人工上传、公网重新下载及哈希回验完成前，下载页继续推荐 `v0.1.16`。
+- 主机侧 Release JVM、`lintRelease`、四 ABI `assembleRelease`、16 KiB zipalign、包身份与签名后验已通过；公网重新下载后的文件大小与 SHA-256 已与本地归档一致。物理真机上的两条制作主链、数字人口播、贴纸与微调烧录仍待用户端测。
+- 下载页现推荐 `v0.1.17`；这表示安装包已公开分发并完成文件级回验，不表示真实 Provider、物理真机或最终成片已经验收通过。
 
 ## [0.1.16] - 2026-08-18
 
