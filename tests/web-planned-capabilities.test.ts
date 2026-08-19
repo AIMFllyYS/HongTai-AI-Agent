@@ -34,7 +34,8 @@ test("templates and production use real runtimes while publishing remains planne
   assert.match(create, /参考哪条拆解/);
   assert.match(create, /这次想讲什么/);
   assert.doesNotMatch(create, />(?:content-analysis\.v1|production-plan\.v1)</u);
-  assert.match(create, /useAppResume\(load\)/);
+  assert.match(create, /useAppResume\(\(\) => \{\s*void load\(\);\s*void applyAssetRecovery\(\);/u);
+  assert.doesNotMatch(create, /useAppResume\(load\)/);
   assert.doesNotMatch(create, /@capacitor\/app/);
   assert.doesNotMatch(create, /viewModel\.(templates|profileTags|materialFilters|generationEta|actionLabel)/);
   assert.doesNotMatch(create, /template-tile__selected/);

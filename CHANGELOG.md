@@ -30,7 +30,8 @@
 ### 发布边界
 
 - Android 源码版本推进为 `0.1.18` / `versionCode=26`；只生成 Release 产品并按 `HongTai-AI-Agent-release-v0.1.18.apk` 独立归档。
-- 本地归档字节数与 SHA-256 在构建完成后写入本段；下载页在公网上传回验前仍推荐 `v0.1.17`。
+- 本地归档为 21,932,925 字节、SHA-256 `A5D39C07C62A37AF42F70242D17EB3F73C47E05E4BBEEA51759E5A3C931072CF`；证书锚点与既有 Release 身份一致。
+- 主机侧 `scripts/build-android-release.ps1` 已通过 Web production build、Capacitor sync、Release JVM、`lintRelease`、四 ABI `assembleRelease`、16 KiB zipalign、包身份与 v2/v3 签名后验。API 35 模拟器上已用归档 `v0.1.17` 以 `adb install --no-streaming -r` 覆盖安装，再同样方式升到 `v0.1.18`，未使用 `-d` 或卸载，`firstInstallTime` 保持 `2026-08-19 17:53:58`。冷启动后首页中文正常。下载页在公网上传回验前仍推荐 `v0.1.17`。
 - API 35 模拟器上已有 v3 蒙太奇与数字人切片的 Media3 成片证据。物理真机、Agent 真实 `generatePlan` 与 B 站 APK 真网采集仍待用户端测。
 
 ## [0.1.17] - 2026-08-20
