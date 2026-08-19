@@ -1,4 +1,4 @@
-import { applyProductionPlanEdit, contentAnalysisResultSchema, createAvatarCaptionPlan, MIMO_CHAT_AUDIO_TTS_INSTRUCTION, ProductionPlanningFlow, productionPlanResultSchema, replicaBlueprintResultSchema, requestedSubtitleTemplateId, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, type AiProvider, type ProductionPlanConstraints, type ProductionPlanningAsset, type ProductionPlanResult } from "@hongtai/ai";
+import { applyProductionPlanEdit, AssetInsightFlow, contentAnalysisResultSchema, createAvatarCaptionPlan, MIMO_CHAT_AUDIO_TTS_INSTRUCTION, ProductionPlanningFlow, productionPlanResultSchema, replicaBlueprintResultSchema, requestedSubtitleTemplateId, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, type AiProvider, type ProductionPlanConstraints, type ProductionPlanningAsset, type ProductionPlanResult } from "@hongtai/ai";
 import {
   createRuntimeId,
   issueFromAppError,
@@ -47,8 +47,23 @@ interface ProductionFilesPort {
  * The blueprint requirement an asset was filmed for is an app-level decision, so it lives here
  * rather than on the native bridge DTO: the renderer has no use for it and must not be handed it.
  */
+/**
+ * What a vision model saw in this asset, kept next to the asset so a re-plan does not pay for the
+ * same call twice. Only the descriptive half reaches the planner; `usable` and `unusableReason` are
+ * a message for the user about reshooting.
+ */
+interface PersistedInsight {
+  readonly description: string;
+  readonly subject: string;
+  readonly tags: readonly string[];
+  readonly usable: boolean;
+  readonly unusableReason: string | null;
+  readonly describedFrameCount: number;
+}
+
 interface PersistedAsset extends NativeProductionAsset {
   readonly requirementOrder?: number;
+  readonly insight?: PersistedInsight;
 }
 
 interface PersistedProject {
@@ -103,6 +118,27 @@ function defaultAssetRole(value: Pick<NativeProductionAsset, "kind">): Productio
 }
 
 /**
+ * Projects an asset field by field for the planner, which also decides what reaches the provider:
+ * the whole record would carry the private file URI, the stored byte count and the reshoot verdict
+ * into the prompt, none of which a model needs to write a shot list.
+ *
+ * An unusable frame contributes no description at all. "We looked and saw nothing" is not grounding,
+ * so the plan must not count that asset as described.
+ */
+function planningAsset(asset: PersistedAsset): ProductionPlanningAsset {
+  const insight = asset.insight?.usable === true ? asset.insight : undefined;
+  return {
+    id: asset.id,
+    kind: asset.kind,
+    role: asset.role ?? defaultAssetRole(asset),
+    mimeType: asset.mimeType,
+    displayName: asset.displayName,
+    ...(asset.durationSeconds === undefined ? {} : { durationSeconds: asset.durationSeconds }),
+    ...(insight ? { insight: { description: insight.description, subject: insight.subject, tags: insight.tags } } : {}),
+  };
+}
+
+/**
  * Hands the renderer the subtitle template the plan already committed to. The template is looked
  * up rather than re-resolved, because degrading a template that needs word-level timing is a
  * planning decision that must already be recorded in the plan the user approved.
@@ -129,9 +165,26 @@ function isRequirementOrder(value: unknown): value is number {
 function persistedAsset(value: PersistedAsset): PersistedAsset | undefined {
   const base = nativeAsset(value);
   if (!base) return undefined;
-  if (value.requirementOrder === undefined) return base;
+  const insight = persistedInsight(value.insight);
+  if (value.requirementOrder === undefined) return insight ? { ...base, insight } : base;
   if (!isRequirementOrder(value.requirementOrder)) return undefined;
-  return { ...base, requirementOrder: value.requirementOrder };
+  return { ...base, requirementOrder: value.requirementOrder, ...(insight ? { insight } : {}) };
+}
+
+/**
+ * A malformed insight is dropped rather than failing the read: it is a cached observation, and
+ * losing it only costs one more vision call, whereas rejecting the record would make the project
+ * unopenable over something that never affected the render.
+ */
+function persistedInsight(value: unknown): PersistedInsight | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = value as Partial<PersistedInsight>;
+  const { description, subject, usable, unusableReason, describedFrameCount } = candidate;
+  if (typeof description !== "string" || !description.trim() || typeof subject !== "string" || !subject.trim()) return undefined;
+  if (typeof usable !== "boolean" || !(typeof unusableReason === "string" || unusableReason === null)) return undefined;
+  if (!Number.isInteger(describedFrameCount) || (describedFrameCount ?? 0) < 1) return undefined;
+  const tags = Array.isArray(candidate.tags) ? candidate.tags.filter((tag): tag is string => typeof tag === "string" && tag.trim().length > 0) : [];
+  return { description, subject, tags, usable, unusableReason, describedFrameCount: describedFrameCount as number };
 }
 
 function nativeAsset(value: NativeProductionAsset): NativeProductionAsset | undefined {
@@ -426,6 +479,7 @@ export class StandaloneProductionService implements ProductionService {
       if (!parsed?.success) throw taskError("来源任务尚无可用的正式拆解结果");
       const sourceText = originalSourceText(await this.#options.tasks.getDetail(project.analysisTaskId));
       if (!sourceText) throw taskError("来源任务没有可用于参考的原始文稿");
+      if (project.mode === "montage") project = await this.#describeAssets(project, visualAssets);
       const plan = project.mode === "avatar"
         ? createAvatarCaptionPlan({
           analysisTaskId: project.analysisTaskId,
@@ -523,24 +577,75 @@ export class StandaloneProductionService implements ProductionService {
   }
 
   /**
+   * Looks at the material before planning, one asset at a time.
+   *
+   * Every failure mode ends the same way: the asset keeps no insight, the plan records that it was
+   * matched blind, and the export stays available. Vision may be unconfigured, the frames may be
+   * unreadable, the call may time out — none of that is a reason to withhold a video the renderer can
+   * produce, and none of it may turn into a description nobody saw. Assets are described in sequence
+   * because three concurrent frame decodes plus three uploads is how a phone runs out of memory.
+   */
+  async #describeAssets(project: PersistedProject, visualAssets: readonly PersistedAsset[]): Promise<PersistedProject> {
+    const pending = visualAssets.filter((asset) => asset.insight === undefined);
+    if (pending.length === 0 || !this.#options.native.insightFrames) return project;
+
+    const described = new Map<string, PersistedInsight>();
+    let provider: AiProvider | undefined;
+    for (const asset of pending) {
+      try {
+        const { frames } = await this.#options.native.insightFrames({ projectId: project.projectId, assetId: asset.id });
+        if (frames.length === 0) continue;
+        provider ??= await this.#options.getProvider();
+        const insight = await new AssetInsightFlow({ provider }).run({
+          assetId: asset.id,
+          kind: asset.kind === "video" ? "video" : "image",
+          frames: frames.map((frame) => ({ uri: frame.uri, mimeType: frame.mimeType })),
+        });
+        described.set(asset.id, {
+          description: insight.description,
+          subject: insight.subject,
+          tags: [...insight.tags],
+          usable: insight.usable,
+          unusableReason: insight.unusableReason,
+          describedFrameCount: insight.describedFrameCount,
+        });
+      } catch {
+        // Deliberately swallowed per asset. The absence of an insight is the honest record of this
+        // failure, and it is already visible in the plan's grounding.
+      }
+    }
+    if (described.size === 0) return project;
+    return this.#persist({
+      ...project,
+      assets: project.assets.map((asset) => {
+        const insight = described.get(asset.id);
+        return insight ? { ...asset, insight } : asset;
+      }),
+      // Silent on purpose: the project is mid-planning and its status has not changed, so an event
+      // here would only make subscribers re-render the same "planning" card.
+    }, { emit: false });
+  }
+
+  /**
    * Planning assets with the shooting intent attached, so the plan can be checked against the list
    * the user actually filmed. If assets claim requirements the list can no longer be read, this
    * fails instead of quietly producing a plan in whatever order the model preferred.
    */
   async #planningAssets(project: PersistedProject): Promise<readonly ProductionPlanningAsset[]> {
-    const base = project.assets.map((asset) => ({ ...asset, role: asset.role ?? defaultAssetRole(asset) }));
+    const base = project.assets.map(planningAsset);
     if (!project.assets.some((asset) => asset.requirementOrder !== undefined)) return base;
     const record = await this.#options.blueprints?.get(project.analysisTaskId).catch(() => undefined);
     const parsed = record?.status === "succeeded" && record.blueprint?.schemaVersion === "replica-blueprint.v1"
       ? replicaBlueprintResultSchema.safeParse(record.blueprint.document) : undefined;
     if (!parsed?.success) throw taskError("这些素材是按复刻清单拍的，但清单已经读不到了，请重新生成清单");
     const shots = new Map(parsed.data.shots.map((shot) => [shot.order, shot]));
-    return base.map((asset) => {
-      if (asset.requirementOrder === undefined) return asset;
-      const shot = shots.get(asset.requirementOrder);
-      if (!shot) throw taskError(`复刻清单里已经没有第 ${asset.requirementOrder} 项，请重新生成清单后再制作`);
+    return base.map((planning, index) => {
+      const order = project.assets[index]?.requirementOrder;
+      if (order === undefined) return planning;
+      const shot = shots.get(order);
+      if (!shot) throw taskError(`复刻清单里已经没有第 ${order} 项，请重新生成清单后再制作`);
       return {
-        ...asset,
+        ...planning,
         requirement: {
           order: shot.order,
           visualDescription: shot.visualDescription,

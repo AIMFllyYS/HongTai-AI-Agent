@@ -72,6 +72,25 @@ internal class ProductionMediaStore(context: Context) {
     if (!it.exists() && !it.mkdirs()) throw IllegalStateException("Could not create production audio storage.")
   }
 
+  /** Derivatives shown to a vision model, kept apart from `inputs` so they can never become a shot. */
+  fun insightDirectory(projectId: String): File = File(projectDirectory(projectId), "insight").also {
+    if (!it.exists() && !it.mkdirs()) throw IllegalStateException("Could not create production insight storage.")
+  }
+
+  /**
+   * Resolves one imported asset without probing the others. `inputs` re-reads every file's metadata,
+   * which is wasted work and wasted battery when a caller only needs the frames of a single asset.
+   */
+  fun input(projectId: String, assetId: String): ProductionInput? {
+    require(ID_PATTERN.matches(assetId)) { "A production asset identifier is invalid." }
+    val file = inputsDirectory(projectId).listFiles()
+      ?.firstOrNull { it.isFile && !it.name.startsWith(".") && it.name.substringBeforeLast('.') == assetId }
+      ?: return null
+    val kind = kindFor(mimeForExtension(file.extension))
+    val probe = inspectInput(file, kind)
+    return ProductionInput(assetId, file.absolutePath, kind, probe?.durationMs, probe?.hasAudio ?: false)
+  }
+
   private fun importOne(uri: Uri, inputs: File, selection: ProductionImportSelection): ImportedProductionAsset {
     require(uri.scheme == "content") { "Only system content URIs may be imported." }
     val displayName = safeName(displayNameFor(uri) ?: "素材")

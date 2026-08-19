@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { MIMO_CHAT_AUDIO_TTS_INSTRUCTION, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, type AiProvider, type ProductionPlanResultV2 } from "@hongtai/ai";
-import type { ContentAnalysisRecord, TaskDetailRecord } from "@hongtai/core";
+import { TaskError, type ContentAnalysisRecord, type TaskDetailRecord } from "@hongtai/core";
 
 import { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
 import { StandaloneProductionService } from "./standalone-production-service.js";
@@ -53,10 +53,19 @@ function deferred(): { readonly promise: Promise<void>; resolve(): void } {
   return { promise: new Promise<void>((done) => { resolve = done; }), resolve };
 }
 
-function harness(narration: "system" | "provider" = "system", now?: () => Date) {
+interface InsightHarnessOptions {
+  /** Frames the native layer publishes per asset. Absent means the plugin method is not available. */
+  readonly frames?: (assetId: string) => readonly { readonly uri: string; readonly mimeType: string }[];
+  /** What the vision model answers. Absent yields one usable description. */
+  readonly vision?: () => Promise<{ readonly content: string; readonly reasoning: string }>;
+}
+
+function harness(narration: "system" | "provider" = "system", now?: () => Date, insight?: InsightHarnessOptions) {
   const values = new Map<string, string>();
   const ids = new Set<string>();
   const deletedPaths: string[] = [];
+  const insightCalls: string[] = [];
+  const visionPrompts: string[] = [];
   const pickCalls: Array<{ readonly projectId: string; readonly maxItems: number; readonly selection?: "visual" | "avatar" }> = [];
   const renderCalls: Array<{
     readonly projectId: string;
@@ -80,6 +89,19 @@ function harness(narration: "system" | "provider" = "system", now?: () => Date) 
   };
   const provider: AiProvider = {
     generate: async (request) => {
+      if (request.model === "vision") {
+        visionPrompts.push(String(request.messages[0]?.content ?? ""));
+        return insight?.vision?.() ?? {
+          content: JSON.stringify({
+            description: "店员在前台后面对着镜头说话，背后是货架",
+            subject: "operator",
+            tags: ["前台", "店员"],
+            usable: true,
+            unusableReason: null,
+          }),
+          reasoning: "",
+        };
+      }
       planningPrompts.push(String(request.messages[0]?.content ?? ""));
       return { content: JSON.stringify(plan), reasoning: "" };
     },
@@ -109,6 +131,14 @@ function harness(narration: "system" | "provider" = "system", now?: () => Date) 
     },
     consumeAssetOperation: async () => ({ status: "none" as const }),
     probeTts: async () => undefined,
+    ...(insight?.frames
+      ? {
+        insightFrames: async ({ assetId }: { readonly projectId: string; readonly assetId: string }) => {
+          insightCalls.push(assetId);
+          return { frames: insight.frames!(assetId) };
+        },
+      }
+      : {}),
   };
   const create = () => new StandaloneProductionService({
     files,
@@ -121,7 +151,7 @@ function harness(narration: "system" | "provider" = "system", now?: () => Date) 
     createProjectId: () => "project-1",
     now: now ?? (() => new Date("2026-08-08T00:00:00.000Z")),
   });
-  return { create, values, ids, files, pickCalls, renderCalls, planningPrompts, deletedPaths };
+  return { create, values, ids, files, pickCalls, renderCalls, planningPrompts, deletedPaths, insightCalls, visionPrompts };
 }
 
 /** Advances a second per persist so assertions can tell the writes apart by timestamp alone. */
@@ -1072,4 +1102,84 @@ test("StandaloneProductionService maps every recovered native asset terminal to 
     assert.equal(recovered.issue.action, "select_media", nativeCode);
     assert.equal(recovered.issue.details?.nativeCode, nativeCode);
   }
+});
+
+const FRAMES = [
+  { uri: "file:///private/productions/project-1/insight/asset-1-0.jpg", mimeType: "image/jpeg" },
+] as const;
+
+function planOf(record: { readonly plan?: { readonly document: unknown } }) {
+  return record.plan?.document as {
+    readonly grounding?: { readonly visual: string; readonly describedAssetIds: readonly string[] };
+  };
+}
+
+test("看过素材时计划记下是哪几个，画面描述进提示词但私有路径不进", async () => {
+  const context = harness("system", undefined, { frames: () => FRAMES });
+  const service = context.create();
+  await service.create({ analysisTaskId: "task-1", brief: "突出真实服务", targetDurationSeconds: 20 });
+  await service.importAssets("project-1");
+
+  const ready = await service.generatePlan("project-1");
+
+  assert.deepEqual(context.insightCalls, ["asset-1", "asset-2", "asset-3"], "每个画面素材各看一次，串行执行");
+  assert.deepEqual(planOf(ready).grounding, {
+    visual: "asset_insight",
+    describedAssetIds: ["asset-1", "asset-2", "asset-3"],
+  });
+  const prompt = context.planningPrompts.at(-1) ?? "";
+  assert.match(prompt, /店员在前台后面对着镜头说话/u, "画面描述必须真的送进规划");
+  assert.doesNotMatch(prompt, /file:\/\/\//u, "素材的私有文件路径不该送给模型");
+  assert.doesNotMatch(prompt, /sizeBytes/u, "落盘字节数对写脚本没用，也不该送出去");
+});
+
+test("看不到画面的每一种原因都退回盲配，不阻塞成片也不编描述", async () => {
+  const cases: ReadonlyArray<readonly [string, InsightHarnessOptions]> = [
+    ["原生没有这个能力（旧 APK 或浏览器）", {}],
+    ["抽不出帧", { frames: () => [] }],
+    ["视觉模型没配好", { frames: () => FRAMES, vision: async () => { throw new TaskError({ code: "AI_VISION_UNAVAILABLE", message: "没有视觉能力", action: "configure_ai" }); } }],
+    ["模型返回坏 JSON", { frames: () => FRAMES, vision: async () => ({ content: "{不是 JSON", reasoning: "" }) }],
+    ["模型说看不清", { frames: () => FRAMES, vision: async () => ({ content: JSON.stringify({ description: "画面几乎全黑", subject: "other", tags: [], usable: false, unusableReason: "太暗了，建议开灯重拍" }), reasoning: "" }) }],
+  ];
+
+  for (const [label, options] of cases) {
+    const context = harness("system", undefined, options);
+    const service = context.create();
+    await service.create({ analysisTaskId: "task-1", brief: "突出真实服务", targetDurationSeconds: 20 });
+    await service.importAssets("project-1");
+
+    const ready = await service.generatePlan("project-1");
+
+    assert.equal(ready.status, "ready", `${label}：不得阻塞制作`);
+    assert.deepEqual(planOf(ready).grounding, { visual: "blind", describedAssetIds: [] }, label);
+    assert.match(context.planningPrompts.at(-1) ?? "", /没有任何素材的画面被识别过/u, label);
+  }
+});
+
+test("已经看过的素材不会在重新规划时再花一次视觉调用", async () => {
+  const context = harness("system", steppingClock(), { frames: () => FRAMES });
+  const service = context.create();
+  await service.create({ analysisTaskId: "task-1", brief: "突出真实服务", targetDurationSeconds: 20 });
+  await service.importAssets("project-1");
+  await service.generatePlan("project-1");
+
+  // A reload proves the cached observation survives in project.json rather than living in memory.
+  const reopened = context.create();
+  const again = await reopened.generatePlan("project-1");
+
+  assert.deepEqual(context.insightCalls, ["asset-1", "asset-2", "asset-3"], "第二次规划不该重新抽帧");
+  assert.equal(context.visionPrompts.length, 3, "第二次规划不该重新调用视觉模型");
+  assert.equal(planOf(again).grounding?.visual, "asset_insight");
+});
+
+test("数字人口播不去看素材，计划记成与画面匹配无关", async () => {
+  const context = harness("system", undefined, { frames: () => FRAMES });
+  const service = context.create();
+  await service.create({ analysisTaskId: "task-1", brief: "数字人口播", targetDurationSeconds: 20, mode: "avatar", avatarScript: "欢迎来到我们的门店，今天带你看看真实的服务过程。" });
+  await service.importAssets("project-1");
+
+  const ready = await service.generatePlan("project-1");
+
+  assert.deepEqual(context.insightCalls, [], "口播稿是用户自己写的，没有画面要匹配");
+  assert.deepEqual(planOf(ready).grounding, { visual: "not_applicable", describedAssetIds: [] });
 });

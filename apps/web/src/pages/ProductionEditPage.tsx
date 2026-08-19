@@ -212,6 +212,22 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
         </p>
       ) : null}
 
+      {/* Says plainly whether the copy was written against the pictures or against the breakdown
+          alone. Without this the two cases look identical, and the user re-generates hoping for
+          something the system was never able to do. */}
+      {plan.visualGrounding === "blind" ? (
+        <p className="production-hint" role="status">
+          <Icon name="info" size={16} />
+          这条视频的口播是按拆解结构写的，系统没有看过你上传的画面，所以文字不一定对得上每个镜头，需要你逐镜核对。
+        </p>
+      ) : null}
+      {plan.visualGrounding === "asset_insight" ? (
+        <p className="production-hint" role="status">
+          <Icon name="info" size={16} />
+          其中 {plan.describedAssetIds.length} 个素材的画面已被识别过，这些镜头的口播按画面里看得到的内容写；没被识别的素材仍是按拆解结构写的。
+        </p>
+      ) : null}
+
       <GlassCard className="production-edit-global">
         <h2>字幕模板</h2>
         <p className="production-edit-global__note">

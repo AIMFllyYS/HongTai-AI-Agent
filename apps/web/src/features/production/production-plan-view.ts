@@ -27,6 +27,12 @@ export interface PlanSubtitleView {
   readonly source: string;
 }
 
+/**
+ * Whether the planner had seen the material. `blind` also covers plans written before the field
+ * existed, which is accurate: those runs had no vision at all.
+ */
+export type PlanVisualGrounding = "asset_insight" | "blind" | "not_applicable";
+
 export interface ProductionPlanView {
   /** False when there is no plan, or when it is too old for the tuning screen to edit. */
   readonly editable: boolean;
@@ -38,6 +44,9 @@ export interface ProductionPlanView {
   readonly backgroundMusicAssetId: string | null;
   readonly backgroundMusicVolume: number;
   readonly subtitle?: PlanSubtitleView;
+  readonly visualGrounding: PlanVisualGrounding;
+  /** Assets whose real frames were described. Empty whenever grounding is not `asset_insight`. */
+  readonly describedAssetIds: readonly string[];
 }
 
 const EMPTY: ProductionPlanView = {
@@ -49,6 +58,8 @@ const EMPTY: ProductionPlanView = {
   speechRate: 1,
   backgroundMusicAssetId: null,
   backgroundMusicVolume: 0,
+  visualGrounding: "blind",
+  describedAssetIds: [],
 };
 
 function asRecord(value: unknown): Readonly<Record<string, unknown>> | undefined {
@@ -118,6 +129,21 @@ function asSubtitle(value: unknown): PlanSubtitleView | undefined {
 }
 
 /**
+ * Reads the grounding record, defaulting to `blind` rather than to something reassuring: a plan with
+ * no record was written before the planner could see anything, and telling the user their video was
+ * matched to real pictures would be the one wrong answer here.
+ */
+function asGrounding(value: unknown): { readonly visual: PlanVisualGrounding; readonly describedAssetIds: readonly string[] } {
+  const record = asRecord(value);
+  const visual = asString(record?.visual);
+  if (visual !== "asset_insight" && visual !== "not_applicable") return { visual: "blind", describedAssetIds: [] };
+  const describedAssetIds = visual === "asset_insight" && Array.isArray(record?.describedAssetIds)
+    ? record.describedAssetIds.flatMap((id) => { const mapped = asString(id); return mapped ? [mapped] : []; })
+    : [];
+  return { visual, describedAssetIds };
+}
+
+/**
  * Reads a display-only projection of the plan the service already validated. The plan crosses the
  * runtime boundary as an untyped document and the interface layer cannot import the AI schema, so
  * missing or malformed fields stay empty here and are never repaired.
@@ -137,6 +163,7 @@ export function readProductionPlan(plan: VersionedDocument | undefined): Product
     ? document.shots.flatMap((shot) => { const mapped = asShot(shot); return mapped ? [mapped] : []; })
     : [];
   const subtitle = asSubtitle(document.subtitle);
+  const grounding = asGrounding(document.grounding);
 
   return {
     editable: plan.schemaVersion !== "production-plan.v1" && shots.length > 0,
@@ -148,5 +175,7 @@ export function readProductionPlan(plan: VersionedDocument | undefined): Product
     backgroundMusicAssetId: asString(audio?.backgroundMusicAssetId) ?? null,
     backgroundMusicVolume: asFiniteNumber(audio?.backgroundMusicVolume) ?? 0,
     ...(subtitle ? { subtitle } : {}),
+    visualGrounding: grounding.visual,
+    describedAssetIds: grounding.describedAssetIds,
   };
 }

@@ -80,3 +80,13 @@ test("如实提示偏短字幕、成片会被作废、以及字幕时间只是�
   assert.match(page, /保存微调会把它作废/u);
   assert.match(page, /来源是文字长度而不是真实语音/u);
 });
+
+test("如实告诉用户这条口播是看着画面写的还是照拆解结构写的", () => {
+  // Both cases look identical on screen otherwise, and a user who is not told will keep
+  // regenerating in the hope of something the system never did.
+  assert.match(page, /visualGrounding === "blind"/u);
+  assert.match(page, /系统没有看过你上传的画面/u);
+  assert.match(page, /visualGrounding === "asset_insight"/u);
+  assert.match(page, /describedAssetIds\.length/u, "看过几个就说几个，不说成全部");
+  assert.match(page, /没被识别的素材仍是按拆解结构写的/u);
+});

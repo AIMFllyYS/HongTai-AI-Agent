@@ -26,6 +26,7 @@ import com.hongtai.aiagent.production.CloudTtsProtocol
 import com.hongtai.aiagent.production.ProductionException
 import com.hongtai.aiagent.production.ProductionFailureKind
 import com.hongtai.aiagent.production.ProductionImportSelection
+import com.hongtai.aiagent.production.ProductionInsightFrames
 import com.hongtai.aiagent.production.ProductionMediaStore
 import com.hongtai.aiagent.production.ProductionPlanParser
 import com.hongtai.aiagent.production.ProductionRenderMode
@@ -42,6 +43,7 @@ import java.util.concurrent.RejectedExecutionException
 class ProductionRuntimePlugin : Plugin() {
   private val store by lazy { ProductionMediaStore(context) }
   private val renderer by lazy { ProductionRenderer(context, store) }
+  private val insightFrames by lazy { ProductionInsightFrames(store) }
   private val preferences by lazy { LocalPreferences(context) }
   private val secrets by lazy { AndroidKeystoreSecretStore(context) }
   private val assetOperations by lazy { AssetOperationStateStore(context) }
@@ -193,6 +195,37 @@ class ProductionRuntimePlugin : Plugin() {
         call.reject(error.message ?: "The production plan is invalid.", NativeIssueCode.INVALID_ARGUMENT)
       } catch (error: Exception) {
         call.reject("The local production render failed.", NativeIssueCode.MEDIA_MERGE_FAILED)
+      }
+    }
+  }
+
+  /**
+   * Publishes bounded JPEG derivatives of one asset for the vision model.
+   *
+   * Resolves with an empty list rather than rejecting when there is nothing to look at: an asset
+   * that cannot be sampled leaves the plan honestly marked as matched blind, and refusing here would
+   * block an export the renderer can produce without ever seeing the picture.
+   */
+  @PluginMethod
+  fun insightFrames(call: PluginCall) {
+    val projectId = call.getString("projectId")
+    val assetId = call.getString("assetId")
+    if (projectId.isNullOrBlank() || assetId.isNullOrBlank()) {
+      call.reject("projectId and assetId are required.", NativeIssueCode.INVALID_ARGUMENT)
+      return
+    }
+    PRODUCTION_EXECUTOR.execute {
+      try {
+        val frames = insightFrames.frames(projectId, assetId)
+        val array = JSArray()
+        frames.forEach { frame -> array.put(JSObject().put("uri", frame.uri).put("mimeType", frame.mimeType)) }
+        call.resolve(JSObject().put("frames", array))
+      } catch (error: IllegalArgumentException) {
+        call.reject(error.message ?: "The production asset reference is invalid.", NativeIssueCode.INVALID_ARGUMENT)
+      } catch (error: ProductionException) {
+        call.reject(error.message ?: "The production asset could not be read.", nativeIssueCode(error.kind))
+      } catch (error: Exception) {
+        call.reject("The production asset frames could not be prepared.", NativeIssueCode.MEDIA_SOURCE_INVALID)
       }
     }
   }

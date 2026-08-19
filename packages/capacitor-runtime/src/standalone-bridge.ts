@@ -206,6 +206,12 @@ export type NativeAssetOperationResult =
   | { readonly status: "succeeded"; readonly projectId: string; readonly assets: readonly NativeProductionAsset[] }
   | { readonly status: "failed"; readonly code: string };
 
+/** A private derivative frame. The URI never reaches the UI; only the AI transport resolves it. */
+export interface NativeProductionInsightFrame {
+  readonly uri: string;
+  readonly mimeType: string;
+}
+
 export interface StandaloneProductionRuntimePlugin {
   pickAssets(options: { readonly projectId: string; readonly maxItems: number; readonly selection?: "visual" | "avatar" }): Promise<{ readonly assets: readonly NativeProductionAsset[] }>;
   consumeAssetOperation(): Promise<NativeAssetOperationResult>;
@@ -221,6 +227,13 @@ export interface StandaloneProductionRuntimePlugin {
   }): Promise<NativeProductionResult>;
   /** Runs a short non-personal synthesis request using the saved protected key. */
   probeTts(options: { readonly miMoInstruction: string; readonly stepFunInstruction: string }): Promise<void>;
+  /**
+   * Publishes bounded private JPEG derivatives of one asset for the vision model. Resolves with an
+   * empty list when there is nothing to look at, which leaves the asset honestly undescribed.
+   */
+  insightFrames?(options: { readonly projectId: string; readonly assetId: string }): Promise<{
+    readonly frames: readonly NativeProductionInsightFrame[];
+  }>;
   addListener?(
     eventName: "productionProgress",
     listener: (event: NativeProductionProgressEvent) => void,
