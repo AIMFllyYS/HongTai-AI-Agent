@@ -491,9 +491,10 @@ export interface ProductionShotUpdate {
  */
 export interface ProductionPlanUpdate {
   /**
-   * The `updatedAt` the caller last read. A plan written from a stale screen is rejected instead
-   * of overwriting a newer one, which in-process serialisation alone cannot prevent across an
-   * app restart or a second runtime instance.
+   * The `updatedAt` the caller last read. A screen that sat through an earlier edit, or through an
+   * app restart, is rejected instead of overwriting the newer plan — something in-process
+   * serialisation cannot see. The check is read-then-write, so it does not make two genuinely
+   * concurrent runtime instances safe; that needs an atomic swap in the file layer.
    */
   readonly expectedUpdatedAt: string;
   readonly subtitleTemplateId?: string;

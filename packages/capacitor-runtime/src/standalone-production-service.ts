@@ -148,15 +148,23 @@ function nativeCode(error: unknown, remainingDepth = 3): string | undefined {
   return nativeCode(value.cause, remainingDepth - 1);
 }
 
+/** Keeps a private-file failure branchable by code instead of leaking a raw platform rejection. */
+function storageTaskError(error: unknown, message: string): TaskError {
+  return error instanceof TaskError ? error : new TaskError({ code: "STORAGE_WRITE_FAILED", message, action: "retry", cause: error });
+}
+
 function productionTaskError(error: unknown, fallbackMessage: string): TaskError {
   if (error instanceof TaskError) return error;
   const code = nativeCode(error);
   const mapped: Readonly<Record<string, Readonly<{
     code: TaskIssue["code"];
     message: string;
-    action: "retry" | "select_media" | "free_storage";
+    action: "retry" | "select_media" | "free_storage" | "edit_input";
     retryable: boolean;
   }>>> = {
+    // The renderer rejected the plan itself. Retrying the same plan can only fail again, so this
+    // must not be dressed up as a transient render failure.
+    ERR_INVALID_ARGUMENT: { code: "PRODUCTION_PLAN_EDIT_INVALID", message: "当前制作计划无法被本地渲染器执行，请调整镜头时长或文案后重新生成计划。", action: "edit_input", retryable: false },
     ERR_MEDIA_SELECTION_CANCELLED: { code: "MEDIA_SELECTION_CANCELLED", message: "已取消选择制作素材。", action: "select_media", retryable: false },
     ERR_MEDIA_SOURCE_MISSING: { code: "MEDIA_SOURCE_NOT_FOUND", message: "系统没有返回可读取的制作素材。", action: "select_media", retryable: false },
     ERR_MEDIA_READ_FAILED: { code: "MEDIA_READ_FAILED", message: "所选制作素材无法读取，请重新选择。", action: "select_media", retryable: false },
@@ -364,15 +372,7 @@ export class StandaloneProductionService implements ProductionService {
       if (project.status === "planning" || project.status === "rendering") {
         throw taskError("制作项目正在处理中，请等结束后再微调");
       }
-      // Serialising mutations only covers this instance. A screen that was opened before an
-      // earlier edit or a restart must not write its stale plan over the newer one.
-      if (project.updatedAt !== input.expectedUpdatedAt) {
-        throw new TaskError({
-          code: "PRODUCTION_PLAN_VERSION_STALE",
-          message: "制作计划已被更新，请刷新后重新微调",
-          action: "retry",
-        });
-      }
+      this.#requireExpectedVersion(project, input.expectedUpdatedAt);
       const plan = project.plan;
       if (!plan) throw taskError("请先生成可执行制作计划");
 
@@ -385,7 +385,7 @@ export class StandaloneProductionService implements ProductionService {
         plan,
         edit: input,
         constraints: {
-          ...this.#editConstraints(project),
+          ...await this.#editConstraints(project),
           ...(headlineText ? { headlineText } : {}),
           ...(requestedTemplateId === undefined ? {} : { subtitleTemplateId: requestedTemplateId }),
         },
@@ -393,13 +393,18 @@ export class StandaloneProductionService implements ProductionService {
       const { output: _output, issue: _issue, ...base } = project;
       void _output; void _issue;
 
-      await this.#options.files.writeProductionText({ projectId, relativePath: PLAN_PATH, value: JSON.stringify(next), replace: true });
+      // Validation and source-text lookup can await, so re-check the version immediately before
+      // writing. This shrinks the window rather than closing it; see #118.
+      this.#requireExpectedVersion(await this.#required(projectId), input.expectedUpdatedAt);
       const updated = await this.#persist({
         ...base,
         ...(headlineText ? { headlineText } : {}),
         status: "ready",
         plan: next,
       });
+      // Written after the authoritative record so a failure here cannot leave the sidecar ahead
+      // of `project.json`, which is the file everything actually reads.
+      await this.#options.files.writeProductionText({ projectId, relativePath: PLAN_PATH, value: JSON.stringify(next), replace: true });
       // The rendered MP4 no longer matches the plan. Leaving it would show the edit as already
       // exported; the project falls back to the same state as a plan that was never rendered.
       if (project.output) {
@@ -408,19 +413,32 @@ export class StandaloneProductionService implements ProductionService {
         } catch (error) {
           await this.#save(project).catch(() => undefined);
           await this.#emit(projectId, { type: "state", project: this.#project(project) }).catch(() => undefined);
-          throw error;
+          throw storageTaskError(error, "作废旧成片失败，制作计划已恢复到微调前的状态。");
         }
       }
       return this.#project(updated);
     });
   }
 
-  #editConstraints(project: PersistedProject): ProductionPlanConstraints {
+  #requireExpectedVersion(project: PersistedProject, expectedUpdatedAt: string): void {
+    if (project.updatedAt === expectedUpdatedAt) return;
+    throw new TaskError({
+      code: "PRODUCTION_PLAN_VERSION_STALE",
+      message: "制作计划已被更新，请刷新后重新微调",
+      action: "retry",
+    });
+  }
+
+  async #editConstraints(project: PersistedProject): Promise<ProductionPlanConstraints> {
+    // Generation refuses narration lifted verbatim from the reference copy. Without the same
+    // source text an edit could do what generation had to refuse.
+    const sourceText = originalSourceText(await this.#options.tasks.getDetail(project.analysisTaskId).catch(() => undefined));
     return {
       analysisTaskId: project.analysisTaskId,
       mode: project.mode,
       targetDurationSeconds: project.targetDurationSeconds,
       textPreset: project.textPreset,
+      ...(sourceText ? { originalSourceText: sourceText } : {}),
       assets: project.assets.map((asset) => ({ ...asset, role: asset.role ?? defaultAssetRole(asset) })),
     };
   }
@@ -509,7 +527,7 @@ export class StandaloneProductionService implements ProductionService {
       } catch (error) {
         await this.#save(project).catch(() => undefined);
         await this.#emit(projectId, { type: "state", project: this.#project(project) }).catch(() => undefined);
-        throw error;
+        throw storageTaskError(error, "删除素材文件失败，制作项目已恢复到删除前的状态。");
       }
       if (project.output) {
         await this.#options.files.deleteProductionFile({ projectId, relativePath: "output.mp4" });
@@ -531,7 +549,7 @@ export class StandaloneProductionService implements ProductionService {
       } catch (error) {
         await this.#save(project).catch(() => undefined);
         await this.#emit(projectId, { type: "state", project: this.#project(project) }).catch(() => undefined);
-        throw error;
+        throw storageTaskError(error, "删除成片文件失败，制作项目已恢复到删除前的状态。");
       }
       return this.#project(next);
     });

@@ -1,5 +1,6 @@
 package com.hongtai.aiagent.production
 
+import kotlin.math.abs
 import org.json.JSONObject
 
 internal enum class ProductionAssetKind { IMAGE, VIDEO, AUDIO }
@@ -150,8 +151,14 @@ internal object ProductionPlanParser {
   }
 
   private fun secondsToMs(value: Double): Long {
-    require(value.isFinite() && value * 1_000.0 % 1.0 == 0.0) { "Production duration must use millisecond precision." }
-    return (value * 1_000.0).toLong()
+    require(value.isFinite()) { "Production duration must be a finite number of seconds." }
+    val milliseconds = value * 1_000.0
+    val rounded = Math.round(milliseconds)
+    // Seconds cannot hold every millisecond exactly in binary floating point: 8.1 seconds becomes
+    // 8100.000000000001 ms. An exact remainder check would reject durations the shared layer
+    // considers valid, and truncating would lose a millisecond, so mirror the shared tolerance.
+    require(abs(milliseconds - rounded) < 1e-6) { "Production duration must use millisecond precision." }
+    return rounded
   }
 
   private val SUPPORTED_SCHEMA_VERSIONS =

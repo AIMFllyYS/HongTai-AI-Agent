@@ -89,6 +89,45 @@ function assertShotDurationsFillPlan(plan: ProductionPlanResultV2): void {
   );
 }
 
+/**
+ * Avatar captions are the words the recorded person actually speaks, and the single video is
+ * sliced sequentially by shot duration. Editing either would burn a subtitle over the segment
+ * where a different sentence is being said, so both are refused instead of silently desyncing.
+ */
+function assertAvatarEditable(edit: ProductionPlanUpdate, mode: ProductionPlanConstraints["mode"]): void {
+  if (mode !== "avatar") return;
+  for (const shot of edit.shots ?? []) {
+    if (shot.narration !== undefined) throw invalidEdit("数字人口播的字幕来自原声口播稿，请改口播稿后重新生成计划。");
+    if (shot.durationSeconds !== undefined) throw invalidEdit("数字人口播的镜头时长跟随原视频，不能在这里单独调整。");
+  }
+}
+
+/** Bounds the plan schema owns, checked here so each field reports itself instead of the timeline. */
+function assertScalarBounds(edit: ProductionPlanUpdate): void {
+  const rate = edit.speechRate;
+  if (rate !== undefined && !(Number.isFinite(rate) && rate >= 0.75 && rate <= 1.25)) {
+    throw invalidEdit("语速需要在 0.75 到 1.25 之间。");
+  }
+  const volume = edit.backgroundMusicVolume;
+  if (volume !== undefined && !(Number.isFinite(volume) && volume >= 0 && volume <= 0.35)) {
+    throw invalidEdit("背景音乐音量需要在 0 到 0.35 之间。");
+  }
+  const headline = edit.headlineText?.trim();
+  if (headline !== undefined && [...headline].length > 24) throw invalidEdit("主文字最多 24 个字。");
+  for (const shot of edit.shots ?? []) {
+    const duration = shot.durationSeconds;
+    if (duration !== undefined && !(Number.isFinite(duration) && duration >= 1 && duration <= 20)) {
+      throw invalidEdit(`第 ${shot.order} 个镜头的时长需要在 1 到 20 秒之间。`);
+    }
+    if (shot.narration !== undefined && [...shot.narration.trim()].length > 160) {
+      throw invalidEdit(`第 ${shot.order} 个镜头的口播最多 160 个字。`);
+    }
+    if (shot.caption !== undefined && [...shot.caption.trim()].length > 40) {
+      throw invalidEdit(`第 ${shot.order} 个镜头的标题最多 40 个字。`);
+    }
+  }
+}
+
 export interface ProductionPlanEditInput {
   readonly plan: ProductionPlanResult;
   readonly edit: ProductionPlanUpdate;
@@ -103,6 +142,8 @@ export interface ProductionPlanEditInput {
  */
 export function applyProductionPlanEdit(input: ProductionPlanEditInput): ProductionPlanResultV3 {
   const { edit } = input;
+  assertAvatarEditable(edit, input.constraints.mode);
+  assertScalarBounds(edit);
   const base = editableBase(input.plan);
   const headline = edit.headlineText?.trim();
   if (edit.headlineText !== undefined && !headline) throw invalidEdit("主文字不能为空，删除请留空原文字预设。");
@@ -129,6 +170,14 @@ export function applyProductionPlanEdit(input: ProductionPlanEditInput): Product
     ...(requestedTemplateId === undefined ? {} : { requestedTemplateId }),
     invalid: (cause) => invalidEdit("这次微调无法生成可播放的字幕，请检查镜头文案和时长。", cause),
   });
-  validateProductionPlan(next, input.constraints);
+  // The shared gate reports every failure as an AI output problem, which would tell the UI to
+  // re-run generation. A user editing their own plan needs to be sent back to their own input.
+  try {
+    validateProductionPlan(next, input.constraints);
+  } catch (error) {
+    throw error instanceof TaskError && error.code === "AI_STRUCTURED_OUTPUT_INVALID"
+      ? invalidEdit(error.message, error)
+      : error;
+  }
   return next;
 }

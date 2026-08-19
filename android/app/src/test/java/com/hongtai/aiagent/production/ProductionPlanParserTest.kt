@@ -133,6 +133,24 @@ class ProductionPlanParserTest {
     }
   }
 
+  @Test
+  fun `accepts millisecond durations that seconds cannot hold exactly and still rejects finer ones`() {
+    // 8.005 秒在 IEEE-754 下是 8004.999999999999 毫秒，8.1 秒是 8100.000000000001 毫秒。
+    // 两者都是合法的整毫秒时长，共享层允许，渲染器也必须能执行。
+    val shifted = validPlan()
+      .replace("\"durationSeconds\":8,", "\"durationSeconds\":8.005,")
+      .replace("\"durationSeconds\":12,", "\"durationSeconds\":11.995,")
+    val plan = ProductionPlanParser.parse(shifted, assets)
+
+    assertEquals(8_005L, plan.shots[0].durationMs)
+    assertEquals(11_995L, plan.shots[1].durationMs)
+    assertEquals(20_000L, plan.shots.sumOf { it.durationMs })
+
+    assertThrows(IllegalArgumentException::class.java) {
+      ProductionPlanParser.parse(validPlan().replace("\"durationSeconds\":8,", "\"durationSeconds\":8.0005,"), assets)
+    }
+  }
+
   private fun timedPlan(): String = """
     {
       "schemaVersion":"production-plan.v3",

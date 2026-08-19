@@ -291,6 +291,123 @@ test("微调选择逐字点亮模板时降级为逐行，并留下用户原本�
   assert.equal(subtitleOf(kept).degradedFromTemplateId, "karaoke_glow", "后续微调必须保留原本的模板选择");
 });
 
+test("微调把用户输入错误报成可编辑，而不是让界面去重跑 AI", async () => {
+  const { service, ready } = await plannedProject(steppingClock());
+  const cases: Array<{ readonly edit: Record<string, unknown>; readonly message: RegExp }> = [
+    { edit: { subtitleTemplateId: "not_a_template" }, message: /字幕模板/u },
+    { edit: { shots: [{ order: 1, assetId: "asset-404" }] }, message: /不存在的素材/u },
+    { edit: { speechRate: 5 }, message: /语速需要在 0\.75 到 1\.25 之间/u },
+    { edit: { speechRate: Number.NaN }, message: /语速需要在/u },
+    { edit: { backgroundMusicVolume: 9 }, message: /背景音乐音量需要在 0 到 0\.35 之间/u },
+    { edit: { headlineText: "一二三四五六七八九十一二三四五六七八九十一二三四五" }, message: /主文字最多 24 个字/u },
+    { edit: { shots: [{ order: 1, durationSeconds: 0.5 }] }, message: /时长需要在 1 到 20 秒之间/u },
+    { edit: { shots: [{ order: 1, durationSeconds: 21 }] }, message: /时长需要在 1 到 20 秒之间/u },
+  ];
+
+  for (const { edit, message } of cases) {
+    await assert.rejects(
+      () => service.updatePlan("project-1", { expectedUpdatedAt: ready.updatedAt, ...edit }),
+      (error: unknown) => {
+        assert.equal((error as { code?: string }).code, "PRODUCTION_PLAN_EDIT_INVALID", `${JSON.stringify(edit)} 应报成可编辑错误`);
+        assert.equal((error as { action?: string }).action, "edit_input");
+        assert.match((error as Error).message, message);
+        return true;
+      },
+    );
+  }
+});
+
+test("微调不能把镜头时长改成渲染器无法表达的毫秒值", async () => {
+  const { service, ready, renderCalls } = await plannedProject(steppingClock());
+  // 8.005 秒在 IEEE-754 下是 8004.999999999999 毫秒，宽松判定会放过、渲染器会拒绝。
+  const edited = await service.updatePlan("project-1", {
+    expectedUpdatedAt: ready.updatedAt,
+    shots: [{ order: 1, durationSeconds: 8.005 }, { order: 2, durationSeconds: 11.995 }],
+  });
+
+  const shots = shotsOf(edited);
+  const totalMs = shots.reduce((sum, shot) => sum + Math.round(shot.durationSeconds * 1_000), 0);
+  assert.equal(totalMs, 20_000, "毫秒总和必须精确等于目标时长");
+  for (const shot of shots) {
+    const milliseconds = shot.durationSeconds * 1_000;
+    assert.ok(Math.abs(milliseconds - Math.round(milliseconds)) < 1e-6, `镜头 ${shot.order} 的时长不是整毫秒`);
+  }
+
+  await service.render("project-1");
+  const planJson = renderCalls.at(-1)?.planJson ?? "";
+  assert.match(planJson, /"durationSeconds":8\.005/u, "落到渲染器的仍是用户填写的时长");
+});
+
+test("数字人口播不接受改口播与改时长，避免字幕与原声对不上", async () => {
+  const context = harness("system", steppingClock());
+  const service = context.create();
+  await service.create({
+    analysisTaskId: "task-1",
+    brief: "介绍门店",
+    targetDurationSeconds: 20,
+    mode: "avatar",
+    avatarScript: "欢迎来到我们的门店。今天带你看看真实服务过程，看完你就知道值不值。",
+  });
+  await service.importAssets("project-1");
+  const ready = await service.generatePlan("project-1");
+
+  await assert.rejects(
+    () => service.updatePlan("project-1", { expectedUpdatedAt: ready.updatedAt, shots: [{ order: 1, narration: "和原声完全不同的一句话。" }] }),
+    /字幕来自原声口播稿/u,
+  );
+  await assert.rejects(
+    () => service.updatePlan("project-1", { expectedUpdatedAt: ready.updatedAt, shots: [{ order: 1, durationSeconds: 2 }] }),
+    /镜头时长跟随原视频/u,
+  );
+
+  const templateOnly = await service.updatePlan("project-1", { expectedUpdatedAt: ready.updatedAt, subtitleTemplateId: "keyword_pop" });
+  assert.equal(subtitleOf(templateOnly).templateId, "keyword_pop", "数字人模式仍可换字幕模板");
+});
+
+test("微调不能逐字照搬来源原文，和生成计划受同一条原创约束", async () => {
+  const { service, ready } = await plannedProject(steppingClock());
+  await assert.rejects(
+    () => service.updatePlan("project-1", {
+      expectedUpdatedAt: ready.updatedAt,
+      shots: [{ order: 1, narration: "原视频介绍了门店场地与合作方式，只作为创作结构参考。" }],
+    }),
+    (error: unknown) => {
+      assert.equal((error as { code?: string }).code, "PRODUCTION_PLAN_EDIT_INVALID");
+      assert.match((error as Error).message, /连续重复/u);
+      return true;
+    },
+  );
+});
+
+test("作废成片失败时回滚到微调前状态，并给出可分支的稳定错误", async () => {
+  const now = steppingClock();
+  const context = harness("system", now);
+  const service = context.create();
+  await service.create({ analysisTaskId: "task-1", brief: "突出真实服务", targetDurationSeconds: 20 });
+  await service.importAssets("project-1");
+  await service.generatePlan("project-1");
+  const rendered = await service.render("project-1");
+  const before = context.values.get("project-1/project.json");
+
+  context.files.deleteProductionFile = async () => { throw new Error("EBUSY"); };
+  await assert.rejects(
+    () => service.updatePlan("project-1", {
+      expectedUpdatedAt: rendered.updatedAt,
+      shots: [{ order: 1, narration: "改一句口播来触发成片作废。" }],
+    }),
+    (error: unknown) => {
+      assert.equal((error as { code?: string }).code, "STORAGE_WRITE_FAILED", "文件失败必须映射成稳定错误码");
+      assert.equal((error as { action?: string }).action, "retry");
+      return true;
+    },
+  );
+
+  assert.equal(context.values.get("project-1/project.json"), before, "回滚后盘上状态必须与微调前完全一致");
+  const restored = await service.get("project-1");
+  assert.equal(restored?.status, "succeeded", "回滚后仍是渲染完成，不能留在半成状态");
+  assert.ok(restored?.output, "回滚后成片记录必须还在");
+});
+
 test("微调换用非可播素材或不存在的镜头时按稳定错误拒绝", async () => {
   const { service, ready } = await plannedProject(steppingClock());
 

@@ -153,6 +153,9 @@ export function validateProductionPlan(plan: ProductionPlanResult, constraints: 
   const musicId = plan.audio.backgroundMusicAssetId;
   if (musicId !== null && assets.get(musicId)?.kind !== "audio") throw invalidPlan("背景音乐必须引用已导入的音频素材");
   if (musicId === null && plan.audio.backgroundMusicVolume !== 0) throw invalidPlan("没有背景音乐时音量必须为0");
+  // Music at zero volume renders as silence while the plan still lists a track, which reads as a
+  // broken export rather than a deliberate choice.
+  if (musicId !== null && plan.audio.backgroundMusicVolume <= 0) throw invalidPlan("选择了背景音乐时音量必须大于0");
 
   if (plan.schemaVersion !== "production-plan.v1") {
     if (plan.textOverlay.preset !== constraints.textPreset) throw invalidPlan("制作计划文字预设与用户选择不一致");
