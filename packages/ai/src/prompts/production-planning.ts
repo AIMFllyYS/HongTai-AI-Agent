@@ -38,6 +38,10 @@ function requirementRules(input: ProductionPlanInput): string {
  * list it will otherwise describe the undescribed pictures with the same confidence.
  */
 function insightRules(input: ProductionPlanInput): string {
+  // Avatar captions must follow the user's own script word for word. Adding "do not describe any
+  // picture" on top of that contradicts the script whenever it happens to mention what is on screen,
+  // and the script wins: the recorded voice already said it.
+  if (input.mode === "avatar") return "";
   const described = input.assets.filter((asset) => asset.insight !== undefined);
   if (described.length === 0) {
     return "没有任何素材的画面被识别过。旁白和字幕只能讲用户的经营需求与拆解结构，不得描述任何具体画面内容，不得声称画面里有某个人、某件物品或某个场景。";

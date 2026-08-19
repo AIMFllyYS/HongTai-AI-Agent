@@ -1,4 +1,4 @@
-import { hasVisibleText, resolveTemplateForPrecision, TaskError } from "@hongtai/core";
+import { hasReadableText, hasVisibleText, resolveTemplateForPrecision, TaskError } from "@hongtai/core";
 
 import type { ReplicaBlueprintFlowDependencies, ReplicaBlueprintInput } from "../../contracts/replica-blueprint";
 import { assertEvidenceRefs } from "../../evidence";
@@ -51,9 +51,10 @@ function assertReadable(value: ReplicaBlueprintResponse): void {
  * user should trust.
  */
 function assertEmptiness(value: ReplicaBlueprintResponse): void {
-  // A reason made of zero-width characters is worse than no reason: the user is shown a blank line
-  // where the explanation should be and cannot tell whether the system failed or the source was thin.
-  if (value.shots.length === 0 && !hasVisibleText(value.emptyReason ?? "")) {
+  // A reason made of zero-width characters or of punctuation is worse than no reason: the user is
+  // shown a line where the explanation should be and still cannot tell whether the system failed or
+  // the source was thin.
+  if (value.shots.length === 0 && !hasReadableText(value.emptyReason ?? "")) {
     throw invalidBlueprint("复刻蓝图给不出分镜时必须说明缺少哪些证据");
   }
   if (value.shots.length > 0 && value.emptyReason !== null) {

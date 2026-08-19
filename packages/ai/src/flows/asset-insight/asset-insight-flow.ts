@@ -1,4 +1,4 @@
-import { hasVisibleText, TaskError } from "@hongtai/core";
+import { hasReadableText, hasVisibleText, TaskError } from "@hongtai/core";
 
 import type { AssetInsightFlowDependencies, AssetInsightInput } from "../../contracts/asset-insight";
 import { assetInsightPrompt } from "../../prompts/asset-insight";
@@ -45,8 +45,10 @@ function assertReadable(value: AssetInsightResponse): void {
  */
 function assertUsability(value: AssetInsightResponse): void {
   if (value.usable && value.unusableReason !== null) throw invalidInsight("可用素材不应附带不可用原因");
-  if (!value.usable && !(value.unusableReason && hasVisibleText(value.unusableReason))) {
-    throw invalidInsight("判定素材不可用时必须说明原因");
+  // A reason of `。。。` clears a non-blank check and then tells the user to reshoot without saying
+  // what was wrong, which is the same dead end as no reason at all.
+  if (!value.usable && !(value.unusableReason && hasReadableText(value.unusableReason))) {
+    throw invalidInsight("判定素材不可用时必须说清该重拍什么");
   }
 }
 

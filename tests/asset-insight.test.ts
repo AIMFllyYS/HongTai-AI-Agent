@@ -110,10 +110,18 @@ test("没有帧、帧过多或非位图都当场拒绝，不去浪费一次视�
 
 test("说不可用就必须说清重拍什么，可用就不能附带不可用原因", async () => {
   const silent = await rejection([JSON.stringify(response({ usable: false, unusableReason: null }))]);
-  assert.match(silent.message, /必须说明原因/u);
+  assert.match(silent.message, /该重拍什么/u);
 
-  const blank = await rejection([JSON.stringify(response({ usable: false, unusableReason: "\u200b\u200b" }))]);
-  assert.match(blank.message, /必须说明原因/u, "只有零宽字符的原因等于没说");
+  // Each of these reaches the user as a reshoot instruction that instructs nothing, which is the
+  // same dead end as saying nothing at all.
+  for (const empty of ["\u200b\u200b", "。。。", "...", "?", "—"]) {
+    const blank = await rejection([JSON.stringify(response({ usable: false, unusableReason: empty }))]);
+    assert.match(blank.message, /该重拍什么/u, `原因「${empty}」等于没说`);
+  }
+
+  // Two characters can be a real answer, so the gate must not become a length rule.
+  const terse = await run([JSON.stringify(response({ usable: false, unusableReason: "太暗" }))]);
+  assert.equal(terse.result.unusableReason, "太暗");
 
   const contradictory = await rejection([JSON.stringify(response({ usable: true, unusableReason: "太暗了" }))]);
   assert.match(contradictory.message, /不应附带不可用原因/u);

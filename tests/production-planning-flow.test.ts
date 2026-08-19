@@ -185,13 +185,17 @@ test("素材被识别过时记下是哪几个，并告诉模型哪些素材仍�
 test("素材理解不得改变清单绑定的镜头顺序", async () => {
   // Bound assets stay in list order: insight informs what the narration may say, never where the
   // shot goes, or the checklist the user filmed against would become a suggestion.
+  // Each insight deliberately contradicts the requirement it is bound to: the asset filmed for the
+  // closing detail slot looks like an opening, and the one filmed for the opening looks like a
+  // detail. Matching pictures to requirements would therefore reverse the plan, so the assertions
+  // below can tell "kept the list order" apart from "happened to agree with the list order".
   const insight = (description: string) => ({ description, subject: "operator", tags: ["门店"] });
   const bound: ProductionPlanInput = {
     ...input,
     assets: [
-      { ...input.assets[0]!, insight: insight("服务细节特写"), requirement: { order: 3, visualDescription: "服务细节", contentHint: "细节特写", suggestedDurationSeconds: 6 } },
+      { ...input.assets[0]!, insight: insight("店员出镜开场，正对镜头说话"), requirement: { order: 3, visualDescription: "服务细节", contentHint: "细节特写", suggestedDurationSeconds: 6 } },
       { ...input.assets[1]!, insight: insight("门店门口全景"), requirement: { order: 2, visualDescription: "门口全景", contentHint: "门口", suggestedDurationSeconds: 6 } },
-      { ...input.assets[2]!, insight: insight("店员出镜开场"), requirement: { order: 1, visualDescription: "店员开场", contentHint: "出镜开场", suggestedDurationSeconds: 8 } },
+      { ...input.assets[2]!, insight: insight("服务细节特写，只有手部动作"), requirement: { order: 1, visualDescription: "店员开场", contentHint: "出镜开场", suggestedDurationSeconds: 8 } },
     ],
   };
   const listOrder = ["asset-video", "asset-detail", "asset-image"];
