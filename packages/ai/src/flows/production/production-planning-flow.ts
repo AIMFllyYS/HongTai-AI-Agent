@@ -1,22 +1,16 @@
-import {
-  buildShotCueTimeline,
-  resolveTemplateForPrecision,
-  subtitleTimingPrecision,
-  TaskError,
-  type SubtitleTimingSource,
-} from "@hongtai/core";
+import { TaskError, type SubtitleTimingSource } from "@hongtai/core";
 
 import type { ProductionPlanInput, ProductionPlanningFlowDependencies } from "../../contracts/production-planning";
 import { productionPlanningPrompt, productionPlanningRepairPrompt } from "../../prompts/production-planning";
 import {
   productionPlanResultJsonSchema,
   productionPlanResultV2Schema,
-  productionPlanResultV3Schema,
   type ProductionPlanResultV2,
   type ProductionPlanResultV3,
 } from "../../schemas/production-plan";
 import { parseStructuredOutput } from "../../structured-output/parse-structured-output";
 import { invalidPlan, validateProductionPlan, type ProductionPlanConstraints } from "./production-plan-validation";
+import { withSubtitleTimeline } from "./production-subtitle-timeline";
 
 /**
  * Narration is synthesized on device only after the plan is approved, so its real length is
@@ -25,39 +19,13 @@ import { invalidPlan, validateProductionPlan, type ProductionPlanConstraints } f
  */
 const MONTAGE_TIMING_SOURCE: SubtitleTimingSource = "script_estimate";
 
-/**
- * The model decides shots and copy; cue milliseconds are derived here, because asking a
- * language model for timestamp arithmetic produces plausible numbers that do not add up.
- *
- * The derived plan is parsed against its own schema before it leaves this function. Without
- * that, a shot whose narration carries no readable characters would yield an empty cue list
- * that only fails later, when the plan is read back from disk and the project can no longer
- * be opened.
- */
 function withDerivedCues(plan: ProductionPlanResultV2, requestedTemplateId: string | undefined): ProductionPlanResultV3 {
-  const precision = subtitleTimingPrecision(MONTAGE_TIMING_SOURCE);
-  const resolved = resolveTemplateForPrecision({ requestedId: requestedTemplateId ?? "", precision });
-  const derived = {
-    ...plan,
-    schemaVersion: "production-plan.v3",
-    subtitle: {
-      templateId: resolved.template.id,
-      timing: { precision, source: MONTAGE_TIMING_SOURCE },
-      degradedFromTemplateId: resolved.degradedFrom ?? null,
-    },
-    shots: plan.shots.map((shot) => ({
-      ...shot,
-      cues: buildShotCueTimeline({
-        text: shot.narration,
-        shotDurationMs: Math.round(shot.durationSeconds * 1_000),
-        typography: resolved.template.typography,
-      }).map((cue) => ({ ...cue, emphasisWords: [...cue.emphasisWords], words: null })),
-    })),
-    decorations: [],
-  };
-  const parsed = productionPlanResultV3Schema.safeParse(derived);
-  if (!parsed.success) throw invalidPlan("制作计划无法生成可执行的字幕时间轴", parsed.error);
-  return parsed.data;
+  return withSubtitleTimeline({
+    plan,
+    source: MONTAGE_TIMING_SOURCE,
+    ...(requestedTemplateId === undefined ? {} : { requestedTemplateId }),
+    invalid: (cause) => invalidPlan("制作计划无法生成可执行的字幕时间轴", cause),
+  });
 }
 
 function validateInput(input: ProductionPlanInput): void {

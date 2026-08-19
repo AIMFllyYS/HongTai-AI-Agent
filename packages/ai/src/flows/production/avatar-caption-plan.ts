@@ -1,12 +1,7 @@
-import {
-  buildShotCueTimeline,
-  resolveTemplateForPrecision,
-  subtitleTimingPrecision,
-  TaskError,
-  type SubtitleTimingSource,
-} from "@hongtai/core";
+import { TaskError, type SubtitleTimingSource } from "@hongtai/core";
 
-import { productionPlanResultV3Schema, type ProductionPlanResultV3 } from "../../schemas/production-plan";
+import type { ProductionPlanResultV3 } from "../../schemas/production-plan";
+import { withSubtitleTimeline } from "./production-subtitle-timeline";
 
 /**
  * Avatar captions are cut from the pasted script, so nothing about the recorded voice is
@@ -98,47 +93,29 @@ export function createAvatarCaptionPlan(input: AvatarCaptionPlanInput): Producti
   const baseDurationMs = Math.floor(totalMs / captions.length);
   const remainderMs = totalMs % captions.length;
 
-  const precision = subtitleTimingPrecision(AVATAR_TIMING_SOURCE);
-  const resolved = resolveTemplateForPrecision({ requestedId: input.subtitleTemplateId ?? "", precision });
-
-  const plan = {
-    schemaVersion: "production-plan.v3",
-    source: { analysisTaskId: input.analysisTaskId },
-    title: input.brief.trim().slice(0, 80),
-    settings: { width: 720, height: 1280, fps: 30, durationSeconds: input.targetDurationSeconds },
-    audio: { voiceLocale: "zh-CN", speechRate: 1, backgroundMusicAssetId: null, backgroundMusicVolume: 0 },
-    textOverlay: {
-      primaryText: input.headlineText?.trim() || input.brief.trim().slice(0, 24),
-      secondaryText: null,
-      preset: input.textPreset,
-    },
-    subtitle: {
-      templateId: resolved.template.id,
-      timing: { precision, source: AVATAR_TIMING_SOURCE },
-      degradedFromTemplateId: resolved.degradedFrom ?? null,
-    },
-    shots: captions.map((caption, index) => {
-      const durationMs = baseDurationMs + (index < remainderMs ? 1 : 0);
-      return {
+  return withSubtitleTimeline({
+    plan: {
+      schemaVersion: "production-plan.v2",
+      source: { analysisTaskId: input.analysisTaskId },
+      title: input.brief.trim().slice(0, 80),
+      settings: { width: 720, height: 1280, fps: 30, durationSeconds: input.targetDurationSeconds },
+      audio: { voiceLocale: "zh-CN", speechRate: 1, backgroundMusicAssetId: null, backgroundMusicVolume: 0 },
+      textOverlay: {
+        primaryText: input.headlineText?.trim() || input.brief.trim().slice(0, 24),
+        secondaryText: null,
+        preset: input.textPreset,
+      },
+      shots: captions.map((caption, index) => ({
         order: index + 1,
         assetId: input.avatarAsset.id,
-        durationSeconds: durationMs / 1_000,
+        durationSeconds: (baseDurationMs + (index < remainderMs ? 1 : 0)) / 1_000,
         narration: caption,
         caption,
-        fit: "contain" as const,
-        cues: buildShotCueTimeline({
-          text: caption,
-          shotDurationMs: durationMs,
-          typography: resolved.template.typography,
-        }).map((cue) => ({ ...cue, emphasisWords: [...cue.emphasisWords], words: null })),
-      };
-    }),
-    decorations: [],
-  };
-
-  // A plan that fails its own schema would still persist, and the project could no longer be
-  // opened afterwards, so the failure has to surface here while the user can still edit input.
-  const parsed = productionPlanResultV3Schema.safeParse(plan);
-  if (!parsed.success) throw invalid("数字人口播稿无法生成可执行的字幕时间轴，请调整口播稿。");
-  return parsed.data;
+        fit: "contain",
+      })),
+    },
+    source: AVATAR_TIMING_SOURCE,
+    ...(input.subtitleTemplateId === undefined ? {} : { requestedTemplateId: input.subtitleTemplateId }),
+    invalid: () => invalid("数字人口播稿无法生成可执行的字幕时间轴，请调整口播稿。"),
+  });
 }

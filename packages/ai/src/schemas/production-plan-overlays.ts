@@ -1,4 +1,10 @@
-import { SUBTITLE_TIMING_PRECISIONS, SUBTITLE_TIMING_SOURCES } from "@hongtai/core";
+import {
+  MAX_CUE_CHARACTERS,
+  MAX_EMPHASIS_WORD_CHARACTERS,
+  MAX_EMPHASIS_WORDS_PER_CUE,
+  SUBTITLE_TIMING_PRECISIONS,
+  SUBTITLE_TIMING_SOURCES,
+} from "@hongtai/core";
 import { z } from "zod";
 
 import { subtitleTemplateIdSchema } from "./subtitle-template";
@@ -32,9 +38,9 @@ export const subtitleCueSchema = z.object({
   /** Milliseconds relative to the start of the owning shot. */
   startMs: shotTimestampMs,
   endMs: shotTimestampMs,
-  text: z.string().min(1).max(40),
+  text: z.string().min(1).max(MAX_CUE_CHARACTERS),
   /** Words the template may recolour or animate; each one must occur in `text`. */
-  emphasisWords: z.array(z.string().min(1).max(12)).max(3),
+  emphasisWords: z.array(z.string().min(1).max(MAX_EMPHASIS_WORD_CHARACTERS)).max(MAX_EMPHASIS_WORDS_PER_CUE),
   /** Word timings when the audio pipeline produced them; null keeps the cue line-level. */
   words: z.array(subtitleCueWordSchema).min(1).max(40).nullable(),
 });

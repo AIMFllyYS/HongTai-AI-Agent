@@ -1,3 +1,4 @@
+import { MAX_CUES_PER_SHOT } from "@hongtai/core";
 import { z } from "zod";
 
 import { toProviderJsonSchema } from "../structured-output/json-schema";
@@ -55,7 +56,7 @@ export const productionPlanResultV3Schema = productionPlanBaseSchema.extend({
   textOverlay: textOverlaySchema,
   subtitle: productionSubtitleSettingsSchema,
   shots: z.array(productionShotBaseSchema.extend({
-    cues: z.array(subtitleCueSchema).min(1).max(12),
+    cues: z.array(subtitleCueSchema).min(1).max(MAX_CUES_PER_SHOT),
   })).min(1).max(12),
   decorations: z.array(productionDecorationSchema).max(6),
 });
