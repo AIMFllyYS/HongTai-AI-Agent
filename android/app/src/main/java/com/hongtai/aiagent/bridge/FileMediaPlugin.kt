@@ -27,6 +27,7 @@ import com.hongtai.aiagent.media.PrivateMediaReadException
 import com.hongtai.aiagent.media.PrivateMediaStore
 import com.hongtai.aiagent.media.PrivateMediaTooLargeException
 import com.hongtai.aiagent.media.TaskVideoImportStore
+import com.hongtai.aiagent.runtime.ActiveWorkScreenStay
 import com.hongtai.aiagent.media.VideoOperationAwaitingResult
 import com.hongtai.aiagent.media.VideoOperationFailed
 import com.hongtai.aiagent.media.VideoOperationImporting
@@ -300,7 +301,12 @@ class FileMediaPlugin : Plugin() {
     }
     try {
       PHOTO_IMPORT_EXECUTOR.execute {
-        importAndResolve(call, Uri.parse(sourceUri), call.getString("displayName"))
+        ActiveWorkScreenStay.acquire(activity)
+        try {
+          importAndResolve(call, Uri.parse(sourceUri), call.getString("displayName"))
+        } finally {
+          ActiveWorkScreenStay.release(activity)
+        }
       }
     } catch (error: RejectedExecutionException) {
       call.reject("The private media import queue is unavailable.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
@@ -321,6 +327,7 @@ class FileMediaPlugin : Plugin() {
     if (!scheduledOperations.add(operation.operationId)) return
     try {
       VIDEO_IMPORT_EXECUTOR.execute {
+        ActiveWorkScreenStay.acquire(activity)
         try {
           val sourceUri = Uri.parse(operation.sourceUri)
           val imported = taskVideos.import(operation.taskId, sourceUri)
@@ -332,6 +339,7 @@ class FileMediaPlugin : Plugin() {
         } finally {
           releasePickerReadPermission(operation.sourceUri)
           scheduledOperations.remove(operation.operationId)
+          ActiveWorkScreenStay.release(activity)
         }
       }
     } catch (error: RejectedExecutionException) {
@@ -344,6 +352,7 @@ class FileMediaPlugin : Plugin() {
     if (!scheduledOperations.add(operation.operationId)) return
     try {
       PHOTO_IMPORT_EXECUTOR.execute {
+        ActiveWorkScreenStay.acquire(activity)
         try {
           val imported = when (operation.kind) {
             PhotoOperationKind.PICKER -> {
@@ -369,6 +378,7 @@ class FileMediaPlugin : Plugin() {
         } finally {
           if (operation.kind == PhotoOperationKind.PICKER) releasePickerReadPermission(operation.sourceUri)
           scheduledOperations.remove(operation.operationId)
+          ActiveWorkScreenStay.release(activity)
         }
       }
     } catch (error: RejectedExecutionException) {

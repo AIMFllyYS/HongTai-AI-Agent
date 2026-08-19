@@ -34,6 +34,7 @@ import com.hongtai.aiagent.production.ProductionPlanParser
 import com.hongtai.aiagent.production.ProductionRenderMode
 import com.hongtai.aiagent.production.ProductionRenderer
 import com.hongtai.aiagent.production.SystemNarrationSynthesizer
+import com.hongtai.aiagent.runtime.ActiveWorkScreenStay
 import com.hongtai.aiagent.storage.AndroidKeystoreSecretStore
 import com.hongtai.aiagent.storage.LocalPreferences
 import java.util.concurrent.ConcurrentHashMap
@@ -171,6 +172,7 @@ class ProductionRuntimePlugin : Plugin() {
       null
     }
     PRODUCTION_EXECUTOR.execute {
+      ActiveWorkScreenStay.acquire(activity)
       try {
         val plan = ProductionPlanParser.parse(
           planJson,
@@ -204,6 +206,8 @@ class ProductionRuntimePlugin : Plugin() {
         call.reject(error.message ?: "The production plan is invalid.", NativeIssueCode.INVALID_ARGUMENT)
       } catch (error: Exception) {
         call.reject("The local production render failed.", NativeIssueCode.MEDIA_MERGE_FAILED)
+      } finally {
+        ActiveWorkScreenStay.release(activity)
       }
     }
   }
@@ -272,6 +276,7 @@ class ProductionRuntimePlugin : Plugin() {
     if (!scheduledOperations.add(operation.operationId)) return
     try {
       PRODUCTION_EXECUTOR.execute {
+        ActiveWorkScreenStay.acquire(activity)
         try {
           val uris = operation.sourceUris.map(Uri::parse)
           val assets = store.importAll(operation.projectId, uris, operation.selection)
@@ -283,6 +288,7 @@ class ProductionRuntimePlugin : Plugin() {
         } finally {
           operation.sourceUris.forEach(::releasePickerReadPermission)
           scheduledOperations.remove(operation.operationId)
+          ActiveWorkScreenStay.release(activity)
         }
       }
     } catch (_: RejectedExecutionException) {

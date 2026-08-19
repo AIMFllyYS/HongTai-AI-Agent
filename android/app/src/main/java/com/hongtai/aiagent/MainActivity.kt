@@ -3,7 +3,6 @@ package com.hongtai.aiagent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
-import android.view.WindowManager
 import androidx.core.view.WindowCompat
 import androidx.media3.common.util.UnstableApi
 import com.getcapacitor.BridgeActivity
@@ -29,10 +28,7 @@ class MainActivity : BridgeActivity() {
     registerPlugin(ProductionRuntimePlugin::class.java)
     super.onCreate(savedInstanceState)
 
-    // Long ingest and on-device render work is owned by this foreground
-    // WebView process. Avoid moving it into the background merely because the
-    // user waited for the screen timeout; Android clears this when hidden.
-    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    // Screen-on is acquired only while import or render work is in flight.
     // Android 15+ enforces edge-to-edge for this target SDK. The Web document
     // already declares viewport-fit=cover and owns its safe-area spacing, so
     // padding the native content view here would apply the status-bar inset a

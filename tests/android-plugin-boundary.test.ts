@@ -202,11 +202,18 @@ test("native page fetches reject with stable link codes and allowlisted data wit
   assert.doesNotMatch(manifest, /ACCESS_NETWORK_STATE/);
 });
 
-test("the foreground APK keeps the screen awake while its in-process tasks are active", () => {
+test("the foreground APK keeps the screen awake only while import or render work is active", () => {
   const mainActivity = read("android/app/src/main/java/com/hongtai/aiagent/MainActivity.kt");
+  const stay = read("android/app/src/main/java/com/hongtai/aiagent/runtime/ActiveWorkScreenStay.kt");
+  const production = read("android/app/src/main/java/com/hongtai/aiagent/bridge/ProductionRuntimePlugin.kt");
+  const files = read("android/app/src/main/java/com/hongtai/aiagent/bridge/FileMediaPlugin.kt");
+  const network = read("android/app/src/main/java/com/hongtai/aiagent/bridge/NativeNetworkPlugin.kt");
 
-  assert.match(mainActivity, /WindowManager\.LayoutParams\.FLAG_KEEP_SCREEN_ON/);
-  assert.match(mainActivity, /window\.addFlags\(/);
+  assert.doesNotMatch(mainActivity, /window\.addFlags\(/);
+  assert.match(stay, /WindowManager\.LayoutParams\.FLAG_KEEP_SCREEN_ON/);
+  assert.match(production, /ActiveWorkScreenStay\.acquire\(activity\)/);
+  assert.match(files, /ActiveWorkScreenStay\.acquire\(activity\)/);
+  assert.match(network, /ActiveWorkScreenStay\.acquire\(activity\)/);
 });
 
 test("video production returns stable safe errors and exports an AAC audio track", () => {
@@ -255,6 +262,8 @@ test("video production returns stable safe errors and exports an AAC audio track
   assert.doesNotMatch(plugin, /call\.reject\([^\n]*,\s*error\)/);
   assert.match(renderer, /setAudioMimeType\(MimeTypes\.AUDIO_AAC\)/);
   assert.match(renderer, /setVideoMimeType\(MimeTypes\.VIDEO_H264\)/);
+  assert.match(renderer, /EditedMediaItemSequence\.withAudioAndVideoFrom\(visualItems\)/);
+  assert.match(renderer, /EditedMediaItemSequence\.withVideoFrom\(visualItems\)/);
   assert.match(renderer, /setEnableFallback\(false\)/);
   assert.match(renderer, /setVideoEncoderSelector\(h264EncoderSelector/);
   assert.match(renderer, /EncoderUtil\.getSupportedEncoders/);

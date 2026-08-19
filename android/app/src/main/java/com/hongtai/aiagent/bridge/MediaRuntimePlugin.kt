@@ -11,6 +11,7 @@ import com.hongtai.aiagent.media.MediaDecodeException
 import com.hongtai.aiagent.media.MediaProbeException
 import com.hongtai.aiagent.media.MediaRemuxException
 import com.hongtai.aiagent.media.PcmWavSegmentationException
+import com.hongtai.aiagent.runtime.ActiveWorkScreenStay
 import java.util.concurrent.Executors
 
 @CapacitorPlugin(name = "MediaRuntime")
@@ -173,7 +174,12 @@ class MediaRuntimePlugin : Plugin() {
   private fun runMediaOperation(call: PluginCall, operation: () -> Unit) {
     try {
       MEDIA_EXECUTOR.execute {
-        operation()
+        ActiveWorkScreenStay.acquire(activity)
+        try {
+          operation()
+        } finally {
+          ActiveWorkScreenStay.release(activity)
+        }
       }
     } catch (error: Exception) {
       call.reject("The native media operation could not start safely.", NativeIssueCode.MEDIA_PROBE_FAILED, error)

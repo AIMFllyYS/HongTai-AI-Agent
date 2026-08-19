@@ -24,6 +24,7 @@ import com.hongtai.aiagent.network.NativeNetworkException
 import com.hongtai.aiagent.network.NativeNetworkPolicy
 import com.hongtai.aiagent.network.NativeTextFetchClient
 import com.hongtai.aiagent.network.NativeTextFetchRequest
+import com.hongtai.aiagent.runtime.ActiveWorkScreenStay
 import com.hongtai.aiagent.storage.AndroidKeystoreSecretStore
 import com.hongtai.aiagent.storage.LocalPreferences
 import com.hongtai.aiagent.storage.SecureStorageException
@@ -136,6 +137,7 @@ class NativeNetworkPlugin : Plugin() {
     }
 
     NETWORK_EXECUTOR.execute {
+      ActiveWorkScreenStay.acquire(activity)
       try {
         val result = downloads.download(request) { progress -> emitDownloadProgress(request, progress) }
         call.resolve(
@@ -155,6 +157,8 @@ class NativeNetworkPlugin : Plugin() {
           cause = error,
         )
         call.reject(safe.userMessage, safe.code, safe)
+      } finally {
+        ActiveWorkScreenStay.release(activity)
       }
     }
   }
