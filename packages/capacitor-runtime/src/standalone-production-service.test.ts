@@ -124,7 +124,7 @@ function harness(narration: "system" | "provider" = "system", now?: () => Date) 
   return { create, values, ids, files, pickCalls, renderCalls, planningPrompts, deletedPaths };
 }
 
-/** Each persist has to land on a distinct `updatedAt` for the stale-write check to mean anything. */
+/** Advances a second per persist so assertions can tell the writes apart by timestamp alone. */
 function steppingClock(): () => Date {
   let tick = 0;
   return () => new Date(Date.UTC(2026, 7, 8, 0, 0, (tick += 1)));
@@ -388,6 +388,9 @@ test("作废成片失败时回滚到微调前状态，并给出可分支的稳�
   await service.generatePlan("project-1");
   const rendered = await service.render("project-1");
   const before = context.values.get("project-1/project.json");
+  const beforePlan = context.values.get("project-1/plan.json");
+  const statuses: string[] = [];
+  service.subscribe("project-1", (event) => { if (event.type === "state") statuses.push(event.project.status); });
 
   context.files.deleteProductionFile = async () => { throw new Error("EBUSY"); };
   await assert.rejects(
@@ -403,9 +406,58 @@ test("作废成片失败时回滚到微调前状态，并给出可分支的稳�
   );
 
   assert.equal(context.values.get("project-1/project.json"), before, "回滚后盘上状态必须与微调前完全一致");
+  assert.equal(context.values.get("project-1/plan.json"), beforePlan, "派生的 plan.json 不能领先于权威记录");
+  assert.deepEqual(statuses, ["succeeded"], "微调没成功就不能先播一个 ready，让界面以为已经改好");
   const restored = await service.get("project-1");
   assert.equal(restored?.status, "succeeded", "回滚后仍是渲染完成，不能留在半成状态");
   assert.ok(restored?.output, "回滚后成片记录必须还在");
+});
+
+test("同一毫秒内的两次写入不会共用版本号，旧界面仍然被拦住", async () => {
+  const frozen = () => new Date(Date.UTC(2026, 7, 8));
+  const { service, ready } = await plannedProject(frozen);
+  const staleUpdatedAt = ready.updatedAt;
+
+  const first = await service.updatePlan("project-1", {
+    expectedUpdatedAt: staleUpdatedAt,
+    shots: [{ order: 1, narration: "第一次微调写进去的口播。" }],
+  });
+  assert.notEqual(first.updatedAt, staleUpdatedAt, "时钟不走也必须换一个版本号");
+
+  await assert.rejects(
+    () => service.updatePlan("project-1", {
+      expectedUpdatedAt: staleUpdatedAt,
+      shots: [{ order: 1, narration: "旧界面拿着老版本号覆盖。" }],
+    }),
+    (error: unknown) => {
+      assert.equal((error as { code?: string }).code, "PRODUCTION_PLAN_VERSION_STALE");
+      return true;
+    },
+  );
+
+  const current = await service.get("project-1");
+  assert.match(shotsOf(current!)[0]!.narration, /第一次微调/u, "第一次的修改必须留在盘上");
+});
+
+test("只有不可见字符的口播按空内容拒绝，不会烧进一条空字幕", async () => {
+  const { service, ready, values } = await plannedProject(steppingClock());
+  const before = values.get("project-1/project.json");
+
+  for (const narration of ["\u200B\u200B\u200B", "\uFEFF \u00A0"]) {
+    await assert.rejects(
+      () => service.updatePlan("project-1", { expectedUpdatedAt: ready.updatedAt, shots: [{ order: 1, narration }] }),
+      /口播内容不能为空/u,
+    );
+  }
+  assert.equal(values.get("project-1/project.json"), before);
+});
+
+test("取消背景音乐时同时设置音量按冲突拒绝，而不是默默改成静音", async () => {
+  const { service, ready } = await plannedProject(steppingClock());
+  await assert.rejects(
+    () => service.updatePlan("project-1", { expectedUpdatedAt: ready.updatedAt, backgroundMusicAssetId: null, backgroundMusicVolume: 0.2 }),
+    /取消背景音乐时不能同时设置音量/u,
+  );
 });
 
 test("微调换用非可播素材或不存在的镜头时按稳定错误拒绝", async () => {

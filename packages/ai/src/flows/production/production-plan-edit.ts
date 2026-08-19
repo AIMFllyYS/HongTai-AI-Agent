@@ -11,7 +11,7 @@ import { withSubtitleTimeline } from "./production-subtitle-timeline";
  */
 const EDIT_TIMING_SOURCE = "script_estimate" as const;
 
-export function invalidEdit(message: string, cause?: unknown): TaskError {
+function invalidEdit(message: string, cause?: unknown): TaskError {
   return new TaskError({ code: "PRODUCTION_PLAN_EDIT_INVALID", message, action: "edit_input", cause });
 }
 
@@ -40,11 +40,24 @@ function editableBase(plan: ProductionPlanResult): ProductionPlanResultV2 {
   return { ...plan, schemaVersion: "production-plan.v2", shots };
 }
 
+/**
+ * `trim` leaves zero-width and other invisible formatting characters, which would pass the
+ * non-blank check and then burn in as an empty caption. Text that carries nothing visible counts
+ * as empty here rather than at render time.
+ */
+function hasVisibleText(value: string): boolean {
+  return value.replace(/[\p{Cf}\p{Zs}\p{Zl}\p{Zp}\s]/gu, "").length > 0;
+}
+
 function editedShot(shot: ProductionPlanResultV2["shots"][number], edit: ProductionShotUpdate) {
   const narration = edit.narration?.trim();
   const caption = edit.caption?.trim();
-  if (edit.narration !== undefined && !narration) throw invalidEdit(`第 ${shot.order} 个镜头的口播内容不能为空。`);
-  if (edit.caption !== undefined && !caption) throw invalidEdit(`第 ${shot.order} 个镜头的标题不能为空。`);
+  if (edit.narration !== undefined && !(narration && hasVisibleText(narration))) {
+    throw invalidEdit(`第 ${shot.order} 个镜头的口播内容不能为空。`);
+  }
+  if (edit.caption !== undefined && !(caption && hasVisibleText(caption))) {
+    throw invalidEdit(`第 ${shot.order} 个镜头的标题不能为空。`);
+  }
   if (edit.durationSeconds !== undefined && !isWholeMilliseconds(edit.durationSeconds)) {
     throw invalidEdit(`第 ${shot.order} 个镜头的时长需要精确到毫秒。`);
   }
@@ -111,6 +124,11 @@ function assertScalarBounds(edit: ProductionPlanUpdate): void {
   const volume = edit.backgroundMusicVolume;
   if (volume !== undefined && !(Number.isFinite(volume) && volume >= 0 && volume <= 0.35)) {
     throw invalidEdit("背景音乐音量需要在 0 到 0.35 之间。");
+  }
+  // Removing the music forces the volume to 0, so accepting a volume in the same payload would
+  // silently discard what the caller asked for.
+  if (edit.backgroundMusicAssetId === null && volume !== undefined && volume !== 0) {
+    throw invalidEdit("取消背景音乐时不能同时设置音量。");
   }
   const headline = edit.headlineText?.trim();
   if (headline !== undefined && [...headline].length > 24) throw invalidEdit("主文字最多 24 个字。");

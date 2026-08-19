@@ -396,15 +396,14 @@ export class StandaloneProductionService implements ProductionService {
       // Validation and source-text lookup can await, so re-check the version immediately before
       // writing. This shrinks the window rather than closing it; see #118.
       this.#requireExpectedVersion(await this.#required(projectId), input.expectedUpdatedAt);
+      // Announced only once the whole edit commits, so a rollback never leaves subscribers
+      // believing the plan changed.
       const updated = await this.#persist({
         ...base,
         ...(headlineText ? { headlineText } : {}),
         status: "ready",
         plan: next,
-      });
-      // Written after the authoritative record so a failure here cannot leave the sidecar ahead
-      // of `project.json`, which is the file everything actually reads.
-      await this.#options.files.writeProductionText({ projectId, relativePath: PLAN_PATH, value: JSON.stringify(next), replace: true });
+      }, { emit: false });
       // The rendered MP4 no longer matches the plan. Leaving it would show the edit as already
       // exported; the project falls back to the same state as a plan that was never rendered.
       if (project.output) {
@@ -416,7 +415,12 @@ export class StandaloneProductionService implements ProductionService {
           throw storageTaskError(error, "作废旧成片失败，制作计划已恢复到微调前的状态。");
         }
       }
-      return this.#project(updated);
+      // Derived sidecar, written last: until this point a failure only has to restore
+      // `project.json`, which is the file everything actually reads.
+      await this.#options.files.writeProductionText({ projectId, relativePath: PLAN_PATH, value: JSON.stringify(next), replace: true });
+      const value = this.#project(updated);
+      await this.#emit(projectId, { type: "state", project: value });
+      return value;
     });
   }
 
@@ -599,12 +603,23 @@ export class StandaloneProductionService implements ProductionService {
     }
   }
 
-  async #persist(project: PersistedProject): Promise<PersistedProject> {
-    const updated = { ...project, updatedAt: (this.#options.now ?? (() => new Date()))().toISOString() };
+  async #persist(project: PersistedProject, options?: { readonly emit?: boolean }): Promise<PersistedProject> {
+    const updated = { ...project, updatedAt: this.#nextUpdatedAt(project.updatedAt) };
     await this.#save(updated);
+    if (options?.emit === false) return updated;
     const value = this.#project(updated);
     await this.#emit(project.projectId, { type: "state", project: value });
     return updated;
+  }
+
+  /**
+   * `updatedAt` doubles as the optimistic version token, so two writes inside the same clock tick
+   * must not share one: a screen holding the older token would otherwise be accepted twice.
+   */
+  #nextUpdatedAt(previous: string): string {
+    const now = (this.#options.now ?? (() => new Date()))().getTime();
+    const last = Date.parse(previous);
+    return new Date(Number.isFinite(last) && now <= last ? last + 1 : now).toISOString();
   }
 
   async #save(project: PersistedProject): Promise<void> {
