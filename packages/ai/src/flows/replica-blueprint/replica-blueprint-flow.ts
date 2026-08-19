@@ -1,4 +1,4 @@
-import { resolveTemplateForPrecision, TaskError } from "@hongtai/core";
+import { hasVisibleText, resolveTemplateForPrecision, TaskError } from "@hongtai/core";
 
 import type { ReplicaBlueprintFlowDependencies, ReplicaBlueprintInput } from "../../contracts/replica-blueprint";
 import { assertEvidenceRefs } from "../../evidence";
@@ -32,12 +32,28 @@ function assertShotOrder(value: ReplicaBlueprintResponse): void {
 }
 
 /**
+ * The whole document exists to be read by a person who then goes out and films. A field that is
+ * technically non-empty but visually blank leaves them staring at nothing to shoot.
+ */
+function assertReadable(value: ReplicaBlueprintResponse): void {
+  if (!hasVisibleText(value.premise)) throw invalidBlueprint("复刻蓝图的复刻思路不能为空");
+  for (const shot of value.shots) {
+    const readable = hasVisibleText(shot.visualDescription)
+      && hasVisibleText(shot.material.contentHint)
+      && hasVisibleText(shot.scriptDraft);
+    if (!readable) throw invalidBlueprint(`复刻蓝图第${shot.order}个分镜的画面、素材说明与脚本草稿都不能为空`);
+  }
+}
+
+/**
  * Empty and non-empty are both legitimate, but they mean opposite things and cannot be mixed: a
  * blank list without a reason reads as a bug, and a reason next to real shots hides which one the
  * user should trust.
  */
 function assertEmptiness(value: ReplicaBlueprintResponse): void {
-  if (value.shots.length === 0 && !value.emptyReason?.trim()) {
+  // A reason made of zero-width characters is worse than no reason: the user is shown a blank line
+  // where the explanation should be and cannot tell whether the system failed or the source was thin.
+  if (value.shots.length === 0 && !hasVisibleText(value.emptyReason ?? "")) {
     throw invalidBlueprint("复刻蓝图给不出分镜时必须说明缺少哪些证据");
   }
   if (value.shots.length > 0 && value.emptyReason !== null) {
@@ -70,6 +86,7 @@ function assertOriginalScript(value: ReplicaBlueprintResponse, input: ReplicaBlu
 function documentFrom(value: ReplicaBlueprintResponse, input: ReplicaBlueprintInput): ReplicaBlueprintResultV1 {
   assertShotOrder(value);
   assertEmptiness(value);
+  assertReadable(value);
   assertTotalDuration(value);
   assertOriginalScript(value, input);
   assertEvidenceRefs({

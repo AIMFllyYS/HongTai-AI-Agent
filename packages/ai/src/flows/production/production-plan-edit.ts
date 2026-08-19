@@ -1,4 +1,4 @@
-import { TaskError, type ProductionPlanUpdate, type ProductionShotUpdate } from "@hongtai/core";
+import { hasVisibleText, TaskError, type ProductionPlanUpdate, type ProductionShotUpdate } from "@hongtai/core";
 
 import type { ProductionPlanResult, ProductionPlanResultV2, ProductionPlanResultV3 } from "../../schemas/production-plan";
 import { isWholeMilliseconds, validateProductionPlan, type ProductionPlanConstraints } from "./production-plan-validation";
@@ -38,15 +38,6 @@ function editableBase(plan: ProductionPlanResult): ProductionPlanResultV2 {
     fit: shot.fit,
   }));
   return { ...plan, schemaVersion: "production-plan.v2", shots };
-}
-
-/**
- * `trim` leaves zero-width and other invisible formatting characters, which would pass the
- * non-blank check and then burn in as an empty caption. Text that carries nothing visible counts
- * as empty here rather than at render time.
- */
-function hasVisibleText(value: string): boolean {
-  return value.replace(/[\p{Cf}\p{Zs}\p{Zl}\p{Zp}\s]/gu, "").length > 0;
 }
 
 function editedShot(shot: ProductionPlanResultV2["shots"][number], edit: ProductionShotUpdate) {

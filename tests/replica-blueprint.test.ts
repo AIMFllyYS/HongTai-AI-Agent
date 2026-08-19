@@ -144,6 +144,30 @@ test("蓝图给出分镜时不能同时声明证据不足，空清单也不能�
   assert.equal(neither.code, "AI_FORMAT_REPAIR_FAILED");
 });
 
+test("空清单的原因不能只有看不见的字符，否则用户面对的是一片空白", async () => {
+  // U+200B 零宽空格能过 Zod 的 min(1) 和 trim，但用户什么都读不到。
+  const invisible = await rejection([JSON.stringify(response({ shots: [], emptyReason: "\u200b\u200b" }))]);
+  assert.equal(invisible.code, "AI_FORMAT_REPAIR_FAILED");
+
+  const readable = await run([JSON.stringify(response({ shots: [], emptyReason: "转写只有寒暄。" }))]);
+  assert.equal(readable.result.emptyReason, "转写只有寒暄。");
+});
+
+test("分镜的画面、素材说明与脚本草稿都不能只有看不见的字符", async () => {
+  const fields = ["visualDescription", "contentHint", "scriptDraft"] as const;
+  for (const field of fields) {
+    const shot = response().shots[0]!;
+    const blanked = field === "contentHint"
+      ? { ...shot, material: { ...shot.material, contentHint: "\u200b", suggestedDurationSeconds: 18 } }
+      : { ...shot, [field]: "\u200b", material: { ...shot.material, suggestedDurationSeconds: 18 } };
+    const error = await rejection([JSON.stringify(response({ shots: [blanked] }))]);
+    assert.equal(error.code, "AI_FORMAT_REPAIR_FAILED", `${field} 只有零宽字符时必须被拒`);
+  }
+
+  const premise = await rejection([JSON.stringify(response({ premise: "\u200b" }))]);
+  assert.equal(premise.code, "AI_FORMAT_REPAIR_FAILED");
+});
+
 test("蓝图引用不存在的证据 id 时修一次仍失败，不产出可信外观的清单", async () => {
   const faked = JSON.stringify(response({
     shots: response().shots.map((shot) => ({ ...shot, evidenceRefs: ["seg-9"] })),

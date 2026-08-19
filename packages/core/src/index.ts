@@ -12,3 +12,4 @@ export * from "./subtitle-template";
 export * from "./subtitle-template-presets";
 export * from "./subtitle-timing";
 export * from "./transcription";
+export * from "./visible-text";

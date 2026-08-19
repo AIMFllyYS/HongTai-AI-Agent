@@ -1,5 +1,6 @@
 import {
   buildShotCueTimeline,
+  hasVisibleText,
   MAX_SHOT_DURATION_SECONDS,
   MIN_CUE_DURATION_MS,
   MIN_SHOT_DURATION_SECONDS,
@@ -186,10 +187,12 @@ export function previewShot(input: { readonly shot: ShotDraft; readonly requeste
  * one", so an empty submission looks accepted and comes back with the old headline still burned in.
  */
 export function planDraftProblem(draft: PlanDraft): string | undefined {
-  if (!draft.headlineText.trim()) return "主文字不能为空。想换文字就直接改写，留空不会删掉它。";
+  // Matches the service's own rule, so a zero-width paste is refused here instead of being accepted
+  // by the page and then bounced back as a save failure the user cannot see the cause of.
+  if (!hasVisibleText(draft.headlineText)) return "主文字不能为空。想换文字就直接改写，留空不会删掉它。";
   for (const shot of draft.shots) {
-    if (!shot.caption.trim()) return `第 ${shot.order} 个镜头的标题不能为空。`;
-    if (!shot.narration.trim()) return `第 ${shot.order} 个镜头的口播文案不能为空。`;
+    if (!hasVisibleText(shot.caption)) return `第 ${shot.order} 个镜头的标题不能为空。`;
+    if (!hasVisibleText(shot.narration)) return `第 ${shot.order} 个镜头的口播文案不能为空。`;
   }
   return undefined;
 }

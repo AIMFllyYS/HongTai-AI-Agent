@@ -260,4 +260,9 @@ test("空标题与空口播在提交前被拦住，不让用户走到一次必�
   assert.match(planDraftProblem(blank({ caption: "  " })) ?? "", /第 1 个镜头的标题不能为空/u);
   assert.match(planDraftProblem(blank({ narration: "" })) ?? "", /第 1 个镜头的口播文案不能为空/u);
   assert.equal(planDraftProblem(base), undefined);
+
+  // 零宽字符能过 trim，服务端会按空拒绝；界面的判断必须和服务端一致，否则用户只看到一次没来由的保存失败。
+  assert.match(planDraftProblem(blank({ caption: "\u200b" })) ?? "", /第 1 个镜头的标题不能为空/u);
+  assert.match(planDraftProblem(blank({ narration: "\u200b\ufeff" })) ?? "", /第 1 个镜头的口播文案不能为空/u);
+  assert.match(planDraftProblem({ ...base, headlineText: "\u200b" }) ?? "", /主文字不能为空/u);
 });
