@@ -3,10 +3,28 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["**/node_modules/**", "**/dist/**", "workspace/**", "android/**"],
+    ignores: ["**/node_modules/**", "**/dist/**", "workspace/**", "android/**", "output/**"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    // Repo tooling and design generators run on Node directly. TypeScript sources get their
+    // globals from tsconfig, so only these plain scripts need the runtime declared here.
+    files: ["**/*.mjs"],
+    languageOptions: {
+      globals: {
+        Buffer: "readonly",
+        URL: "readonly",
+        URLSearchParams: "readonly",
+        TextDecoder: "readonly",
+        TextEncoder: "readonly",
+        console: "readonly",
+        fetch: "readonly",
+        process: "readonly",
+        structuredClone: "readonly",
+      },
+    },
+  },
   {
     files: [
       "packages/core/**/*.ts",
