@@ -4,6 +4,7 @@ import {
   issueFromAppError,
   MAX_PRODUCTION_DURATION_SECONDS,
   MAX_SHOTS_PER_PRODUCTION,
+  MIN_MONTAGE_VISUAL_ASSETS,
   MIN_PRODUCTION_DURATION_SECONDS,
   subtitleTemplateById,
   TaskError,
@@ -306,7 +307,14 @@ export class StandaloneProductionService implements ProductionService {
     if (selection === "avatar" && project.assets.some((asset) => (asset.role ?? defaultAssetRole(asset)) === "avatar")) {
       throw taskError("数字人口播模式只能上传一个数字人口播视频", "select_media");
     }
-    if (requirementOrder !== undefined) {
+    if (requirementOrder === undefined) {
+      // An earlier pick can have died with the WebView and left its marker behind — a cancelled or
+      // failed external Activity never comes back to clear it. This import was not made for that
+      // item, so the marker goes before the picker opens rather than silently marking whatever the
+      // user adds here as the material for it. Together with the overwrite below, a marker can then
+      // only ever describe the pick currently in flight.
+      project = await this.#withoutPendingRequirement(project);
+    } else {
       if (!isRequirementOrder(requirementOrder)) throw taskError("素材清单项编号无效", "select_media");
       if (project.assets.some((asset) => asset.requirementOrder === requirementOrder)) {
         throw taskError(`第 ${requirementOrder} 项已经有素材了，先移除再换一个`, "select_media");
@@ -327,11 +335,14 @@ export class StandaloneProductionService implements ProductionService {
 
   /** A cancelled or failed pick must not leave the next import silently attached to the old item. */
   async #clearPendingRequirement(projectId: string): Promise<void> {
-    const project = await this.#required(projectId);
-    if (project.pendingRequirementOrder === undefined) return;
+    await this.#withoutPendingRequirement(await this.#required(projectId));
+  }
+
+  async #withoutPendingRequirement(project: PersistedProject): Promise<PersistedProject> {
+    if (project.pendingRequirementOrder === undefined) return project;
     const { pendingRequirementOrder: _pending, ...base } = project;
     void _pending;
-    await this.#persist(base, { emit: false });
+    return this.#persist(base, { emit: false });
   }
 
   async consumeAssetRecovery(): Promise<ProductionAssetRecovery> {
@@ -394,7 +405,9 @@ export class StandaloneProductionService implements ProductionService {
     const roleOf = (asset: NativeProductionAsset) => asset.role ?? defaultAssetRole(asset);
     const visualAssets = project.assets.filter((asset) => roleOf(asset) === "visual" && asset.kind !== "audio");
     const avatarAssets = project.assets.filter((asset) => roleOf(asset) === "avatar" && asset.kind === "video");
-    if (project.mode === "montage" && visualAssets.length < 3) throw taskError("素材剪辑模式至少需要3个图片或视频素材", "select_media");
+    if (project.mode === "montage" && visualAssets.length < MIN_MONTAGE_VISUAL_ASSETS) {
+      throw taskError(`素材剪辑模式至少需要${MIN_MONTAGE_VISUAL_ASSETS}个图片或视频素材`, "select_media");
+    }
     if (project.mode === "avatar" && (avatarAssets.length !== 1 || !project.avatarScript)) throw taskError("请上传一个数字人口播视频并填写对应口播稿", "select_media");
     if (project.mode === "avatar" && (avatarAssets[0]?.durationSeconds === undefined || avatarAssets[0].durationSeconds + 0.001 < project.targetDurationSeconds)) {
       throw new TaskError({

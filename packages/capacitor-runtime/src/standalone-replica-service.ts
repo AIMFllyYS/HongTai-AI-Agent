@@ -1,5 +1,11 @@
 import { contentAnalysisResultSchema, ReplicaBlueprintFlow, replicaBlueprintResultSchema, type AiProvider } from "@hongtai/ai";
-import { issueFromAppError, MAX_PRODUCTION_DURATION_SECONDS, MIN_PRODUCTION_DURATION_SECONDS, TaskError } from "@hongtai/core";
+import {
+  issueFromAppError,
+  MAX_PRODUCTION_DURATION_SECONDS,
+  MIN_MONTAGE_VISUAL_ASSETS,
+  MIN_PRODUCTION_DURATION_SECONDS,
+  TaskError,
+} from "@hongtai/core";
 import type {
   AnalysisService,
   JsonObject,
@@ -16,9 +22,6 @@ import { citedEvidenceUnits } from "./standalone-analysis-service.js";
 
 const BLUEPRINT_PATH = "replica-blueprint.json";
 
-/** Montage needs three separate visuals, so a shorter list cannot be rebuilt this way at all. */
-const MIN_MONTAGE_SHOTS = 3;
-
 interface ReplicaFilesPort {
   writeText(options: { readonly taskId: string; readonly relativePath: string; readonly value: string; readonly replace: boolean }): Promise<void>;
   readText(options: { readonly taskId: string; readonly relativePath: string }): Promise<{ readonly value?: string }>;
@@ -28,7 +31,7 @@ export interface StandaloneReplicaServiceOptions {
   readonly files: ReplicaFilesPort;
   readonly analysis: Pick<AnalysisService, "get">;
   readonly tasks: Pick<TaskService, "getDetail">;
-  readonly production: Pick<ProductionService, "create" | "get">;
+  readonly production: Pick<ProductionService, "create" | "get" | "delete">;
   readonly getProvider: () => Promise<AiProvider>;
   readonly now?: () => Date;
 }
@@ -70,8 +73,25 @@ function originalSourceText(detail: TaskDetailRecord | undefined): string | unde
 export class StandaloneReplicaService implements ReplicaService {
   readonly #options: StandaloneReplicaServiceOptions;
   readonly #active = new Map<string, Promise<ReplicaBlueprintRecord>>();
+  readonly #mutations = new Map<string, Promise<unknown>>();
 
   constructor(options: StandaloneReplicaServiceOptions) { this.#options = options; }
+
+  /**
+   * One writer per breakdown. `run` and `startProject` are both read-modify-write over the same
+   * file, so interleaving them could drop the project link or write a stale blueprint back over a
+   * newer one.
+   */
+  async #exclusive<T>(taskId: string, operation: () => Promise<T>): Promise<T> {
+    if (this.#mutations.has(taskId)) throw taskError("这条爆款正在处理另一项操作，请稍后再试");
+    const active = operation();
+    this.#mutations.set(taskId, active);
+    try {
+      return await active;
+    } finally {
+      if (this.#mutations.get(taskId) === active) this.#mutations.delete(taskId);
+    }
+  }
 
   async get(taskId: string): Promise<ReplicaBlueprintRecord | undefined> {
     const response = await this.#options.files.readText({ taskId, relativePath: BLUEPRINT_PATH });
@@ -100,7 +120,7 @@ export class StandaloneReplicaService implements ReplicaService {
     // One list per breakdown at a time: a second tap would only pay for the same request twice.
     const active = this.#active.get(taskId);
     if (active) return active;
-    const operation = this.#run(taskId);
+    const operation = this.#exclusive(taskId, () => this.#run(taskId));
     this.#active.set(taskId, operation);
     void operation.finally(() => {
       if (this.#active.get(taskId) === operation) this.#active.delete(taskId);
@@ -145,7 +165,19 @@ export class StandaloneReplicaService implements ReplicaService {
    */
   async #refuseIfMaterialAlreadyFilmed(previous: ReplicaBlueprintRecord | undefined): Promise<void> {
     if (!previous?.projectId) return;
-    const project = await this.#options.production.get(previous.projectId).catch(() => undefined);
+    // Only a project that is genuinely gone clears the way. Treating a failed read as "gone" would
+    // let a transient I/O error be the thing that decides it is safe to relabel filmed material.
+    let project;
+    try {
+      project = await this.#options.production.get(previous.projectId);
+    } catch (error) {
+      throw new TaskError({
+        code: "STORAGE_READ_FAILED",
+        message: "读不到正在使用这份清单的制作项目，暂时不能重新生成清单。请稍后再试。",
+        action: "retry",
+        cause: error,
+      });
+    }
     if (!project?.assets.some((asset) => asset.requirementOrder !== undefined)) return;
     throw taskError(
       "这份清单已经绑定了拍好的素材。要重新生成清单，请先删掉正在使用它的制作项目，否则已拍素材会对不上新的清单项。",
@@ -169,6 +201,10 @@ export class StandaloneReplicaService implements ReplicaService {
   }
 
   async startProject(taskId: string): Promise<ProductionProjectRecord> {
+    return this.#exclusive(taskId, () => this.#startProject(taskId));
+  }
+
+  async #startProject(taskId: string): Promise<ProductionProjectRecord> {
     const record = await this.get(taskId);
     const parsed = record?.status === "succeeded" && record.blueprint?.schemaVersion === "replica-blueprint.v1"
       ? replicaBlueprintResultSchema.safeParse(record.blueprint.document) : undefined;
@@ -177,8 +213,8 @@ export class StandaloneReplicaService implements ReplicaService {
     if (blueprint.shots.length === 0) {
       throw taskError(blueprint.emptyReason ?? "这条内容没有给出可拍摄的分镜，无法复刻", "none");
     }
-    if (blueprint.shots.length < MIN_MONTAGE_SHOTS) {
-      throw taskError(`素材剪辑至少需要 ${MIN_MONTAGE_SHOTS} 个镜头，这份清单只有 ${blueprint.shots.length} 个`, "none");
+    if (blueprint.shots.length < MIN_MONTAGE_VISUAL_ASSETS) {
+      throw taskError(`素材剪辑至少需要 ${MIN_MONTAGE_VISUAL_ASSETS} 个镜头，这份清单只有 ${blueprint.shots.length} 个`, "none");
     }
 
     // Reopening the wizard has to land back in the project already being filmed for, or the user
@@ -197,8 +233,27 @@ export class StandaloneReplicaService implements ReplicaService {
       // instead of being squeezed into a preset they never picked.
       targetDurationSeconds: total,
     });
-    if (record) await this.#write({ ...record, projectId: project.projectId, updatedAt: this.#iso() });
+    if (record) await this.#link(record, project);
     return project;
+  }
+
+  /**
+   * `create` can outlive the WebView, so the in-process lock is not enough: the link is written
+   * against a fresh read rather than the snapshot this call started from. If the list has since been
+   * regenerated or already points at a project, the empty project we just made is removed instead of
+   * being left behind as an orphan.
+   */
+  async #link(started: ReplicaBlueprintRecord, project: ProductionProjectRecord): Promise<void> {
+    const current = await this.get(started.taskId);
+    if (current?.projectId && current.projectId !== project.projectId) {
+      await this.#options.production.delete(project.projectId).catch(() => undefined);
+      throw taskError("这条爆款已经在另一个制作项目里开始复刻了，请回到那个项目继续", "none");
+    }
+    if (current && current.updatedAt !== started.updatedAt) {
+      await this.#options.production.delete(project.projectId).catch(() => undefined);
+      throw taskError("素材需求清单刚刚被重新生成了，请按新的清单再建一次项目");
+    }
+    await this.#write({ ...(current ?? started), projectId: project.projectId, updatedAt: this.#iso() });
   }
 
   async #write(record: ReplicaBlueprintRecord): Promise<ReplicaBlueprintRecord> {

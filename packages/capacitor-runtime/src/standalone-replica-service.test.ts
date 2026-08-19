@@ -92,7 +92,12 @@ function planFor(assetIds: readonly string[]): ProductionPlanResultV2 {
  * The wizard spans two services, so the tests wire the real pair: a fake picker returns one file per
  * call and the provider answers whichever document the prompt asked for.
  */
-function harness(options: { readonly plans?: readonly ProductionPlanResultV2[]; readonly blueprintJson?: string } = {}) {
+function harness(options: {
+  readonly plans?: readonly ProductionPlanResultV2[];
+  readonly blueprintJson?: string;
+  /** Makes reading the linked project fail, standing in for a transient private-file error. */
+  readonly breakProjectRead?: boolean;
+} = {}) {
   const taskFiles = new Map<string, string>();
   const projectFiles = new Map<string, string>();
   const projectIds = new Set<string>();
@@ -166,11 +171,29 @@ function harness(options: { readonly plans?: readonly ProductionPlanResultV2[]; 
     createProjectId: () => `project-${projectIds.size + 1}`,
     now,
   });
+  let readsBroken = false;
+  const productionPort = {
+    create: production.create.bind(production),
+    delete: production.delete.bind(production),
+    get: async (projectId: string) => {
+      if (readsBroken) throw new Error("EIO: private file unavailable");
+      return production.get(projectId);
+    },
+  };
   const replica: StandaloneReplicaService = new StandaloneReplicaService({
-    files, analysis: analysisPort, tasks, production, getProvider: async () => provider, now,
+    files, analysis: analysisPort, tasks, production: productionPort, getProvider: async () => provider, now,
   });
+  if (options.breakProjectRead) readsBroken = true;
 
-  return { production, replica, taskFiles, projectFiles, pickCalls, planningPrompts };
+  return {
+    production,
+    replica,
+    taskFiles,
+    projectFiles,
+    pickCalls,
+    planningPrompts,
+    breakProjectRead: () => { readsBroken = true; },
+  };
 }
 
 async function boundProject(context: ReturnType<typeof harness>, orders: readonly number[]) {
@@ -311,6 +334,46 @@ test("空清单和镜头太少的清单都不能开项目，并说明原因", as
     assert.match(error.message, /至少需要 3 个镜头/u);
     return true;
   });
+});
+
+test("读不到已绑定的项目时拒绝重新生成清单，而不是当成项目已删除", async () => {
+  const context = harness();
+  await boundProject(context, [1]);
+  context.breakProjectRead();
+
+  await assert.rejects(() => context.replica.run("task-1"), (error: unknown) => {
+    assert.ok(error instanceof TaskError);
+    assert.equal(error.code, "STORAGE_READ_FAILED");
+    assert.equal(error.action, "retry");
+    return true;
+  });
+  const kept = await context.replica.get("task-1");
+  assert.equal(kept?.status, "succeeded", "读盘失败不能变成覆盖清单的许可");
+  assert.ok(kept?.projectId, "清单和项目的链接要留着");
+});
+
+test("外部选择器留下的待绑定标记不会挂到制作页随手加的素材上", async () => {
+  const context = harness();
+  const project = await boundProject(context, [1]);
+
+  // 选择器带走 WebView 后取消或失败，标记留在盘上：进程内的清理没有机会跑。
+  const key = `${project.projectId}/project.json`;
+  const stored = JSON.parse(context.projectFiles.get(key)!) as Record<string, unknown>;
+  context.projectFiles.set(key, JSON.stringify({ ...stored, pendingRequirementOrder: 3 }));
+
+  const after = await context.production.importAssets(project.projectId);
+  const added = after.assets.find((asset) => asset.id !== "asset-a");
+  assert.equal(added?.requirementOrder, undefined, "这次导入没说是第几项，就不能算成第 3 项的素材");
+  assert.deepEqual(
+    after.assets.filter((asset) => asset.requirementOrder !== undefined).map((asset) => asset.requirementOrder),
+    [1],
+    "原有绑定不受影响",
+  );
+  assert.equal(
+    (JSON.parse(context.projectFiles.get(key)!) as Record<string, unknown>).pendingRequirementOrder,
+    undefined,
+    "过期标记要被清掉，不能等下一次导入再中招",
+  );
 });
 
 test("还没有清单就开项目会被拒绝，不会先建一个空项目", async () => {

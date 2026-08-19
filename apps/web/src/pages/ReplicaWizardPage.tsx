@@ -31,16 +31,25 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
   const [project, setProject] = useState<ProductionProjectRecord>();
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<Pending>();
-  const [issue, setIssue] = useState<TaskIssue>();
+  // The retry travels with the failure, so "重试" always redoes the step that failed instead of
+  // whatever the current stage of the wizard would otherwise run.
+  const [failure, setFailure] = useState<{ readonly issue: TaskIssue; readonly retry?: () => void }>();
+  const issue = failure?.issue;
+  const setIssue = (next: TaskIssue | undefined) => { setFailure(next ? { issue: next } : undefined); };
 
-  const load = useCallback(async () => {
+  const load = useCallback(async function reload(): Promise<void> {
     setLoading(true);
     try {
       const next = await runtime.replica.get(taskId);
       setRecord(next);
       setProject(next?.projectId ? await runtime.production.get(next.projectId) : undefined);
     } catch (error) {
-      setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "这条爆款的复刻清单暂时无法读取", action: "none" }));
+      // Reading failed, so we do not know whether a list already exists — retry the read rather than
+      // offering to generate one over the top of it.
+      setFailure({
+        issue: issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "这条爆款的复刻清单暂时无法读取", action: "retry" }),
+        retry: () => { void reload(); },
+      });
     } finally {
       setLoading(false);
     }
@@ -61,11 +70,14 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
   const run = async (kind: Exclude<Pending, undefined>, operation: () => Promise<void>, fallback: string) => {
     if (pending) return;
     setPending(kind);
-    setIssue(undefined);
+    setFailure(undefined);
     try {
       await operation();
     } catch (error) {
-      setIssue(issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: fallback, action: "retry" }));
+      setFailure({
+        issue: issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: fallback, action: "retry" }),
+        retry: () => { void run(kind, operation, fallback); },
+      });
     } finally {
       setPending(undefined);
     }
@@ -133,14 +145,14 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
           title={blueprint.emptyReason ? "这条内容拆不出可拍的清单" : "还没有素材需求清单"}
         />
         {record?.issue && !blueprint.emptyReason ? <IssueNotice actions={{ retry: generate }} issue={record.issue} /> : null}
-        {issue ? <IssueNotice actions={{ retry: generate }} issue={issue} /> : null}
+        {issue ? <IssueNotice {...(failure?.retry ? { actions: { retry: failure.retry } } : {})} issue={issue} /> : null}
       </>,
     );
   }
 
   return shell(
     <>
-      {issue ? <IssueNotice actions={{ retry: project ? compose : start }} issue={issue} /> : null}
+      {issue ? <IssueNotice {...(failure?.retry ? { actions: { retry: failure.retry } } : {})} issue={issue} /> : null}
 
       <GlassCard className="replica-wizard__premise">
         <h2>怎么复刻这条</h2>
@@ -206,7 +218,7 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
               {pending === "plan" ? "正在写脚本和字幕" : "生成脚本与字幕"}
             </Button>
             <small>
-              镜头顺序就是清单顺序：第 1 项拍的素材会出现在第 1 个镜头。生成完可以在微调页改时长和文案，再回制作页合成成片。
+              已绑定的素材会按清单编号从前往后成镜；跳过的项不会留空镜头，后面的素材会往前顶。生成完可以在微调页改时长和文案，再回制作页合成成片。
             </small>
           </div>
         </>

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { ProductionAsset, VersionedDocument } from "@hongtai/core";
+import { MIN_MONTAGE_VISUAL_ASSETS, type ProductionAsset, type VersionedDocument } from "@hongtai/core";
 
 import {
   MIN_BOUND_REQUIREMENTS,
@@ -96,7 +96,7 @@ test("不够三项时不能开工，并说清还差几项", () => {
   const three = wizardReadiness(requirementBindings(view.requirements, [asset("asset-a", 1), asset("asset-b", 2), asset("asset-c", 3)]));
   assert.equal(three.ready, true);
   assert.equal(three.blockedReason, "");
-  assert.equal(MIN_BOUND_REQUIREMENTS, 3, "本地合成的画面下限就是这个数，UI 不能自己放宽");
+  assert.equal(MIN_BOUND_REQUIREMENTS, MIN_MONTAGE_VISUAL_ASSETS, "UI 的门槛必须就是合成端的门槛，不能各写一个数");
 });
 
 test("跳过清单项不会让成片变短，提示要说出时长去哪了", () => {

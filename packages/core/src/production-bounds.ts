@@ -17,3 +17,11 @@ export const MAX_SHOT_DURATION_SECONDS = 20;
 /** Seconds a whole production may run. Which values inside it are offered is a UI decision. */
 export const MIN_PRODUCTION_DURATION_SECONDS = 15;
 export const MAX_PRODUCTION_DURATION_SECONDS = 60;
+
+/**
+ * Separate visuals a montage needs before it can be cut at all.
+ *
+ * The planning service, the replica wizard's "ready to compose" test and the blueprint's usability
+ * test all gate on this same floor, so it lives here rather than as a literal in each of them.
+ */
+export const MIN_MONTAGE_VISUAL_ASSETS = 3;

@@ -1,4 +1,4 @@
-import type { ProductionAsset, VersionedDocument } from "@hongtai/core";
+import { MIN_MONTAGE_VISUAL_ASSETS, type ProductionAsset, type VersionedDocument } from "@hongtai/core";
 
 export interface ReplicaRequirementView {
   readonly order: number;
@@ -131,7 +131,7 @@ export function unboundAssetCount(assets: readonly ProductionAsset[]): number {
   return assets.filter((asset) => asset.requirementOrder === undefined && asset.role === "visual").length;
 }
 
-export const MIN_BOUND_REQUIREMENTS = 3;
+export const MIN_BOUND_REQUIREMENTS = MIN_MONTAGE_VISUAL_ASSETS;
 
 export interface WizardReadiness {
   readonly boundCount: number;
