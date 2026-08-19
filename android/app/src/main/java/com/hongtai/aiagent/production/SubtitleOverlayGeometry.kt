@@ -101,6 +101,10 @@ internal object SubtitleOverlayGeometry {
   private fun fromBottom(offsetPx: Float, frameHeight: Int): Float =
     (-1f + 2f * offsetPx / frameHeight).coerceIn(-1f, 1f)
 
+  /**
+   * Insets must stay equal to `packages/core/src/decoration.ts`. There is no pixel collision check
+   * against captions; these slots only keep stickers off the headline and caption bands by layout.
+   */
   private const val DECORATION_INSET_PX = 48f
   private const val DECORATION_TOP_INSET_PX = 220f
   private const val DECORATION_CAPTION_GAP_PX = 96f

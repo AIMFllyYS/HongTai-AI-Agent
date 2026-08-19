@@ -23,6 +23,7 @@ import com.hongtai.aiagent.production.ImportedProductionAsset
 import com.hongtai.aiagent.production.CloudNarrationConfiguration
 import com.hongtai.aiagent.production.CloudNarrationSynthesizer
 import com.hongtai.aiagent.production.CloudTtsProtocol
+import com.hongtai.aiagent.production.DecorationAssets
 import com.hongtai.aiagent.production.ProductionException
 import com.hongtai.aiagent.production.ProductionFailureKind
 import com.hongtai.aiagent.production.ProductionImportSelection
@@ -169,7 +170,13 @@ class ProductionRuntimePlugin : Plugin() {
     }
     PRODUCTION_EXECUTOR.execute {
       try {
-        val plan = ProductionPlanParser.parse(planJson, store.inputs(projectId), mode, call.getString("subtitleTemplateJson"))
+        val plan = ProductionPlanParser.parse(
+          planJson,
+          store.inputs(projectId),
+          mode,
+          call.getString("subtitleTemplateJson"),
+          stickerExists = { id -> DecorationAssets.exists(context.assets, id) },
+        )
         val synthesizer = if (cloudInstructions != null) {
           CloudNarrationSynthesizer(
             context,

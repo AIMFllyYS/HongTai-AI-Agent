@@ -122,15 +122,42 @@ class ProductionPlanParserTest {
   }
 
   @Test
-  fun `refuses a sticker decoration while the bundled catalogue is absent`() {
+  fun `joins Capacitor public assets with the catalogue relative path`() {
+    assertEquals("public/decorations/arrow_right.png", DecorationAssets.assetManagerPath("arrow_right"))
+    assertEquals("public/decorations/star_mark.png", DecorationAssets.assetManagerPath("star_mark"))
+  }
+
+  @Test
+  fun `refuses a sticker whose packaged PNG is missing`() {
     val sticker = timedPlan().replace(
       "{\"kind\":\"floating_text\",\"assetRef\":null,\"text\":\"限时\"",
-      "{\"kind\":\"sticker\",\"assetRef\":\"spark_burst\",\"text\":null",
+      "{\"kind\":\"sticker\",\"assetRef\":\"arrow_right\",\"text\":null",
     )
 
-    assertThrows(IllegalArgumentException::class.java) {
+    val error = assertThrows(IllegalArgumentException::class.java) {
       ProductionPlanParser.parse(sticker, assets, ProductionRenderMode.MONTAGE, classicLineTemplate())
     }
+    assertEquals("A sticker PNG is missing from the packaged catalogue.", error.message)
+  }
+
+  @Test
+  fun `parses a sticker when the packaged PNG is present`() {
+    val sticker = timedPlan().replace(
+      "{\"kind\":\"floating_text\",\"assetRef\":null,\"text\":\"限时\"",
+      "{\"kind\":\"sticker\",\"assetRef\":\"arrow_right\",\"text\":null",
+    )
+
+    val plan = ProductionPlanParser.parse(
+      sticker,
+      assets,
+      ProductionRenderMode.MONTAGE,
+      classicLineTemplate(),
+      stickerExists = { it == "arrow_right" },
+    )
+
+    assertEquals("sticker", plan.decorations.first().kind)
+    assertEquals("arrow_right", plan.decorations.first().assetRef)
+    assertEquals("public/decorations/arrow_right.png", DecorationAssets.assetManagerPath(plan.decorations.first().assetRef!!))
   }
 
   @Test

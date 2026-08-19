@@ -51,8 +51,9 @@ internal class ProductionCaptionOverlay(
 }
 
 /**
- * Draws one bounded decoration. Floating text borrows the caption template's fill, stroke and box
- * so a decoration cannot introduce a look the chosen subtitle template did not define.
+ * Draws one bounded decoration. Stickers reuse a PNG decoded at construction; floating text
+ * borrows the caption template's fill, stroke and box so a decoration cannot introduce a look the
+ * chosen subtitle template did not define.
  */
 @UnstableApi
 internal class ProductionDecorationOverlay(
@@ -61,24 +62,36 @@ internal class ProductionDecorationOverlay(
   private val frameWidth: Int,
   private val frameHeight: Int,
   itemStartMs: Long,
+  stickerBitmap: Bitmap? = null,
 ) : BitmapOverlay() {
   private val painter = SubtitleCaptionPainter(template)
   private val clock = SubtitleOverlayClock(itemStartMs)
   private val blank = painter.blank()
-  private val cue = SubtitleCue(
-    startMs = decoration.startMs,
-    endMs = decoration.endMs,
-    text = requireNotNull(decoration.text) { "Only floating text decorations can be drawn yet." },
-    emphasisWords = emptyList(),
-    words = null,
-  )
-  private var cached: Bitmap? = null
+  private val sticker: Bitmap? = if (decoration.kind == "sticker") {
+    requireNotNull(stickerBitmap) { "A sticker overlay needs a decoded PNG." }
+  } else {
+    null
+  }
+  private val cue = if (decoration.kind == "floating_text") {
+    SubtitleCue(
+      startMs = decoration.startMs,
+      endMs = decoration.endMs,
+      text = requireNotNull(decoration.text) { "A floating text decoration needs text." },
+      emphasisWords = emptyList(),
+      words = null,
+    )
+  } else {
+    null
+  }
+  private var cachedText: Bitmap? = null
 
   override fun getBitmap(presentationTimeUs: Long): Bitmap {
     if (progressAt(presentationTimeUs) == null) return blank
-    return cached ?: painter
-      .paint(cue, cue.text.length, 1f, SubtitleOverlayGeometry.decorationMaxWidthPx(decoration, frameWidth))
-      .also { cached = it }
+    sticker?.let { return it }
+    val textCue = requireNotNull(cue) { "A floating text decoration needs text." }
+    return cachedText ?: painter
+      .paint(textCue, textCue.text.length, 1f, SubtitleOverlayGeometry.decorationMaxWidthPx(decoration, frameWidth))
+      .also { cachedText = it }
   }
 
   override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {

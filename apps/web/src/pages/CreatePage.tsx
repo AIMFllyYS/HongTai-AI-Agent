@@ -10,11 +10,12 @@ import { FeatureUnavailablePanel } from "../components/FeatureUnavailablePanel";
 import { GlassCard } from "../components/GlassCard";
 import { Icon, type IconName } from "../components/Icon";
 import { IssueNotice, issueTitle } from "../components/IssueNotice";
+import { ProductionModeEntry, type ProductionEntryKind } from "../components/ProductionModeEntry";
 import { ProductionProjectCard } from "../components/ProductionProjectCard";
 import { EmptyState, LoadingState } from "../components/StatePanels";
 import { platformLabel } from "../features/tasks/task-presenters";
 import { useAppResume } from "../hooks/useAppResume";
-import { aiSettingsPath, productionEditPath } from "../router";
+import { aiSettingsPath, pathForRoute, productionEditPath, replicaWizardPath } from "../router";
 import {
   productionPlanReady,
   productionRenderStageCopy,
@@ -28,6 +29,7 @@ import { consumeCreateSourceIdFromSearch, isEligibleCreateSourceTask, peekCreate
 export { productionRenderStageCopy };
 
 type CreateShellViewModel = Pick<CreateViewModel, "title">;
+type ComposerFlow = "pick" | ProductionEntryKind;
 
 export interface CreatePageProps {
   readonly viewModel?: CreateShellViewModel;
@@ -72,6 +74,7 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
   const [projects, setProjects] = useState<readonly ProductionProjectRecord[]>([]);
   const [project, setProject] = useState<ProductionProjectRecord>();
   const [composingNew, setComposingNew] = useState(false);
+  const [composerFlow, setComposerFlow] = useState<ComposerFlow>("pick");
   const [sourceId, setSourceId] = useState("");
   const [brief, setBrief] = useState("");
   const [mode, setMode] = useState<ProductionMode>("montage");
@@ -108,6 +111,7 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
           availableSourceIds,
         });
         setComposingNew(true);
+        setComposerFlow("agent");
         setSourceId(entry.sourceId);
         setIssue(entry.sourceMatchFailed
           ? issueFromAppError(new TaskError({ code: "CONTENT_NOT_FOUND", message: "没有找到这条可用于制作的拆解", action: "none" }), { code: "CONTENT_NOT_FOUND", message: "没有找到这条可用于制作的拆解", action: "none" })
@@ -236,6 +240,7 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
       setProjects(remaining);
       setProject(remaining[0]);
       setComposingNew(remaining.length === 0);
+      if (remaining.length === 0) setComposerFlow("pick");
       setProgress(0);
       setProgressMessage("");
     } catch (error) {
@@ -260,12 +265,21 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
     importBlocked,
   });
   const createBlocked = busy || !sourceId || !brief.trim() || (mode === "avatar" && !avatarScript.trim());
-  const primaryDisabled = primary.stage === "no-project" ? createBlocked : primary.disabled;
   const showComposer = !activeProject;
+  const replicaComposer = showComposer && composerFlow === "replica";
+  const agentComposer = showComposer && composerFlow === "agent";
+  const primaryDisabled = replicaComposer
+    ? busy || !sourceId
+    : primary.stage === "no-project" ? createBlocked : primary.disabled;
+  const composerPrimaryVisible = (agentComposer || replicaComposer) && sources.length > 0;
   const showHistory = projects.length > 1 || composingNew && projects.length > 0;
 
   const retryCurrent = () => {
     if (!activeProject) {
+      if (composerFlow === "replica") {
+        if (sourceId) navigate(replicaWizardPath(sourceId));
+        return;
+      }
       void createProject();
       return;
     }
@@ -289,6 +303,10 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
   };
 
   const runPrimary = () => {
+    if (showComposer && composerFlow === "replica") {
+      if (sourceId) navigate(replicaWizardPath(sourceId));
+      return;
+    }
     if (primary.stage === "no-project") {
       void createProject();
       return;
@@ -308,6 +326,7 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
     }
     if (primary.stage === "has-output") {
       setComposingNew(true);
+      setComposerFlow("pick");
       setBrief("");
       setHeadlineText("");
       setAvatarScript("");
@@ -323,31 +342,37 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
     retry: () => retryCurrent(),
   };
 
-  const primaryIcon: IconName = primary.stage === "no-assets" || primary.stage === "failed" && resolveProductionRetryKind(activeProject?.issue?.action ?? issue?.action) === "import"
-    ? "upload_file"
-    : primary.stage === "no-plan"
-      ? "auto_awesome"
-      : primary.stage === "no-output"
-        ? "bolt"
-        : primary.stage === "rendering"
-          ? "sync"
-          : primary.stage === "has-output"
-            ? "sparkle"
-            : "movie_edit";
+  const primaryIcon: IconName = replicaComposer
+    ? "list"
+    : primary.stage === "no-assets" || primary.stage === "failed" && resolveProductionRetryKind(activeProject?.issue?.action ?? issue?.action) === "import"
+      ? "upload_file"
+      : primary.stage === "no-plan"
+        ? "auto_awesome"
+        : primary.stage === "no-output"
+          ? "bolt"
+          : primary.stage === "rendering"
+            ? "sync"
+            : primary.stage === "has-output"
+              ? "sparkle"
+              : "movie_edit";
 
-  const contextualAction = sources.length === 0 && showComposer
-    ? undefined
-    : (
+  const primaryLabel = replicaComposer
+    ? "按清单复刻"
+    : primary.stage === "rendering" ? `${progressMessage || primary.label} ${progress}%` : primary.label;
+
+  const contextualAction = !showComposer || composerPrimaryVisible
+    ? (
       <Button className={busy || primary.stage === "rendering" ? "is-busy" : ""} disabled={primaryDisabled} icon={<Icon name={primaryIcon} size={19} />} onClick={runPrimary} size="lg">
-        {primary.stage === "rendering" ? `${progressMessage || primary.label} ${progress}%` : primary.label}
+        {primaryLabel}
       </Button>
-    );
+    )
+    : undefined;
 
   if (loading) return <AppShell activeNav="create" headerAction={<MaterialLibraryHeaderAction />} navigate={navigate} title="制作"><LoadingState description="正在读取正式拆解与本地制作项目" title="打开制作工作台" /></AppShell>;
 
   return (
     <AppShell activeNav="create" contextualAction={contextualAction} headerAction={<MaterialLibraryHeaderAction />} leadingAction={<span className="page-header-icon"><Icon name="movie_edit" size={24} /></span>} navigate={navigate} title="制作">
-      <div className="page-stack page-create production-workbench" data-production-stage={primary.stage}>
+      <div className="page-stack page-create production-workbench" data-composer-flow={showComposer ? composerFlow : "project"} data-production-stage={primary.stage}>
         {issue ? <IssueNotice actions={issueActions} issue={issue} /> : null}
         {issue && issue.action !== "edit_input" && showComposer ? (
           <aside className={`issue-notice issue-notice--${issue.severity}`} role={issue.severity === "error" ? "alert" : "status"}>
@@ -357,47 +382,49 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
         ) : null}
 
         {showComposer ? (
-          <>
-            <section className="production-hero">
-              <h2>这次想讲什么？</h2>
-            </section>
-            <GlassCard className="production-setup">
-              {sources.length > 0 ? (
-                <>
-                  <label className="field-label" htmlFor="production-brief">{mode === "avatar" ? "视频标题与制作需求" : "你的经营需求"}</label>
-                  <textarea id="production-brief" maxLength={500} onChange={(event) => setBrief(event.target.value)} placeholder={mode === "avatar" ? "例如：介绍门店的新服务，语气自然可信，不夸大承诺。" : "例如：面向附近上班族，突出真实环境、服务过程和到店体验，不夸大承诺。"} rows={4} value={brief} />
-                  <small className="production-field-help">{brief.length}/500</small>
-                  <span className="field-label" id="production-source-label">参考哪条拆解</span>
-                  <div aria-labelledby="production-source-label" className="production-source-scroller" role="listbox">
-                    {sources.map(({ task, label }) => (
-                      <button aria-selected={task.id === sourceId} className={task.id === sourceId ? "production-source-card is-selected" : "production-source-card"} key={task.id} onClick={() => setSourceId(task.id)} role="option" type="button">
-                        <strong>{label}</strong>
-                      </button>
-                    ))}
-                  </div>
-                  <span className="field-label">制作方式</span>
-                  <div aria-label="制作方式" className="production-mode-grid" role="group">
-                    <button aria-pressed={mode === "montage"} className={mode === "montage" ? "is-selected" : ""} onClick={() => setMode("montage")} type="button"><Icon name="movie_edit" size={19} /><span><strong>素材剪辑 + TTS</strong><small>上传图片或视频，使用 AI 连接页配置的 TTS 配音并生成字幕</small></span></button>
-                    <button aria-pressed={mode === "avatar"} className={mode === "avatar" ? "is-selected" : ""} onClick={() => setMode("avatar")} type="button"><Icon name="record_voice_over" size={19} /><span><strong>数字人口播</strong><small>上传带原声的数字人 MP4，本地按口播稿生成字幕</small></span></button>
-                  </div>
-                  <label className="field-label" htmlFor="production-headline">主文字（可选）</label>
-                  <input id="production-headline" maxLength={24} onChange={(event) => setHeadlineText(event.target.value)} placeholder="例如：你出时间，我出货" value={headlineText} />
-                  <small className="production-field-help">留空时由 AI 根据你的真实需求生成；填写后成片会逐字使用。</small>
-                  <label className="field-label" htmlFor="production-text-preset">文字预设</label>
-                  <select id="production-text-preset" onChange={(event) => setTextPreset(event.target.value as ProductionTextPreset)} value={textPreset}>
-                    <option value="classic_top">经典顶部白字</option>
-                    <option value="clean_card">简洁白底卡片</option>
-                    <option value="aqua_accent">青绿色强调</option>
-                  </select>
-                  {mode === "avatar" ? <><label className="field-label" htmlFor="production-avatar-script">数字人口播稿</label><textarea id="production-avatar-script" maxLength={360} onChange={(event) => setAvatarScript(event.target.value)} placeholder="请粘贴与上传数字人视频原声一致的口播稿。它会在本地切分为短字幕，不会替换原视频声音。" rows={5} value={avatarScript} /></> : null}
-                  <label className="field-label" htmlFor="production-duration">目标时长</label>
-                  <select id="production-duration" onChange={(event) => setDuration(Number(event.target.value))} value={duration}>
-                    {[15, 30, 45, 60].map((seconds) => <option key={seconds} value={seconds}>{seconds} 秒</option>)}
-                  </select>
-                </>
-              ) : <EmptyState description="先完成一个采集任务，并在任务详情中手动运行 AI 自动拆解。" icon="analytics" title="还没有可用于制作的拆解" />}
-            </GlassCard>
-          </>
+          composerFlow === "pick" ? (
+            <>
+              <section className="production-hero">
+                <h2>这次走哪条路？</h2>
+                <p>先选一种做法。两条路要准备的东西不一样。</p>
+              </section>
+              <ProductionModeEntry onSelect={setComposerFlow} />
+            </>
+          ) : (
+            <>
+              <button className="production-entry-switch" onClick={() => setComposerFlow("pick")} type="button">
+                <Icon name={composerFlow === "agent" ? "movie_edit" : "list"} size={19} />
+                <span>{composerFlow === "agent" ? "Agent 模式" : "爆款复刻"}</span>
+                <small>更换</small>
+              </button>
+              {composerFlow === "agent" ? (
+                <AgentSetupForm
+                  avatarScript={avatarScript}
+                  brief={brief}
+                  duration={duration}
+                  headlineText={headlineText}
+                  mode={mode}
+                  onAvatarScript={setAvatarScript}
+                  onBrief={setBrief}
+                  onDuration={setDuration}
+                  onHeadlineText={setHeadlineText}
+                  onMode={setMode}
+                  onSourceId={setSourceId}
+                  onTextPreset={setTextPreset}
+                  sourceId={sourceId}
+                  sources={sources}
+                  textPreset={textPreset}
+                />
+              ) : (
+                <ReplicaSetupForm
+                  onGoAnalyze={() => navigate(pathForRoute("home"))}
+                  onSourceId={setSourceId}
+                  sourceId={sourceId}
+                  sources={sources}
+                />
+              )}
+            </>
+          )
         ) : activeProject ? (
           <ProductionProjectCard
             busy={busy}
@@ -429,4 +456,157 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
 function sourceCardLabel(task: AppTaskRecord): string {
   const platform = task.sourceKind === "local_video" ? "本地上传" : platformLabel(task.platform) ?? "内容任务";
   return `${platform} · ${new Date(task.updatedAt).toLocaleDateString("zh-CN")}`;
+}
+
+function SourcePicker({
+  sourceId,
+  sources,
+  onSourceId,
+}: {
+  readonly sourceId: string;
+  readonly sources: readonly AnalysisSource[];
+  readonly onSourceId: (id: string) => void;
+}) {
+  return (
+    <>
+      <span className="field-label" id="production-source-label">参考哪条拆解</span>
+      <div aria-labelledby="production-source-label" className="production-source-scroller" role="listbox">
+        {sources.map(({ task, label }) => (
+          <button aria-selected={task.id === sourceId} className={task.id === sourceId ? "production-source-card is-selected" : "production-source-card"} key={task.id} onClick={() => onSourceId(task.id)} role="option" type="button">
+            <strong>{label}</strong>
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function AgentSetupForm({
+  avatarScript,
+  brief,
+  duration,
+  headlineText,
+  mode,
+  onAvatarScript,
+  onBrief,
+  onDuration,
+  onHeadlineText,
+  onMode,
+  onSourceId,
+  onTextPreset,
+  sourceId,
+  sources,
+  textPreset,
+}: {
+  readonly avatarScript: string;
+  readonly brief: string;
+  readonly duration: number;
+  readonly headlineText: string;
+  readonly mode: ProductionMode;
+  readonly onAvatarScript: (value: string) => void;
+  readonly onBrief: (value: string) => void;
+  readonly onDuration: (value: number) => void;
+  readonly onHeadlineText: (value: string) => void;
+  readonly onMode: (value: ProductionMode) => void;
+  readonly onSourceId: (id: string) => void;
+  readonly onTextPreset: (value: ProductionTextPreset) => void;
+  readonly sourceId: string;
+  readonly sources: readonly AnalysisSource[];
+  readonly textPreset: ProductionTextPreset;
+}) {
+  const avatarOn = mode === "avatar";
+  return (
+    <>
+      <section className="production-hero">
+        <h2>这次想讲什么？</h2>
+      </section>
+      <GlassCard className="production-setup">
+        {sources.length > 0 ? (
+          <>
+            <label className="field-label" htmlFor="production-brief">{avatarOn ? "视频标题与制作需求" : "你的经营需求"}</label>
+            <textarea id="production-brief" maxLength={500} onChange={(event) => onBrief(event.target.value)} placeholder={avatarOn ? "例如：介绍门店的新服务，语气自然可信，不夸大承诺。" : "例如：面向附近上班族，突出真实环境、服务过程和到店体验，不夸大承诺。"} rows={4} value={brief} />
+            <small className="production-field-help">{brief.length}/500</small>
+            <SourcePicker onSourceId={onSourceId} sourceId={sourceId} sources={sources} />
+            <span className="field-label" id="production-avatar-option-label">也可以改用数字人口播</span>
+            <button aria-describedby="production-avatar-option-label" aria-pressed={mode === "avatar"} className={mode === "avatar" ? "production-avatar-option is-selected" : "production-avatar-option"} onClick={() => onMode(avatarOn ? "montage" : "avatar")} type="button">
+              <Icon name="record_voice_over" size={19} />
+              <span>
+                <strong>数字人口播</strong>
+                <small>改用已录好原声的 MP4，只烧字幕、不配音</small>
+              </span>
+            </button>
+            {avatarOn ? (
+              <p className="production-hint">
+                <Icon name="info" size={16} />
+                上传一条已经录好自己声音的 MP4，并粘贴口播稿。应用只按稿烧字幕，不合成语音，也不改原声。字幕必须跟口播稿一致；生成后不能改口播和单镜时长。切分按字数估算，不是对着录音识别的。
+              </p>
+            ) : (
+              <p className="production-hint">
+                <Icon name="info" size={16} />
+                能看到画面时，旁白会参考画面里看得见的内容；看不到就按拆解结构写，生成后微调页会告诉你是哪一种。两种情况都不会核对文字是否对得上每个镜头，需要你逐镜核对，看不清的素材要重拍。
+              </p>
+            )}
+            <label className="field-label" htmlFor="production-headline">主文字（可选）</label>
+            <input id="production-headline" maxLength={24} onChange={(event) => onHeadlineText(event.target.value)} placeholder="例如：你出时间，我出货" value={headlineText} />
+            <small className="production-field-help">留空时由 AI 根据你的真实需求生成；填写后成片会逐字使用。</small>
+            <label className="field-label" htmlFor="production-text-preset">文字预设</label>
+            <select id="production-text-preset" onChange={(event) => onTextPreset(event.target.value as ProductionTextPreset)} value={textPreset}>
+              <option value="classic_top">经典顶部白字</option>
+              <option value="clean_card">简洁白底卡片</option>
+              <option value="aqua_accent">青绿色强调</option>
+            </select>
+            {avatarOn ? (
+              <>
+                <label className="field-label" htmlFor="production-avatar-script">数字人口播稿</label>
+                <textarea id="production-avatar-script" maxLength={360} onChange={(event) => onAvatarScript(event.target.value)} placeholder="请粘贴与上传数字人视频原声一致的口播稿。它会在本地切分为短字幕，不会替换原视频声音。" rows={5} value={avatarScript} />
+              </>
+            ) : null}
+            <label className="field-label" htmlFor="production-duration">目标时长</label>
+            <select id="production-duration" onChange={(event) => onDuration(Number(event.target.value))} value={duration}>
+              {[15, 30, 45, 60].map((seconds) => <option key={seconds} value={seconds}>{seconds} 秒</option>)}
+            </select>
+            {avatarOn ? <small className="production-field-help">口播视频时长不能短于这个目标。旁白语速和单镜时长之后也不能改。</small> : null}
+          </>
+        ) : <EmptyState description="先完成一个采集任务，并在任务详情中手动运行 AI 自动拆解。" icon="analytics" title="还没有可用于制作的拆解" />}
+      </GlassCard>
+    </>
+  );
+}
+
+function ReplicaSetupForm({
+  onGoAnalyze,
+  onSourceId,
+  sourceId,
+  sources,
+}: {
+  readonly onGoAnalyze: () => void;
+  readonly onSourceId: (id: string) => void;
+  readonly sourceId: string;
+  readonly sources: readonly AnalysisSource[];
+}) {
+  return (
+    <>
+      <section className="production-hero">
+        <h2>按哪条拆解复刻？</h2>
+      </section>
+      <GlassCard className="production-setup">
+        {sources.length > 0 ? (
+          <>
+            <SourcePicker onSourceId={onSourceId} sourceId={sourceId} sources={sources} />
+            <p className="production-hint">
+              <Icon name="info" size={16} />
+              下一步会打开这条拆解的复刻向导，按清单逐项绑定素材。清单不代表画面里真的有这些内容；生成的是脚本和字幕，成片要回制作页合成。
+            </p>
+          </>
+        ) : (
+          <EmptyState
+            action={<Button onClick={onGoAnalyze}>去拆解一条</Button>}
+            description="爆款复刻必须先有一份成功的正式拆解。先完成采集，再在任务详情里运行 AI 自动拆解。"
+            icon="analytics"
+            title="还没有可用于复刻的拆解"
+          />
+        )}
+      </GlassCard>
+    </>
+  );
 }

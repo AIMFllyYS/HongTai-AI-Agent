@@ -1,6 +1,7 @@
 import { applyProductionPlanEdit, AssetInsightFlow, contentAnalysisResultSchema, createAvatarCaptionPlan, MIMO_CHAT_AUDIO_TTS_INSTRUCTION, ProductionPlanningFlow, productionPlanResultSchema, replicaBlueprintResultSchema, requestedSubtitleTemplateId, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, type AiProvider, type ProductionPlanConstraints, type ProductionPlanningAsset, type ProductionPlanResult } from "@hongtai/ai";
 import {
   createRuntimeId,
+  DECORATION_IDS,
   issueFromAppError,
   MAX_PRODUCTION_DURATION_SECONDS,
   MAX_SHOTS_PER_PRODUCTION,
@@ -504,6 +505,10 @@ export class StandaloneProductionService implements ProductionService {
           targetDurationSeconds: project.targetDurationSeconds,
           analysis: parsed.data,
           assets: await this.#planningAssets(project),
+          // The stickers shipped inside this APK. Leaving it out is not "no stickers": it is an
+          // empty allow-list, so every selection the model makes fails validation and the whole
+          // plan is rejected.
+          allowedDecorationIds: [...DECORATION_IDS],
         });
       await this.#options.files.writeProductionText({ projectId, relativePath: PLAN_PATH, value: JSON.stringify(plan), replace: true });
       return this.#project(await this.#persist({ ...project, status: "ready", plan }));
@@ -671,6 +676,9 @@ export class StandaloneProductionService implements ProductionService {
       textPreset: project.textPreset,
       ...(sourceText ? { originalSourceText: sourceText } : {}),
       assets: await this.#planningAssets(project),
+      // Same allow-list as generation: an edit must not be able to keep a sticker that generation
+      // would have refused, nor drop one it accepted.
+      allowedDecorationIds: [...DECORATION_IDS],
     };
   }
 

@@ -1,6 +1,7 @@
 package com.hongtai.aiagent.production
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Typeface
 import android.media.MediaExtractor
@@ -172,7 +173,12 @@ internal class ProductionRenderer(private val context: Context, private val stor
   }
 
   private fun compile(plan: NativeProductionPlan, narration: List<Pair<File, Long>>): Composition {
-    val visualItems = if (plan.renderMode == ProductionRenderMode.AVATAR) avatarVisualItems(plan) else plan.shots.flatMap { shot -> visualItems(plan, shot) }
+    val stickers = decodeStickers(plan)
+    val visualItems = if (plan.renderMode == ProductionRenderMode.AVATAR) {
+      avatarVisualItems(plan, stickers)
+    } else {
+      plan.shots.flatMap { shot -> visualItems(plan, shot, stickers = stickers) }
+    }
     val sequences = mutableListOf(EditedMediaItemSequence.withVideoFrom(visualItems))
     if (plan.renderMode == ProductionRenderMode.MONTAGE) {
       sequences += EditedMediaItemSequence.withAudioFrom(narration.map { (file, maximumDurationMs) ->
@@ -190,14 +196,19 @@ internal class ProductionRenderer(private val context: Context, private val stor
   }
 
   /** Avatar subtitle cues trim sequential portions of its one original video instead of replaying from 0. */
-  private fun avatarVisualItems(plan: NativeProductionPlan): List<EditedMediaItem> {
+  private fun avatarVisualItems(plan: NativeProductionPlan, stickers: Map<String, Bitmap>): List<EditedMediaItem> {
     var sourceOffsetMs = 0L
     return plan.shots.flatMap { shot ->
-      visualItems(plan, shot, sourceOffsetMs).also { sourceOffsetMs += shot.durationMs }
+      visualItems(plan, shot, sourceOffsetMs, stickers).also { sourceOffsetMs += shot.durationMs }
     }
   }
 
-  private fun visualItems(plan: NativeProductionPlan, shot: ProductionShot, sourceOffsetMs: Long = 0L): List<EditedMediaItem> {
+  private fun visualItems(
+    plan: NativeProductionPlan,
+    shot: ProductionShot,
+    sourceOffsetMs: Long = 0L,
+    stickers: Map<String, Bitmap>,
+  ): List<EditedMediaItem> {
     var shotOffsetMs = 0L
     val durations = when (shot.input.kind) {
       ProductionAssetKind.IMAGE -> listOf(shot.durationMs)
@@ -216,7 +227,7 @@ internal class ProductionRenderer(private val context: Context, private val stor
         plan.width, plan.height,
         if (shot.fit == "cover") Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP else Presentation.LAYOUT_SCALE_TO_FIT,
       )
-      val overlay = OverlayEffect(headlineOverlays(plan.textOverlay) + subtitleOverlays(plan, shot, shotOffsetMs))
+      val overlay = OverlayEffect(headlineOverlays(plan.textOverlay) + subtitleOverlays(plan, shot, shotOffsetMs, stickers))
       shotOffsetMs += duration
       EditedMediaItem.Builder(media).setRemoveAudio(plan.renderMode == ProductionRenderMode.MONTAGE)
         .apply { if (shot.input.kind == ProductionAssetKind.IMAGE) setFrameRate(plan.fps) }
@@ -231,12 +242,29 @@ internal class ProductionRenderer(private val context: Context, private val stor
    * @param shotOffsetMs where this media item starts inside its shot, which is non-zero only when a
    *   clip shorter than the shot is repeated to fill it.
    */
-  private fun subtitleOverlays(plan: NativeProductionPlan, shot: ProductionShot, shotOffsetMs: Long): List<TextureOverlay> {
+  private fun subtitleOverlays(
+    plan: NativeProductionPlan,
+    shot: ProductionShot,
+    shotOffsetMs: Long,
+    stickers: Map<String, Bitmap>,
+  ): List<TextureOverlay> {
     val template = plan.subtitleTemplate ?: return captionOverlays(shot.caption)
     val decorations = plan.decorations.filter { it.shotOrder == shot.order }.map { decoration ->
-      ProductionDecorationOverlay(decoration, template, plan.width, plan.height, shotOffsetMs)
+      ProductionDecorationOverlay(
+        decoration,
+        template,
+        plan.width,
+        plan.height,
+        shotOffsetMs,
+        decoration.assetRef?.let(stickers::get),
+      )
     }
     return listOf(ProductionCaptionOverlay(template, shot.cues, plan.width, plan.height, shotOffsetMs)) + decorations
+  }
+
+  private fun decodeStickers(plan: NativeProductionPlan): Map<String, Bitmap> {
+    val ids = plan.decorations.mapNotNull { spec -> spec.assetRef.takeIf { spec.kind == "sticker" } }.toSet()
+    return ids.associateWith { DecorationAssets.decode(context.assets, it) }
   }
 
   private fun headlineOverlays(value: ProductionTextOverlay): List<TextOverlay> {

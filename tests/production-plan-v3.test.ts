@@ -7,6 +7,7 @@ import {
   productionPlanResultSchema,
   productionPlanResultV3JsonSchema,
   productionPlanResultV3Schema,
+  productionDecorationSchema,
   validateProductionPlan,
   type ProductionDecoration,
   type ProductionPlanConstraints,
@@ -20,7 +21,7 @@ const constraints: ProductionPlanConstraints = {
   textPreset: "classic_top",
   headlineText: "看得见的真实服务",
   subtitleTemplateId: "keyword_pop",
-  allowedDecorationIds: ["tag_arrow_right", "tag_star"],
+  allowedDecorationIds: ["arrow_right", "star_mark"],
   assets: [
     { id: "asset-image", role: "visual", kind: "image", mimeType: "image/jpeg", displayName: "门店.jpg" },
     { id: "asset-detail", role: "visual", kind: "image", mimeType: "image/png", displayName: "细节.png" },
@@ -78,7 +79,7 @@ function plan(): ProductionPlanResultV3 {
       },
     ],
     decorations: [
-      { kind: "sticker", assetRef: "tag_arrow_right", text: null, shotOrder: 1, startMs: 600, endMs: 2600, anchor: "middle_right", scale: 1, animation: "pop" },
+      { kind: "sticker", assetRef: "arrow_right", text: null, shotOrder: 1, startMs: 600, endMs: 2600, anchor: "middle_right", scale: 1, animation: "pop" },
       { kind: "floating_text", assetRef: null, text: "真实过程", shotOrder: 2, startMs: 400, endMs: 3000, anchor: "top_left", scale: 1, animation: "fade" },
     ],
   };
@@ -113,6 +114,9 @@ test("production-plan.v3 承载字幕模板、逐句时间轴与装饰层，且�
   const jsonSchema = productionPlanResultV3JsonSchema as { properties?: Record<string, unknown> };
   assert.ok(jsonSchema.properties?.subtitle);
   assert.ok(jsonSchema.properties?.decorations);
+
+  assert.equal(productionDecorationSchema.safeParse(plan().decorations[0]).success, true);
+  assert.equal(productionDecorationSchema.safeParse({ ...plan().decorations[0], assetRef: "invented_sticker" }).success, false);
 });
 
 test("画面识别记录必须自洽，缺这条记录的老计划仍然打得开", () => {
@@ -178,7 +182,7 @@ test("v3 校验不允许计划宣称高于实际证据的字幕时间精度", ()
 });
 
 test("v3 校验按白名单和密度上限拦住装饰层", () => {
-  rejects((draft) => { draft.decorations[0]!.assetRef = "tag_not_bundled"; }, /不在内置素材清单/u);
+  rejects((draft) => { draft.decorations[0]!.assetRef = "sparkle"; }, /不在内置素材清单/u);
   rejects((draft) => { draft.decorations[0]!.text = "多余文字"; }, /贴纸装饰必须引用素材清单/u);
   rejects((draft) => { draft.decorations[1]!.text = null; }, /浮动文字装饰必须给出文字/u);
   rejects((draft) => { draft.decorations[0]!.shotOrder = 9; }, /不存在的镜头/u);
@@ -187,13 +191,13 @@ test("v3 校验按白名单和密度上限拦住装饰层", () => {
 
   const overShot = plan();
   overShot.decorations = Array.from({ length: MAX_DECORATIONS_PER_SHOT + 1 }, (): ProductionDecoration => ({
-    kind: "sticker", assetRef: "tag_star", text: null, shotOrder: 1, startMs: 100, endMs: 2000, anchor: "top_right", scale: 1, animation: "fade",
+    kind: "sticker", assetRef: "star_mark", text: null, shotOrder: 1, startMs: 100, endMs: 2000, anchor: "top_right", scale: 1, animation: "fade",
   }));
   assert.throws(() => validateProductionPlan(overShot, constraints), /单个镜头的装饰数量超出上限/u);
 
   const overPlan = plan();
   overPlan.decorations = Array.from({ length: MAX_DECORATIONS_PER_PLAN + 1 }, (): ProductionDecoration => ({
-    kind: "sticker", assetRef: "tag_star", text: null, shotOrder: 1, startMs: 100, endMs: 2000, anchor: "top_right", scale: 1, animation: "fade",
+    kind: "sticker", assetRef: "star_mark", text: null, shotOrder: 1, startMs: 100, endMs: 2000, anchor: "top_right", scale: 1, animation: "fade",
   }));
   assert.throws(() => validateProductionPlan(overPlan, constraints), /装饰数量超出单条视频上限/u);
 

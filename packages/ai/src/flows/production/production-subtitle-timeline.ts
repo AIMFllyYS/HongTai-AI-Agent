@@ -12,6 +12,7 @@ import {
   type ProductionPlanResultV2,
   type ProductionPlanResultV3,
 } from "../../schemas/production-plan";
+import { deriveDecorationTimeline, type DecorationIntent } from "./production-decoration-timeline";
 
 export interface SubtitleTimelineInput {
   /** A plan carrying every v2 field; the subtitle timeline is derived from its shots. */
@@ -26,6 +27,11 @@ export interface SubtitleTimelineInput {
    * does not un-see them either.
    */
   readonly grounding?: ProductionPlanGrounding;
+  /**
+   * Sticker/floating-text choices without timestamps. Windows are taken from the cues built above
+   * so an edit that rewrites narration keeps the same stickers instead of wiping them.
+   */
+  readonly decorations?: readonly DecorationIntent[];
   /** How this caller reports a plan it cannot make executable, since recovery differs per mode. */
   readonly invalid: (cause: unknown) => TaskError;
 }
@@ -34,13 +40,22 @@ export interface SubtitleTimelineInput {
  * Turns a v2-shaped plan into a validated v3 plan by deriving each shot's cue timeline.
  *
  * Cue milliseconds are computed here rather than asked of a language model, which produces
- * plausible numbers that do not add up. The result is parsed against its own schema before it
- * is returned: a plan that fails the schema would still persist, and the project could no
- * longer be opened afterwards.
+ * plausible numbers that do not add up. Decoration windows follow the same rule: the model may
+ * pick a shot, a catalogue id and an anchor, and this function maps those onto the cues it just
+ * built. The result is parsed against its own schema before it is returned: a plan that fails the
+ * schema would still persist, and the project could no longer be opened afterwards.
  */
 export function withSubtitleTimeline(input: SubtitleTimelineInput): ProductionPlanResultV3 {
   const precision = subtitleTimingPrecision(input.source);
   const resolved = resolveTemplateForPrecision({ requestedId: input.requestedTemplateId ?? "", precision });
+  const shots = input.plan.shots.map((shot) => ({
+    ...shot,
+    cues: buildShotCueTimeline({
+      text: shot.narration,
+      shotDurationMs: Math.round(shot.durationSeconds * 1_000),
+      typography: resolved.template.typography,
+    }).map((cue) => ({ ...cue, emphasisWords: [...cue.emphasisWords] })),
+  }));
   const derived = {
     ...input.plan,
     schemaVersion: "production-plan.v3",
@@ -49,15 +64,8 @@ export function withSubtitleTimeline(input: SubtitleTimelineInput): ProductionPl
       timing: { precision, source: input.source },
       degradedFromTemplateId: resolved.degradedFrom ?? null,
     },
-    shots: input.plan.shots.map((shot) => ({
-      ...shot,
-      cues: buildShotCueTimeline({
-        text: shot.narration,
-        shotDurationMs: Math.round(shot.durationSeconds * 1_000),
-        typography: resolved.template.typography,
-      }).map((cue) => ({ ...cue, emphasisWords: [...cue.emphasisWords] })),
-    })),
-    decorations: [],
+    shots,
+    decorations: deriveDecorationTimeline(input.decorations ?? [], shots),
     ...(input.grounding === undefined ? {} : { grounding: input.grounding }),
   };
 

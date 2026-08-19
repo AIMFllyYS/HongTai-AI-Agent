@@ -69,7 +69,7 @@ function blueprint(overrides: Record<string, unknown> = {}): string {
   });
 }
 
-function planFor(assetIds: readonly string[]): ProductionPlanResultV2 {
+function planFor(assetIds: readonly string[]): ProductionPlanResultV2 & { decorationSelections: readonly [] } {
   return {
     schemaVersion: "production-plan.v2",
     source: { analysisTaskId: "task-1" },
@@ -85,6 +85,7 @@ function planFor(assetIds: readonly string[]): ProductionPlanResultV2 {
       caption: `第${index + 1}段`,
       fit: "cover" as const,
     })),
+    decorationSelections: [],
   };
 }
 

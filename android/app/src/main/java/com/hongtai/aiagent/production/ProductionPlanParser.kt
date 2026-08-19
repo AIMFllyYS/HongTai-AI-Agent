@@ -60,6 +60,7 @@ internal object ProductionPlanParser {
     assets: Map<String, ProductionInput>,
     renderMode: ProductionRenderMode = ProductionRenderMode.MONTAGE,
     subtitleTemplateJson: String? = null,
+    stickerExists: (String) -> Boolean = { false },
   ): NativeProductionPlan {
     require(json.toByteArray(Charsets.UTF_8).size <= MAX_PLAN_BYTES) { "The production plan is too large." }
     val root = JSONObject(json)
@@ -126,6 +127,7 @@ internal object ProductionPlanParser {
       SubtitleRenderSpecParser.parseDecorations(
         root.getJSONArray("decorations"),
         shots.associate { it.order to it.durationMs },
+        stickerExists,
       )
     } else {
       emptyList()

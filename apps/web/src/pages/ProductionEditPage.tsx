@@ -320,6 +320,7 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
             })}
             onNarration={(value) => patch({ ...draft, shots: draft.shots.map((candidate) => candidate.order === shot.order ? { ...candidate, narration: value } : candidate) })}
             preview={previewShot({ shot, requestedTemplateId: draft.subtitleTemplateId })}
+            decorations={plan.decorations}
             shots={draft.shots}
             totalMilliseconds={Math.round(plan.targetDurationSeconds * 1_000)}
           />

@@ -8,6 +8,16 @@ export interface PlanCueView {
   readonly hasWordTiming: boolean;
 }
 
+export interface PlanDecorationView {
+  readonly kind: "sticker" | "floating_text";
+  readonly assetRef: string | null;
+  readonly text: string | null;
+  readonly shotOrder: number;
+  readonly anchor: string;
+  readonly scale: number;
+  readonly animation: string;
+}
+
 export interface PlanShotView {
   readonly order: number;
   readonly assetId: string;
@@ -44,6 +54,7 @@ export interface ProductionPlanView {
   readonly backgroundMusicAssetId: string | null;
   readonly backgroundMusicVolume: number;
   readonly subtitle?: PlanSubtitleView;
+  readonly decorations: readonly PlanDecorationView[];
   readonly visualGrounding: PlanVisualGrounding;
   /** Assets whose real frames were described. Empty whenever grounding is not `asset_insight`. */
   readonly describedAssetIds: readonly string[];
@@ -58,6 +69,7 @@ const EMPTY: ProductionPlanView = {
   speechRate: 1,
   backgroundMusicAssetId: null,
   backgroundMusicVolume: 0,
+  decorations: [],
   visualGrounding: "blind",
   describedAssetIds: [],
 };
@@ -113,6 +125,22 @@ function asShot(value: unknown): PlanShotView | undefined {
   };
 }
 
+function asDecoration(value: unknown): PlanDecorationView | undefined {
+  const record = asRecord(value);
+  const kind = asString(record?.kind);
+  const shotOrder = asFiniteNumber(record?.shotOrder);
+  const anchor = asString(record?.anchor);
+  const scale = asFiniteNumber(record?.scale);
+  const animation = asString(record?.animation);
+  if (kind !== "sticker" && kind !== "floating_text") return undefined;
+  if (shotOrder === undefined || !anchor || scale === undefined || !animation) return undefined;
+  const assetRef = asString(record?.assetRef) ?? null;
+  const text = asString(record?.text) ?? null;
+  if (kind === "sticker" && !assetRef) return undefined;
+  if (kind === "floating_text" && !text) return undefined;
+  return { kind, assetRef, text, shotOrder, anchor, scale, animation };
+}
+
 function asSubtitle(value: unknown): PlanSubtitleView | undefined {
   const record = asRecord(value);
   const templateId = asString(record?.templateId);
@@ -163,6 +191,9 @@ export function readProductionPlan(plan: VersionedDocument | undefined): Product
     ? document.shots.flatMap((shot) => { const mapped = asShot(shot); return mapped ? [mapped] : []; })
     : [];
   const subtitle = asSubtitle(document.subtitle);
+  const decorations = Array.isArray(document.decorations)
+    ? document.decorations.flatMap((item) => { const mapped = asDecoration(item); return mapped ? [mapped] : []; })
+    : [];
   const grounding = asGrounding(document.grounding);
 
   return {
@@ -175,6 +206,7 @@ export function readProductionPlan(plan: VersionedDocument | undefined): Product
     backgroundMusicAssetId: asString(audio?.backgroundMusicAssetId) ?? null,
     backgroundMusicVolume: asFiniteNumber(audio?.backgroundMusicVolume) ?? 0,
     ...(subtitle ? { subtitle } : {}),
+    decorations,
     visualGrounding: grounding.visual,
     describedAssetIds: grounding.describedAssetIds,
   };

@@ -38,7 +38,7 @@ const input: ProductionPlanInput = {
   ],
 };
 
-function plan(assetId = "asset-image"): ProductionPlanResultV2 {
+function plan(assetId = "asset-image"): ProductionPlanResultV2 & { decorationSelections: unknown[] } {
   return {
     schemaVersion: "production-plan.v2",
     source: { analysisTaskId: "task-1" },
@@ -50,6 +50,7 @@ function plan(assetId = "asset-image"): ProductionPlanResultV2 {
       { order: 1, assetId, durationSeconds: 8, narration: "第一次到店，不知道服务过程是否适合自己？", caption: "先看清服务过程", fit: "cover" },
       { order: 2, assetId: "asset-video", durationSeconds: 12, narration: "我们把真实步骤逐一呈现，欢迎到店进一步了解。", caption: "真实步骤逐一呈现", fit: "cover" },
     ],
+    decorationSelections: [],
   };
 }
 
@@ -228,4 +229,66 @@ test("制作规划拒绝切不出字幕的旁白，而不是产出打不开的�
 
   await assert.rejects(() => new ProductionPlanningFlow({ provider }).run(input), /修复/u);
   assert.equal(provider.calls.length, 2, "无法生成字幕时应先尝试修复一次");
+});
+
+test("制作规划把贴纸选择铺到字幕时间轴上，不让模型写毫秒", async () => {
+  const selected = plan();
+  selected.decorationSelections = [
+    { shotOrder: 1, assetRef: "arrow_right", anchor: "middle_right", scale: 1, animation: "pop" },
+    { shotOrder: 2, assetRef: "star_mark", anchor: "top_left", scale: 1, animation: "fade" },
+  ];
+  const provider = new SequenceProvider([JSON.stringify(selected)]);
+  const result = await new ProductionPlanningFlow({ provider }).run({
+    ...input,
+    allowedDecorationIds: ["arrow_right", "star_mark"],
+  });
+
+  assert.equal(result.decorations.length, 2);
+  assert.equal(result.decorations[0]?.assetRef, "arrow_right");
+  assert.equal(result.decorations[0]?.shotOrder, 1);
+  assert.equal(result.decorations[0]?.text, null);
+  assert.ok((result.decorations[0]?.endMs ?? 0) > (result.decorations[0]?.startMs ?? 0));
+  const firstCue = result.shots[0]?.cues[0];
+  assert.equal(result.decorations[0]?.startMs, firstCue?.startMs);
+  assert.equal(result.decorations[0]?.endMs, firstCue?.endMs);
+  assert.match(provider.calls[0]?.messages[0]?.content as string, /不得自造文件名/u);
+  assert.match(provider.calls[0]?.messages[0]?.content as string, /不要填写startMs、endMs/u);
+  assert.doesNotMatch(JSON.stringify(selected.decorationSelections[0]), /startMs/u);
+});
+
+test("制作规划拒绝清单外贴纸、超密度或不支持的动效，并走修复轮", async () => {
+  const invented = plan();
+  invented.decorationSelections = [
+    { shotOrder: 1, assetRef: "invented_sticker", anchor: "top_left", scale: 1, animation: "pop" },
+  ];
+  const inventedProvider = new SequenceProvider([JSON.stringify(invented), JSON.stringify(invented)]);
+  await assert.rejects(
+    () => new ProductionPlanningFlow({ provider: inventedProvider }).run({ ...input, allowedDecorationIds: ["arrow_right"] }),
+    /修复/u,
+  );
+  assert.equal(inventedProvider.calls.length, 2);
+
+  const crowded = plan();
+  crowded.decorationSelections = [
+    { shotOrder: 1, assetRef: "arrow_right", anchor: "top_left", scale: 1, animation: "none" },
+    { shotOrder: 1, assetRef: "star_mark", anchor: "top_right", scale: 1, animation: "fade" },
+    { shotOrder: 1, assetRef: "sparkle", anchor: "middle_left", scale: 1, animation: "pop" },
+  ];
+  const crowdedProvider = new SequenceProvider([JSON.stringify(crowded), JSON.stringify(plan())]);
+  const repaired = await new ProductionPlanningFlow({ provider: crowdedProvider }).run({
+    ...input,
+    allowedDecorationIds: ["arrow_right", "star_mark", "sparkle"],
+  });
+  assert.equal(crowdedProvider.calls.length, 2);
+  assert.deepEqual(repaired.decorations, []);
+
+  const particles = plan();
+  particles.decorationSelections = [
+    { shotOrder: 1, assetRef: "arrow_right", anchor: "top_left", scale: 1, animation: "particle" },
+  ];
+  const particleProvider = new SequenceProvider([JSON.stringify(particles), JSON.stringify(particles)]);
+  await assert.rejects(
+    () => new ProductionPlanningFlow({ provider: particleProvider }).run({ ...input, allowedDecorationIds: ["arrow_right"] }),
+    /修复/u,
+  );
 });

@@ -9,7 +9,12 @@ import {
 import { z } from "zod";
 
 import { toProviderJsonSchema } from "../structured-output/json-schema";
-import { productionDecorationSchema, productionSubtitleSettingsSchema, subtitleCueSchema } from "./production-plan-overlays";
+import {
+  decorationSelectionSchema,
+  productionDecorationSchema,
+  productionSubtitleSettingsSchema,
+  subtitleCueSchema,
+} from "./production-plan-overlays";
 
 const productionShotBaseSchema = z.object({
   order: z.number().int().positive(),
@@ -106,5 +111,15 @@ export type ProductionPlanResultV2 = z.infer<typeof productionPlanResultV2Schema
 export type ProductionPlanResultV3 = z.infer<typeof productionPlanResultV3Schema>;
 export type ProductionPlanResult = z.infer<typeof productionPlanResultSchema>;
 
-export const productionPlanResultJsonSchema = toProviderJsonSchema(productionPlanResultV2Schema);
+/**
+ * Planner JSON is still a v2 plan plus decoration *choices*. Cue milliseconds for those stickers
+ * are assembled locally after the subtitle timeline exists; the model is not asked to invent them.
+ */
+export const productionPlannerOutputSchema = productionPlanResultV2Schema.extend({
+  decorationSelections: z.array(decorationSelectionSchema).max(6),
+});
+
+export type ProductionPlannerOutput = z.infer<typeof productionPlannerOutputSchema>;
+
+export const productionPlanResultJsonSchema = toProviderJsonSchema(productionPlannerOutputSchema);
 export const productionPlanResultV3JsonSchema = toProviderJsonSchema(productionPlanResultV3Schema);

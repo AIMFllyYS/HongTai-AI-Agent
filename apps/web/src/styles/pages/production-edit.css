@@ -62,6 +62,13 @@
   border-radius: var(--radius-control);
 }
 
+.shot-edit-card__canvas {
+  position: relative;
+  width: min(100%, 12.5rem);
+  aspect-ratio: 9 / 16;
+  margin-inline: auto;
+}
+
 .shot-edit-card__field { display: grid; gap: var(--space-2); }
 .shot-edit-card__count { justify-self: end; color: var(--color-text-muted); font-size: var(--text-meta); font-variant-numeric: tabular-nums; }
 

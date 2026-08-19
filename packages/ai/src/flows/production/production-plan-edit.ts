@@ -2,6 +2,7 @@ import { hasVisibleText, TaskError, type ProductionPlanUpdate, type ProductionSh
 
 import type { ProductionPlanResult, ProductionPlanResultV2, ProductionPlanResultV3 } from "../../schemas/production-plan";
 import { isWholeMilliseconds, validateProductionPlan, type ProductionPlanConstraints } from "./production-plan-validation";
+import { intentFromDecoration } from "./production-decoration-timeline";
 import { withSubtitleTimeline } from "./production-subtitle-timeline";
 
 /**
@@ -176,9 +177,13 @@ export function applyProductionPlanEdit(input: ProductionPlanEditInput): Product
   // Carried across explicitly rather than left to survive the spread: an edit does not look at the
   // material again, so the plan keeps saying exactly how much the planner had seen.
   const grounding = input.plan.schemaVersion === "production-plan.v3" ? input.plan.grounding : undefined;
+  const decorations = input.plan.schemaVersion === "production-plan.v3"
+    ? input.plan.decorations.map(intentFromDecoration)
+    : [];
   const next = withSubtitleTimeline({
     plan: edited,
     source: EDIT_TIMING_SOURCE,
+    decorations,
     ...(requestedTemplateId === undefined ? {} : { requestedTemplateId }),
     ...(grounding === undefined ? {} : { grounding }),
     invalid: (cause) => invalidEdit("这次微调无法生成可播放的字幕，请检查镜头文案和时长。", cause),

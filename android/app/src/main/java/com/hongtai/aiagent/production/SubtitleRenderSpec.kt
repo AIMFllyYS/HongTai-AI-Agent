@@ -197,7 +197,11 @@ internal object SubtitleRenderSpecParser {
     return words
   }
 
-  fun parseDecorations(array: JSONArray, shotDurations: Map<Int, Long>): List<ProductionDecorationSpec> {
+  fun parseDecorations(
+    array: JSONArray,
+    shotDurations: Map<Int, Long>,
+    stickerExists: (String) -> Boolean,
+  ): List<ProductionDecorationSpec> {
     require(array.length() <= MAX_DECORATIONS_PER_PLAN) { "The decoration count is outside the supported range." }
     val perShot = mutableMapOf<Int, Int>()
     return (0 until array.length()).map { index ->
@@ -221,9 +225,7 @@ internal object SubtitleRenderSpecParser {
       if (kind == "sticker") {
         require(assetRef != null && text == null) { "A sticker decoration needs a catalogue reference and no text." }
         require(BUNDLED_ASSET_REF.matches(assetRef)) { "A sticker reference is not a catalogue id." }
-        // The bundled decoration catalogue is not shipped yet, so a sticker cannot be resolved to
-        // real pixels. Failing here keeps a plan from exporting with its stickers silently missing.
-        throw IllegalArgumentException("The bundled sticker catalogue is not available in this build.")
+        require(stickerExists(assetRef)) { "A sticker PNG is missing from the packaged catalogue." }
       } else {
         require(text != null && assetRef == null) { "A floating text decoration needs text and no catalogue reference." }
         require(text.length <= 12) { "A floating text decoration is too long." }

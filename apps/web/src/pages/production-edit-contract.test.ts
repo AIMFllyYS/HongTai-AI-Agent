@@ -65,6 +65,8 @@ test("微调不提交字幕时间，并如实说清哪些东西在这里改不�
 test("字幕模板选择器与预览真的被挂到微调页，并按真实精度判断是否降级", () => {
   assert.match(page, /<SubtitleTemplatePicker/u);
   assert.match(card, /<SubtitleTemplatePreview/u);
+  assert.match(card, /<ProductionDecorationPreview/u);
+  assert.match(card, /decorationPublicUrl|decorations=\{decorations\}/u);
   assert.match(page, /hasWordTiming=\{plan\.subtitle\?\.precision === "word"\}/u, "词级时间要按计划里的真实精度判断，不能写死 true");
   assert.doesNotMatch(page, /hasWordTiming=\{true\}/u);
 });

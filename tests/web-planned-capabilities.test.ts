@@ -38,8 +38,9 @@ test("templates and production use real runtimes while publishing remains planne
   assert.doesNotMatch(create, /@capacitor\/app/);
   assert.doesNotMatch(create, /viewModel\.(templates|profileTags|materialFilters|generationEta|actionLabel)/);
   assert.doesNotMatch(create, /template-tile__selected/);
-  assert.match(create, /mode === "montage"\s*\?\s*"is-selected"/);
-  assert.match(create, /mode === "avatar"\s*\?\s*"is-selected"/);
+  assert.match(create, /<ProductionModeEntry /);
+  assert.match(create, /aria-pressed=\{mode === "avatar"\}/);
+  assert.match(create, /mode === "avatar" \? \{ avatarScript \}/);
 
   const templates = read("pages/TemplatesPage.tsx");
   assert.match(templates, /runtime\.templates\.(list|createFromAnalysis|create|update|delete)/);

@@ -11,7 +11,7 @@ const SHOT = {
   cues: [{ startMs: 0, endMs: 2_000, text: "真实门店" }],
 };
 
-function planWith(grounding?: unknown) {
+function planWith(grounding?: unknown, decorations?: unknown) {
   return {
     schemaVersion: "production-plan.v3",
     document: {
@@ -21,6 +21,7 @@ function planWith(grounding?: unknown) {
       shots: [SHOT],
       subtitle: { templateId: "classic_line", timing: { precision: "estimated", source: "script_estimate" } },
       ...(grounding === undefined ? {} : { grounding }),
+      ...(decorations === undefined ? {} : { decorations }),
     },
   };
 }
@@ -53,4 +54,15 @@ test("旧计划仍然可读可微调，新增字段不会让它变成不可编�
   assert.equal(view.editable, true);
   assert.equal(view.visualGrounding, "blind");
   assert.equal(view.shots.length, 1);
+  assert.deepEqual(view.decorations, []);
+});
+
+test("装饰层按清单相对路径读出，坏字段丢掉而不是猜一个贴纸", () => {
+  const view = readProductionPlan(planWith(undefined, [
+    { kind: "sticker", assetRef: "arrow_right", text: null, shotOrder: 1, startMs: 0, endMs: 1000, anchor: "top_right", scale: 1, animation: "pop" },
+    { kind: "sticker", shotOrder: 1 },
+  ]));
+  assert.equal(view.decorations.length, 1);
+  assert.equal(view.decorations[0]?.assetRef, "arrow_right");
+  assert.equal(view.decorations[0]?.anchor, "top_right");
 });

@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { resolveSubtitleTemplate } from "@hongtai/core";
 
 import {
   MAX_SHOT_MS,
@@ -8,8 +9,10 @@ import {
   type ShotDraft,
   type ShotPreview,
 } from "../features/production/plan-edit-model";
+import type { PlanDecorationView } from "../features/production/production-plan-view";
 import { GlassCard } from "./GlassCard";
 import { Icon } from "./Icon";
+import { ProductionDecorationPreview } from "./ProductionDecorationPreview";
 import { StepperField } from "./StepperField";
 import { SubtitleTemplatePreview } from "./SubtitleTemplatePreview";
 
@@ -17,6 +20,7 @@ export interface ProductionShotEditCardProps {
   readonly draft: ShotDraft;
   /** What saving would produce for this shot, so the card never shows the previous save's timings. */
   readonly preview: ShotPreview;
+  readonly decorations: readonly PlanDecorationView[];
   readonly shots: readonly ShotDraft[];
   readonly totalMilliseconds: number;
   /** Avatar captions come from the recorded voice, so the service refuses these two fields. */
@@ -32,7 +36,7 @@ function seconds(milliseconds: number): string {
 }
 
 export function ProductionShotEditCard({
-  draft, preview, shots, totalMilliseconds, lockedCopy, disabled,
+  draft, preview, decorations, shots, totalMilliseconds, lockedCopy, disabled,
   onDuration, onNarration, onCaption,
 }: ProductionShotEditCardProps) {
   const narrationId = useId();
@@ -40,6 +44,7 @@ export function ProductionShotEditCard({
   const bounds = shotDurationBounds({ shots, order: draft.order, totalMilliseconds });
   const single = shots.length < 2;
   const first = preview.cues[0];
+  const template = resolveSubtitleTemplate({ id: preview.templateId, hasWordTiming: false }).template;
 
   return (
     <GlassCard className="shot-edit-card" tone="soft">
@@ -53,14 +58,21 @@ export function ProductionShotEditCard({
 
       {first ? (
         <div className="shot-edit-card__stage">
-          <SubtitleTemplatePreview
-            emphasisWords={first.emphasisWords}
-            // An edit re-derives cues from the copy, so it can never claim per-word timing.
-            hasWordTiming={false}
-            placement="band"
-            templateId={preview.templateId}
-            text={first.text}
-          />
+          <div className="shot-edit-card__canvas">
+            <ProductionDecorationPreview
+              captionBottomOffsetPx={template.layout.bottomOffsetPx}
+              decorations={decorations}
+              shotOrder={draft.order}
+            />
+            <SubtitleTemplatePreview
+              emphasisWords={first.emphasisWords}
+              // An edit re-derives cues from the copy, so it can never claim per-word timing.
+              hasWordTiming={false}
+              placement="frame"
+              templateId={preview.templateId}
+              text={first.text}
+            />
+          </div>
         </div>
       ) : (
         <p className="production-hint">

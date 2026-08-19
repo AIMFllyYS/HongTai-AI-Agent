@@ -1,8 +1,11 @@
+import { DECORATION_CATALOGUE } from "@hongtai/core";
+
 import type { ProductionPlanInput } from "../contracts/production-planning";
+import { MAX_DECORATIONS_PER_PLAN, MAX_DECORATIONS_PER_SHOT } from "../schemas/production-plan-overlays";
 import { productionPlanResultJsonSchema } from "../schemas/production-plan";
 
 const RULES = `你是手机端短视频制作规划助手。根据正式内容拆解、用户经营需求和用户主动导入的素材，生成可由本地渲染器直接执行的计划。
-只输出production-plan.v2 JSON对象，不要Markdown、thinking标签或JSON以外的内容。
+只输出一个JSON对象，schemaVersion必须是production-plan.v2，并额外给出decorationSelections数组，不要Markdown、thinking标签或JSON以外的内容。
 只允许引用素材清单中的assetId。不得照抄原作品措辞、虚构经营事实、医疗功效或无法验证的承诺。
 镜头order必须从1连续递增；镜头durationSeconds之和必须等于settings.durationSeconds和目标时长。
 首版固定720x1280、30fps、zh-CN系统语音；背景音乐只能引用audio素材，未提供时必须为null且音量为0。
@@ -53,16 +56,37 @@ function insightRules(input: ProductionPlanInput): string {
   return `部分素材带有insight字段，那是系统对该素材真实画面的识别结果。为这些镜头写旁白和字幕时，只能讲insight里确实提到的东西，不得补充insight没有提到的人物、物品、品牌、地点或数字。insight与拆解内容冲突时以insight为准，因为画面是用户真正拍到的。${blindRule}`;
 }
 
+/**
+ * Catalogue ids and density only. Timestamps are assembled locally from cues; asking the model
+ * for milliseconds produced numbers that did not add up.
+ */
+function decorationRules(input: ProductionPlanInput): string {
+  const allowed = new Set(input.allowedDecorationIds ?? []);
+  if (allowed.size === 0) {
+    return "decorationSelections必须是空数组。当前没有开放任何贴纸，不得自造文件名或贴纸id。";
+  }
+  const catalogue = DECORATION_CATALOGUE
+    .filter((item) => allowed.has(item.id))
+    .map((item) => ({ id: item.id, label: item.label, tags: item.tags }));
+  return [
+    `decorationSelections从下列内置贴纸中挑选，assetRef必须逐字等于表中id，不得自造文件名、路径或未列出的id。`,
+    `整片最多${MAX_DECORATIONS_PER_PLAN}个，每个镜头最多${MAX_DECORATIONS_PER_SHOT}个；不需要装饰时输出空数组。`,
+    `只选择镜头shotOrder、贴纸id、锚点anchor、scale（0.5到2）和animation。animation只能是none、fade、pop、float四种，不要承诺描边动画、序列帧或粒子。`,
+    `不要填写startMs、endMs或文件路径，时间轴由系统按该镜字幕推导。`,
+    `可选贴纸：${JSON.stringify(catalogue)}`,
+  ].join("");
+}
+
 export function productionPlanningPrompt(input: ProductionPlanInput): string {
   const modeRules = input.mode === "avatar"
     ? "当前是数字人口播模式：只使用role为avatar的单个视频；保留其原始口播声音，不生成TTS或背景音乐。目标时长不得超过该视频时长；必须按用户提供的口播稿顺序切分镜头，caption与narration均不得偏离这份口播稿。"
     : "当前是素材剪辑模式：使用图片/视频作为视觉素材，为每个镜头写可由zh-CN系统TTS朗读的旁白；字幕应与旁白一致或忠实概括。";
-  return `${RULES}\n${modeRules}\n${requirementRules(input)}\n${insightRules(input)}\n${CONTRACT}\n${REFERENCE_PREFIX}\n真实来源和需求：${JSON.stringify({ analysisTaskId: input.analysisTaskId, brief: input.brief, targetDurationSeconds: input.targetDurationSeconds, mode: input.mode, headlineText: input.headlineText ?? null, textPreset: input.textPreset, ...(input.avatarScript ? { avatarScript: input.avatarScript } : {}) })}\n爆款原文（参考，不可作为口播）：${input.originalSourceText}\n正式爆款拆解（参考，不可照抄）：${JSON.stringify(input.analysis)}\n可用素材：${JSON.stringify(input.assets)}`;
+  return `${RULES}\n${modeRules}\n${requirementRules(input)}\n${insightRules(input)}\n${decorationRules(input)}\n${CONTRACT}\n${REFERENCE_PREFIX}\n真实来源和需求：${JSON.stringify({ analysisTaskId: input.analysisTaskId, brief: input.brief, targetDurationSeconds: input.targetDurationSeconds, mode: input.mode, headlineText: input.headlineText ?? null, textPreset: input.textPreset, ...(input.avatarScript ? { avatarScript: input.avatarScript } : {}) })}\n爆款原文（参考，不可作为口播）：${input.originalSourceText}\n正式爆款拆解（参考，不可照抄）：${JSON.stringify(input.analysis)}\n可用素材：${JSON.stringify(input.assets)}`;
 }
 
 export function productionPlanningRepairPrompt(raw: string, input: ProductionPlanInput): string {
   const modeRules = input.mode === "avatar"
     ? `数字人口播模式：只能引用role为avatar的单个视频，保留原声，backgroundMusicAssetId必须为null且backgroundMusicVolume必须为0。口播稿：${input.avatarScript ?? ""}`
     : "素材剪辑模式：每条narration都会由zh-CN系统TTS朗读。";
-  return `${RULES}\n${modeRules}\n${requirementRules(input)}\n${insightRules(input)}\n${CONTRACT}\n${REFERENCE_PREFIX}\n下面结果不符合Schema、原创性或执行约束。只修复计划，不新增素材。\n真实任务ID：${input.analysisTaskId}\n目标时长：${input.targetDurationSeconds}\n主文字：${input.headlineText ?? "由模型生成"}\n文字预设：${input.textPreset}\n爆款原文（参考，不可作为口播）：${input.originalSourceText}\n正式爆款拆解（参考，不可照抄）：${JSON.stringify(input.analysis)}\n合法素材：${JSON.stringify(input.assets)}\n原始响应：${raw.slice(0, 32_000)}`;
+  return `${RULES}\n${modeRules}\n${requirementRules(input)}\n${insightRules(input)}\n${decorationRules(input)}\n${CONTRACT}\n${REFERENCE_PREFIX}\n下面结果不符合Schema、原创性或执行约束。只修复计划，不新增素材。\n真实任务ID：${input.analysisTaskId}\n目标时长：${input.targetDurationSeconds}\n主文字：${input.headlineText ?? "由模型生成"}\n文字预设：${input.textPreset}\n爆款原文（参考，不可作为口播）：${input.originalSourceText}\n正式爆款拆解（参考，不可照抄）：${JSON.stringify(input.analysis)}\n合法素材：${JSON.stringify(input.assets)}\n原始响应：${raw.slice(0, 32_000)}`;
 }

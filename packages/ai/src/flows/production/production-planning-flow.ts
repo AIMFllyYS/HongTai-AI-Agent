@@ -11,13 +11,14 @@ import type { ProductionPlanInput, ProductionPlanningFlowDependencies } from "..
 import { productionPlanningPrompt, productionPlanningRepairPrompt } from "../../prompts/production-planning";
 import {
   productionPlanResultJsonSchema,
-  productionPlanResultV2Schema,
+  productionPlannerOutputSchema,
   type ProductionPlanGrounding,
-  type ProductionPlanResultV2,
+  type ProductionPlannerOutput,
   type ProductionPlanResultV3,
 } from "../../schemas/production-plan";
 import { parseStructuredOutput } from "../../structured-output/parse-structured-output";
 import { invalidPlan, validateProductionPlan, type ProductionPlanConstraints } from "./production-plan-validation";
+import { stickerIntent } from "./production-decoration-timeline";
 import { withSubtitleTimeline } from "./production-subtitle-timeline";
 
 /**
@@ -42,14 +43,16 @@ function groundingOf(input: ProductionPlanInput): ProductionPlanGrounding {
 }
 
 function withDerivedCues(
-  plan: ProductionPlanResultV2,
+  parsed: ProductionPlannerOutput,
   requestedTemplateId: string | undefined,
   grounding: ProductionPlanGrounding,
 ): ProductionPlanResultV3 {
+  const { decorationSelections, ...plan } = parsed;
   return withSubtitleTimeline({
     plan,
     source: MONTAGE_TIMING_SOURCE,
     grounding,
+    decorations: decorationSelections.map(stickerIntent),
     ...(requestedTemplateId === undefined ? {} : { requestedTemplateId }),
     invalid: (cause) => invalidPlan("制作计划无法生成可执行的字幕时间轴", cause),
   });
@@ -111,14 +114,14 @@ export class ProductionPlanningFlow {
     const grounding = groundingOf(input);
     const initial = await request(productionPlanningPrompt(input));
     try {
-      const result = withDerivedCues(parseStructuredOutput(initial.content, productionPlanResultV2Schema), input.subtitleTemplateId, grounding);
+      const result = withDerivedCues(parseStructuredOutput(initial.content, productionPlannerOutputSchema), input.subtitleTemplateId, grounding);
       validateProductionPlan(result, constraints);
       return result;
     } catch (error) {
       if (!(error instanceof TaskError) || error.code !== "AI_STRUCTURED_OUTPUT_INVALID") throw error;
       const repaired = await request(productionPlanningRepairPrompt(initial.content, input));
       try {
-        const result = withDerivedCues(parseStructuredOutput(repaired.content, productionPlanResultV2Schema), input.subtitleTemplateId, grounding);
+        const result = withDerivedCues(parseStructuredOutput(repaired.content, productionPlannerOutputSchema), input.subtitleTemplateId, grounding);
         validateProductionPlan(result, constraints);
         return result;
       } catch (repairError) {

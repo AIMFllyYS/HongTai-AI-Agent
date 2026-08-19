@@ -1,11 +1,13 @@
 import { useState } from "react";
-import type { JsonObject, ProductionProjectRecord, TaskIssue } from "@hongtai/core";
+import { resolveSubtitleTemplate, type JsonObject, type ProductionProjectRecord, type TaskIssue } from "@hongtai/core";
 
 import { PRODUCTION_TEXT_PRESET_LABELS, PRODUCTION_WORKBENCH_TABS, productionPreviewSource, resolveProductionWorkbenchStage } from "../pages/production-workbench-model";
+import { readProductionPlan } from "../features/production/production-plan-view";
 import { Button } from "./Buttons";
 import { GlassCard } from "./GlassCard";
 import { Icon } from "./Icon";
 import { issueActionPresentation, issueTitle, type TaskIssueActionHandlers } from "./IssueNotice";
+import { ProductionDecorationPreview } from "./ProductionDecorationPreview";
 import { TabPanel, Tabs, tabId, tabPanelId } from "./Tabs";
 
 export interface ProductionProjectCardProps {
@@ -39,6 +41,11 @@ export function ProductionProjectCard({ project, progress, progressMessage, busy
   const changing = project.status === "planning" || rendering;
   const stage = resolveProductionWorkbenchStage({ project });
   const preview = productionPreviewSource(project);
+  const planView = readProductionPlan(project.plan);
+  const captionBottomOffsetPx = resolveSubtitleTemplate({
+    id: planView.subtitle?.templateId ?? "classic_line",
+    hasWordTiming: planView.subtitle?.precision === "word",
+  }).template.layout.bottomOffsetPx;
   const avatarMode = project.mode === "avatar";
   const requiredVisualAssets = avatarMode ? 1 : 3;
   const usableVisualAssets = project.assets.filter((asset) => avatarMode ? asset.role === "avatar" : asset.role === "visual").length;
@@ -65,6 +72,13 @@ export function ProductionProjectCard({ project, progress, progressMessage, busy
         {preview.kind === "image" && preview.uri ? <img alt={project.assets.find((asset) => asset.uri === preview.uri)?.displayName ?? "制作素材"} src={preview.uri} /> : null}
         {preview.kind === "video" && preview.uri ? <video muted playsInline preload="metadata" src={preview.uri} /> : null}
         {preview.kind === "empty" ? <div className="production-preview-frame__empty"><Icon name="movie_edit" size={36} /><span>成片会显示在这里</span></div> : null}
+        {planView.decorations.length > 0 && preview.kind !== "output" ? (
+          <ProductionDecorationPreview
+            captionBottomOffsetPx={captionBottomOffsetPx}
+            decorations={planView.decorations}
+            shotOrder={planView.shots[0]?.order}
+          />
+        ) : null}
       </div>
 
       {rendering || progress > 0 && progress < 100 ? <div className="production-render-progress"><div><span>{progressMessage || "正在本地合成"}</span><strong>{progress}%</strong></div><progress max={100} value={progress} /></div> : null}

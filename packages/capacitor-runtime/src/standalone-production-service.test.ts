@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { MIMO_CHAT_AUDIO_TTS_INSTRUCTION, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, type AiProvider, type ProductionPlanResultV2 } from "@hongtai/ai";
-import { TaskError, type ContentAnalysisRecord, type TaskDetailRecord } from "@hongtai/core";
+import { MIMO_CHAT_AUDIO_TTS_INSTRUCTION, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, type AiProvider, type DecorationSelection, type ProductionPlanResultV2 } from "@hongtai/ai";
+import { DECORATION_IDS, TaskError, type ContentAnalysisRecord, type TaskDetailRecord } from "@hongtai/core";
 
 import { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
 import { StandaloneProductionService } from "./standalone-production-service.js";
 
-const plan: ProductionPlanResultV2 = {
+// Carries a real sticker rather than an empty list: the allow-list is supplied by this service, and
+// leaving it out rejects every selection. An empty fixture would pass either way and the feature
+// would ship dead.
+const plan: ProductionPlanResultV2 & { decorationSelections: readonly DecorationSelection[] } = {
   schemaVersion: "production-plan.v2",
   source: { analysisTaskId: "task-1" },
   title: "门店真实体验",
@@ -18,6 +21,7 @@ const plan: ProductionPlanResultV2 = {
     { order: 1, assetId: "asset-1", durationSeconds: 8, narration: "先看看真实环境。", caption: "真实环境", fit: "cover" },
     { order: 2, assetId: "asset-2", durationSeconds: 12, narration: "再了解完整服务过程。", caption: "服务过程", fit: "cover" },
   ],
+  decorationSelections: [{ shotOrder: 1, assetRef: "arrow_right", anchor: "above_caption", scale: 1, animation: "fade" }],
 };
 
 const analysis: ContentAnalysisRecord = {
@@ -167,6 +171,14 @@ async function plannedProject(now: () => Date) {
   await service.importAssets("project-1");
   const ready = await service.generatePlan("project-1");
   return { ...context, service, ready };
+}
+
+function decorationsOf(record: { readonly plan?: { readonly document: unknown } }) {
+  return (record.plan?.document as { readonly decorations?: readonly {
+    readonly assetRef: string;
+    readonly startMs: number;
+    readonly endMs: number;
+  }[] }).decorations ?? [];
 }
 
 function shotsOf(record: { readonly plan?: { readonly document: unknown } }) {
@@ -480,6 +492,31 @@ test("只有不可见字符的口播按空内容拒绝，不会烧进一条空�
     );
   }
   assert.equal(values.get("project-1/project.json"), before);
+});
+
+test("随包贴纸的白名单由服务传入，生成与微调都留得住装饰", async () => {
+  const { service, ready } = await plannedProject(steppingClock());
+
+  // Without `allowedDecorationIds` the allow-list is empty, every selection fails validation and
+  // generatePlan throws — so reaching `ready` at all is part of the assertion.
+  const generated = decorationsOf(ready);
+  assert.equal(generated.length, 1);
+  assert.equal(generated[0]!.assetRef, "arrow_right");
+  assert.ok(DECORATION_IDS.includes(generated[0]!.assetRef), "只能是随包清单里的 id");
+
+  // Timing is derived here, not answered by the model, so it must land inside the shot it belongs to.
+  const firstShot = shotsOf(ready)[0]!;
+  assert.ok(generated[0]!.startMs >= 0);
+  assert.ok(generated[0]!.endMs <= Math.round(firstShot.durationSeconds * 1_000));
+  assert.ok(generated[0]!.endMs > generated[0]!.startMs);
+
+  // A micro-edit re-derives the window; it must not silently drop the sticker.
+  const edited = await service.updatePlan("project-1", {
+    expectedUpdatedAt: ready.updatedAt,
+    shots: [{ order: 1, narration: "先看看真实环境，再看服务过程。" }],
+  });
+  assert.equal(decorationsOf(edited).length, 1, "微调不得把装饰清空");
+  assert.equal(decorationsOf(edited)[0]!.assetRef, "arrow_right");
 });
 
 test("取消背景音乐时同时设置音量按冲突拒绝，而不是默默改成静音", async () => {

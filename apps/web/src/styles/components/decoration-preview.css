@@ -1,0 +1,24 @@
+.decoration-preview {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.decoration-preview__sticker,
+.decoration-preview__text {
+  position: absolute;
+  display: block;
+  height: auto;
+  max-width: 50%;
+  object-fit: contain;
+}
+
+.decoration-preview__text {
+  color: #ffffff;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-shadow: 0 0 0.35rem #001512;
+  white-space: nowrap;
+}

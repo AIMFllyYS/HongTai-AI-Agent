@@ -1,5 +1,7 @@
 export * from "./contracts";
 export * from "./application-runtime";
+export * from "./decoration";
+export * from "./decoration-catalogue";
 export * from "./errors";
 export * from "./input";
 export * from "./models";
