@@ -76,6 +76,7 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
   const avatarMode = base?.mode === "avatar";
   const problem = draft ? planDraftProblem(draft) : undefined;
   const update = draft && base && !problem ? buildPlanUpdate({ draft, plan, expectedUpdatedAt: base.updatedAt }) : undefined;
+  const unreadableAssets = (base?.assets ?? []).filter((asset) => asset.reshootAdvice !== undefined);
   const busy = saving || !base || Boolean(conflict) || !editableStatus(base);
 
   // Read inside the subscription callback, which closes over the state of the render that installed
@@ -212,19 +213,28 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
         </p>
       ) : null}
 
-      {/* Says plainly whether the copy was written against the pictures or against the breakdown
-          alone. Without this the two cases look identical, and the user re-generates hoping for
-          something the system was never able to do. */}
+      {/* Says plainly what the copy was written against. Without this the cases look identical and
+          the user re-generates hoping for something the system was never able to do. "Looked but
+          could not read it" must not be reported as "never looked": that sends the user to proofread
+          the script when the fix is to reshoot the material. */}
       {plan.visualGrounding === "blind" ? (
         <p className="production-hint" role="status">
           <Icon name="info" size={16} />
-          这条视频的口播是按拆解结构写的，系统没有看过你上传的画面，所以文字不一定对得上每个镜头，需要你逐镜核对。
+          {unreadableAssets.length > 0
+            ? `系统看过你上传的画面，但有 ${unreadableAssets.length} 个素材看不清，没能用来写口播。这条口播按拆解结构写的，重拍那几个素材会比改文字更有用。`
+            : "这条视频的口播是按拆解结构写的，系统没有看过你上传的画面，所以文字不一定对得上每个镜头，需要你逐镜核对。"}
         </p>
       ) : null}
       {plan.visualGrounding === "asset_insight" ? (
         <p className="production-hint" role="status">
           <Icon name="info" size={16} />
-          其中 {plan.describedAssetIds.length} 个素材的画面已被识别过，这些镜头的口播按画面里看得到的内容写；没被识别的素材仍是按拆解结构写的。
+          其中 {plan.describedAssetIds.length} 个素材的画面被识别过，这些镜头的口播参考了画面里看得到的内容；其余素材仍按拆解结构写。系统只是看了画面上有什么，没有核对你拍的是不是该拍的那一项。
+        </p>
+      ) : null}
+      {unreadableAssets.length > 0 ? (
+        <p className="production-hint" role="status">
+          <Icon name="error" size={16} />
+          看不清的素材：{unreadableAssets.map((asset) => `${asset.displayName ?? asset.id}（${asset.reshootAdvice}）`).join("；")}。回制作页换掉它们再重新生成。
         </p>
       ) : null}
 

@@ -118,6 +118,11 @@ test("清单外导入的画面素材单独计数，不会被当成某一项", ()
 });
 
 test("镜头角色显示中文，未知角色保留原值而不是显示空白", () => {
-  assert.equal(requirementRoleLabel("hook"), "开场钩子");
+  const schemaRoles = ["opening", "development", "proof", "transition", "closing", "other"] as const;
+  for (const role of schemaRoles) {
+    const label = requirementRoleLabel(role);
+    assert.notEqual(label, role, `${role} 必须有中文标签，不能把 schema 原值直接展示给用户`);
+    assert.match(label, /\p{Script=Han}/u, `${role} 的标签必须是中文`);
+  }
   assert.equal(requirementRoleLabel("unmapped_role"), "unmapped_role");
 });

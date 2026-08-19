@@ -46,6 +46,11 @@ internal object ProductionInsightFramePolicy {
   /** Stable per-asset names so a re-run replaces its own derivatives instead of piling up. */
   fun frameFileName(assetId: String, index: Int): String = "$assetId-$index.jpg"
 
+  /**
+   * Matches the exact names this policy hands out. A prefix test would let `asset-1` claim
+   * `asset-10-0.jpg` and delete another asset's frames; ids are opaque and nothing stops one from
+   * being a prefix of another.
+   */
   fun isFrameFileOf(assetId: String, fileName: String): Boolean =
-    fileName.startsWith("$assetId-") && fileName.endsWith(".jpg")
+    (0 until MAX_FRAMES).any { index -> fileName == frameFileName(assetId, index) }
 }

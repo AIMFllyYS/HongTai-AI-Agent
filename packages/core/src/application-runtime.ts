@@ -457,6 +457,13 @@ export interface ProductionAsset extends MediaReference {
    * of wherever the planner happens to put it, and it disappears with the asset.
    */
   readonly requirementOrder?: number;
+  /**
+   * Present only when this asset's frames were looked at and judged unusable, carrying what to
+   * reshoot. Only the advice crosses this boundary: the visual description behind it is a planning
+   * input, and showing it would invite the reading that the app checked the material against the
+   * shooting list, which it does not do.
+   */
+  readonly reshootAdvice?: string;
 }
 
 export interface ProductionProjectRecord {

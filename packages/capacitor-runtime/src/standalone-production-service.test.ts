@@ -1058,6 +1058,44 @@ test("StandaloneProductionService consumes a recovered native asset picker as pr
   assert.doesNotMatch(JSON.stringify(recovered), /file:\/\//);
 });
 
+test("consume 返回 none 时保留待绑定标记，以免清掉仍在进行的外部选择", async () => {
+  const { create, values } = harness();
+  const created = create();
+  await created.create({ analysisTaskId: "task-1", brief: "真实门店", targetDurationSeconds: 20 });
+  const stored = JSON.parse(values.get("project-1/project.json")!) as Record<string, unknown>;
+  values.set("project-1/project.json", JSON.stringify({ ...stored, pendingRequirementOrder: 3 }));
+  const service = new StandaloneProductionService({
+    files: {
+      ensureProduction: async () => undefined,
+      writeProductionText: async ({ projectId, relativePath, value }) => { values.set(`${projectId}/${relativePath}`, value); },
+      readProductionText: async ({ projectId, relativePath }) => ({ value: values.get(`${projectId}/${relativePath}`) }),
+      listProductionIds: async () => ({ projectIds: ["project-1"] }),
+      deleteProductionFile: async () => undefined,
+      deleteProduction: async () => undefined,
+    },
+    native: {
+      pickAssets: async () => ({ assets: [] }),
+      consumeAssetOperation: async () => ({ status: "none" as const }),
+      render: async () => { throw new Error("unused"); },
+      probeTts: async () => undefined,
+    },
+    analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
+    tasks,
+    getProvider: async () => ({ generate: async () => ({ content: JSON.stringify(plan), reasoning: "" }), transcribe: async () => "" }),
+    getNarrationMode: async () => "system",
+    toDisplayUri: (uri) => uri,
+  });
+
+  const recovered = await service.consumeAssetRecovery();
+
+  assert.equal(recovered.status, "none");
+  assert.equal(
+    (JSON.parse(values.get("project-1/project.json")!) as Record<string, unknown>).pendingRequirementOrder,
+    3,
+    "原生 none 同时表示「选择器还开着」和「这次选择已经没了」，清掉会让即将返回的文件对不上清单项",
+  );
+});
+
 test("StandaloneProductionService maps every recovered native asset terminal to a stable TaskIssue", async () => {
   const expected = new Map<string, string>([
     ["ERR_MEDIA_SELECTION_CANCELLED", "MEDIA_SELECTION_CANCELLED"],
@@ -1170,6 +1208,27 @@ test("已经看过的素材不会在重新规划时再花一次视觉调用", as
   assert.deepEqual(context.insightCalls, ["asset-1", "asset-2", "asset-3"], "第二次规划不该重新抽帧");
   assert.equal(context.visionPrompts.length, 3, "第二次规划不该重新调用视觉模型");
   assert.equal(planOf(again).grounding?.visual, "asset_insight");
+});
+
+test("看不清的素材把重拍建议交到界面，而不是只留一句盲配", async () => {
+  const context = harness("system", undefined, {
+    frames: () => FRAMES,
+    vision: async () => ({
+      content: JSON.stringify({ description: "画面几乎全黑，看不出主体", subject: "other", tags: [], usable: false, unusableReason: "太暗了，建议开灯后重拍" }),
+      reasoning: "",
+    }),
+  });
+  const service = context.create();
+  await service.create({ analysisTaskId: "task-1", brief: "突出真实服务", targetDurationSeconds: 20 });
+  await service.importAssets("project-1");
+
+  const ready = await service.generatePlan("project-1");
+
+  assert.equal(planOf(ready).grounding?.visual, "blind", "看过但没看清不算已识别");
+  assert.deepEqual(ready.assets.map((asset) => asset.reshootAdvice), ["太暗了，建议开灯后重拍", "太暗了，建议开灯后重拍", "太暗了，建议开灯后重拍"]);
+  // Only the advice crosses over: the description behind it is a planning input, and showing it
+  // would suggest the app checked the material against the shooting list.
+  assert.equal(JSON.stringify(ready.assets).includes("画面几乎全黑"), false);
 });
 
 test("数字人口播不去看素材，计划记成与画面匹配无关", async () => {

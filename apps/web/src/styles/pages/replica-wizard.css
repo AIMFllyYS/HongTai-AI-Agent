@@ -67,10 +67,14 @@
 .replica-wizard__finish { display: grid; gap: var(--space-2); padding: var(--space-1); }
 .replica-wizard__finish small { color: var(--color-text-muted); font-size: var(--text-meta); line-height: 1.6; }
 
-.replica-wizard__footnote { padding: 0 var(--space-1); color: var(--color-text-muted); font-size: var(--text-meta); line-height: 1.6; }
+.replica-wizard__footnote { padding: 0 var(--space-1); overflow-wrap: anywhere; color: var(--color-text-muted); font-size: var(--text-meta); line-height: 1.6; }
 .replica-wizard__link {
-  min-height: unset;
-  padding: 0 0.15rem;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-block: -12px;
+  padding-inline: 0.15rem;
+  vertical-align: middle;
   color: var(--color-primary-strong);
   font: inherit;
   background: none;

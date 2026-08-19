@@ -12,6 +12,7 @@ const read = (relativePath: string) => readFileSync(join(webRoot, relativePath),
 const page = read("pages/ReplicaWizardPage.tsx");
 const card = read("components/ReplicaRequirementCard.tsx");
 const view = read("features/replica/replica-blueprint-view.ts");
+const css = read("styles/pages/replica-wizard.css");
 
 test("向导有自己的路由，任务标识编码后进入路径，且不吃掉任务详情", () => {
   assert.equal(replicaWizardPath("task-1"), "/replica/task-1");
@@ -65,4 +66,21 @@ test("顺序保证按校验器实际做的说：相对顺序压紧，不是第 i
 
 test("重新生成清单的限制在页面上说明，而不是等服务报错才知道", () => {
   assert.match(page, /删掉正在用它的项目/u);
+});
+
+test("业务拒绝把服务端说的原因显示出来，不被通用套话盖住", () => {
+  assert.match(page, /isInlineIssueAction\(issue\.action\) \|\| issue\.action === "none"/u);
+  assert.match(page, /<small>\{issue\.userMessage\}<\/small>/u, "镜头太少或清单已绑定时，必须看见服务端那一句");
+  assert.doesNotMatch(
+    page,
+    /\{issue \? <IssueNotice/u,
+    "向导不能把 action=none 的拒绝丢给只展示套话的共享通知",
+  );
+});
+
+test("脚注链接的触达高度不小于 44px，且不靠撑高整行来凑", () => {
+  assert.match(css, /\.replica-wizard__link \{[^}]*min-height: 44px/u);
+  assert.match(css, /\.replica-wizard__link \{[^}]*display: inline-flex/u);
+  assert.match(css, /\.replica-wizard__link \{[^}]*margin-block: -12px/u, "负边距把加高的点击区收回行高里");
+  assert.doesNotMatch(css, /\.replica-wizard__link \{[^}]*min-height: unset/u);
 });

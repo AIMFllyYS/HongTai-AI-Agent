@@ -111,6 +111,21 @@
 .production-add-asset { align-items: center; justify-items: center; color: var(--color-primary-strong); border-style: dashed; }
 .production-add-asset:disabled { color: var(--color-text-muted); }
 
+/* Wraps rather than truncates: a reshoot instruction cut off mid-sentence cannot be acted on, and
+   the three-column tile is only about 110px wide at 390px. */
+.production-asset-reshoot {
+  display: flex;
+  gap: 0.2rem;
+  align-items: flex-start;
+  overflow-wrap: anywhere;
+  margin: 0.15rem 0 0;
+  color: var(--color-status-error);
+  font-size: var(--text-caption);
+  line-height: 1.4;
+}
+
+.production-asset-reshoot svg { flex: none; margin-top: 0.1rem; }
+
 .production-asset-delete {
   position: absolute;
   top: var(--space-2);

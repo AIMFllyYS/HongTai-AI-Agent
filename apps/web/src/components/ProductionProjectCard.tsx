@@ -102,6 +102,10 @@ export function ProductionProjectCard({ project, progress, progressMessage, busy
                   <div>{asset.kind === "image" ? <img alt={asset.displayName ?? "制作素材"} src={asset.uri} /> : <Icon name={asset.kind === "video" ? "movie" : "voice"} size={25} />}</div>
                   <span>{asset.displayName ?? "本地素材"}</span>
                   <small>{asset.role === "avatar" ? "数字人口播视频" : asset.role === "music" ? "音乐" : asset.kind === "image" ? "图片" : "视频"}</small>
+                  {/* The reshoot advice is the only useful thing the app learned about a clip it
+                      could not read. Dropping it leaves the user with a video whose copy ignores
+                      this material and no idea that the material itself was the problem. */}
+                  {asset.reshootAdvice ? <p className="production-asset-reshoot"><Icon name="error" size={14} />{asset.reshootAdvice}</p> : null}
                   <button aria-label={`删除素材 ${asset.displayName ?? asset.id}`} className="production-asset-delete" disabled={busy || changing} onClick={() => setConfirmation({ kind: "asset", assetId: asset.id, label: asset.displayName ?? "本地素材" })} type="button"><Icon name="close" size={15} /></button>
                 </article>
               ))}

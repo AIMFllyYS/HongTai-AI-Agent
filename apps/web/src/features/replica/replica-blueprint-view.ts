@@ -31,17 +31,18 @@ const EMPTY: ReplicaBlueprintView = {
   totalSuggestedSeconds: 0,
 };
 
+/**
+ * Display labels for `replica-blueprint.v1` shot roles. The interface layer cannot import the AI
+ * schema, so this table is kept here and must cover every `REPLICA_SHOT_ROLES` value. Unknown keys
+ * fall through to the raw role so a future schema addition is still readable instead of blank.
+ */
 const ROLE_LABELS: Readonly<Record<string, string>> = {
-  hook: "开场钩子",
   opening: "开场",
-  context: "背景",
+  development: "发展",
   proof: "证据",
-  process: "过程",
-  detail: "细节",
-  contrast: "对比",
-  result: "结果",
+  transition: "过渡",
   closing: "收尾",
-  cta: "行动号召",
+  other: "其他",
 };
 
 export function requirementRoleLabel(role: string): string {

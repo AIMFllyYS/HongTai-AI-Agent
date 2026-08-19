@@ -6,7 +6,7 @@ import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
-import { IssueNotice } from "../components/IssueNotice";
+import { IssueNotice, isInlineIssueAction, issueTitle } from "../components/IssueNotice";
 import { ReplicaRequirementCard } from "../components/ReplicaRequirementCard";
 import { EmptyState, LoadingState } from "../components/StatePanels";
 import {
@@ -25,6 +25,22 @@ export interface ReplicaWizardPageProps {
 }
 
 type Pending = "blueprint" | "project" | "plan" | "asset" | undefined;
+
+/**
+ * Business refusals put the reason in `userMessage`. The shared notice maps the code to a generic
+ * title and only shows action guidance, which would hide why a tap did nothing.
+ */
+function WizardIssue({ issue, retry }: { readonly issue: TaskIssue; readonly retry?: () => void }) {
+  if (isInlineIssueAction(issue.action) || issue.action === "none") {
+    return (
+      <aside className="issue-notice issue-notice--error" role="alert">
+        <strong>{issueTitle(issue)}</strong>
+        <small>{issue.userMessage}</small>
+      </aside>
+    );
+  }
+  return <IssueNotice {...(retry ? { actions: { retry } } : {})} issue={issue} />;
+}
 
 export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPageProps) {
   const [record, setRecord] = useState<ReplicaBlueprintRecord>();
@@ -144,15 +160,15 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
           icon="movie_edit"
           title={blueprint.emptyReason ? "这条内容拆不出可拍的清单" : "还没有素材需求清单"}
         />
-        {record?.issue && !blueprint.emptyReason ? <IssueNotice actions={{ retry: generate }} issue={record.issue} /> : null}
-        {issue ? <IssueNotice {...(failure?.retry ? { actions: { retry: failure.retry } } : {})} issue={issue} /> : null}
+        {record?.issue && !blueprint.emptyReason ? <WizardIssue issue={record.issue} retry={generate} /> : null}
+        {issue ? <WizardIssue {...(failure?.retry ? { retry: failure.retry } : {})} issue={issue} /> : null}
       </>,
     );
   }
 
   return shell(
     <>
-      {issue ? <IssueNotice {...(failure?.retry ? { actions: { retry: failure.retry } } : {})} issue={issue} /> : null}
+      {issue ? <WizardIssue {...(failure?.retry ? { retry: failure.retry } : {})} issue={issue} /> : null}
 
       <GlassCard className="replica-wizard__premise">
         <h2>怎么复刻这条</h2>

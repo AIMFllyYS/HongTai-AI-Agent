@@ -298,6 +298,7 @@ test("清单已绑定拍好的素材时拒绝重新生成，避免已拍素材�
   await assert.rejects(() => context.replica.run("task-1"), (error: unknown) => {
     assert.ok(error instanceof TaskError);
     assert.match(error.message, /先删掉正在使用它的制作项目/u);
+    assert.equal(error.action, "none", "向导按 none 展示 userMessage；改成 retry 会重新走共享套话");
     return true;
   });
   assert.equal(await context.replica.get("task-1").then((value) => value?.status), "succeeded", "被拒绝的重生成不能把已有清单写坏");
@@ -332,6 +333,7 @@ test("空清单和镜头太少的清单都不能开项目，并说明原因", as
   await assert.rejects(() => short.replica.startProject("task-1"), (error: unknown) => {
     assert.ok(error instanceof TaskError);
     assert.match(error.message, /至少需要 3 个镜头/u);
+    assert.equal(error.action, "none", "向导按 none 展示 userMessage；改成 retry 会重新走共享套话");
     return true;
   });
 });

@@ -88,5 +88,17 @@ test("如实告诉用户这条口播是看着画面写的还是照拆解结构�
   assert.match(page, /系统没有看过你上传的画面/u);
   assert.match(page, /visualGrounding === "asset_insight"/u);
   assert.match(page, /describedAssetIds\.length/u, "看过几个就说几个，不说成全部");
-  assert.match(page, /没被识别的素材仍是按拆解结构写的/u);
+  assert.match(page, /其余素材仍按拆解结构写/u);
+
+  // Looking and failing to read is not the same as never looking: one is fixed by reshooting, the
+  // other by proofreading. Reporting the first as the second sends the user to the wrong repair.
+  assert.match(page, /reshootAdvice !== undefined/u);
+  assert.match(page, /unreadableAssets\.length > 0/u);
+  assert.match(page, /系统看过你上传的画面，但有/u);
+  assert.match(page, /重拍那几个素材会比改文字更有用/u);
+  assert.match(page, /看不清的素材：/u, "必须把重拍建议本身显示出来，而不是只说有几个看不清");
+
+  // #112 never compares "what the list asked for" against "what the picture shows", so the page
+  // must not let being described be read as having been checked.
+  assert.match(page, /没有核对你拍的是不是该拍的那一项/u);
 });

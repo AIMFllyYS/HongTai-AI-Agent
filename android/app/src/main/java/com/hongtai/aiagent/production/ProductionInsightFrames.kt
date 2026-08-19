@@ -6,6 +6,7 @@ import android.os.Build
 import com.hongtai.aiagent.media.ImageFormatProbe
 import com.hongtai.aiagent.media.PrivateObservationImageNormalizer
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.util.UUID
 
@@ -119,7 +120,23 @@ internal class ProductionInsightFrames(private val store: ProductionMediaStore) 
       destination.delete()
       return emptyList()
     }
+    // A truncated or half-written file still has bytes, and handing it over would let the model
+    // describe noise while the app reports the asset as described. Declaring it undescribed is the
+    // honest outcome.
+    if (!isJpeg(destination)) {
+      destination.delete()
+      return emptyList()
+    }
     return listOf(ProductionInsightFrame(uri = "file://${destination.absolutePath}", mimeType = "image/jpeg"))
+  }
+
+  private fun isJpeg(file: File): Boolean = try {
+    FileInputStream(file).use { input ->
+      val header = ByteArray(2)
+      input.read(header) == 2 && header[0] == 0xFF.toByte() && header[1] == 0xD8.toByte()
+    }
+  } catch (_: Exception) {
+    false
   }
 
   private fun clearStale(directory: File, assetId: String) {

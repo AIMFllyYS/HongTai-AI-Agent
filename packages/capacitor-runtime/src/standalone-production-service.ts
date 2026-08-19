@@ -405,7 +405,11 @@ export class StandaloneProductionService implements ProductionService {
     } catch (error) {
       return { status: "failed", issue: issueFromAppError(productionTaskError(error, "素材没有导入成功")) };
     }
-    if (recovered.status === "none") return { status: "none" };
+    if (recovered.status === "none") {
+      // Native returns none both when nothing is waiting and while the original picker is still
+      // live. Clearing `pendingRequirementOrder` here would unbind a pick that is about to return.
+      return { status: "none" };
+    }
     if (recovered.status === "failed") {
       return { status: "failed", issue: issueFromAppError(productionTaskError({ code: recovered.code }, "素材没有导入成功")) };
     }
@@ -850,7 +854,7 @@ export class StandaloneProductionService implements ProductionService {
   }
 
   #project(project: PersistedProject): ProductionProjectRecord {
-    const asset = (value: PersistedAsset): ProductionAsset => ({ id: value.id, role: value.role ?? defaultAssetRole(value), uri: this.#options.toDisplayUri(value.uri), kind: value.kind, origin: "imported", mimeType: value.mimeType, displayName: value.displayName, byteLength: value.sizeBytes, ...(value.durationSeconds === undefined ? {} : { durationSeconds: value.durationSeconds }), ...(value.requirementOrder === undefined ? {} : { requirementOrder: value.requirementOrder }) });
+    const asset = (value: PersistedAsset): ProductionAsset => ({ id: value.id, role: value.role ?? defaultAssetRole(value), uri: this.#options.toDisplayUri(value.uri), kind: value.kind, origin: "imported", mimeType: value.mimeType, displayName: value.displayName, byteLength: value.sizeBytes, ...(value.durationSeconds === undefined ? {} : { durationSeconds: value.durationSeconds }), ...(value.requirementOrder === undefined ? {} : { requirementOrder: value.requirementOrder }), ...(value.insight?.usable === false && value.insight.unusableReason ? { reshootAdvice: value.insight.unusableReason } : {}) });
     return {
       projectId: project.projectId, analysisTaskId: project.analysisTaskId, brief: project.brief, mode: project.mode, textPreset: project.textPreset, ...(project.headlineText ? { headlineText: project.headlineText } : {}), ...(project.avatarScript ? { avatarScript: project.avatarScript } : {}), targetDurationSeconds: project.targetDurationSeconds,
       status: project.status, assets: project.assets.map(asset),

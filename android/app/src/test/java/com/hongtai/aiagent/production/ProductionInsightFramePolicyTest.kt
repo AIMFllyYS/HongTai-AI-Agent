@@ -52,6 +52,11 @@ class ProductionInsightFramePolicyTest {
     assertTrue(ProductionInsightFramePolicy.isFrameFileOf("asset-1", name))
     assertFalse(ProductionInsightFramePolicy.isFrameFileOf("asset-2", name))
     assertFalse("an imported asset must never be mistaken for a derivative", ProductionInsightFramePolicy.isFrameFileOf("asset-1", "asset-1.jpg"))
+    // Ids are opaque, so one can be a prefix of another. Clearing `asset-1` must not take out the
+    // frames belonging to `asset-10`.
+    assertFalse(ProductionInsightFramePolicy.isFrameFileOf("asset-1", ProductionInsightFramePolicy.frameFileName("asset-10", 0)))
+    assertFalse(ProductionInsightFramePolicy.isFrameFileOf("asset-1", "asset-1-9.jpg"))
+    assertFalse(ProductionInsightFramePolicy.isFrameFileOf("asset-1", "asset-1-0.png"))
   }
 
   @Test
