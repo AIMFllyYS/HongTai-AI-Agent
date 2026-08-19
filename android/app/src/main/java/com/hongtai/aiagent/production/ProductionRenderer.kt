@@ -179,7 +179,13 @@ internal class ProductionRenderer(private val context: Context, private val stor
     } else {
       plan.shots.flatMap { shot -> visualItems(plan, shot, stickers = stickers) }
     }
-    val sequences = mutableListOf(EditedMediaItemSequence.withVideoFrom(visualItems))
+    val sequences = mutableListOf(
+      if (plan.renderMode == ProductionRenderMode.AVATAR) {
+        EditedMediaItemSequence.withAudioAndVideoFrom(visualItems)
+      } else {
+        EditedMediaItemSequence.withVideoFrom(visualItems)
+      },
+    )
     if (plan.renderMode == ProductionRenderMode.MONTAGE) {
       sequences += EditedMediaItemSequence.withAudioFrom(narration.map { (file, maximumDurationMs) ->
         val media = MediaItem.Builder().setUri(file.toURI().toString()).setClipEndPositionMs(maximumDurationMs).build()

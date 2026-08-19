@@ -5,12 +5,15 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.media.MediaExtractor
+import android.media.MediaFormat
 import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.security.MessageDigest
 import kotlin.math.sin
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -21,26 +24,15 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ProductionRendererInstrumentationTest {
   @Test
-  fun rendersRealLengthPortraitShotsWithDeterministicNarrationAndCaptions() {
+  fun rendersV3MontageWithRealMp4CuesAndSticker() {
     val context = ApplicationProvider.getApplicationContext<Context>()
-    val projectId = "instrumentation-production"
+    val projectId = "instrumentation-production-v3"
     val inputsDirectory = File(context.filesDir, "productions/$projectId/inputs").apply { mkdirs() }
-    val inputs = listOf(Color.rgb(16, 93, 82), Color.rgb(231, 170, 92), Color.rgb(44, 62, 80)).mapIndexed { index, color ->
-      val file = File(inputsDirectory, "asset-${index + 1}.jpg")
-      Bitmap.createBitmap(360, 640, Bitmap.Config.ARGB_8888).also { bitmap ->
-        Canvas(bitmap).drawColor(color)
-        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }
-        bitmap.recycle()
-      }
-      ProductionInput("asset-${index + 1}", file.absolutePath, ProductionAssetKind.IMAGE)
-    }
-    val narrations = listOf(
-      "在我们这里，每一只小生命都值得被温柔以待。",
-      "我们提供专业的喂养建议，用心守护它们的健康。",
-      "干净的环境，耐心的陪伴，让它们在这里快乐成长。",
-      "因为爱，所以用心。欢迎带您和家人一起来看看。",
-    )
-    val durations = listOf(3_000L, 4_000L, 4_000L, 4_000L)
+    val image = writeSolidJpeg(File(inputsDirectory, "asset-1.jpg"), Color.rgb(16, 93, 82))
+    val video = copyFixture(File(inputsDirectory, "asset-2.mp4"))
+    val imageInput = ProductionInput("asset-1", image.absolutePath, ProductionAssetKind.IMAGE)
+    val videoInput = ProductionInput("asset-2", video.absolutePath, ProductionAssetKind.VIDEO, durationMs = 16_000L, hasAudio = true)
+    val template = classicLineTemplate()
     val plan = NativeProductionPlan(
       width = 720,
       height = 1280,
@@ -50,40 +42,174 @@ class ProductionRendererInstrumentationTest {
       speechRate = 1f,
       backgroundMusic = null,
       backgroundMusicVolume = 0f,
-      textOverlay = ProductionTextOverlay("3-5人合伙", "你出时间，我出内容", "classic_top"),
-      shots = narrations.mapIndexed { index, narration ->
-        ProductionShot(index + 1, inputs[index % inputs.size], durations[index], narration, "真实镜头 ${index + 1}", "cover")
-      },
+      textOverlay = ProductionTextOverlay("真实服务", "看得见过程", "classic_top"),
+      shots = listOf(
+        ProductionShot(
+          1, imageInput, 5_000L, "先看真实环境。", "真实环境", "cover",
+          listOf(
+            SubtitleCue(0, 2_500, "先看真实环境", listOf("真实"), null),
+            SubtitleCue(2_500, 5_000, "看得见的过程", emptyList(), null),
+          ),
+        ),
+        ProductionShot(
+          2, videoInput, 5_000L, "再看完整服务。", "服务过程", "cover",
+          listOf(SubtitleCue(0, 5_000, "服务过程全程可看", emptyList(), null)),
+        ),
+        ProductionShot(
+          3, imageInput, 5_000L, "欢迎安心了解。", "欢迎了解", "cover",
+          listOf(SubtitleCue(0, 5_000, "欢迎安心了解", emptyList(), null)),
+        ),
+      ),
+      subtitleTemplate = template,
+      decorations = listOf(
+        ProductionDecorationSpec("sticker", "arrow_right", null, 1, 500, 2_500, "above_caption", 1f, "fade"),
+        ProductionDecorationSpec("floating_text", null, "限时", 2, 1_000, 3_000, "top_right", 1f, "pop"),
+      ),
     )
 
+    val evidence = renderAndVerify(context, projectId, plan, expectDuration = 14.5..15.5)
+    assertTrue(evidence.length() > 0)
+  }
+
+  @Test
+  fun rendersAvatarModeFromSequentialSlicesOfRealMp4() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val projectId = "instrumentation-production-avatar"
+    val inputsDirectory = File(context.filesDir, "productions/$projectId/inputs").apply { mkdirs() }
+    val video = copyFixture(File(inputsDirectory, "avatar-1.mp4"))
+    val avatar = ProductionInput("avatar-1", video.absolutePath, ProductionAssetKind.VIDEO, durationMs = 16_000L, hasAudio = true)
+    val template = classicLineTemplate()
+    val captions = listOf("欢迎来到门店", "今天看看真实服务", "欢迎安心了解")
+    val plan = NativeProductionPlan(
+      width = 720,
+      height = 1280,
+      fps = 30,
+      durationMs = 15_000,
+      voiceLocale = "zh-CN",
+      speechRate = 1f,
+      backgroundMusic = null,
+      backgroundMusicVolume = 0f,
+      textOverlay = ProductionTextOverlay("门店介绍", null, "classic_top"),
+      shots = captions.mapIndexed { index, caption ->
+        ProductionShot(
+          index + 1, avatar, 5_000L, "$caption。", caption, "contain",
+          listOf(SubtitleCue(0, 5_000, caption, emptyList(), null)),
+        )
+      },
+      renderMode = ProductionRenderMode.AVATAR,
+      subtitleTemplate = template,
+    )
+
+    renderAndVerify(context, projectId, plan, expectDuration = 14.5..15.5)
+  }
+
+  @Test
+  fun garbageMp4IsClassifiedDecodeOrExportFailureNotGenericMerge() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val projectId = "instrumentation-production-decode-fail"
+    val inputsDirectory = File(context.filesDir, "productions/$projectId/inputs").apply { mkdirs() }
+    val bogus = File(inputsDirectory, "broken.mp4").apply { writeText("not a video") }
+    val input = ProductionInput("asset-1", bogus.absolutePath, ProductionAssetKind.VIDEO, durationMs = 15_000L, hasAudio = true)
+    val template = classicLineTemplate()
+    val plan = NativeProductionPlan(
+      width = 720,
+      height = 1280,
+      fps = 30,
+      durationMs = 15_000,
+      voiceLocale = "zh-CN",
+      speechRate = 1f,
+      backgroundMusic = null,
+      backgroundMusicVolume = 0f,
+      textOverlay = ProductionTextOverlay("失败分类", null, "classic_top"),
+      shots = listOf(
+        ProductionShot(
+          1, input, 15_000L, "这不是有效视频。", "无效素材", "cover",
+          listOf(SubtitleCue(0, 15_000, "无效素材", emptyList(), null)),
+        ),
+      ),
+      subtitleTemplate = template,
+    )
+    try {
+      ProductionRenderer(context, ProductionMediaStore(context)).render(projectId, plan, FixtureNarrationSynthesizer(ProductionMediaStore(context))) { _, _ -> }
+      org.junit.Assert.fail("expected a classified ProductionException")
+    } catch (error: ProductionException) {
+      android.util.Log.i("HongTaiEvidence", "garbageMp4 kind=${error.kind}")
+      assertTrue(
+        error.kind == ProductionFailureKind.MEDIA_DECODE_FAILED ||
+          error.kind == ProductionFailureKind.MEDIA_EXPORT_FAILED ||
+          error.kind == ProductionFailureKind.MEDIA_RENDER_PIPELINE_FAILED,
+      )
+    }
+  }
+
+  private fun renderAndVerify(
+    context: Context,
+    projectId: String,
+    plan: NativeProductionPlan,
+    expectDuration: ClosedFloatingPointRange<Double>,
+  ): File {
     val progress = mutableListOf<Int>()
     val store = ProductionMediaStore(context)
-    val result = ProductionRenderer(context, store).render(projectId, plan, FixtureNarrationSynthesizer(store)) { value, _ -> progress += value }
-
+    val result = ProductionRenderer(context, store).render(projectId, plan, FixtureNarrationSynthesizer(store)) { value, _ ->
+      progress += value
+    }
     assertTrue(result.sizeBytes > 0)
-    assertTrue(result.durationSeconds in 14.5..15.5)
+    assertTrue(result.durationSeconds in expectDuration)
     assertEquals(100, progress.last())
+    val path = requireNotNull(android.net.Uri.parse(result.uri).path)
     val extractor = MediaExtractor()
-    extractor.setDataSource(requireNotNull(android.net.Uri.parse(result.uri).path))
+    extractor.setDataSource(path)
     val formats = (0 until extractor.trackCount).map(extractor::getTrackFormat)
-    val mimes = formats.map { it.getString("mime") }
-    val videoFormat = formats.first { it.getString("mime")?.startsWith("video/") == true }
-    val rotation = videoFormat.getInteger(android.media.MediaFormat.KEY_ROTATION, 0)
-    val encodedWidth = videoFormat.getInteger(android.media.MediaFormat.KEY_WIDTH)
-    val encodedHeight = videoFormat.getInteger(android.media.MediaFormat.KEY_HEIGHT)
+    val mimes = formats.map { it.getString(MediaFormat.KEY_MIME) }
+    val videoFormat = formats.first { it.getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true }
+    val rotation = videoFormat.getInteger(MediaFormat.KEY_ROTATION, 0)
+    val encodedWidth = videoFormat.getInteger(MediaFormat.KEY_WIDTH)
+    val encodedHeight = videoFormat.getInteger(MediaFormat.KEY_HEIGHT)
     val displayWidth = if (rotation % 180 == 0) encodedWidth else encodedHeight
     val displayHeight = if (rotation % 180 == 0) encodedHeight else encodedWidth
     extractor.release()
-    assertTrue(mimes.any { it?.startsWith("video/") == true })
-    assertTrue(mimes.any { it?.startsWith("audio/") == true })
-    assertEquals("video/avc", videoFormat.getString("mime"))
+    assertEquals("video/avc", videoFormat.getString(MediaFormat.KEY_MIME))
     assertTrue(mimes.contains("audio/mp4a-latm"))
     assertEquals(720, displayWidth)
     assertEquals(1280, displayHeight)
-    val evidence = File(requireNotNull(context.getExternalFilesDir(null)), "instrumentation-production-output.mp4")
-    File(requireNotNull(android.net.Uri.parse(result.uri).path)).copyTo(evidence, overwrite = true)
+    val evidence = File(requireNotNull(context.getExternalFilesDir(null)), "$projectId-output.mp4")
+    File(path).copyTo(evidence, overwrite = true)
     assertEquals(result.sizeBytes, evidence.length())
+    val digest = MessageDigest.getInstance("SHA-256").digest(evidence.readBytes())
+    val sha256 = digest.joinToString("") { byte -> "%02x".format(byte) }
+    File(evidence.parentFile, "$projectId-output.sha256").writeText("$sha256  ${evidence.name}\n${evidence.length()}\n")
+    android.util.Log.i("HongTaiEvidence", "$projectId size=${evidence.length()} sha256=$sha256")
+    return evidence
   }
+
+  private fun writeSolidJpeg(file: File, color: Int): File {
+    Bitmap.createBitmap(360, 640, Bitmap.Config.ARGB_8888).also { bitmap ->
+      Canvas(bitmap).drawColor(color)
+      file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+      bitmap.recycle()
+    }
+    return file
+  }
+
+  private fun copyFixture(destination: File): File {
+    InstrumentationRegistry.getInstrumentation().context.assets.open("production/portrait-16s.mp4").use { input ->
+      destination.outputStream().use { output -> input.copyTo(output) }
+    }
+    return destination
+  }
+
+  private fun classicLineTemplate(): SubtitleTemplateSpec = SubtitleTemplateSpec(
+    id = "classic_line",
+    typography = SubtitleTypographySpec(46f, 1.25f, 700, 0.5f, 2, 14),
+    layout = SubtitleLayoutSpec("center", 260f, 48f),
+    fillArgb = 0xFFFFFFFFu.toInt(),
+    stroke = SubtitleStrokeSpec(0xE6001815u.toInt(), 6f),
+    box = null,
+    entrance = SubtitleEntranceSpec("fade", 180, "standard", 0f),
+    wordReveal = "none",
+    pendingArgb = null,
+    emphasis = SubtitleEmphasisSpec("recolor", 0xFF64F4DAu.toInt(), 1f, 0, "standard"),
+  )
 }
 
 /**
