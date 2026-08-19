@@ -1,5 +1,12 @@
 import { applyProductionPlanEdit, contentAnalysisResultSchema, createAvatarCaptionPlan, MIMO_CHAT_AUDIO_TTS_INSTRUCTION, ProductionPlanningFlow, productionPlanResultSchema, requestedSubtitleTemplateId, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, type AiProvider, type ProductionPlanConstraints, type ProductionPlanResult } from "@hongtai/ai";
-import { createRuntimeId, issueFromAppError, subtitleTemplateById, TaskError } from "@hongtai/core";
+import {
+  createRuntimeId,
+  issueFromAppError,
+  MAX_PRODUCTION_DURATION_SECONDS,
+  MIN_PRODUCTION_DURATION_SECONDS,
+  subtitleTemplateById,
+  TaskError,
+} from "@hongtai/core";
 import type {
   AnalysisService,
   JsonObject,
@@ -202,7 +209,9 @@ export class StandaloneProductionService implements ProductionService {
   async create(input: { readonly analysisTaskId: string; readonly brief: string; readonly targetDurationSeconds: number; readonly mode?: ProductionMode; readonly avatarScript?: string; readonly headlineText?: string; readonly textPreset?: ProductionTextPreset }): Promise<ProductionProjectRecord> {
     const brief = input.brief.trim();
     if (!brief) throw taskError("请填写制作需求");
-    if (input.targetDurationSeconds < 15 || input.targetDurationSeconds > 60) throw taskError("制作时长必须在15到60秒之间");
+    if (input.targetDurationSeconds < MIN_PRODUCTION_DURATION_SECONDS || input.targetDurationSeconds > MAX_PRODUCTION_DURATION_SECONDS) {
+      throw taskError("制作时长必须在15到60秒之间");
+    }
     const mode = input.mode ?? "montage";
     const avatarScript = input.avatarScript?.trim();
     const headlineText = input.headlineText?.trim();

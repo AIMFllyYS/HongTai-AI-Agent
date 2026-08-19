@@ -14,8 +14,10 @@ import { toProviderJsonSchema } from "../structured-output/json-schema";
  * What a user would have to film to rebuild a breakdown, one shot at a time.
  *
  * This is a shopping list, not a plan: it names the material each shot needs so the user knows what
- * to shoot, and it deliberately carries no `assetId`, because nothing has been imported yet. The
- * shot count and durations mirror the production bounds so the list can always become a real plan.
+ * to shoot, and it deliberately carries no `assetId`, because nothing has been imported yet. Shot
+ * count and durations stay inside the production bounds so the list never describes a video no plan
+ * could hold — but turning it into a plan still needs the suggested seconds fitted to the target
+ * duration the user picks, since a plan's shots must sum to it exactly.
  */
 
 /** Mirrors the analysis's narrative roles, so a shot can be traced back to the段 it came from. */
@@ -47,8 +49,10 @@ export const replicaShotSchema = z.object({
   /** A starting point for the narration, not finished copy: the user still rewrites it. */
   scriptDraft: z.string().min(1).max(160),
   /**
-   * At least one real evidence id. A shot nobody can trace back to the source is the fabrication
-   * this document exists to prevent, so an unciteable shot has to be left out entirely.
+   * At least one real evidence id, so every shot can be traced back to something that was actually
+   * said. This bounds where a shot came from, not what it claims: a transcript describes speech, so
+   * no check here can confirm that `visualDescription` matches the original framing. Keeping the
+   * description to what the user can film themselves is a prompt rule, not a validated one.
    */
   evidenceRefs: z.array(z.string().min(1)).min(1).max(8),
 });

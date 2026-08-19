@@ -45,7 +45,11 @@ function assertEmptiness(value: ReplicaBlueprintResponse): void {
   }
 }
 
-/** The list has to be buildable as one project, or the wizard would collect material for nothing. */
+/**
+ * A list whose total falls outside what any single project can run would have the user filming
+ * material that cannot be used. This keeps the total inside the range; matching it to the exact
+ * target duration the user picks is the production side's job.
+ */
 function assertTotalDuration(value: ReplicaBlueprintResponse): void {
   if (value.shots.length === 0) return;
   const total = value.shots.reduce((sum, shot) => sum + shot.material.suggestedDurationSeconds, 0);

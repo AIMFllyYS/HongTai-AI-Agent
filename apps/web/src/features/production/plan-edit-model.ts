@@ -1,6 +1,8 @@
 import {
   buildShotCueTimeline,
+  MAX_SHOT_DURATION_SECONDS,
   MIN_CUE_DURATION_MS,
+  MIN_SHOT_DURATION_SECONDS,
   resolveTemplateForPrecision,
   type ProductionPlanUpdate,
   type ProductionShotUpdate,
@@ -9,9 +11,9 @@ import {
 
 import type { PlanShotView, ProductionPlanView } from "./production-plan-view";
 
-/** Shot bounds the plan schema owns; mirrored here so a control never offers an unusable value. */
-export const MIN_SHOT_MS = 1_000;
-export const MAX_SHOT_MS = 20_000;
+/** The plan's own shot bounds, in the millisecond unit the controls work in. */
+export const MIN_SHOT_MS = MIN_SHOT_DURATION_SECONDS * 1_000;
+export const MAX_SHOT_MS = MAX_SHOT_DURATION_SECONDS * 1_000;
 /** The step a duration control moves by. Finer steps read as jitter on a 390px screen. */
 export const SHOT_STEP_MS = 100;
 

@@ -92,11 +92,17 @@ async function run(contents: readonly string[], value = input()) {
 }
 
 async function rejection(contents: readonly string[], value = input()): Promise<TaskError> {
+  return (await rejectionWithProvider(contents, value)).error;
+}
+
+async function rejectionWithProvider(contents: readonly string[], value = input()) {
+  const dependencies = provider(contents);
+  const flow = new ReplicaBlueprintFlow({ provider: dependencies });
   try {
-    await run(contents, value);
+    await flow.run(value);
   } catch (error) {
     assert.ok(error instanceof TaskError, "失败必须是可分支的 TaskError");
-    return error;
+    return { dependencies, error };
   }
   throw new Error("这次调用本应被拒绝");
 }
@@ -118,7 +124,9 @@ test("蓝图把拆解转成可执行的素材需求清单，并逐镜留下真�
   assert.ok(replicaBlueprintResultSchema.safeParse(result).success);
 });
 
-test("蓝图证据不足时给空清单并说明原因，而不是编造画面", async () => {
+// 注意：这里验收的是「模型主动交空清单时会被接受」。校验层无法证明画面不是编的——
+// 证据只有转写文本，没有画面，构图无从核对。
+test("蓝图证据不足时可以交空清单并说明原因", async () => {
   const { result } = await run([JSON.stringify(response({
     shots: [],
     emptyReason: "转写只有一句寒暄，说不出任何可拍的画面。",
@@ -140,10 +148,14 @@ test("蓝图引用不存在的证据 id 时修一次仍失败，不产出可信�
   const faked = JSON.stringify(response({
     shots: response().shots.map((shot) => ({ ...shot, evidenceRefs: ["seg-9"] })),
   }));
-  const error = await rejection([faked]);
+  const { dependencies, error } = await rejectionWithProvider([faked]);
 
   assert.equal(error.code, "AI_FORMAT_REPAIR_FAILED");
   assert.equal(error.action, "retry");
+  // 语义违规按结构非法拒绝，因此确实会多打一次模型（与制作计划一致），但只修一次就停。
+  assert.equal(dependencies.requests.length, 2, "最多一次生成加一次修复，不能无限重试");
+  assert.ok(error.cause instanceof TaskError, "修复轮的拒绝原因要挂在 cause 上，便于定位");
+  assert.equal(error.cause.code, "AI_STRUCTURED_OUTPUT_INVALID");
 });
 
 test("蓝图修好证据引用后接受，修复提示只给合法 id", async () => {
@@ -221,9 +233,12 @@ test("蓝图提示词只注入真实证据，不注入标题作者，也不留�
   const prompt = replicaBlueprintPrompt(input());
 
   assert.match(prompt, /很多顾客第一次来都会担心流程不清楚/u, "证据单元必须进提示词");
-  assert.doesNotMatch(prompt, /reusableTemplate|doNotCopy/u, "话术模板不该被当成分镜素材来源");
-  assert.match(prompt, /不得描述被拆解视频里的具体人物、门店、品牌或画面细节/u);
-  assert.match(prompt, /不得输出疾病诊断、处方、概率、健康评分或医疗功效承诺/u);
+  assert.match(prompt, /seg-1/u, "证据 id 必须给出来，模型才能引用真实来源");
+  // 摘要只给可复刻的结构，不给话术模板与风险清单，避免被当成分镜素材来源。
+  assert.doesNotMatch(prompt, /reusableTemplate|doNotCopy|疑问-过程-结果/u);
+  assert.doesNotMatch(prompt, /避免绝对化承诺/u);
+  assert.match(prompt, /画面细节/u, "必须要求画面只描述用户自己能拍到的东西");
+  assert.match(prompt, /疾病诊断/u, "医疗边界必须写进约束");
 
   const { result } = await run([JSON.stringify(response())]);
   assert.doesNotMatch(JSON.stringify(result), /这段推理不应该出现在任何产物里/u);

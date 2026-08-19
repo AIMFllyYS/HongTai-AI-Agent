@@ -1,4 +1,10 @@
-import { TaskError, type SubtitleTimingSource } from "@hongtai/core";
+import {
+  MAX_PRODUCTION_DURATION_SECONDS,
+  MAX_SHOTS_PER_PRODUCTION,
+  MIN_PRODUCTION_DURATION_SECONDS,
+  TaskError,
+  type SubtitleTimingSource,
+} from "@hongtai/core";
 
 import type { ProductionPlanInput, ProductionPlanningFlowDependencies } from "../../contracts/production-planning";
 import { productionPlanningPrompt, productionPlanningRepairPrompt } from "../../prompts/production-planning";
@@ -29,8 +35,10 @@ function withDerivedCues(plan: ProductionPlanResultV2, requestedTemplateId: stri
 }
 
 function validateInput(input: ProductionPlanInput): void {
-  if (input.targetDurationSeconds < 15 || input.targetDurationSeconds > 60) throw invalidPlan("制作目标时长必须在15到60秒之间");
-  if (input.assets.length === 0 || input.assets.length > 12) throw invalidPlan("制作素材数量必须在1到12个之间");
+  if (input.targetDurationSeconds < MIN_PRODUCTION_DURATION_SECONDS || input.targetDurationSeconds > MAX_PRODUCTION_DURATION_SECONDS) {
+    throw invalidPlan("制作目标时长必须在15到60秒之间");
+  }
+  if (input.assets.length === 0 || input.assets.length > MAX_SHOTS_PER_PRODUCTION) throw invalidPlan("制作素材数量必须在1到12个之间");
   if (!input.brief.trim()) throw invalidPlan("制作需求不能为空");
   if (!input.originalSourceText.trim() || input.originalSourceText.length > 12_000) throw invalidPlan("爆款原文必须在1到12000字符之间");
   if (input.headlineText !== undefined && (!input.headlineText.trim() || input.headlineText.trim().length > 24)) throw invalidPlan("主文字必须在1到24字符之间");
