@@ -977,6 +977,43 @@ test("制作素材、成片和项目删除同步更新持久状态与私有文�
   assert.equal([...values.keys()].some((path) => path.startsWith("project-1/")), false);
 });
 
+test("计划无法读取时项目仍可见、可重新生成、可删除", async () => {
+  const { create, values, ids } = harness();
+  const service = create();
+  await service.create({ analysisTaskId: "task-1", brief: "真实门店", targetDurationSeconds: 20 });
+  await service.importAssets("project-1");
+  await service.generatePlan("project-1");
+  await service.render("project-1");
+  const stored = JSON.parse(values.get("project-1/project.json") ?? "{}") as Record<string, unknown>;
+  values.set("project-1/project.json", JSON.stringify({
+    ...stored,
+    plan: { schemaVersion: "production-plan.v3" },
+  }));
+
+  const listed = await service.list();
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0]?.status, "failed");
+  assert.equal(listed[0]?.plan, undefined);
+  assert.equal(listed[0]?.assets.length, 3);
+  assert.ok(listed[0]?.output);
+  assert.equal(listed[0]?.issue?.code, "PRODUCTION_PLAN_UNREADABLE");
+  assert.equal(listed[0]?.issue?.action, "retry");
+  assert.equal(JSON.parse(values.get("project-1/project.json") ?? "{}").plan, undefined, "损坏计划必须从磁盘拿掉，不能假装还可用");
+
+  const regenerated = await service.generatePlan("project-1");
+  assert.equal(regenerated.status, "ready");
+  assert.equal(regenerated.plan?.schemaVersion, "production-plan.v3");
+  assert.equal(regenerated.issue, undefined);
+
+  values.set("project-1/project.json", JSON.stringify({
+    ...JSON.parse(values.get("project-1/project.json") ?? "{}"),
+    plan: { schemaVersion: "not-a-plan" },
+  }));
+  await service.delete("project-1");
+  assert.equal(ids.has("project-1"), false);
+  assert.equal((await service.list()).length, 0);
+});
+
 test("制作项目在规划或渲染中拒绝删除且同一项目只允许一个变更", async () => {
   const { create, values } = harness();
   const service = create();

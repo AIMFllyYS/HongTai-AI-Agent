@@ -114,6 +114,16 @@ function taskError(message: string, action: "retry" | "select_media" = "retry"):
   return new TaskError({ code: "TASK_ARTIFACT_MISSING", message, action });
 }
 
+function unreadablePlanIssue(): TaskIssue {
+  return {
+    code: "PRODUCTION_PLAN_UNREADABLE",
+    severity: "error",
+    userMessage: "这份制作计划已经无法读取，项目和素材都还在。请重新生成计划，或删除这个项目。",
+    retryable: true,
+    action: "retry",
+  };
+}
+
 function defaultAssetRole(value: Pick<NativeProductionAsset, "kind">): ProductionAssetRole {
   return value.kind === "audio" ? "music" : "visual";
 }
@@ -233,9 +243,31 @@ function parseProject(value: string, projectId: string): PersistedProject | unde
     const bound = assets.map((asset) => asset?.requirementOrder).filter((order) => order !== undefined);
     if (new Set(bound).size !== bound.length) return undefined;
     if (parsed.pendingRequirementOrder !== undefined && !isRequirementOrder(parsed.pendingRequirementOrder)) return undefined;
-    const plan = parsed.plan ? productionPlanResultSchema.safeParse(parsed.plan) : undefined;
-    if (parsed.plan && !plan?.success) return undefined;
-    return { ...parsed, mode, textPreset, ...(headlineText ? { headlineText } : {}), ...(avatarScript ? { avatarScript } : {}), assets: assets as readonly PersistedAsset[], ...(plan?.success ? { plan: plan.data } : {}) };
+    const parsedPlan = parsed.plan ? productionPlanResultSchema.safeParse(parsed.plan) : undefined;
+    const planUnreadable = Boolean(parsed.plan) && parsedPlan?.success !== true;
+    if (planUnreadable) {
+      const { plan: _unreadablePlan, ...rest } = parsed;
+      void _unreadablePlan;
+      return {
+        ...rest,
+        mode,
+        textPreset,
+        ...(headlineText ? { headlineText } : {}),
+        ...(avatarScript ? { avatarScript } : {}),
+        assets: assets as readonly PersistedAsset[],
+        status: "failed",
+        issue: unreadablePlanIssue(),
+      };
+    }
+    return {
+      ...parsed,
+      mode,
+      textPreset,
+      ...(headlineText ? { headlineText } : {}),
+      ...(avatarScript ? { avatarScript } : {}),
+      assets: assets as readonly PersistedAsset[],
+      ...(parsedPlan?.success ? { plan: parsedPlan.data } : {}),
+    };
   } catch {
     return undefined;
   }
@@ -824,7 +856,23 @@ export class StandaloneProductionService implements ProductionService {
 
   async #readPersisted(projectId: string): Promise<PersistedProject | undefined> {
     const response = await this.#options.files.readProductionText({ projectId, relativePath: PROJECT_PATH });
-    return response.value ? parseProject(response.value, projectId) : undefined;
+    const project = response.value ? parseProject(response.value, projectId) : undefined;
+    if (!project) return undefined;
+    if (project.issue?.code !== "PRODUCTION_PLAN_UNREADABLE" || this.#mutations.has(projectId)) return project;
+    let diskHasPlan = false;
+    try {
+      diskHasPlan = Boolean((JSON.parse(response.value ?? "{}") as { plan?: unknown }).plan);
+    } catch {
+      diskHasPlan = false;
+    }
+    if (!diskHasPlan && project.status === "failed") return project;
+    const operation = this.#persist(project);
+    this.#mutations.set(projectId, operation);
+    try {
+      return await operation;
+    } finally {
+      if (this.#mutations.get(projectId) === operation) this.#mutations.delete(projectId);
+    }
   }
 
   async #recoverProject(projectId: string): Promise<boolean> {
