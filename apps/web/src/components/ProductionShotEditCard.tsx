@@ -6,8 +6,8 @@ import {
   SHOT_STEP_MS,
   shotDurationBounds,
   type ShotDraft,
+  type ShotPreview,
 } from "../features/production/plan-edit-model";
-import type { PlanShotView } from "../features/production/production-plan-view";
 import { GlassCard } from "./GlassCard";
 import { Icon } from "./Icon";
 import { StepperField } from "./StepperField";
@@ -15,12 +15,10 @@ import { SubtitleTemplatePreview } from "./SubtitleTemplatePreview";
 
 export interface ProductionShotEditCardProps {
   readonly draft: ShotDraft;
-  readonly shot: PlanShotView;
+  /** What saving would produce for this shot, so the card never shows the previous save's timings. */
+  readonly preview: ShotPreview;
   readonly shots: readonly ShotDraft[];
   readonly totalMilliseconds: number;
-  readonly templateId: string;
-  readonly hasWordTiming: boolean;
-  readonly shortCues: number;
   /** Avatar captions come from the recorded voice, so the service refuses these two fields. */
   readonly lockedCopy: boolean;
   readonly disabled: boolean;
@@ -34,14 +32,14 @@ function seconds(milliseconds: number): string {
 }
 
 export function ProductionShotEditCard({
-  draft, shot, shots, totalMilliseconds, templateId, hasWordTiming, shortCues, lockedCopy, disabled,
+  draft, preview, shots, totalMilliseconds, lockedCopy, disabled,
   onDuration, onNarration, onCaption,
 }: ProductionShotEditCardProps) {
   const narrationId = useId();
   const captionId = useId();
   const bounds = shotDurationBounds({ shots, order: draft.order, totalMilliseconds });
   const single = shots.length < 2;
-  const first = shot.cues[0];
+  const first = preview.cues[0];
 
   return (
     <GlassCard className="shot-edit-card" tone="soft">
@@ -49,26 +47,25 @@ export function ProductionShotEditCard({
         <em>{String(draft.order).padStart(2, "0")}</em>
         <div>
           <strong>{draft.caption || "这个镜头还没有标题"}</strong>
-          <small>{shot.cues.length > 0 ? `${shot.cues.length} 条字幕` : "还没有切出字幕"}</small>
+          <small>{preview.cues.length > 0 ? `${preview.cues.length} 条字幕` : "切不出字幕"}</small>
         </div>
       </header>
 
-      {/* Previews the first real cue. A plan made before subtitle timing existed has none, and
-          slicing the narration would show a caption the export never puts on screen. */}
       {first ? (
         <div className="shot-edit-card__stage">
           <SubtitleTemplatePreview
             emphasisWords={first.emphasisWords}
-            hasWordTiming={hasWordTiming}
+            // An edit re-derives cues from the copy, so it can never claim per-word timing.
+            hasWordTiming={false}
             placement="band"
-            templateId={templateId}
+            templateId={preview.templateId}
             text={first.text}
           />
         </div>
       ) : (
         <p className="production-hint">
           <Icon name="info" size={16} />
-          这个计划还没有字幕时间轴。保存微调后会按当前文案和模板重新切分，届时可以在这里预览。
+          这个镜头没有口播文案，切不出字幕。填上文案后这里会显示它在画面上的样子。
         </p>
       )}
 
@@ -84,7 +81,8 @@ export function ProductionShotEditCard({
         max={lockedCopy ? draft.milliseconds : Math.min(bounds.maxMs, MAX_SHOT_MS)}
         min={lockedCopy ? draft.milliseconds : Math.max(bounds.minMs, MIN_SHOT_MS)}
         onChange={onDuration}
-        // Absorbing another shot's change lands on any millisecond, not just the button's step.
+        // The slider positions itself on the exact value: an older plan can hold 6.667 s, which the
+        // button's step cannot express, and snapping the thumb would misreport what is stored.
         sliderStep={1}
         step={SHOT_STEP_MS}
         value={draft.milliseconds}
@@ -97,6 +95,7 @@ export function ProductionShotEditCard({
           id={captionId}
           maxLength={40}
           onChange={(event) => onCaption(event.target.value)}
+          required
           type="text"
           value={draft.caption}
         />
@@ -109,6 +108,7 @@ export function ProductionShotEditCard({
           id={narrationId}
           maxLength={160}
           onChange={(event) => onNarration(event.target.value)}
+          required
           rows={3}
           value={draft.narration}
         />
@@ -122,25 +122,25 @@ export function ProductionShotEditCard({
         </p>
       ) : null}
 
-      {shortCues > 0 ? (
+      {preview.shortCues > 0 ? (
         <p className="shot-edit-card__warning" role="status">
           <Icon name="error" size={16} />
-          有 {shortCues} 条字幕短于 0.6 秒，观众来不及看完。加长这个镜头，或把口播改短一些。
+          有 {preview.shortCues} 条字幕短于 0.6 秒，观众来不及看完。加长这个镜头，或把口播改短一些。
         </p>
       ) : null}
 
-      {shot.cues.length > 0 ? (
+      {preview.cues.length > 0 ? (
         <details className="shot-edit-card__cues">
           <summary>看这个镜头切出的字幕</summary>
           <ol>
-            {shot.cues.map((cue) => (
+            {preview.cues.map((cue) => (
               <li key={cue.startMs}>
                 <code>{(cue.startMs / 1_000).toFixed(1)}–{(cue.endMs / 1_000).toFixed(1)}s</code>
                 <span>{cue.text}</span>
               </li>
             ))}
           </ol>
-          <p>字幕的切分和进出点由文案与模板决定，保存后会重新计算，不能在这里逐条拖动。</p>
+          <p>这就是保存后会烧进画面的切分：由文案、时长和模板一起决定，不能在这里逐条拖动。</p>
         </details>
       ) : null}
     </GlassCard>

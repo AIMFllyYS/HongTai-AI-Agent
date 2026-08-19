@@ -16,8 +16,8 @@ import {
   draftTotalMilliseconds,
   planDraftFrom,
   planDraftProblem,
+  previewShot,
   redistributeShotDuration,
-  shortCueCount,
   type PlanDraft,
 } from "../features/production/plan-edit-model";
 import { readProductionPlan } from "../features/production/production-plan-view";
@@ -276,35 +276,28 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
 
       <div className="production-edit-shots">
         <h2>逐镜微调</h2>
-        {draft.shots.map((shot) => {
-          const source = plan.shots.find((candidate) => candidate.order === shot.order);
-          if (!source) return null;
-          return (
-            <ProductionShotEditCard
-              disabled={busy}
-              draft={shot}
-              hasWordTiming={plan.subtitle?.precision === "word"}
-              key={shot.order}
-              lockedCopy={avatarMode}
-              onCaption={(value) => patch({ ...draft, shots: draft.shots.map((candidate) => candidate.order === shot.order ? { ...candidate, caption: value } : candidate) })}
-              onDuration={(milliseconds) => patch({
-                ...draft,
-                shots: redistributeShotDuration({
-                  shots: draft.shots,
-                  order: shot.order,
-                  milliseconds,
-                  totalMilliseconds: Math.round(plan.targetDurationSeconds * 1_000),
-                }),
-              })}
-              onNarration={(value) => patch({ ...draft, shots: draft.shots.map((candidate) => candidate.order === shot.order ? { ...candidate, narration: value } : candidate) })}
-              shortCues={shortCueCount(source)}
-              shot={source}
-              shots={draft.shots}
-              templateId={plan.subtitle?.templateId ?? ""}
-              totalMilliseconds={Math.round(plan.targetDurationSeconds * 1_000)}
-            />
-          );
-        })}
+        {draft.shots.map((shot) => (
+          <ProductionShotEditCard
+            disabled={busy}
+            draft={shot}
+            key={shot.order}
+            lockedCopy={avatarMode}
+            onCaption={(value) => patch({ ...draft, shots: draft.shots.map((candidate) => candidate.order === shot.order ? { ...candidate, caption: value } : candidate) })}
+            onDuration={(milliseconds) => patch({
+              ...draft,
+              shots: redistributeShotDuration({
+                shots: draft.shots,
+                order: shot.order,
+                milliseconds,
+                totalMilliseconds: Math.round(plan.targetDurationSeconds * 1_000),
+              }),
+            })}
+            onNarration={(value) => patch({ ...draft, shots: draft.shots.map((candidate) => candidate.order === shot.order ? { ...candidate, narration: value } : candidate) })}
+            preview={previewShot({ shot, requestedTemplateId: draft.subtitleTemplateId })}
+            shots={draft.shots}
+            totalMilliseconds={Math.round(plan.targetDurationSeconds * 1_000)}
+          />
+        ))}
       </div>
 
       <p className="production-edit-footnote">

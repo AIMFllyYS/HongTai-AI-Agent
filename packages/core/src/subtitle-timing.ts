@@ -46,8 +46,8 @@ export const MAX_EMPHASIS_WORD_CHARACTERS = 12;
 /**
  * A cue shorter than this flashes past unread. Cue count follows the copy and the template's
  * line box, so a shot too short for its narration produces cues below this; the copy cannot be
- * compressed without dropping words. Nothing surfaces that to the user yet — the export screen
- * (#109) is where it belongs — so today this only documents the threshold and guards the tests.
+ * compressed without dropping words. Planning does not refuse such a shot — dropping words would
+ * be worse — so the export screen warns about it per shot and leaves the choice to the user.
  */
 export const MIN_CUE_DURATION_MS = 600;
 

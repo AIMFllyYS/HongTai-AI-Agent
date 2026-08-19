@@ -49,9 +49,16 @@ test("主文字不能被清空，因为服务端会把空值读成保持原样",
   assert.match(page, /required/u);
 });
 
+test("字幕预览按当前草稿重算，不展示上次保存的出入点", () => {
+  assert.match(page, /previewShot\(\{ shot, requestedTemplateId: draft\.subtitleTemplateId \}\)/u);
+  assert.doesNotMatch(card, /shot\.cues/u, "卡片不能再读已保存计划的 cue");
+  assert.doesNotMatch(page, /shortCueCount/u, "偏短字幕要按草稿数，而不是按上次保存的结果");
+  assert.match(card, /hasWordTiming=\{false\}/u, "微调只会产出估算时间，预览不能假装能逐字点亮");
+});
+
 test("微调不提交字幕时间，并如实说清哪些东西在这里改不了", () => {
   assert.doesNotMatch(`${page}\n${card}`, /startMs:|endMs:|cues:\s*\[/u, "字幕时间由共享层重算，界面不能提交");
-  assert.match(card, /字幕的切分和进出点由文案与模板决定/u);
+  assert.match(card, /由文案、时长和模板一起决定，不能在这里逐条拖动/u);
   assert.match(page, /镜头的数量、顺序和画面比例在这里不能改/u);
 });
 

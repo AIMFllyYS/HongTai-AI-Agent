@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { DEFAULT_SUBTITLE_TEMPLATE_ID } from "@hongtai/core";
+
 import {
   buildPlanUpdate,
   draftTotalMilliseconds,
@@ -8,9 +10,9 @@ import {
   MIN_SHOT_MS,
   planDraftFrom,
   planDraftProblem,
+  previewShot,
   redistributeShotDuration,
   secondsFromMilliseconds,
-  shortCueCount,
   shotDurationBounds,
   type ShotDraft,
 } from "./plan-edit-model";
@@ -215,16 +217,47 @@ test("微调始终保持镜头数量与顺序，也不会提交计划里没有�
   assert.equal(update, undefined, "计划里没有的镜头不能被提交出去");
 });
 
-test("按镜头数出偏短字幕，好让界面如实提示而不是悄悄接受", () => {
-  const plan = view({
-    shots: [{
-      order: 1, assetId: "asset-1", durationSeconds: 1, narration: "很长的一句口播。", caption: "标题", fit: "cover",
-      cues: [
-        { startMs: 0, endMs: 500, text: "很长的一句", emphasisWords: [], words: null },
-        { startMs: 500, endMs: 1_000, text: "口播", emphasisWords: [], words: null },
-      ],
-    }],
+test("预览按当前草稿重算，不再展示上次保存的出入点", () => {
+  const plan = view();
+  const base = planDraftFrom(plan);
+  const shot = base.shots[0]!;
+  assert.equal(shot.milliseconds, 8_000);
+
+  const before = previewShot({ shot, requestedTemplateId: "keyword_pop" });
+  assert.ok(before.cues.length > 0);
+  assert.equal(before.cues.at(-1)?.endMs, 8_000, "预览必须铺满镜头时长");
+  assert.equal(before.shortCues, 0);
+
+  // 把镜头缩到 1.1 秒：旧实现会继续显示 0.0–8.0s，用户看不出导出会变成什么样。
+  const shortened = previewShot({ shot: { ...shot, milliseconds: 1_100 }, requestedTemplateId: "keyword_pop" });
+  assert.equal(shortened.cues.at(-1)?.endMs, 1_100, "预览必须跟着草稿的时长走");
+  assert.deepEqual(shortened.cues.map((cue) => cue.text), before.cues.map((cue) => cue.text), "只改时长不该改变切分");
+
+  // 文案切成多条、镜头又短，每条就来不及看完。这必须在保存前数出来。
+  const crowded = previewShot({
+    shot: { ...shot, milliseconds: 1_500, narration: "先看真实环境，再看服务过程，最后看离店时的收尾细节，全程都能对上。" },
+    requestedTemplateId: "keyword_pop",
   });
-  assert.equal(shortCueCount(plan.shots[0]!), 2);
-  assert.equal(shortCueCount(view().shots[0]!), 0);
+  assert.ok(crowded.cues.length > 1, "长文案必须切成多条");
+  assert.ok(crowded.shortCues > 0, "偏短字幕必须在保存前就被数出来");
+
+  const retitled = previewShot({ shot: { ...shot, narration: "换成很短的一句。" }, requestedTemplateId: "keyword_pop" });
+  assert.deepEqual(retitled.cues.map((cue) => cue.text), ["换成很短的一句。"], "改文案后预览必须用新文案");
+});
+
+test("预览显示的是降级后的模板，不假装能逐字点亮", () => {
+  const shot = planDraftFrom(view()).shots[0]!;
+  assert.equal(previewShot({ shot, requestedTemplateId: "karaoke_glow" }).templateId, "classic_line");
+  assert.equal(previewShot({ shot, requestedTemplateId: "keyword_pop" }).templateId, "keyword_pop");
+  // 旧计划没有模板选择，服务端会解析成默认模板，预览必须显示同一个。
+  assert.equal(previewShot({ shot, requestedTemplateId: "" }).templateId, DEFAULT_SUBTITLE_TEMPLATE_ID);
+});
+
+test("空标题与空口播在提交前被拦住，不让用户走到一次必然失败的保存", () => {
+  const base = planDraftFrom(view());
+  const blank = (patch: Partial<ShotDraft>) => ({ ...base, shots: base.shots.map((shot) => shot.order === 1 ? { ...shot, ...patch } : shot) });
+
+  assert.match(planDraftProblem(blank({ caption: "  " })) ?? "", /第 1 个镜头的标题不能为空/u);
+  assert.match(planDraftProblem(blank({ narration: "" })) ?? "", /第 1 个镜头的口播文案不能为空/u);
+  assert.equal(planDraftProblem(base), undefined);
 });

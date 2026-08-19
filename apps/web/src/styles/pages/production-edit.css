@@ -78,7 +78,15 @@
   border-radius: var(--radius-control);
 }
 
-.shot-edit-card__cues summary { color: var(--color-primary-strong); font-size: var(--text-meta); cursor: pointer; }
+/* A disclosure is still a touch target: text-height alone is too small to hit on a phone. */
+.shot-edit-card__cues summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--color-primary-strong);
+  font-size: var(--text-meta);
+  cursor: pointer;
+}
 .shot-edit-card__cues ol { display: grid; gap: var(--space-2); margin-top: var(--space-3); padding: 0; list-style: none; }
 .shot-edit-card__cues li { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: var(--space-2); align-items: baseline; }
 .shot-edit-card__cues code { color: var(--color-progress); font-family: var(--font-data); font-size: var(--text-meta); }

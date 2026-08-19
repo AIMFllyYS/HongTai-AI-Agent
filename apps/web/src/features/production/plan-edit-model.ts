@@ -1,4 +1,11 @@
-import { MIN_CUE_DURATION_MS, type ProductionPlanUpdate, type ProductionShotUpdate } from "@hongtai/core";
+import {
+  buildShotCueTimeline,
+  MIN_CUE_DURATION_MS,
+  resolveTemplateForPrecision,
+  type ProductionPlanUpdate,
+  type ProductionShotUpdate,
+  type SubtitleCueTiming,
+} from "@hongtai/core";
 
 import type { PlanShotView, ProductionPlanView } from "./production-plan-view";
 
@@ -136,21 +143,52 @@ export function draftTotalMilliseconds(shots: readonly ShotDraft[]): number {
 }
 
 /**
- * Cue count follows the copy and the subtitle template's line box, not the shot length, so a shot
- * too short for its narration produces captions that flash past unread. The service accepts them,
- * which makes saying so the tuning screen's job.
+ * The tier an edit produces. `updatePlan` re-derives every cue from the copy and never accepts a
+ * caller's timeline, so a manual edit can only ever claim an estimate.
  */
-export function shortCueCount(shot: PlanShotView): number {
-  return shot.cues.filter((cue) => cue.endMs - cue.startMs < MIN_CUE_DURATION_MS).length;
+const EDIT_PRECISION = "estimated" as const;
+
+export interface ShotPreview {
+  /** The template that would actually burn in, after any degrade for missing word timing. */
+  readonly templateId: string;
+  readonly cues: readonly SubtitleCueTiming[];
+  /** Cues too short to read. Planning allows them, so the screen has to say so. */
+  readonly shortCues: number;
 }
 
 /**
- * Why the headline cannot be cleared here: the plan's text overlay requires it, and `updatePlan`
- * reads a blank value as "keep the current one". Submitting the empty string would look accepted and
- * then come back with the old headline still burned in, so the screen has to refuse it up front.
+ * What saving this draft would produce, not what the last save produced.
+ *
+ * This calls the same shared derivation `updatePlan` calls, so the preview is the outcome rather
+ * than a second implementation that could drift. Showing the stored cues instead would keep a
+ * 10-second timeline on screen after the shot was shortened to 1 second.
+ */
+export function previewShot(input: { readonly shot: ShotDraft; readonly requestedTemplateId: string }): ShotPreview {
+  const resolved = resolveTemplateForPrecision({ requestedId: input.requestedTemplateId, precision: EDIT_PRECISION });
+  const cues = buildShotCueTimeline({
+    text: input.shot.narration,
+    shotDurationMs: input.shot.milliseconds,
+    typography: resolved.template.typography,
+  });
+  return {
+    templateId: resolved.template.id,
+    cues,
+    shortCues: cues.filter((cue) => cue.endMs - cue.startMs < MIN_CUE_DURATION_MS).length,
+  };
+}
+
+/**
+ * Why these are refused before the request instead of after: the service rejects all of them, and a
+ * save that can only fail is a worse answer than a field that says what it needs. The headline is the
+ * one that would otherwise pass silently — `updatePlan` reads a blank value as "keep the current
+ * one", so an empty submission looks accepted and comes back with the old headline still burned in.
  */
 export function planDraftProblem(draft: PlanDraft): string | undefined {
   if (!draft.headlineText.trim()) return "主文字不能为空。想换文字就直接改写，留空不会删掉它。";
+  for (const shot of draft.shots) {
+    if (!shot.caption.trim()) return `第 ${shot.order} 个镜头的标题不能为空。`;
+    if (!shot.narration.trim()) return `第 ${shot.order} 个镜头的口播文案不能为空。`;
+  }
   return undefined;
 }
 
