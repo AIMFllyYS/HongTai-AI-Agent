@@ -38,6 +38,8 @@ function listApkRuntimeSources(relativeDir: string): string[] {
       if (!relative.endsWith(".ts") && !relative.endsWith(".tsx")) return false;
       if (relative.endsWith(".test.ts") || relative.endsWith(".test.tsx")) return false;
       if (relative.includes("/browser-native/") || relative.startsWith("browser-native/")) return false;
+      if (relative === "node.ts" || relative.endsWith("/node.ts")) return false;
+      if (relative.endsWith("fetch-ai-transport.ts")) return false;
       return true;
     })
     .map((entry) => join(relativeDir, entry).replaceAll("\\", "/"));
@@ -47,9 +49,15 @@ test("WebView 89 runtime paths avoid newer browser-only helpers", () => {
   const apkRuntimeFiles = [
     ...listApkRuntimeSources("apps/web/src"),
     ...listApkRuntimeSources("packages/capacitor-runtime/src"),
+    ...listApkRuntimeSources("packages/core/src"),
+    ...listApkRuntimeSources("packages/ai/src"),
   ];
   assert.ok(apkRuntimeFiles.some((path) => path.endsWith("production-workbench-model.ts")));
   assert.ok(apkRuntimeFiles.some((path) => path.endsWith("standalone-analysis-service.ts")));
+  assert.ok(apkRuntimeFiles.some((path) => path.endsWith("subtitle-timing.ts")));
+  assert.ok(apkRuntimeFiles.some((path) => path.endsWith("production-planning-flow.ts")));
+  assert.equal(apkRuntimeFiles.some((path) => path.endsWith("fetch-ai-transport.ts")), false);
+  assert.equal(apkRuntimeFiles.some((path) => path.endsWith("node.ts")), false);
 
   const forbidden = /crypto\.randomUUID\(|Object\.hasOwn\(|\.at\(/;
   const offenders = apkRuntimeFiles.filter((path) => forbidden.test(read(path)));

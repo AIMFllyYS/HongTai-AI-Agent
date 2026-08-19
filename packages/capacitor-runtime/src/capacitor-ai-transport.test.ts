@@ -3,6 +3,7 @@ import test from "node:test";
 import { OpenAiCompatibleProvider } from "@hongtai/ai";
 
 import { CapacitorAiTransport, NativeAiTransportError } from "./capacitor-ai-transport.js";
+import { generatedRequestId } from "./capacitor-ai-transport-mapping.js";
 
 type NativeEvent = Readonly<Record<string, unknown>>;
 type NativeRequest = Readonly<Record<string, unknown>>;
@@ -285,4 +286,10 @@ test("Capacitor AI transport accepts only app-private file URIs for native attac
     /private URI/,
   );
   assert.equal(starts, 0);
+});
+
+test("AI request ID uses the Chromium 89-safe runtime id helper", () => {
+  const value = generatedRequestId();
+  assert.match(value, /^ai-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u);
+  assert.notEqual(generatedRequestId(), value);
 });

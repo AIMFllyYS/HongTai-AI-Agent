@@ -4,6 +4,7 @@ import type {
   AiTransportJsonAttachment,
   AiTransportRequest,
 } from "@hongtai/ai";
+import { createRuntimeId } from "@hongtai/core";
 import type {
   NativeAiJsonAttachment,
   NativeAiMediaSource,
@@ -73,9 +74,7 @@ export function requestId(value: string): string {
 }
 
 export function generatedRequestId(): string {
-  const value = globalThis.crypto?.randomUUID?.();
-  if (!value) throw new TypeError("Secure random AI request ID is unavailable");
-  return requestId(`ai-${value}`);
+  return requestId(`ai-${createRuntimeId()}`);
 }
 
 function relativePath(value: unknown): string {

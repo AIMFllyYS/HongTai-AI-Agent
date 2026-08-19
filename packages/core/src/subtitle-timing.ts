@@ -136,9 +136,9 @@ function absorbShortTail(
   cuts: readonly number[],
   typography: SubtitleTypography,
 ): readonly number[] {
-  const last = cuts.at(-1);
+  const last = cuts[cuts.length - 1];
   if (last === undefined || characters.length - last >= MIN_TAIL_CHARACTERS) return cuts;
-  const previous = cuts.at(-2) ?? 0;
+  const previous = cuts.length >= 2 ? cuts[cuts.length - 2] ?? 0 : 0;
 
   const joined = sliceAt(characters, previous, characters.length);
   if (joined.length <= MAX_CUE_CHARACTERS && subtitleTextFits(joined, typography)) return cuts.slice(0, -1);
