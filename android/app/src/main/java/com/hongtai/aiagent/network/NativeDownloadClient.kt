@@ -56,7 +56,7 @@ class NativeDownloadClient(
             throw NativeNetworkException("STORAGE_SPACE_INSUFFICIENT", "The media file is larger than the local download limit.")
           }
           val mimeType = connection.contentType?.substringBefore(';')?.trim()?.takeIf(MIME_TYPE::matches)
-          requireExpectedMediaType(request.artifact, mimeType)
+          DownloadMediaTypePolicy.requireExpectedMediaType(request.artifact.kind, mimeType)
           var lastProgressAtNanos = 0L
           val artifact = connection.inputStream.use { input ->
             artifacts.writeStream(
@@ -128,26 +128,6 @@ class NativeDownloadClient(
     if (Thread.currentThread().isInterrupted) throw InterruptedException("Native download was interrupted.")
   }
 
-  /** Rejects declared HTML/JSON/HLS before an app-private artifact is created. */
-  private fun requireExpectedMediaType(slot: NativeDownloadArtifactSlot, mimeType: String?) {
-    val normalized = mimeType?.lowercase() ?: return
-    if (normalized.startsWith("text/") || normalized in BLOCKED_MIME_TYPES) {
-      throw NativeNetworkException("MEDIA_DOWNLOAD_FAILED", "The media source returned a non-media response.")
-    }
-    val genericBinary = normalized == "application/octet-stream"
-    when (slot.kind) {
-      "image" -> if (!genericBinary && !normalized.startsWith("image/")) {
-        throw NativeNetworkException("MEDIA_DOWNLOAD_FAILED", "The image source returned an unexpected media type.")
-      }
-      "video", "videoPart" -> if (!genericBinary && !normalized.startsWith("video/")) {
-        throw NativeNetworkException("MEDIA_DOWNLOAD_FAILED", "The video source returned an unexpected media type.")
-      }
-      "audio" -> if (!genericBinary && !normalized.startsWith("audio/")) {
-        throw NativeNetworkException("MEDIA_DOWNLOAD_FAILED", "The audio source returned an unexpected media type.")
-      }
-    }
-  }
-
   private companion object {
     const val CONNECT_TIMEOUT_MS = 15_000
     const val READ_TIMEOUT_MS = 60_000
@@ -157,11 +137,5 @@ class NativeDownloadClient(
     val HTTP_SUCCESS_RANGE = 200..299
     val REDIRECT_STATUS_CODES = setOf(301, 302, 303, 307, 308)
     val MIME_TYPE = Regex("[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+")
-    val BLOCKED_MIME_TYPES = setOf(
-      "application/json",
-      "application/problem+json",
-      "application/vnd.apple.mpegurl",
-      "application/x-mpegurl",
-    )
   }
 }
