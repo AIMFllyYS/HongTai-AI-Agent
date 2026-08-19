@@ -1,10 +1,55 @@
-import { TaskError } from "@hongtai/core";
+import {
+  buildShotCueTimeline,
+  resolveTemplateForPrecision,
+  subtitleTimingPrecision,
+  TaskError,
+  type SubtitleTimingSource,
+} from "@hongtai/core";
 
 import type { ProductionPlanInput, ProductionPlanningFlowDependencies } from "../../contracts/production-planning";
 import { productionPlanningPrompt, productionPlanningRepairPrompt } from "../../prompts/production-planning";
-import { productionPlanResultJsonSchema, productionPlanResultV2Schema, type ProductionPlanResultV2 } from "../../schemas/production-plan";
+import {
+  productionPlanResultJsonSchema,
+  productionPlanResultV2Schema,
+  type ProductionPlanResultV2,
+  type ProductionPlanResultV3,
+} from "../../schemas/production-plan";
 import { parseStructuredOutput } from "../../structured-output/parse-structured-output";
 import { invalidPlan, validateProductionPlan, type ProductionPlanConstraints } from "./production-plan-validation";
+
+/**
+ * Narration is synthesized on device only after the plan is approved, so its real length is
+ * unknown while planning. Cue boundaries are therefore proportional to the copy and the plan
+ * says so rather than implying the subtitles were aligned to audio.
+ */
+const MONTAGE_TIMING_SOURCE: SubtitleTimingSource = "script_estimate";
+
+/**
+ * The model decides shots and copy; cue milliseconds are derived here, because asking a
+ * language model for timestamp arithmetic produces plausible numbers that do not add up.
+ */
+function withDerivedCues(plan: ProductionPlanResultV2, requestedTemplateId: string | undefined): ProductionPlanResultV3 {
+  const precision = subtitleTimingPrecision(MONTAGE_TIMING_SOURCE);
+  const resolved = resolveTemplateForPrecision({ requestedId: requestedTemplateId ?? "", precision });
+  return {
+    ...plan,
+    schemaVersion: "production-plan.v3",
+    subtitle: {
+      templateId: resolved.template.id,
+      timing: { precision, source: MONTAGE_TIMING_SOURCE },
+      degradedFromTemplateId: resolved.degradedFrom ?? null,
+    },
+    shots: plan.shots.map((shot) => ({
+      ...shot,
+      cues: buildShotCueTimeline({
+        text: shot.narration,
+        shotDurationMs: Math.round(shot.durationSeconds * 1_000),
+        typography: resolved.template.typography,
+      }).map((cue) => ({ ...cue, emphasisWords: [...cue.emphasisWords], words: null })),
+    })),
+    decorations: [],
+  };
+}
 
 function validateInput(input: ProductionPlanInput): void {
   if (input.targetDurationSeconds < 15 || input.targetDurationSeconds > 60) throw invalidPlan("制作目标时长必须在15到60秒之间");
@@ -45,7 +90,7 @@ export class ProductionPlanningFlow {
     this.#dependencies = dependencies;
   }
 
-  async run(input: ProductionPlanInput): Promise<ProductionPlanResultV2> {
+  async run(input: ProductionPlanInput): Promise<ProductionPlanResultV3> {
     validateInput(input);
     const constraints = planConstraintsFromInput(input);
     const request = async (prompt: string) => this.#dependencies.provider.generate({
@@ -57,14 +102,14 @@ export class ProductionPlanningFlow {
     });
     const initial = await request(productionPlanningPrompt(input));
     try {
-      const result = parseStructuredOutput(initial.content, productionPlanResultV2Schema);
+      const result = withDerivedCues(parseStructuredOutput(initial.content, productionPlanResultV2Schema), input.subtitleTemplateId);
       validateProductionPlan(result, constraints);
       return result;
     } catch (error) {
       if (!(error instanceof TaskError) || error.code !== "AI_STRUCTURED_OUTPUT_INVALID") throw error;
       const repaired = await request(productionPlanningRepairPrompt(initial.content, input));
       try {
-        const result = parseStructuredOutput(repaired.content, productionPlanResultV2Schema);
+        const result = withDerivedCues(parseStructuredOutput(repaired.content, productionPlanResultV2Schema), input.subtitleTemplateId);
         validateProductionPlan(result, constraints);
         return result;
       } catch (repairError) {

@@ -36,7 +36,11 @@ function plan(): ProductionPlanResultV3 {
     settings: { width: 720, height: 1280, fps: 30, durationSeconds: 20 },
     audio: { voiceLocale: "zh-CN", speechRate: 1, backgroundMusicAssetId: null, backgroundMusicVolume: 0 },
     textOverlay: { primaryText: "看得见的真实服务", secondaryText: "过程透明，表达克制", preset: "classic_top" },
-    subtitle: { templateId: "keyword_pop" },
+    subtitle: {
+      templateId: "keyword_pop",
+      timing: { precision: "estimated", source: "script_estimate" },
+      degradedFromTemplateId: null,
+    },
     shots: [
       {
         order: 1,
@@ -119,7 +123,40 @@ test("v3 校验拒绝越界、重叠或与音频不一致的字幕时间轴", ()
   rejects((draft) => { draft.shots[0]!.cues[1]!.words![2]!.text = "别的"; }, /拼接后必须与字幕文本一致/u);
   rejects((draft) => { draft.shots[0]!.cues[1]!.words![0]!.startMs = 100; }, /必须落在所属字幕区间内/u);
   rejects((draft) => { draft.shots[0]!.cues[1]!.words![1]!.startMs = 3900; }, /重叠或倒序/u);
-  rejects((draft) => { draft.subtitle = { templateId: "variety_card" }; }, /字幕模板与用户选择不一致/u);
+  rejects((draft) => { draft.subtitle = { ...draft.subtitle, templateId: "variety_card" }; }, /字幕模板与用户选择不一致/u);
+});
+
+test("v3 校验不允许计划宣称高于实际证据的字幕时间精度", () => {
+  const karaokeConstraints: ProductionPlanConstraints = { ...constraints, subtitleTemplateId: "karaoke_glow" };
+
+  const honestDegrade = plan();
+  honestDegrade.subtitle = {
+    templateId: "classic_line",
+    timing: { precision: "estimated", source: "script_estimate" },
+    degradedFromTemplateId: "karaoke_glow",
+  };
+  validateProductionPlan(honestDegrade, karaokeConstraints);
+
+  const keptKaraoke = plan();
+  keptKaraoke.subtitle = {
+    templateId: "karaoke_glow",
+    timing: { precision: "estimated", source: "script_estimate" },
+    degradedFromTemplateId: null,
+  };
+  assert.throws(() => validateProductionPlan(keptKaraoke, karaokeConstraints), /降级结果与时间精度不匹配/u);
+
+  rejects(
+    (draft) => { draft.subtitle = { ...draft.subtitle, timing: { precision: "word", source: "script_estimate" } }; },
+    /精度与时间来源不一致/u,
+  );
+  rejects(
+    (draft) => { draft.subtitle = { ...draft.subtitle, timing: { precision: "word", source: "asr_word" } }; },
+    /每条字幕都必须带词级时间/u,
+  );
+  rejects(
+    (draft) => { draft.subtitle = { ...draft.subtitle, degradedFromTemplateId: "karaoke_glow" }; },
+    /字幕模板与用户选择不一致/u,
+  );
 });
 
 test("v3 校验按白名单和密度上限拦住装饰层", () => {

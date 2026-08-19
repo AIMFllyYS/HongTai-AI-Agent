@@ -132,7 +132,7 @@ test("制作项目导入素材、生成计划和渲染结果后可在重启后�
 
   const ready = await service.generatePlan("project-1");
   assert.equal(ready.status, "ready");
-  assert.equal(ready.plan?.schemaVersion, "production-plan.v2");
+  assert.equal(ready.plan?.schemaVersion, "production-plan.v3");
   assert.match(planningPrompts[0] ?? "", /原视频介绍了门店场地与合作方式/u);
   assert.match(planningPrompts[0] ?? "", /仅供创作参考/u);
 
@@ -146,6 +146,11 @@ test("制作项目导入素材、生成计划和渲染结果后可在重启后�
   const restored = await create().get("project-1");
   assert.equal(restored?.status, "succeeded");
   assert.equal(restored?.assets[0]?.uri.includes("file://"), false);
+  assert.deepEqual(
+    (restored?.plan?.document as { subtitle?: unknown } | undefined)?.subtitle,
+    { templateId: "classic_line", timing: { precision: "estimated", source: "script_estimate" }, degradedFromTemplateId: null },
+    "重启后字幕时间精度必须仍可被界面读取",
+  );
   assert.equal((await create().list()).length, 1);
 });
 
@@ -399,7 +404,7 @@ test("制作项目恢复中断的渲染状态并保留正式计划", async () =>
 
   const recovered = await service.get("project-1");
   assert.equal(recovered?.status, "failed");
-  assert.equal(recovered?.plan?.schemaVersion, "production-plan.v2");
+  assert.equal(recovered?.plan?.schemaVersion, "production-plan.v3");
   assert.equal(recovered?.issue?.code, "TASK_INTERRUPTED");
 });
 

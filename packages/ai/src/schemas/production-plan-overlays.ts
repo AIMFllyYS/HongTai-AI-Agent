@@ -1,3 +1,4 @@
+import { SUBTITLE_TIMING_PRECISIONS, SUBTITLE_TIMING_SOURCES } from "@hongtai/core";
 import { z } from "zod";
 
 import { subtitleTemplateIdSchema } from "./subtitle-template";
@@ -52,11 +53,21 @@ export const productionDecorationSchema = z.object({
   animation: z.enum(DECORATION_ANIMATIONS),
 });
 
+export const productionSubtitleTimingSchema = z.object({
+  precision: z.enum(SUBTITLE_TIMING_PRECISIONS),
+  source: z.enum(SUBTITLE_TIMING_SOURCES),
+});
+
 export const productionSubtitleSettingsSchema = z.object({
   templateId: subtitleTemplateIdSchema,
+  /** Evidence behind the cue boundaries, so the UI can explain the template it actually got. */
+  timing: productionSubtitleTimingSchema,
+  /** Template the user asked for when it was replaced for lack of word timing; null otherwise. */
+  degradedFromTemplateId: subtitleTemplateIdSchema.nullable(),
 });
 
 export type SubtitleCueWord = z.infer<typeof subtitleCueWordSchema>;
 export type SubtitleCue = z.infer<typeof subtitleCueSchema>;
 export type ProductionDecoration = z.infer<typeof productionDecorationSchema>;
+export type ProductionSubtitleTiming = z.infer<typeof productionSubtitleTimingSchema>;
 export type ProductionSubtitleSettings = z.infer<typeof productionSubtitleSettingsSchema>;

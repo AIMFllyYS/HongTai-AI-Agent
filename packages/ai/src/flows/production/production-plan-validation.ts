@@ -1,4 +1,4 @@
-import { TaskError } from "@hongtai/core";
+import { resolveTemplateForPrecision, subtitleTimingPrecision, TaskError } from "@hongtai/core";
 
 import type { ProductionPlanningAsset } from "../../contracts/production-planning";
 import { MAX_DECORATIONS_PER_PLAN, MAX_DECORATIONS_PER_SHOT } from "../../schemas/production-plan-overlays";
@@ -40,6 +40,28 @@ export function assertOriginalNarration(plan: ProductionPlanResult, constraints:
     if (original.includes(narration.slice(index, index + 12))) {
       throw invalidPlan("制作口播与参考原文存在连续重复，请重新组织原创表达");
     }
+  }
+}
+
+/**
+ * Keeps the promised subtitle look in step with the evidence behind the cue times. The
+ * renderer trusts `templateId` as-is, so the degrade has to be settled and recorded here
+ * rather than re-decided at render time.
+ */
+function validateSubtitleTiming(plan: ProductionPlanResultV3, constraints: ProductionPlanConstraints): void {
+  const { templateId, timing, degradedFromTemplateId } = plan.subtitle;
+  const requestedId = degradedFromTemplateId ?? templateId;
+  if (constraints.subtitleTemplateId && requestedId !== constraints.subtitleTemplateId) {
+    throw invalidPlan("制作计划字幕模板与用户选择不一致");
+  }
+  if (subtitleTimingPrecision(timing.source) !== timing.precision) throw invalidPlan("字幕时间精度与时间来源不一致");
+
+  const resolved = resolveTemplateForPrecision({ requestedId, precision: timing.precision });
+  if (resolved.template.id !== templateId) throw invalidPlan("字幕模板降级结果与时间精度不匹配");
+  if ((resolved.degradedFrom ?? null) !== degradedFromTemplateId) throw invalidPlan("字幕模板降级标识与实际降级不一致");
+
+  if (timing.precision === "word" && plan.shots.some((shot) => shot.cues.some((cue) => cue.words === null))) {
+    throw invalidPlan("声明词级精度时每条字幕都必须带词级时间");
   }
 }
 
@@ -125,9 +147,7 @@ export function validateProductionPlan(plan: ProductionPlanResult, constraints: 
   }
 
   if (plan.schemaVersion === "production-plan.v3") {
-    if (constraints.subtitleTemplateId && plan.subtitle.templateId !== constraints.subtitleTemplateId) {
-      throw invalidPlan("制作计划字幕模板与用户选择不一致");
-    }
+    validateSubtitleTiming(plan, constraints);
     validateCues(plan);
     validateDecorations(plan, constraints);
   }
