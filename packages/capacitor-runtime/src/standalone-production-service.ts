@@ -1,4 +1,4 @@
-import { contentAnalysisResultSchema, createAvatarCaptionPlan, MIMO_CHAT_AUDIO_TTS_INSTRUCTION, ProductionPlanningFlow, productionPlanResultSchema, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, type AiProvider, type ProductionPlanResult } from "@hongtai/ai";
+import { applyProductionPlanEdit, contentAnalysisResultSchema, createAvatarCaptionPlan, MIMO_CHAT_AUDIO_TTS_INSTRUCTION, ProductionPlanningFlow, productionPlanResultSchema, requestedSubtitleTemplateId, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, type AiProvider, type ProductionPlanConstraints, type ProductionPlanResult } from "@hongtai/ai";
 import { createRuntimeId, issueFromAppError, subtitleTemplateById, TaskError } from "@hongtai/core";
 import type {
   AnalysisService,
@@ -8,6 +8,7 @@ import type {
   ProductionAssetRole,
   ProductionEvent,
   ProductionMode,
+  ProductionPlanUpdate,
   ProductionProjectRecord,
   ProductionService,
   ProductionTextPreset,
@@ -355,6 +356,73 @@ export class StandaloneProductionService implements ProductionService {
       await this.#persist({ ...project, status: "failed", issue: issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "制作计划没有完成", action: "retry" }) });
       throw error;
     }
+  }
+
+  async updatePlan(projectId: string, input: ProductionPlanUpdate): Promise<ProductionProjectRecord> {
+    return this.#exclusive(projectId, async () => {
+      const project = await this.#required(projectId);
+      if (project.status === "planning" || project.status === "rendering") {
+        throw taskError("制作项目正在处理中，请等结束后再微调");
+      }
+      // Serialising mutations only covers this instance. A screen that was opened before an
+      // earlier edit or a restart must not write its stale plan over the newer one.
+      if (project.updatedAt !== input.expectedUpdatedAt) {
+        throw new TaskError({
+          code: "PRODUCTION_PLAN_VERSION_STALE",
+          message: "制作计划已被更新，请刷新后重新微调",
+          action: "retry",
+        });
+      }
+      const plan = project.plan;
+      if (!plan) throw taskError("请先生成可执行制作计划");
+
+      // The headline lives on both the project and the plan overlay, so the constraint has to be
+      // the edited value or validation would reject the plan for matching the new text.
+      const headlineText = input.headlineText?.trim() || project.headlineText;
+      const requestedTemplateId = input.subtitleTemplateId ?? requestedSubtitleTemplateId(plan);
+      // Everything below the validated plan is a write, so validation has to finish first.
+      const next = applyProductionPlanEdit({
+        plan,
+        edit: input,
+        constraints: {
+          ...this.#editConstraints(project),
+          ...(headlineText ? { headlineText } : {}),
+          ...(requestedTemplateId === undefined ? {} : { subtitleTemplateId: requestedTemplateId }),
+        },
+      });
+      const { output: _output, issue: _issue, ...base } = project;
+      void _output; void _issue;
+
+      await this.#options.files.writeProductionText({ projectId, relativePath: PLAN_PATH, value: JSON.stringify(next), replace: true });
+      const updated = await this.#persist({
+        ...base,
+        ...(headlineText ? { headlineText } : {}),
+        status: "ready",
+        plan: next,
+      });
+      // The rendered MP4 no longer matches the plan. Leaving it would show the edit as already
+      // exported; the project falls back to the same state as a plan that was never rendered.
+      if (project.output) {
+        try {
+          await this.#options.files.deleteProductionFile({ projectId, relativePath: "output.mp4" });
+        } catch (error) {
+          await this.#save(project).catch(() => undefined);
+          await this.#emit(projectId, { type: "state", project: this.#project(project) }).catch(() => undefined);
+          throw error;
+        }
+      }
+      return this.#project(updated);
+    });
+  }
+
+  #editConstraints(project: PersistedProject): ProductionPlanConstraints {
+    return {
+      analysisTaskId: project.analysisTaskId,
+      mode: project.mode,
+      targetDurationSeconds: project.targetDurationSeconds,
+      textPreset: project.textPreset,
+      assets: project.assets.map((asset) => ({ ...asset, role: asset.role ?? defaultAssetRole(asset) })),
+    };
   }
 
   async render(projectId: string): Promise<ProductionProjectRecord> {

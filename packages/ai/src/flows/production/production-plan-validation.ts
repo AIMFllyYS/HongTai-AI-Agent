@@ -26,6 +26,12 @@ export function invalidPlan(message: string, cause?: unknown): TaskError {
   return new TaskError({ code: "AI_STRUCTURED_OUTPUT_INVALID", message, action: "retry", cause });
 }
 
+/** True when the duration survives the renderer's millisecond arithmetic without rounding. */
+export function isWholeMilliseconds(seconds: number): boolean {
+  const milliseconds = seconds * 1_000;
+  return Math.abs(milliseconds - Math.round(milliseconds)) < 1e-6;
+}
+
 function normalizedCopy(value: string): string {
   return value.toLocaleLowerCase("zh-CN").replace(/[^\p{Letter}\p{Number}]/gu, "");
 }
@@ -133,11 +139,17 @@ export function validateProductionPlan(plan: ProductionPlanResult, constraints: 
   if (plan.source.analysisTaskId !== constraints.analysisTaskId) throw invalidPlan("制作计划来源与真实拆解任务不一致");
   if (plan.settings.durationSeconds !== constraints.targetDurationSeconds) throw invalidPlan("制作计划时长与目标时长不一致");
   if (plan.shots.some((shot, index) => shot.order !== index + 1)) throw invalidPlan("制作计划镜头顺序不连续");
-  const total = plan.shots.reduce((sum, shot) => sum + shot.durationSeconds, 0);
-  if (Math.abs(total - plan.settings.durationSeconds) > 0.01) throw invalidPlan("制作计划镜头总时长不一致");
+  // The renderer works in whole milliseconds and requires the shots to sum exactly. A duration it
+  // cannot express would otherwise only surface as a failed render after the user waits for it.
+  if (plan.shots.some((shot) => !isWholeMilliseconds(shot.durationSeconds))) {
+    throw invalidPlan("制作计划镜头时长必须精确到毫秒");
+  }
+  const totalMs = plan.shots.reduce((sum, shot) => sum + Math.round(shot.durationSeconds * 1_000), 0);
+  if (totalMs !== Math.round(plan.settings.durationSeconds * 1_000)) throw invalidPlan("制作计划镜头总时长不一致");
 
   const assets = new Map(constraints.assets.map((asset) => [asset.id, asset]));
   if (plan.shots.some((shot) => !assets.has(shot.assetId))) throw invalidPlan("制作计划引用了不存在的素材");
+  if (plan.shots.some((shot) => assets.get(shot.assetId)?.kind === "audio")) throw invalidPlan("镜头画面不能引用音频素材");
   const musicId = plan.audio.backgroundMusicAssetId;
   if (musicId !== null && assets.get(musicId)?.kind !== "audio") throw invalidPlan("背景音乐必须引用已导入的音频素材");
   if (musicId === null && plan.audio.backgroundMusicVolume !== 0) throw invalidPlan("没有背景音乐时音量必须为0");

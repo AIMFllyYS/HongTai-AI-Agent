@@ -5,6 +5,7 @@ export * from "./contracts/production-planning";
 export * from "./flows/content-analysis/content-analysis-flow";
 export * from "./flows/diagnosis/diagnosis-flow";
 export * from "./flows/production/avatar-caption-plan";
+export * from "./flows/production/production-plan-edit";
 export * from "./flows/production/production-plan-validation";
 export * from "./flows/production/production-planning-flow";
 export * from "./schemas/content-analysis";

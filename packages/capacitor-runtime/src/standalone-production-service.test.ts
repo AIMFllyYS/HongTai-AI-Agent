@@ -53,9 +53,10 @@ function deferred(): { readonly promise: Promise<void>; resolve(): void } {
   return { promise: new Promise<void>((done) => { resolve = done; }), resolve };
 }
 
-function harness(narration: "system" | "provider" = "system") {
+function harness(narration: "system" | "provider" = "system", now?: () => Date) {
   const values = new Map<string, string>();
   const ids = new Set<string>();
+  const deletedPaths: string[] = [];
   const pickCalls: Array<{ readonly projectId: string; readonly maxItems: number; readonly selection?: "visual" | "avatar" }> = [];
   const renderCalls: Array<{
     readonly projectId: string;
@@ -71,7 +72,7 @@ function harness(narration: "system" | "provider" = "system") {
     writeProductionText: async ({ projectId, relativePath, value }: { readonly projectId: string; readonly relativePath: string; readonly value: string; readonly replace: boolean }) => { values.set(`${projectId}/${relativePath}`, value); },
     readProductionText: async ({ projectId, relativePath }: { readonly projectId: string; readonly relativePath: string }) => ({ value: values.get(`${projectId}/${relativePath}`) }),
     listProductionIds: async () => ({ projectIds: [...ids] }),
-    deleteProductionFile: async ({ projectId, relativePath }: { readonly projectId: string; readonly relativePath: string }) => { values.delete(`${projectId}/${relativePath}`); },
+    deleteProductionFile: async ({ projectId, relativePath }: { readonly projectId: string; readonly relativePath: string }) => { deletedPaths.push(relativePath); values.delete(`${projectId}/${relativePath}`); },
     deleteProduction: async ({ projectId }: { readonly projectId: string }) => {
       ids.delete(projectId);
       for (const path of [...values.keys()]) if (path.startsWith(`${projectId}/`)) values.delete(path);
@@ -118,9 +119,41 @@ function harness(narration: "system" | "provider" = "system") {
     getNarrationMode: async () => narration,
     toDisplayUri: (uri: string) => uri.replace("file:///private/", "capacitor://localhost/private/"),
     createProjectId: () => "project-1",
-    now: () => new Date("2026-08-08T00:00:00.000Z"),
+    now: now ?? (() => new Date("2026-08-08T00:00:00.000Z")),
   });
-  return { create, values, ids, files, pickCalls, renderCalls, planningPrompts };
+  return { create, values, ids, files, pickCalls, renderCalls, planningPrompts, deletedPaths };
+}
+
+/** Each persist has to land on a distinct `updatedAt` for the stale-write check to mean anything. */
+function steppingClock(): () => Date {
+  let tick = 0;
+  return () => new Date(Date.UTC(2026, 7, 8, 0, 0, (tick += 1)));
+}
+
+async function plannedProject(now: () => Date) {
+  const context = harness("system", now);
+  const service = context.create();
+  await service.create({ analysisTaskId: "task-1", brief: "突出真实服务", targetDurationSeconds: 20 });
+  await service.importAssets("project-1");
+  const ready = await service.generatePlan("project-1");
+  return { ...context, service, ready };
+}
+
+function shotsOf(record: { readonly plan?: { readonly document: unknown } }) {
+  return (record.plan?.document as { readonly shots: readonly {
+    readonly order: number;
+    readonly narration: string;
+    readonly durationSeconds: number;
+    readonly cues: readonly { readonly text: string; readonly startMs: number; readonly endMs: number }[];
+  }[] }).shots;
+}
+
+function subtitleOf(record: { readonly plan?: { readonly document: unknown } }) {
+  return (record.plan?.document as { readonly subtitle: {
+    readonly templateId: string;
+    readonly degradedFromTemplateId: string | null;
+    readonly timing: { readonly precision: string; readonly source: string };
+  } }).subtitle;
 }
 
 test("制作项目导入素材、生成计划和渲染结果后可在重启后恢复", async () => {
@@ -152,6 +185,127 @@ test("制作项目导入素材、生成计划和渲染结果后可在重启后�
     "重启后字幕时间精度必须仍可被界面读取",
   );
   assert.equal((await create().list()).length, 1);
+});
+
+test("微调计划按新文案重建字幕时间轴，并作废已经不匹配的成片", async () => {
+  const { service, ready, create, deletedPaths } = await plannedProject(steppingClock());
+  const rendered = await service.render("project-1");
+  assert.equal(rendered.status, "succeeded");
+  assert.ok(rendered.output, "先渲染出成片，微调才需要处理作废");
+  void ready;
+
+  const edited = await service.updatePlan("project-1", {
+    expectedUpdatedAt: rendered.updatedAt,
+    shots: [
+      { order: 1, narration: "先看清真实环境，再看服务过程是否让人放心。", durationSeconds: 10 },
+      { order: 2, durationSeconds: 10 },
+    ],
+  });
+
+  assert.equal(edited.status, "ready", "微调后必须回到待合成，而不是继续显示已完成");
+  assert.equal(edited.output, undefined, "旧成片与新计划不符，不能留在界面上");
+  assert.ok(deletedPaths.includes("output.mp4"), "作废的成片文件必须真的删掉");
+
+  const shots = shotsOf(edited);
+  assert.equal(shots[0]?.narration, "先看清真实环境，再看服务过程是否让人放心。");
+  assert.equal(shots[0]?.durationSeconds, 10);
+  assert.equal(
+    shots[0]?.cues.map((cue) => cue.text).join(""),
+    "先看清真实环境，再看服务过程是否让人放心。",
+    "字幕必须按新文案重建，不能留下旧文案的时间轴",
+  );
+  assert.equal(shots[0]?.cues.at(-1)?.endMs, 10_000, "重建的字幕必须铺满新的镜头时长");
+  assert.equal(shots[1]?.narration, "再了解完整服务过程。", "没有改到的镜头文案不应被动过");
+
+  const restored = await create().get("project-1");
+  assert.equal(restored?.status, "ready", "重启后仍是待合成");
+  assert.equal(shotsOf(restored!)[0]?.durationSeconds, 10, "微调结果必须落盘");
+});
+
+test("过期版本号的微调被拒绝，且不覆盖已经更新的计划", async () => {
+  const { service, ready } = await plannedProject(steppingClock());
+  const staleUpdatedAt = ready.updatedAt;
+
+  const first = await service.updatePlan("project-1", {
+    expectedUpdatedAt: staleUpdatedAt,
+    shots: [{ order: 1, narration: "第一次修改后的口播内容。" }],
+  });
+  assert.notEqual(first.updatedAt, staleUpdatedAt, "成功的微调必须推进版本");
+
+  await assert.rejects(
+    () => service.updatePlan("project-1", {
+      expectedUpdatedAt: staleUpdatedAt,
+      shots: [{ order: 1, narration: "拿着旧界面提交的第二次修改。" }],
+    }),
+    (error: unknown) => {
+      assert.equal((error as { code?: string }).code, "PRODUCTION_PLAN_VERSION_STALE");
+      assert.equal((error as { action?: string }).action, "retry");
+      return true;
+    },
+  );
+
+  const current = await service.get("project-1");
+  assert.equal(shotsOf(current!)[0]?.narration, "第一次修改后的口播内容。", "过期写入不能覆盖更新的计划");
+});
+
+test("镜头时长之和不等于目标时长时拒绝微调，且不写坏已落盘的计划", async () => {
+  const { service, ready, values } = await plannedProject(steppingClock());
+  const before = values.get("project-1/project.json");
+
+  await assert.rejects(
+    () => service.updatePlan("project-1", {
+      expectedUpdatedAt: ready.updatedAt,
+      shots: [{ order: 1, durationSeconds: 10 }],
+    }),
+    (error: unknown) => {
+      assert.equal((error as { code?: string }).code, "PRODUCTION_PLAN_EDIT_INVALID");
+      assert.equal((error as { action?: string }).action, "edit_input");
+      assert.match((error as Error).message, /多 2\.000 秒/u, "错误必须说明超出多少时间");
+      return true;
+    },
+  );
+
+  assert.equal(values.get("project-1/project.json"), before, "校验失败不能写盘");
+  const current = await service.get("project-1");
+  assert.equal(current?.updatedAt, ready.updatedAt, "校验失败不能推进版本");
+});
+
+test("微调选择逐字点亮模板时降级为逐行，并留下用户原本的选择", async () => {
+  const { service, ready } = await plannedProject(steppingClock());
+  assert.equal(subtitleOf(ready).templateId, "classic_line");
+
+  const edited = await service.updatePlan("project-1", {
+    expectedUpdatedAt: ready.updatedAt,
+    subtitleTemplateId: "karaoke_glow",
+  });
+
+  const subtitle = subtitleOf(edited);
+  assert.equal(subtitle.templateId, "classic_line", "拿不到词级时间时不能伪造逐字点亮");
+  assert.equal(subtitle.degradedFromTemplateId, "karaoke_glow", "用户原本的选择必须可被界面读取");
+  assert.deepEqual(subtitle.timing, { precision: "estimated", source: "script_estimate" });
+
+  const kept = await service.updatePlan("project-1", {
+    expectedUpdatedAt: edited.updatedAt,
+    shots: [{ order: 1, narration: "再改一次文案，模板选择不应被这次修改吃掉。" }],
+  });
+  assert.equal(subtitleOf(kept).degradedFromTemplateId, "karaoke_glow", "后续微调必须保留原本的模板选择");
+});
+
+test("微调换用非可播素材或不存在的镜头时按稳定错误拒绝", async () => {
+  const { service, ready } = await plannedProject(steppingClock());
+
+  await assert.rejects(
+    () => service.updatePlan("project-1", { expectedUpdatedAt: ready.updatedAt, shots: [{ order: 9, narration: "不存在的镜头。" }] }),
+    /制作计划里没有第 9 个镜头/u,
+  );
+  await assert.rejects(
+    () => service.updatePlan("project-1", { expectedUpdatedAt: ready.updatedAt, shots: [{ order: 1, assetId: "asset-404" }] }),
+    /不存在的素材/u,
+  );
+  await assert.rejects(
+    () => service.updatePlan("project-1", { expectedUpdatedAt: ready.updatedAt, shots: [{ order: 1, narration: "   " }] }),
+    /口播内容不能为空/u,
+  );
 });
 
 test("渲染进度只转发原生 stage 和百分比，不补文案也不回传 message", async () => {

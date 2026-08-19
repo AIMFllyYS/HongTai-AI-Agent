@@ -472,6 +472,38 @@ export interface ProductionProjectRecord {
   readonly updatedAt: string;
 }
 
+/** One shot's editable fields, addressed by the `order` the plan already assigned. */
+export interface ProductionShotUpdate {
+  readonly order: number;
+  readonly assetId?: string;
+  readonly durationSeconds?: number;
+  readonly narration?: string;
+  readonly caption?: string;
+}
+
+/**
+ * A bounded edit to an existing plan. Every field is optional and omission means "leave as is",
+ * so the export screen can send one card's change without restating the plan.
+ *
+ * Subtitle cue timings are never accepted from the caller: they are rebuilt from the narration
+ * and the template, because a caller-supplied timeline could claim precision the audio does not
+ * support. Shot durations must still sum to the project's target duration.
+ */
+export interface ProductionPlanUpdate {
+  /**
+   * The `updatedAt` the caller last read. A plan written from a stale screen is rejected instead
+   * of overwriting a newer one, which in-process serialisation alone cannot prevent across an
+   * app restart or a second runtime instance.
+   */
+  readonly expectedUpdatedAt: string;
+  readonly subtitleTemplateId?: string;
+  readonly headlineText?: string;
+  readonly speechRate?: number;
+  readonly backgroundMusicAssetId?: string | null;
+  readonly backgroundMusicVolume?: number;
+  readonly shots?: readonly ProductionShotUpdate[];
+}
+
 export const PRODUCTION_RENDER_STAGE_VALUES = [
   "validate_avatar_audio",
   "synthesize_narration",
@@ -508,6 +540,11 @@ export interface ProductionService {
   /** Consumes at most one terminal asset-picker result left by an external Activity/WebView rebuild. */
   consumeAssetRecovery(): Promise<ProductionAssetRecovery>;
   generatePlan(projectId: string): Promise<ProductionProjectRecord>;
+  /**
+   * Applies a bounded edit to the existing plan. A rendered MP4 no longer matches the plan after
+   * this, so it is removed rather than left on screen as a stale success.
+   */
+  updatePlan(projectId: string, input: ProductionPlanUpdate): Promise<ProductionProjectRecord>;
   render(projectId: string): Promise<ProductionProjectRecord>;
   /** Removes one imported asset and invalidates any plan and output that referenced it. */
   removeAsset(projectId: string, assetId: string): Promise<ProductionProjectRecord>;
