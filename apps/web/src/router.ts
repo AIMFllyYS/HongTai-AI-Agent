@@ -8,6 +8,7 @@ export type ActiveRouteKey =
   | "task-analysis"
   | "create"
   | "production-edit"
+  | "replica-wizard"
   | "templates"
   | "settings"
   | "settings-profile"
@@ -68,6 +69,7 @@ export const appRoutes: readonly AppRoute[] = [
   { path: "/tasks/:taskId/analysis", key: "task-analysis", navKey: "home" },
   { path: "/create", key: "create", navKey: "create" },
   { path: "/create/:projectId/edit", key: "production-edit", navKey: "create" },
+  { path: "/replica/:taskId", key: "replica-wizard", navKey: "create" },
   { path: "/templates", key: "templates", navKey: "templates" },
   { path: "/settings", key: "settings", navKey: "settings" },
   { path: "/settings/profile", key: "settings-profile", navKey: "settings" },
@@ -80,7 +82,7 @@ export const appRoutes: readonly AppRoute[] = [
 const EMPTY_ROUTE_PARAMS: RouteParams = Object.freeze({});
 
 interface DynamicRouteDefinition {
-  readonly key: Extract<ActiveRouteKey, "task-processing" | "task-detail" | "task-analysis" | "observation-report" | "production-edit">;
+  readonly key: Extract<ActiveRouteKey, "task-processing" | "task-detail" | "task-analysis" | "observation-report" | "production-edit" | "replica-wizard">;
   readonly pattern: string;
   readonly navKey: PrimaryNavKey;
   readonly matcher: RegExp;
@@ -94,6 +96,13 @@ const dynamicRoutes: readonly DynamicRouteDefinition[] = [
     navKey: "create",
     matcher: /^\/create\/([^/]+)\/edit$/u,
     paramName: "projectId",
+  },
+  {
+    key: "replica-wizard",
+    pattern: "/replica/:taskId",
+    navKey: "create",
+    matcher: /^\/replica\/([^/]+)$/u,
+    paramName: "taskId",
   },
   {
     key: "task-processing",
@@ -209,6 +218,10 @@ export function taskAnalysisPath(taskId: string): string {
 
 export function productionEditPath(projectId: string): string {
   return `/create/${encodedPathSegment(projectId)}/edit`;
+}
+
+export function replicaWizardPath(taskId: string): string {
+  return `/replica/${encodedPathSegment(taskId)}`;
 }
 
 export function profileSettingsPath(): string {

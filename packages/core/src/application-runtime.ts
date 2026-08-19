@@ -451,6 +451,12 @@ export type ProductionTextPreset = "classic_top" | "clean_card" | "aqua_accent";
 export interface ProductionAsset extends MediaReference {
   readonly id: string;
   readonly role: ProductionAssetRole;
+  /**
+   * The replica blueprint requirement this asset was filmed for, when it was imported through the
+   * replica wizard. It is what makes "the clip I shot for item 3" end up in the third shot instead
+   * of wherever the planner happens to put it, and it disappears with the asset.
+   */
+  readonly requirementOrder?: number;
 }
 
 export interface ProductionProjectRecord {
@@ -536,8 +542,14 @@ export interface ProductionService {
   }): Promise<ProductionProjectRecord>;
   get(projectId: string): Promise<ProductionProjectRecord | undefined>;
   list(): Promise<readonly ProductionProjectRecord[]>;
-  /** Opens the system picker and copies selected items into this project's private directory. */
-  importAssets(projectId: string): Promise<ProductionProjectRecord>;
+  /**
+   * Opens the system picker and copies selected items into this project's private directory.
+   *
+   * Passing a `requirementOrder` imports exactly one item and records which blueprint requirement it
+   * satisfies. The intent is written down before the picker opens, so a WebView rebuild during the
+   * external Activity cannot leave the imported file attached to nothing.
+   */
+  importAssets(projectId: string, options?: { readonly requirementOrder?: number }): Promise<ProductionProjectRecord>;
   /** Consumes at most one terminal asset-picker result left by an external Activity/WebView rebuild. */
   consumeAssetRecovery(): Promise<ProductionAssetRecovery>;
   generatePlan(projectId: string): Promise<ProductionProjectRecord>;
@@ -554,6 +566,38 @@ export interface ProductionService {
   /** Permanently removes one production project and all owned private artifacts. */
   delete(projectId: string): Promise<void>;
   subscribe(projectId: string, listener: (event: ProductionEvent) => void | Promise<void>): Unsubscribe;
+}
+
+export type ReplicaBlueprintStatus = "succeeded" | "failed";
+
+/**
+ * One replica blueprint per breakdown, plus the wizard project it is currently feeding.
+ *
+ * Only terminal states are written down. A run that dies with the process leaves no record rather
+ * than a row that says "generating" forever, and the next visit simply offers to generate again.
+ */
+export interface ReplicaBlueprintRecord {
+  readonly taskId: string;
+  readonly status: ReplicaBlueprintStatus;
+  /** `replica-blueprint.v1`. Present on success, and may legitimately carry an empty shot list. */
+  readonly blueprint?: VersionedDocument;
+  readonly issue?: TaskIssue;
+  /** The production project this breakdown is being rebuilt in, so reopening the wizard resumes it. */
+  readonly projectId?: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface ReplicaService {
+  get(taskId: string): Promise<ReplicaBlueprintRecord | undefined>;
+  /** Turns a finished breakdown into the material list the user has to film. */
+  run(taskId: string): Promise<ReplicaBlueprintRecord>;
+  /**
+   * Opens the production project the list will be rebuilt in, reusing the one already linked to this
+   * breakdown. The target duration is the blueprint's own total, so the list stays internally
+   * consistent instead of being squeezed into a preset the user never chose.
+   */
+  startProject(taskId: string): Promise<ProductionProjectRecord>;
 }
 
 export interface ContentTemplateInput {
@@ -679,6 +723,7 @@ export interface AppRuntime {
   readonly analysis: AnalysisService;
   readonly diagnosis: DiagnosisService;
   readonly production: ProductionService;
+  readonly replica: ReplicaService;
   readonly recovery: RuntimeRecoveryService;
   readonly templates: TemplateService;
   readonly features: FeatureCapabilityRegistry;

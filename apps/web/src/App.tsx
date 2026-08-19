@@ -16,6 +16,7 @@ import { TaskHomePage } from "./pages/TaskHomePage";
 const TemplatesPage = lazy(async () => ({ default: (await import("./pages/TemplatesPage")).TemplatesPage }));
 const CreatePage = lazy(async () => ({ default: (await import("./pages/CreatePage")).CreatePage }));
 const ProductionEditPage = lazy(async () => ({ default: (await import("./pages/ProductionEditPage")).ProductionEditPage }));
+const ReplicaWizardPage = lazy(async () => ({ default: (await import("./pages/ReplicaWizardPage")).ReplicaWizardPage }));
 const ObservationReportPage = lazy(async () => ({ default: (await import("./pages/ObservationReportPage")).ObservationReportPage }));
 const ObservationStartPage = lazy(async () => ({ default: (await import("./pages/ObservationStartPage")).ObservationStartPage }));
 const TaskPage = lazy(async () => ({ default: (await import("./pages/TaskPage")).TaskPage }));
@@ -89,6 +90,12 @@ export function App({ runtime, visualData }: AppProps = {}) {
       return projectId
         ? <ProductionEditPage key={projectId} navigate={navigate} projectId={projectId} runtime={runtime} />
         : <RuntimePendingPage description="这个微调链接不完整，请返回制作页重新进入。" navigate={navigate} title="无法打开微调" />;
+    }
+    if (runtime && renderedRoute.key === "replica-wizard") {
+      const taskId = renderedRoute.params.taskId;
+      return taskId
+        ? <ReplicaWizardPage key={taskId} navigate={navigate} runtime={runtime} taskId={taskId} />
+        : <RuntimePendingPage description="这个复刻链接不完整，请返回任务详情重新进入。" navigate={navigate} title="无法打开复刻向导" />;
     }
     if (runtime && renderedRoute.key === "templates") {
       return <TemplatesPage navigate={navigate} runtime={runtime} />;

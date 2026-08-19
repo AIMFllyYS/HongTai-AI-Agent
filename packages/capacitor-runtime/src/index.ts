@@ -6,5 +6,6 @@ export * from "./standalone-task-service.js";
 export * from "./standalone-analysis-service.js";
 export * from "./standalone-diagnosis-service.js";
 export * from "./standalone-production-service.js";
+export * from "./standalone-replica-service.js";
 export * from "./standalone-template-service.js";
 export * from "./standalone-app-runtime.js";

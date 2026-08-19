@@ -1,0 +1,224 @@
+import { useCallback, useEffect, useState } from "react";
+import { issueFromAppError } from "@hongtai/core";
+import type { AppRuntime, ProductionProjectRecord, ReplicaBlueprintRecord, TaskIssue } from "@hongtai/core";
+
+import { AppShell } from "../components/AppShell";
+import { Button } from "../components/Buttons";
+import { GlassCard } from "../components/GlassCard";
+import { Icon } from "../components/Icon";
+import { IssueNotice } from "../components/IssueNotice";
+import { ReplicaRequirementCard } from "../components/ReplicaRequirementCard";
+import { EmptyState, LoadingState } from "../components/StatePanels";
+import {
+  readReplicaBlueprint,
+  requirementBindings,
+  skipEffectHint,
+  unboundAssetCount,
+  wizardReadiness,
+} from "../features/replica/replica-blueprint-view";
+import { pathForRoute, productionEditPath, taskDetailPath, type Navigate } from "../router";
+
+export interface ReplicaWizardPageProps {
+  readonly taskId: string;
+  readonly navigate: Navigate;
+  readonly runtime: AppRuntime;
+}
+
+type Pending = "blueprint" | "project" | "plan" | "asset" | undefined;
+
+export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPageProps) {
+  const [record, setRecord] = useState<ReplicaBlueprintRecord>();
+  const [project, setProject] = useState<ProductionProjectRecord>();
+  const [loading, setLoading] = useState(true);
+  const [pending, setPending] = useState<Pending>();
+  const [issue, setIssue] = useState<TaskIssue>();
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const next = await runtime.replica.get(taskId);
+      setRecord(next);
+      setProject(next?.projectId ? await runtime.production.get(next.projectId) : undefined);
+    } catch (error) {
+      setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "这条爆款的复刻清单暂时无法读取", action: "none" }));
+    } finally {
+      setLoading(false);
+    }
+  }, [runtime, taskId]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  // An external picker can rebuild the WebView, so the returned file is claimed on arrival. The item
+  // it belongs to was written down before the picker opened, so it survives the rebuild.
+  useEffect(() => {
+    void (async () => {
+      const recovered = await runtime.production.consumeAssetRecovery().catch(() => ({ status: "none" as const }));
+      if (recovered.status === "succeeded") setProject(recovered.project);
+      else if (recovered.status === "failed") setIssue(recovered.issue);
+    })();
+  }, [runtime]);
+
+  const run = async (kind: Exclude<Pending, undefined>, operation: () => Promise<void>, fallback: string) => {
+    if (pending) return;
+    setPending(kind);
+    setIssue(undefined);
+    try {
+      await operation();
+    } catch (error) {
+      setIssue(issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: fallback, action: "retry" }));
+    } finally {
+      setPending(undefined);
+    }
+  };
+
+  const blueprint = readReplicaBlueprint(record?.blueprint);
+  const bindings = requirementBindings(blueprint.requirements, project?.assets ?? []);
+  const readiness = wizardReadiness(bindings);
+  const strays = unboundAssetCount(project?.assets ?? []);
+  const busy = pending !== undefined;
+
+  const generate = () => run("blueprint", async () => {
+    setRecord(await runtime.replica.run(taskId));
+    setProject(undefined);
+  }, "复刻清单没有生成成功");
+
+  const start = () => run("project", async () => {
+    setProject(await runtime.replica.startProject(taskId));
+  }, "没能打开这条爆款的制作项目");
+
+  const bind = (order: number) => run("asset", async () => {
+    if (!project) return;
+    setProject(await runtime.production.importAssets(project.projectId, { requirementOrder: order }));
+  }, "素材没有导入成功");
+
+  const unbind = (assetId: string) => run("asset", async () => {
+    if (!project) return;
+    setProject(await runtime.production.removeAsset(project.projectId, assetId));
+  }, "素材没有移除成功");
+
+  const compose = () => run("plan", async () => {
+    if (!project) return;
+    const ready = await runtime.production.generatePlan(project.projectId);
+    setProject(ready);
+    navigate(productionEditPath(ready.projectId));
+  }, "脚本和字幕没有生成成功");
+
+  const shell = (children: React.ReactNode, subtitle?: string) => (
+    <AppShell
+      activeNav="create"
+      backPath={taskDetailPath(taskId)}
+      className="replica-wizard-page"
+      headerMode="detail"
+      navigate={navigate}
+      {...(subtitle ? { subtitle } : {})}
+      title="按清单复刻"
+    >
+      {children}
+    </AppShell>
+  );
+
+  if (loading) return shell(<LoadingState title="正在打开复刻清单" />);
+
+  if (!record || record.status === "failed" || !blueprint.usable) {
+    const failed = record?.status === "failed";
+    return shell(
+      <>
+        <EmptyState
+          action={<Button disabled={busy} onClick={generate}>{pending === "blueprint" ? "正在读这条爆款" : failed ? "重新生成清单" : "生成素材需求清单"}</Button>}
+          description={blueprint.emptyReason
+            || (failed
+              ? "上一次生成没有完成，可以再试一次。"
+              : "先让 AI 读一遍这条爆款的拆解，列出你需要拍哪几段素材。清单只列拍摄要求，不会替你判断画面里到底有什么。")}
+          icon="movie_edit"
+          title={blueprint.emptyReason ? "这条内容拆不出可拍的清单" : "还没有素材需求清单"}
+        />
+        {record?.issue && !blueprint.emptyReason ? <IssueNotice actions={{ retry: generate }} issue={record.issue} /> : null}
+        {issue ? <IssueNotice actions={{ retry: generate }} issue={issue} /> : null}
+      </>,
+    );
+  }
+
+  return shell(
+    <>
+      {issue ? <IssueNotice actions={{ retry: project ? compose : start }} issue={issue} /> : null}
+
+      <GlassCard className="replica-wizard__premise">
+        <h2>怎么复刻这条</h2>
+        <p>{blueprint.premise}</p>
+        <ul>
+          <li>共 {blueprint.requirements.length} 项素材，清单建议合计 {blueprint.totalSuggestedSeconds} 秒。</li>
+          <li>成片时长按清单合计定下，不用再从固定档位里挑。</li>
+          <li>口播、配音和字幕在素材齐了以后自动生成，生成完直接进微调页。</li>
+        </ul>
+      </GlassCard>
+
+      {project ? null : (
+        <GlassCard className="replica-wizard__start">
+          <h2>开始准备素材</h2>
+          <p>先按这份清单建一个制作项目，之后逐项把拍好的素材放进对应位置。项目会记住每一项对应哪个文件。</p>
+          <Button disabled={busy} onClick={start} size="lg">
+            {pending === "project" ? "正在建项目" : "按这份清单建项目"}
+          </Button>
+        </GlassCard>
+      )}
+
+      {project ? (
+        <>
+          <p className="replica-wizard__progress" role="status">
+            已绑定 {readiness.boundCount}/{blueprint.requirements.length} 项 · 成片 {project.targetDurationSeconds} 秒
+          </p>
+
+          {readiness.ready ? null : (
+            <p className="production-hint" role="status">
+              <Icon name="info" size={16} />
+              {readiness.blockedReason}
+            </p>
+          )}
+
+          {skipEffectHint(bindings, project.targetDurationSeconds) ? (
+            <p className="production-hint">
+              <Icon name="info" size={16} />
+              {skipEffectHint(bindings, project.targetDurationSeconds)}
+            </p>
+          ) : null}
+
+          {strays > 0 ? (
+            <p className="production-hint">
+              <Icon name="info" size={16} />
+              这个项目里还有 {strays} 个不属于清单的素材。它们不会被排进镜头，需要的话回制作页删掉。
+            </p>
+          ) : null}
+
+          <div className="replica-wizard__list">
+            {bindings.map((binding) => (
+              <ReplicaRequirementCard
+                binding={binding}
+                disabled={busy}
+                key={binding.requirement.order}
+                onImport={() => bind(binding.requirement.order)}
+                onRemove={() => { if (binding.asset) unbind(binding.asset.id); }}
+              />
+            ))}
+          </div>
+
+          <div className="replica-wizard__finish">
+            <Button disabled={busy || !readiness.ready} onClick={compose} size="lg">
+              {pending === "plan" ? "正在写脚本和字幕" : "生成脚本与字幕"}
+            </Button>
+            <small>
+              镜头顺序就是清单顺序：第 1 项拍的素材会出现在第 1 个镜头。生成完可以在微调页改时长和文案，再回制作页合成成片。
+            </small>
+          </div>
+        </>
+      ) : null}
+
+      <p className="replica-wizard__footnote">
+        清单来自这条爆款的正式拆解，只说明该拍什么，不代表画面里真的有这些内容。素材始终只留在本机，不会上传。
+        想换一份清单，需要先在
+        <button className="replica-wizard__link" onClick={() => navigate(pathForRoute("create"))} type="button">制作页</button>
+        删掉正在用它的项目，否则已经拍好的素材会对不上新的清单项。
+      </p>
+    </>,
+    `${blueprint.requirements.length} 项素材 · 清单合计 ${blueprint.totalSuggestedSeconds} 秒`,
+  );
+}

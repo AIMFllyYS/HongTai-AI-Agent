@@ -1,6 +1,19 @@
 import type { ContentAnalysisResultV1 } from "../schemas/content-analysis";
 import type { AiProvider, AiStreamEvent } from "./provider";
 
+/**
+ * Why the user filmed this asset, when it came from a replica blueprint requirement.
+ *
+ * The planner may not reassign it: the user shot this clip for this item, so the plan has to put it
+ * where the list said it goes, otherwise the checklist they followed was decoration.
+ */
+export interface ProductionAssetRequirement {
+  readonly order: number;
+  readonly visualDescription: string;
+  readonly contentHint: string;
+  readonly suggestedDurationSeconds: number;
+}
+
 export interface ProductionPlanningAsset {
   readonly id: string;
   readonly kind: "image" | "video" | "audio";
@@ -8,6 +21,7 @@ export interface ProductionPlanningAsset {
   readonly mimeType: string;
   readonly displayName: string;
   readonly durationSeconds?: number;
+  readonly requirement?: ProductionAssetRequirement;
 }
 
 export interface ProductionPlanInput {

@@ -13,6 +13,7 @@ import type {
   MediaReference,
   ProfileUpdate,
   PublicAiConnectionConfig,
+  ReplicaBlueprintRecord,
   TaskIssue,
   TranscriptSegment,
 } from "@hongtai/core";
@@ -22,6 +23,7 @@ import { CapacitorAiTransport } from "./capacitor-ai-transport.js";
 import { StandaloneAnalysisService } from "./standalone-analysis-service.js";
 import { StandaloneDiagnosisService } from "./standalone-diagnosis-service.js";
 import { StandaloneProductionService } from "./standalone-production-service.js";
+import { StandaloneReplicaService } from "./standalone-replica-service.js";
 import { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
 import { StandaloneRuntimeRecovery } from "./standalone-runtime-recovery.js";
 import { NativeIngestPorts } from "./thin-ingest-ports.js";
@@ -328,12 +330,23 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
     files: options.plugins.localFiles,
     native: options.plugins.productionRuntime ?? unavailableProduction,
     analysis,
+    // Resolved lazily: the list is only needed once a project holds assets filmed against it, and
+    // the two services own opposite ends of the same wizard.
+    blueprints: { get: async (taskId): Promise<ReplicaBlueprintRecord | undefined> => replica.get(taskId) },
     tasks,
     getProvider: requireProvider,
     getNarrationMode: narrationMode,
     toDisplayUri: display,
     now,
     operations,
+  });
+  const replica: StandaloneReplicaService = new StandaloneReplicaService({
+    files: options.plugins.localFiles,
+    analysis,
+    tasks,
+    production,
+    getProvider: requireProvider,
+    now,
   });
   const recovery = new StandaloneRuntimeRecovery({ operations, sources: [tasks, analysis, diagnosis, production] });
   const templates = new StandaloneTemplateService({ files: options.plugins.localFiles, analysis, now });
@@ -487,6 +500,7 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
     analysis,
     diagnosis,
     production,
+    replica,
     recovery,
     templates,
     features: FEATURES,

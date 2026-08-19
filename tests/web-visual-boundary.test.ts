@@ -32,6 +32,7 @@ test("web application routes expose canonical runtime paths", () => {
     "/tasks/:taskId/analysis",
     "/create",
     "/create/:projectId/edit",
+    "/replica/:taskId",
     "/templates",
     "/settings",
     "/settings/profile",

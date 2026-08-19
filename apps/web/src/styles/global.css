@@ -10,6 +10,7 @@
 @import "./pages/creation.css" layer(pages);
 @import "./pages/production-runtime.css" layer(pages);
 @import "./pages/production-edit.css" layer(pages);
+@import "./pages/replica-wizard.css" layer(pages);
 @import "./pages/library.css" layer(pages);
 @import "./pages/settings.css" layer(pages);
 @import "./pages/observation-runtime.css" layer(pages);

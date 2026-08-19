@@ -60,6 +60,18 @@ function formalDocument(value: unknown): ContentAnalysisRecord["result"] {
   return { schemaVersion: "content-analysis.v1", document: JSON.parse(JSON.stringify(parsed.data)) as JsonObject };
 }
 
+/**
+ * The evidence set the formal breakdown was built from, stripped of the projection-only `source`.
+ *
+ * Anything derived from that breakdown has to cite the same ids, so both callers read the units the
+ * same way instead of each picking its own subset of the task's files.
+ */
+export function citedEvidenceUnits(detail: TaskDetailRecord): readonly { readonly id: string; readonly text: string; readonly startSeconds?: number; readonly endSeconds?: number }[] {
+  const wanted = detail.task.contentType === "image_text" ? "image_text" : "transcript";
+  return detail.evidenceUnits.filter((item) => item.source === wanted)
+    .map(({ id, text, startSeconds, endSeconds }) => ({ id, text, ...(startSeconds === undefined ? {} : { startSeconds }), ...(endSeconds === undefined ? {} : { endSeconds }) }));
+}
+
 function analysisInput(taskId: string, detail: TaskDetailRecord | undefined): ContentAnalysisInput {
   if (!detail || detail.task.id !== taskId) {
     throw taskError("TASK_ARTIFACT_MISSING", "未找到可供拆解的本地任务证据", "view_partial_result");
@@ -67,8 +79,7 @@ function analysisInput(taskId: string, detail: TaskDetailRecord | undefined): Co
   const platform = detail.task.sourceKind === "local_video" ? "local_upload" as const : detail.task.platform;
   if (!platform) throw taskError("TASK_ARTIFACT_MISSING", "拆解任务缺少明确来源", "view_partial_result");
   if (detail.task.contentType === "image_text") {
-    const evidenceUnits = detail.evidenceUnits.filter((item) => item.source === "image_text")
-      .map(({ id, text, startSeconds, endSeconds }) => ({ id, text, ...(startSeconds === undefined ? {} : { startSeconds }), ...(endSeconds === undefined ? {} : { endSeconds }) }));
+    const evidenceUnits = citedEvidenceUnits(detail);
     if (evidenceUnits.length === 0) throw taskError("TASK_ARTIFACT_MISSING", "图文任务没有已保存的正文证据", "view_partial_result");
     return {
       taskId,
@@ -83,8 +94,7 @@ function analysisInput(taskId: string, detail: TaskDetailRecord | undefined): Co
   if (detail.task.contentType !== "video" || !detail.transcript) {
     throw taskError("TASK_ARTIFACT_MISSING", "视频任务没有可用的已保存文稿", "view_partial_result");
   }
-  const evidenceUnits = detail.evidenceUnits.filter((item) => item.source === "transcript")
-    .map(({ id, text, startSeconds, endSeconds }) => ({ id, text, ...(startSeconds === undefined ? {} : { startSeconds }), ...(endSeconds === undefined ? {} : { endSeconds }) }));
+  const evidenceUnits = citedEvidenceUnits(detail);
   if (evidenceUnits.length === 0) throw taskError("TASK_ARTIFACT_MISSING", "视频任务没有可供拆解的文稿证据", "view_partial_result");
   return {
     taskId,

@@ -15,7 +15,7 @@ import { TaskStatusBadge } from "../components/TaskStatusBadge";
 import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
 import { contentAnalysisModuleDefinitions } from "../features/tasks/content-analysis-module-progress";
 import { contentTypeLabel, formatTaskTime, platformLabel } from "../features/tasks/task-presenters";
-import { aiSettingsPath, pathForRoute, type Navigate } from "../router";
+import { aiSettingsPath, pathForRoute, replicaWizardPath, type Navigate } from "../router";
 import { TaskAnalysisPage } from "./TaskAnalysisPage";
 import {
   ANALYSIS_TAB_LABEL,
@@ -202,6 +202,7 @@ export function TaskDetailPage({
           ? (
             <div className="task-completed-actions mobile-action-group">
               <Button disabled={pendingAction !== undefined || runtime.features.templates !== "available"} icon={<Icon name="bookmark" size={17} />} onClick={() => void saveAsTemplate()} variant="secondary">存为模板</Button>
+              <Button disabled={pendingAction !== undefined} icon={<Icon name="list" size={17} />} onClick={() => navigate(replicaWizardPath(task.id))} variant="secondary">按清单复刻</Button>
               <Button disabled={pendingAction !== undefined} icon={<Icon name="movie_edit" size={17} />} onClick={() => navigateToCreateWithSource(navigate, task.id)}>用它做视频</Button>
             </div>
           )

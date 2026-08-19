@@ -124,6 +124,25 @@ function validateDecorations(plan: ProductionPlanResultV3, constraints: Producti
 }
 
 /**
+ * Keeps the finished video in the order the user filmed for.
+ *
+ * When assets arrive from a replica blueprint, each one was shot for a numbered item on a list the
+ * user worked through. Letting the planner reorder them would quietly turn that list into a
+ * suggestion, so the shots must be exactly the bound assets, in the list's own order. Items the user
+ * skipped simply are not here; the ones that remain keep their relative order.
+ */
+function validateRequirementOrder(plan: ProductionPlanResult, constraints: ProductionPlanConstraints): void {
+  const bound = constraints.assets
+    .filter((asset) => asset.requirement !== undefined)
+    .sort((left, right) => (left.requirement?.order ?? 0) - (right.requirement?.order ?? 0));
+  if (bound.length === 0) return;
+  if (plan.shots.length !== bound.length) throw invalidPlan("制作计划镜头数量必须与已绑定的素材清单项一致");
+  for (const [index, asset] of bound.entries()) {
+    if (plan.shots[index]?.assetId !== asset.id) throw invalidPlan("制作计划镜头必须按素材清单的顺序使用对应素材");
+  }
+}
+
+/**
  * The single place that decides whether a production plan is executable. Both the planning flow
  * and any later partial edit run these rules, so an edited plan can never be looser than a
  * generated one.
@@ -163,6 +182,7 @@ export function validateProductionPlan(plan: ProductionPlanResult, constraints: 
     validateDecorations(plan, constraints);
   }
 
+  validateRequirementOrder(plan, constraints);
   assertOriginalNarration(plan, constraints);
 
   if (constraints.mode === "avatar") {

@@ -1,8 +1,9 @@
-import { applyProductionPlanEdit, contentAnalysisResultSchema, createAvatarCaptionPlan, MIMO_CHAT_AUDIO_TTS_INSTRUCTION, ProductionPlanningFlow, productionPlanResultSchema, requestedSubtitleTemplateId, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, type AiProvider, type ProductionPlanConstraints, type ProductionPlanResult } from "@hongtai/ai";
+import { applyProductionPlanEdit, contentAnalysisResultSchema, createAvatarCaptionPlan, MIMO_CHAT_AUDIO_TTS_INSTRUCTION, ProductionPlanningFlow, productionPlanResultSchema, replicaBlueprintResultSchema, requestedSubtitleTemplateId, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, type AiProvider, type ProductionPlanConstraints, type ProductionPlanningAsset, type ProductionPlanResult } from "@hongtai/ai";
 import {
   createRuntimeId,
   issueFromAppError,
   MAX_PRODUCTION_DURATION_SECONDS,
+  MAX_SHOTS_PER_PRODUCTION,
   MIN_PRODUCTION_DURATION_SECONDS,
   subtitleTemplateById,
   TaskError,
@@ -19,6 +20,7 @@ import type {
   ProductionProjectRecord,
   ProductionService,
   ProductionTextPreset,
+  ReplicaService,
   RuntimeUnfinishedWork,
   TaskIssue,
   TaskService,
@@ -40,6 +42,14 @@ interface ProductionFilesPort {
   deleteProduction(options: { readonly projectId: string }): Promise<void>;
 }
 
+/**
+ * The blueprint requirement an asset was filmed for is an app-level decision, so it lives here
+ * rather than on the native bridge DTO: the renderer has no use for it and must not be handed it.
+ */
+interface PersistedAsset extends NativeProductionAsset {
+  readonly requirementOrder?: number;
+}
+
 interface PersistedProject {
   readonly projectId: string;
   readonly analysisTaskId: string;
@@ -50,7 +60,12 @@ interface PersistedProject {
   readonly avatarScript?: string;
   readonly targetDurationSeconds: number;
   readonly status: ProductionProjectRecord["status"];
-  readonly assets: readonly NativeProductionAsset[];
+  readonly assets: readonly PersistedAsset[];
+  /**
+   * Which requirement the picker was opened for. Written before the external Activity starts,
+   * because a WebView rebuild would otherwise return a file with nothing saying what it is for.
+   */
+  readonly pendingRequirementOrder?: number;
   readonly plan?: ProductionPlanResult;
   readonly output?: NativeProductionResult;
   readonly issue?: TaskIssue;
@@ -62,6 +77,12 @@ export interface StandaloneProductionServiceOptions {
   readonly files: ProductionFilesPort;
   readonly native: StandaloneProductionRuntimePlugin;
   readonly analysis: AnalysisService;
+  /**
+   * Reads the material list an asset was filmed against. Only consulted when a project actually has
+   * bound assets, and a failure there fails the plan rather than silently dropping the ordering
+   * promise the wizard made.
+   */
+  readonly blueprints?: Pick<ReplicaService, "get">;
   readonly tasks: Pick<TaskService, "getDetail">;
   readonly getProvider: () => Promise<AiProvider>;
   /** App logic decides whether a saved connection has an executable cloud narration path. */
@@ -97,6 +118,19 @@ function originalSourceText(detail: Awaited<ReturnType<TaskService["getDetail"]>
   const evidence = detail?.evidenceUnits.map((unit) => unit.text.trim()).filter(Boolean).join("\n");
   const value = (direct || evidence)?.replace(/\s+/gu, " ").trim();
   return value ? value.slice(0, 12_000) : undefined;
+}
+
+/** A requirement number that could not have come from a blueprint would bind an asset to nothing. */
+function isRequirementOrder(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= MAX_SHOTS_PER_PRODUCTION;
+}
+
+function persistedAsset(value: PersistedAsset): PersistedAsset | undefined {
+  const base = nativeAsset(value);
+  if (!base) return undefined;
+  if (value.requirementOrder === undefined) return base;
+  if (!isRequirementOrder(value.requirementOrder)) return undefined;
+  return { ...base, requirementOrder: value.requirementOrder };
 }
 
 function nativeAsset(value: NativeProductionAsset): NativeProductionAsset | undefined {
@@ -138,11 +172,15 @@ function parseProject(value: string, projectId: string): PersistedProject | unde
     if (parsed.headlineText !== undefined && (!headlineText || headlineText.length > 24)) return undefined;
     const textPreset = parsed.textPreset ?? "classic_top";
     if (!TEXT_PRESETS.includes(textPreset)) return undefined;
-    const assets = parsed.assets.map(nativeAsset);
+    const assets = parsed.assets.map(persistedAsset);
     if (assets.some((asset) => !asset)) return undefined;
+    // Two assets claiming the same requirement would make "the clip for item 3" ambiguous.
+    const bound = assets.map((asset) => asset?.requirementOrder).filter((order) => order !== undefined);
+    if (new Set(bound).size !== bound.length) return undefined;
+    if (parsed.pendingRequirementOrder !== undefined && !isRequirementOrder(parsed.pendingRequirementOrder)) return undefined;
     const plan = parsed.plan ? productionPlanResultSchema.safeParse(parsed.plan) : undefined;
     if (parsed.plan && !plan?.success) return undefined;
-    return { ...parsed, mode, textPreset, ...(headlineText ? { headlineText } : {}), ...(avatarScript ? { avatarScript } : {}), assets: assets as readonly NativeProductionAsset[], ...(plan?.success ? { plan: plan.data } : {}) };
+    return { ...parsed, mode, textPreset, ...(headlineText ? { headlineText } : {}), ...(avatarScript ? { avatarScript } : {}), assets: assets as readonly PersistedAsset[], ...(plan?.success ? { plan: plan.data } : {}) };
   } catch {
     return undefined;
   }
@@ -253,28 +291,47 @@ export class StandaloneProductionService implements ProductionService {
     return projects.filter((value): value is ProductionProjectRecord => Boolean(value)).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   }
 
-  async importAssets(projectId: string): Promise<ProductionProjectRecord> {
+  async importAssets(projectId: string, options?: { readonly requirementOrder?: number }): Promise<ProductionProjectRecord> {
     return this.#exclusive(projectId, () => this.#track(
       { kind: "transient-operation", id: `production-assets:${projectId}`, execution: "external-activity" },
-      () => this.#importAssets(projectId),
+      () => this.#importAssets(projectId, options?.requirementOrder),
     ));
   }
 
-  async #importAssets(projectId: string): Promise<ProductionProjectRecord> {
-    const project = await this.#required(projectId);
+  async #importAssets(projectId: string, requirementOrder?: number): Promise<ProductionProjectRecord> {
+    let project = await this.#required(projectId);
     const remaining = 12 - project.assets.length;
     if (remaining <= 0) throw taskError("每个制作项目最多使用12个素材", "select_media");
     const selection = project.mode === "avatar" ? "avatar" as const : "visual" as const;
     if (selection === "avatar" && project.assets.some((asset) => (asset.role ?? defaultAssetRole(asset)) === "avatar")) {
       throw taskError("数字人口播模式只能上传一个数字人口播视频", "select_media");
     }
+    if (requirementOrder !== undefined) {
+      if (!isRequirementOrder(requirementOrder)) throw taskError("素材清单项编号无效", "select_media");
+      if (project.assets.some((asset) => asset.requirementOrder === requirementOrder)) {
+        throw taskError(`第 ${requirementOrder} 项已经有素材了，先移除再换一个`, "select_media");
+      }
+      // Recorded before the picker leaves the app, so a rebuilt WebView still knows what the
+      // returned file was chosen for.
+      project = await this.#persist({ ...project, pendingRequirementOrder: requirementOrder }, { emit: false });
+    }
     let result;
     try {
-      result = await this.#options.native.pickAssets({ projectId, maxItems: selection === "avatar" ? 1 : remaining, selection });
+      result = await this.#options.native.pickAssets({ projectId, maxItems: requirementOrder !== undefined || selection === "avatar" ? 1 : remaining, selection });
     } catch (error) {
+      await this.#clearPendingRequirement(projectId).catch(() => undefined);
       throw productionTaskError(error, "素材没有导入成功");
     }
     return this.#applyImportedAssets(project, result.assets);
+  }
+
+  /** A cancelled or failed pick must not leave the next import silently attached to the old item. */
+  async #clearPendingRequirement(projectId: string): Promise<void> {
+    const project = await this.#required(projectId);
+    if (project.pendingRequirementOrder === undefined) return;
+    const { pendingRequirementOrder: _pending, ...base } = project;
+    void _pending;
+    await this.#persist(base, { emit: false });
   }
 
   async consumeAssetRecovery(): Promise<ProductionAssetRecovery> {
@@ -304,14 +361,24 @@ export class StandaloneProductionService implements ProductionService {
   async #applyImportedAssets(project: PersistedProject, assets: readonly NativeProductionAsset[]): Promise<ProductionProjectRecord> {
     const selection = project.mode === "avatar" ? "avatar" as const : "visual" as const;
     const imported = assets.map(nativeAsset).filter((asset): asset is NativeProductionAsset => Boolean(asset));
-    if (imported.length === 0) throw taskError("没有导入可用的图片、视频或音频", "select_media");
+    if (imported.length === 0) {
+      await this.#clearPendingRequirement(project.projectId).catch(() => undefined);
+      throw taskError("没有导入可用的图片、视频或音频", "select_media");
+    }
     if (selection === "avatar" && (imported.length !== 1 || imported[0]?.role !== "avatar" || imported[0].kind !== "video")) {
+      await this.#clearPendingRequirement(project.projectId).catch(() => undefined);
       throw taskError("请选择一个包含口播原声的 MP4 数字人视频", "select_media");
     }
-    const combined = new Map([...project.assets, ...imported].map((asset) => [asset.id, asset]));
+    // The picker can return more than the one item a requirement asked for; binding all of them
+    // would claim the user filmed several things for the same list entry.
+    const order = project.pendingRequirementOrder;
+    const bound = order !== undefined && imported.length === 1
+      ? [{ ...imported[0]!, requirementOrder: order }]
+      : imported;
+    const combined = new Map([...project.assets, ...bound].map((asset) => [asset.id, asset]));
     if (combined.size > 12) throw taskError("每个制作项目最多使用12个素材", "select_media");
-    const { plan: _plan, output: _output, issue: _issue, ...base } = project;
-    void _plan; void _output; void _issue;
+    const { plan: _plan, output: _output, issue: _issue, pendingRequirementOrder: _pending, ...base } = project;
+    void _plan; void _output; void _issue; void _pending;
     return this.#project(await this.#persist({ ...base, assets: [...combined.values()], status: "draft" }));
   }
 
@@ -365,7 +432,7 @@ export class StandaloneProductionService implements ProductionService {
           textPreset: project.textPreset,
           targetDurationSeconds: project.targetDurationSeconds,
           analysis: parsed.data,
-          assets: project.assets.map((asset) => ({ ...asset, role: roleOf(asset) })),
+          assets: await this.#planningAssets(project),
         });
       await this.#options.files.writeProductionText({ projectId, relativePath: PLAN_PATH, value: JSON.stringify(plan), replace: true });
       return this.#project(await this.#persist({ ...project, status: "ready", plan }));
@@ -442,6 +509,35 @@ export class StandaloneProductionService implements ProductionService {
     });
   }
 
+  /**
+   * Planning assets with the shooting intent attached, so the plan can be checked against the list
+   * the user actually filmed. If assets claim requirements the list can no longer be read, this
+   * fails instead of quietly producing a plan in whatever order the model preferred.
+   */
+  async #planningAssets(project: PersistedProject): Promise<readonly ProductionPlanningAsset[]> {
+    const base = project.assets.map((asset) => ({ ...asset, role: asset.role ?? defaultAssetRole(asset) }));
+    if (!project.assets.some((asset) => asset.requirementOrder !== undefined)) return base;
+    const record = await this.#options.blueprints?.get(project.analysisTaskId).catch(() => undefined);
+    const parsed = record?.status === "succeeded" && record.blueprint?.schemaVersion === "replica-blueprint.v1"
+      ? replicaBlueprintResultSchema.safeParse(record.blueprint.document) : undefined;
+    if (!parsed?.success) throw taskError("这些素材是按复刻清单拍的，但清单已经读不到了，请重新生成清单");
+    const shots = new Map(parsed.data.shots.map((shot) => [shot.order, shot]));
+    return base.map((asset) => {
+      if (asset.requirementOrder === undefined) return asset;
+      const shot = shots.get(asset.requirementOrder);
+      if (!shot) throw taskError(`复刻清单里已经没有第 ${asset.requirementOrder} 项，请重新生成清单后再制作`);
+      return {
+        ...asset,
+        requirement: {
+          order: shot.order,
+          visualDescription: shot.visualDescription,
+          contentHint: shot.material.contentHint,
+          suggestedDurationSeconds: shot.material.suggestedDurationSeconds,
+        },
+      };
+    });
+  }
+
   async #editConstraints(project: PersistedProject): Promise<ProductionPlanConstraints> {
     // Generation refuses narration lifted verbatim from the reference copy. Without the same
     // source text an edit could do what generation had to refuse.
@@ -452,7 +548,7 @@ export class StandaloneProductionService implements ProductionService {
       targetDurationSeconds: project.targetDurationSeconds,
       textPreset: project.textPreset,
       ...(sourceText ? { originalSourceText: sourceText } : {}),
-      assets: project.assets.map((asset) => ({ ...asset, role: asset.role ?? defaultAssetRole(asset) })),
+      assets: await this.#planningAssets(project),
     };
   }
 
@@ -636,7 +732,7 @@ export class StandaloneProductionService implements ProductionService {
   }
 
   #project(project: PersistedProject): ProductionProjectRecord {
-    const asset = (value: NativeProductionAsset): ProductionAsset => ({ id: value.id, role: value.role ?? defaultAssetRole(value), uri: this.#options.toDisplayUri(value.uri), kind: value.kind, origin: "imported", mimeType: value.mimeType, displayName: value.displayName, byteLength: value.sizeBytes, ...(value.durationSeconds === undefined ? {} : { durationSeconds: value.durationSeconds }) });
+    const asset = (value: PersistedAsset): ProductionAsset => ({ id: value.id, role: value.role ?? defaultAssetRole(value), uri: this.#options.toDisplayUri(value.uri), kind: value.kind, origin: "imported", mimeType: value.mimeType, displayName: value.displayName, byteLength: value.sizeBytes, ...(value.durationSeconds === undefined ? {} : { durationSeconds: value.durationSeconds }), ...(value.requirementOrder === undefined ? {} : { requirementOrder: value.requirementOrder }) });
     return {
       projectId: project.projectId, analysisTaskId: project.analysisTaskId, brief: project.brief, mode: project.mode, textPreset: project.textPreset, ...(project.headlineText ? { headlineText: project.headlineText } : {}), ...(project.avatarScript ? { avatarScript: project.avatarScript } : {}), targetDurationSeconds: project.targetDurationSeconds,
       status: project.status, assets: project.assets.map(asset),
