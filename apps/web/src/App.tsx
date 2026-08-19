@@ -15,6 +15,7 @@ import { TaskHomePage } from "./pages/TaskHomePage";
 
 const TemplatesPage = lazy(async () => ({ default: (await import("./pages/TemplatesPage")).TemplatesPage }));
 const CreatePage = lazy(async () => ({ default: (await import("./pages/CreatePage")).CreatePage }));
+const ProductionEditPage = lazy(async () => ({ default: (await import("./pages/ProductionEditPage")).ProductionEditPage }));
 const ObservationReportPage = lazy(async () => ({ default: (await import("./pages/ObservationReportPage")).ObservationReportPage }));
 const ObservationStartPage = lazy(async () => ({ default: (await import("./pages/ObservationStartPage")).ObservationStartPage }));
 const TaskPage = lazy(async () => ({ default: (await import("./pages/TaskPage")).TaskPage }));
@@ -82,6 +83,12 @@ export function App({ runtime, visualData }: AppProps = {}) {
     }
     if (runtime && renderedRoute.key === "create") {
       return <CreatePage navigate={navigate} runtime={runtime} />;
+    }
+    if (runtime && renderedRoute.key === "production-edit") {
+      const projectId = renderedRoute.params.projectId;
+      return projectId
+        ? <ProductionEditPage key={projectId} navigate={navigate} projectId={projectId} runtime={runtime} />
+        : <RuntimePendingPage description="这个微调链接不完整，请返回制作页重新进入。" navigate={navigate} title="无法打开微调" />;
     }
     if (runtime && renderedRoute.key === "templates") {
       return <TemplatesPage navigate={navigate} runtime={runtime} />;

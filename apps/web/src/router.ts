@@ -7,6 +7,7 @@ export type ActiveRouteKey =
   | "task-detail"
   | "task-analysis"
   | "create"
+  | "production-edit"
   | "templates"
   | "settings"
   | "settings-profile"
@@ -66,6 +67,7 @@ export const appRoutes: readonly AppRoute[] = [
   { path: "/tasks/:taskId", key: "task-detail", navKey: "home" },
   { path: "/tasks/:taskId/analysis", key: "task-analysis", navKey: "home" },
   { path: "/create", key: "create", navKey: "create" },
+  { path: "/create/:projectId/edit", key: "production-edit", navKey: "create" },
   { path: "/templates", key: "templates", navKey: "templates" },
   { path: "/settings", key: "settings", navKey: "settings" },
   { path: "/settings/profile", key: "settings-profile", navKey: "settings" },
@@ -78,14 +80,21 @@ export const appRoutes: readonly AppRoute[] = [
 const EMPTY_ROUTE_PARAMS: RouteParams = Object.freeze({});
 
 interface DynamicRouteDefinition {
-  readonly key: Extract<ActiveRouteKey, "task-processing" | "task-detail" | "task-analysis" | "observation-report">;
+  readonly key: Extract<ActiveRouteKey, "task-processing" | "task-detail" | "task-analysis" | "observation-report" | "production-edit">;
   readonly pattern: string;
   readonly navKey: PrimaryNavKey;
   readonly matcher: RegExp;
-  readonly paramName: "taskId" | "sessionId";
+  readonly paramName: "taskId" | "sessionId" | "projectId";
 }
 
 const dynamicRoutes: readonly DynamicRouteDefinition[] = [
+  {
+    key: "production-edit",
+    pattern: "/create/:projectId/edit",
+    navKey: "create",
+    matcher: /^\/create\/([^/]+)\/edit$/u,
+    paramName: "projectId",
+  },
   {
     key: "task-processing",
     pattern: "/tasks/:taskId/processing",
@@ -196,6 +205,10 @@ export function taskDetailPath(taskId: string): string {
 
 export function taskAnalysisPath(taskId: string): string {
   return `/tasks/${encodedPathSegment(taskId)}/analysis`;
+}
+
+export function productionEditPath(projectId: string): string {
+  return `/create/${encodedPathSegment(projectId)}/edit`;
 }
 
 export function profileSettingsPath(): string {

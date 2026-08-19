@@ -1,6 +1,7 @@
 import type { SVGProps } from "react";
 
 export type IconName =
+  | "add" | "remove"
   | "arrow_back" | "analytics" | "aspect_ratio" | "auto_awesome" | "bookmark" | "bolt" | "business_center"
   | "camera" | "check_circle" | "chevron_right" | "chevron_down" | "chevron_up" | "close" | "comment"
   | "content_paste" | "download" | "error" | "expand" | "face" | "file" | "filter" | "folder" | "folder_open"
@@ -11,6 +12,8 @@ export type IconName =
   | "video_file" | "video_library" | "visibility" | "voice" | "smart_toy" | "robot" | "logout";
 
 const paths: Record<IconName, readonly string[]> = {
+  add: ["M12 5v14M5 12h14"],
+  remove: ["M5 12h14"],
   arrow_back: ["M19 12H5", "m12 19-7-7 7-7"],
   analytics: ["M4 19V5h4v14H4Zm6 0V9h4v10h-4Zm6 0V3h4v16h-4Z"],
   aspect_ratio: ["M8 4H4v4M16 4h4v4M20 16v4h-4M4 16v4h4"],

@@ -14,7 +14,7 @@ import { ProductionProjectCard } from "../components/ProductionProjectCard";
 import { EmptyState, LoadingState } from "../components/StatePanels";
 import { platformLabel } from "../features/tasks/task-presenters";
 import { useAppResume } from "../hooks/useAppResume";
-import { aiSettingsPath } from "../router";
+import { aiSettingsPath, productionEditPath } from "../router";
 import {
   productionPlanReady,
   productionRenderStageCopy,
@@ -403,6 +403,7 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
             busy={busy}
             onConfigureAi={() => navigate(aiSettingsPath())}
             onDeleteProject={() => void deleteProject(activeProject.projectId)}
+            onEditPlan={() => navigate(productionEditPath(activeProject.projectId))}
             onGeneratePlan={() => void perform(() => runtime.production.generatePlan(activeProject.projectId))}
             onImport={() => void perform(() => runtime.production.importAssets(activeProject.projectId))}
             onRemoveAsset={(assetId) => void perform(() => runtime.production.removeAsset(activeProject.projectId, assetId))}

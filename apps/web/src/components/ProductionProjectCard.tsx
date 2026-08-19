@@ -20,6 +20,8 @@ export interface ProductionProjectCardProps {
   readonly onRemoveOutput: () => void;
   readonly onDeleteProject: () => void;
   readonly onConfigureAi?: () => void;
+  /** Opens the tuning screen; absent until a plan exists to tune. */
+  readonly onEditPlan?: () => void;
 }
 
 type DeleteConfirmation =
@@ -29,7 +31,7 @@ type DeleteConfirmation =
 
 const TAB_GROUP_ID = "production-workbench-tabs";
 
-export function ProductionProjectCard({ project, progress, progressMessage, busy, pageIssue, onImport, onGeneratePlan, onRemoveAsset, onRemoveOutput, onDeleteProject, onConfigureAi }: ProductionProjectCardProps) {
+export function ProductionProjectCard({ project, progress, progressMessage, busy, pageIssue, onImport, onGeneratePlan, onRemoveAsset, onRemoveOutput, onDeleteProject, onConfigureAi, onEditPlan }: ProductionProjectCardProps) {
   const [confirmation, setConfirmation] = useState<DeleteConfirmation>();
   const [activeTab, setActiveTab] = useState<string>(PRODUCTION_WORKBENCH_TABS[0]);
   const shots = planShots(project.plan?.document);
@@ -77,6 +79,7 @@ export function ProductionProjectCard({ project, progress, progressMessage, busy
         {activeTab === "预览" ? (
           <div className="production-preview-tab">
             {shots.length > 0 ? <div className="production-shot-list"><h3>制作计划</h3>{shots.map((shot) => <article key={shot.order}><em>{String(shot.order).padStart(2, "0")}</em><div><strong>{shot.caption}</strong><p>{shot.narration}</p></div><small>{shot.durationSeconds} 秒</small></article>)}</div> : <p className="production-hint"><Icon name="info" size={16} />还没有制作计划。添加素材后，用底部主按钮生成。</p>}
+            {onEditPlan && project.plan && project.plan.schemaVersion !== "production-plan.v1" ? <Button disabled={busy || changing} onClick={onEditPlan} variant="secondary"><Icon name="tune" size={16} />微调字幕与镜头</Button> : null}
             {stage === "no-output" ? <Button disabled={busy || changing || !canGeneratePlan} onClick={onGeneratePlan} variant="quiet"><Icon name="auto_awesome" size={16} />重新生成计划</Button> : null}
             {project.output ? <Button disabled={busy || changing} onClick={() => setConfirmation({ kind: "output" })} variant="quiet"><Icon name="close" size={16} />删除成片</Button> : null}
           </div>
