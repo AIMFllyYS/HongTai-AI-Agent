@@ -7,6 +7,7 @@ import {
   MAX_SHOT_MS,
   MIN_SHOT_MS,
   planDraftFrom,
+  planDraftProblem,
   redistributeShotDuration,
   secondsFromMilliseconds,
   shortCueCount,
@@ -108,8 +109,26 @@ test("改一个镜头时长后其余镜头按比例吸收差值，毫秒总和�
 test("按步长吸收差值，用户读到的秒数仍然加得起来", () => {
   const next = redistributeShotDuration({ shots: draft(10_000, 10_000, 10_000), order: 1, milliseconds: 10_100, totalMilliseconds: 30_000 });
   assert.deepEqual(next.map((shot) => shot.milliseconds), [10_100, 10_000, 9_900]);
-  const shown = next.map((shot) => Number((shot.milliseconds / 1_000).toFixed(1)));
-  assert.equal(shown.reduce((sum, value) => sum + value, 0), 30, "界面上显示的秒数之和必须等于总时长");
+
+  const cases: readonly { readonly shots: readonly ShotDraft[]; readonly order: number; readonly ms: number; readonly total: number }[] = [
+    // 滑杆可以停在任意毫秒；请求值必须先对齐步长，否则显示的秒数加不回总时长。
+    { shots: draft(10_000, 10_000, 10_000), order: 1, ms: 10_150, total: 30_000 },
+    { shots: draft(10_000, 10_000, 10_000), order: 2, ms: 12_049, total: 30_000 },
+    // 旧计划的镜头本来就不在步长网格上（20 秒平均切三镜）。
+    { shots: draft(6_667, 6_667, 6_666), order: 1, ms: 6_567, total: 20_000 },
+    { shots: draft(8_005, 10_995, 11_000), order: 3, ms: 9_400, total: 30_000 },
+  ];
+
+  for (const { shots, order, ms, total } of cases) {
+    const result = redistributeShotDuration({ shots, order, milliseconds: ms, totalMilliseconds: total });
+    assert.equal(draftTotalMilliseconds(result), total, `${order} 号镜头改成 ${ms} 后毫秒总和必须仍是 ${total}`);
+    const shown = result.map((shot) => Number((shot.milliseconds / 1_000).toFixed(1)));
+    assert.equal(
+      Number(shown.reduce((sum, value) => sum + value, 0).toFixed(1)),
+      total / 1_000,
+      `界面上显示的秒数之和必须等于总时长：${JSON.stringify(shown)}`,
+    );
+  }
 });
 
 test("超出可行范围的时长被夹到边界，而不是产出服务端必然拒绝的计划", () => {
@@ -151,6 +170,23 @@ test("只提交用户真的动过的字段，没动过就不发请求", () => {
     expectedUpdatedAt: "t0",
   });
   assert.deepEqual(update, { expectedUpdatedAt: "t0", shots: [{ order: 1, narration: "换一句开场。" }] });
+});
+
+test("清空主文字按不可提交拒绝，而不是当成没改后被悄悄还原", () => {
+  const plan = view();
+  const base = planDraftFrom(plan);
+  assert.equal(planDraftProblem(base), undefined);
+
+  for (const headlineText of ["", "   "]) {
+    const cleared = { ...base, headlineText };
+    assert.match(planDraftProblem(cleared) ?? "", /主文字不能为空/u, "服务端会把空主文字读成“保持原值”，界面必须先拦住");
+    // 同时改了别的字段也不能放过：否则保存会成功，但主文字被还原成旧值。
+    const withNarration = { ...cleared, shots: cleared.shots.map((shot) => shot.order === 1 ? { ...shot, narration: "换一句开场。" } : shot) };
+    assert.match(planDraftProblem(withNarration) ?? "", /主文字不能为空/u);
+  }
+
+  const renamed = buildPlanUpdate({ draft: { ...base, headlineText: "换一个主文字" }, plan, expectedUpdatedAt: "t0" });
+  assert.deepEqual(renamed, { expectedUpdatedAt: "t0", headlineText: "换一个主文字" });
 });
 
 test("取消背景音乐时不同时发音量，避免服务端按冲突拒绝", () => {

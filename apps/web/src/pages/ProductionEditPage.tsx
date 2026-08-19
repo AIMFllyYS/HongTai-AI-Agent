@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_SUBTITLE_TEMPLATE_ID, issueFromAppError, isSubtitleTemplateId } from "@hongtai/core";
 import type { AppRuntime, ProductionProjectRecord, TaskIssue } from "@hongtai/core";
 
@@ -6,7 +6,7 @@ import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
-import { IssueNotice } from "../components/IssueNotice";
+import { IssueNotice, isInlineIssueAction, issueTitle } from "../components/IssueNotice";
 import { ProductionShotEditCard } from "../components/ProductionShotEditCard";
 import { EmptyState, LoadingState } from "../components/StatePanels";
 import { StepperField } from "../components/StepperField";
@@ -15,6 +15,7 @@ import {
   buildPlanUpdate,
   draftTotalMilliseconds,
   planDraftFrom,
+  planDraftProblem,
   redistributeShotDuration,
   shortCueCount,
   type PlanDraft,
@@ -34,18 +35,21 @@ function editableStatus(project: ProductionProjectRecord): boolean {
 }
 
 export function ProductionEditPage({ projectId, navigate, runtime }: ProductionEditPageProps) {
-  const [project, setProject] = useState<ProductionProjectRecord>();
+  /** The record the draft was read from. Its `updatedAt` is the version token the save must carry. */
+  const [base, setBase] = useState<ProductionProjectRecord>();
+  /** A newer record seen while the draft had unsaved edits. Saving is blocked until it is resolved. */
+  const [conflict, setConflict] = useState<ProductionProjectRecord>();
   const [draft, setDraft] = useState<PlanDraft>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [issue, setIssue] = useState<TaskIssue>();
-  const [stale, setStale] = useState(false);
   const [saved, setSaved] = useState(false);
+  const inFlight = useRef(false);
 
   const adopt = useCallback((next: ProductionProjectRecord) => {
-    setProject(next);
+    setBase(next);
     setDraft(planDraftFrom(readProductionPlan(next.plan)));
-    setStale(false);
+    setConflict(undefined);
   }, []);
 
   const load = useCallback(async () => {
@@ -53,7 +57,7 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
     try {
       const next = await runtime.production.get(projectId);
       if (!next) {
-        setProject(undefined);
+        setBase(undefined);
         return;
       }
       adopt(next);
@@ -67,28 +71,34 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
 
   useEffect(() => { void load(); }, [load]);
 
-  // A render finishing elsewhere, or an edit from another screen, replaces the record. Adopting the
-  // new version keeps this screen's token current instead of letting it become the stale writer.
+  const plan = readProductionPlan(base?.plan);
+  const total = draft ? draftTotalMilliseconds(draft.shots) : 0;
+  const avatarMode = base?.mode === "avatar";
+  const problem = draft ? planDraftProblem(draft) : undefined;
+  const update = draft && base && !problem ? buildPlanUpdate({ draft, plan, expectedUpdatedAt: base.updatedAt }) : undefined;
+  const busy = saving || !base || Boolean(conflict) || !editableStatus(base);
+
+  // Read inside the subscription callback, which closes over the state of the render that installed
+  // it and must not resubscribe on every keystroke.
+  const live = useRef({ updatedAt: "", dirty: false });
+  useEffect(() => { live.current = { updatedAt: base?.updatedAt ?? "", dirty: Boolean(update) }; });
+
   useEffect(() => {
     try {
       return runtime.production.subscribe(projectId, (event) => {
         if (event.type !== "state" || event.project.projectId !== projectId) return;
-        setProject((current) => {
-          if (current && current.updatedAt === event.project.updatedAt) return current;
-          setStale(Boolean(current));
-          return event.project;
-        });
+        const { updatedAt, dirty } = live.current;
+        if (!updatedAt || updatedAt === event.project.updatedAt) return;
+        // Adopting the newer record would refresh the version token while the draft still describes
+        // the older plan, which is exactly the write `expectedUpdatedAt` exists to refuse. Unsaved
+        // edits therefore keep the old token and wait for the user to decide.
+        if (dirty) setConflict(event.project);
+        else adopt(event.project);
       });
     } catch {
       return undefined;
     }
-  }, [projectId, runtime]);
-
-  const plan = readProductionPlan(project?.plan);
-  const total = draft ? draftTotalMilliseconds(draft.shots) : 0;
-  const avatarMode = project?.mode === "avatar";
-  const busy = saving || !project || !editableStatus(project);
-  const update = draft && project ? buildPlanUpdate({ draft, plan, expectedUpdatedAt: project.updatedAt }) : undefined;
+  }, [adopt, projectId, runtime]);
 
   const patch = (next: PlanDraft) => {
     setDraft(next);
@@ -96,7 +106,8 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
   };
 
   const save = async () => {
-    if (!update || !project) return;
+    if (!update || !base || inFlight.current) return;
+    inFlight.current = true;
     setSaving(true);
     setIssue(undefined);
     try {
@@ -104,16 +115,15 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
       setSaved(true);
     } catch (error) {
       const next = issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "这次微调没有保存成功", action: "retry" });
-      // A stale token means someone else already wrote. Retrying blind would either overwrite that
-      // work or, worse, fall through to the generic retry path and start a local render.
+      setIssue(next);
+      // Someone else already wrote. The draft stays as it is: reloading over it would silently drop
+      // work the user can still see on screen.
       if (next.code === "PRODUCTION_PLAN_VERSION_STALE") {
-        setStale(true);
-        setIssue(next);
-        await load();
-      } else {
-        setIssue(next);
+        const latest = await runtime.production.get(projectId).catch(() => undefined);
+        if (latest) setConflict(latest);
       }
     } finally {
+      inFlight.current = false;
       setSaving(false);
     }
   };
@@ -128,7 +138,7 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
     );
   }
 
-  if (!project || !draft) {
+  if (!base || !draft) {
     return (
       <AppShell activeNav="create" backPath={pathForRoute("create")} headerMode="detail" navigate={navigate} title="微调导出">
         <EmptyState action={<Button onClick={back}>回到制作</Button>} description="这个制作项目已经不在本机了，请返回制作页重新选择。" icon="movie_edit" title="找不到这个项目" />
@@ -139,7 +149,7 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
 
   if (!plan.editable) {
     return (
-      <AppShell activeNav="create" backPath={pathForRoute("create")} headerMode="detail" navigate={navigate} subtitle={project.brief} title="微调导出">
+      <AppShell activeNav="create" backPath={pathForRoute("create")} headerMode="detail" navigate={navigate} subtitle={base.brief} title="微调导出">
         <EmptyState
           action={<Button onClick={back}>回到制作</Button>}
           description={plan.schemaVersion === "production-plan.v1"
@@ -159,7 +169,7 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
       className="production-edit-page"
       contextualAction={(
         <Button disabled={busy || !update} onClick={save} size="lg">
-          {saving ? "正在保存微调" : update ? "保存微调" : saved ? "已保存" : "还没有改动"}
+          {saving ? "正在保存微调" : problem ? "还不能保存" : update ? "保存微调" : saved ? "已保存" : "还没有改动"}
         </Button>
       )}
       headerMode="detail"
@@ -167,25 +177,35 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
       subtitle={`共 ${plan.shots.length} 个镜头 · ${(total / 1_000).toFixed(1)} 秒`}
       title="微调导出"
     >
-      {/* The stale code carries `retry`, which the workbench maps to "render". Here retry has to
-          mean "read the newer plan", or one tap would start a local composition instead. */}
-      {issue ? <IssueNotice actions={{ retry: issue.code === "PRODUCTION_PLAN_VERSION_STALE" ? load : save }} issue={issue} /> : null}
+      {/* The stale code is explained by the conflict banner below, which can also act on it. Routing
+          it through the shared notice would offer a "重试" that means "render" on the workbench, and
+          promise that saved work is safe when the point is that this save did not land. */}
+      {issue && issue.code !== "PRODUCTION_PLAN_VERSION_STALE" ? (
+        isInlineIssueAction(issue.action)
+          // #108 reports which field is wrong in `userMessage`; the shared notice shows only the
+          // mapped title and generic guidance, which would hide it.
+          ? <aside className="issue-notice issue-notice--error" role="alert"><strong>{issueTitle(issue)}</strong><small>{issue.userMessage}</small></aside>
+          : <IssueNotice actions={{ retry: save }} issue={issue} />
+      ) : null}
 
-      {stale ? (
+      {conflict ? (
         <aside className="production-edit-stale" role="alert">
           <strong>这个计划刚刚在别处被改过</strong>
-          <p>页面已经换成最新的计划，之前没保存的改动没有写进去。请确认后重新调整。</p>
+          <p>你的改动还留在这一页上，但本机存的计划已经比它新，现在保存会被拒绝。可以改用最新计划（这一页的改动会丢掉），或者先记下要改的地方再重新调整。</p>
+          <Button onClick={() => { adopt(conflict); setIssue(undefined); setSaved(false); }} variant="secondary">用最新计划，放弃这一页的改动</Button>
         </aside>
       ) : null}
 
-      {project.output ? (
+      {problem ? <p className="production-hint" role="status"><Icon name="error" size={16} />{problem}</p> : null}
+
+      {base.output ? (
         <p className="production-hint">
           <Icon name="info" size={16} />
           已经有一条合成好的成片。保存微调会把它作废，需要回到制作页重新合成。
         </p>
       ) : null}
 
-      {!editableStatus(project) ? (
+      {!editableStatus(base) ? (
         <p className="production-hint" role="status">
           <Icon name="pending" size={16} />
           这个项目正在处理中，等它结束后才能保存微调。
@@ -216,6 +236,7 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
             id="production-edit-headline"
             maxLength={24}
             onChange={(event) => patch({ ...draft, headlineText: event.target.value })}
+            required
             type="text"
             value={draft.headlineText}
           />

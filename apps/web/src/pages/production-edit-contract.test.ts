@@ -23,11 +23,30 @@ test("微调页有自己的路由，项目标识始终编码后进入路径", ()
   assert.equal(pathForRoute("create"), "/create");
 });
 
-test("版本过期时重新读取计划，绝不复用会触发本地合成的重试路径", () => {
-  assert.match(page, /PRODUCTION_PLAN_VERSION_STALE/u);
-  assert.match(page, /retry:\s*issue\.code === "PRODUCTION_PLAN_VERSION_STALE" \? load : save/u);
+test("版本过期不走共享通知，改用能说清后果、也能执行的冲突提示", () => {
+  assert.match(page, /issue\.code !== "PRODUCTION_PLAN_VERSION_STALE"/u, "过期码不能交给把 retry 当成本地合成的共享通知");
+  assert.match(page, /现在保存会被拒绝/u, "必须说清保留旧版本号意味着这次保存不会落盘");
   assert.doesNotMatch(page, /resolveProductionRetryOperation|resolveProductionRetryKind/u, "微调页不能借用制作页的重试映射");
   assert.doesNotMatch(page, /production\.render|production\.generatePlan/u, "微调页不负责合成或重新规划");
+});
+
+test("外部写入不刷新版本令牌，未保存的改动既不被覆盖也不被静默丢弃", () => {
+  assert.match(page, /if \(dirty\) setConflict\(event\.project\);\s*\n\s*else adopt\(event\.project\);/u);
+  assert.match(page, /expectedUpdatedAt: base\.updatedAt/u, "版本令牌只能来自草稿所依据的那份记录");
+  assert.doesNotMatch(page, /setStale/u, "不能在状态更新函数里做副作用");
+  // 过期后重新读取的是“对照用的最新计划”，不能覆盖用户还看得见的草稿。
+  assert.match(page, /const latest = await runtime\.production\.get\(projectId\)/u);
+  assert.doesNotMatch(page, /VERSION_STALE"\) \{\s*\n\s*.*await load\(\)/u, "过期分支不能整页重载，否则提示和草稿都会被清掉");
+});
+
+test("字段级错误把服务端说的那一项显示出来，不被通用标题盖住", () => {
+  assert.match(page, /isInlineIssueAction\(issue\.action\)/u);
+  assert.match(page, /issue\.userMessage/u, "#108 按字段给的原因必须可见");
+});
+
+test("主文字不能被清空，因为服务端会把空值读成保持原样", () => {
+  assert.match(page, /planDraftProblem/u);
+  assert.match(page, /required/u);
 });
 
 test("微调不提交字幕时间，并如实说清哪些东西在这里改不了", () => {

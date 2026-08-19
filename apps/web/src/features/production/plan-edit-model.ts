@@ -72,6 +72,16 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
+ * Why every requested duration lands on the control's step: the shots that absorb the difference are
+ * snapped to it too, so as long as the target total is also on the step the seconds the user reads
+ * add up. A dragged slider would otherwise leave values like 9950 ms, shown as 9.9 s, and three of
+ * those no longer sum to the stated total.
+ */
+function snapped(milliseconds: number): number {
+  return Math.round(milliseconds / SHOT_STEP_MS) * SHOT_STEP_MS;
+}
+
+/**
  * Moves one shot to `milliseconds` and gives the difference back to the other shots in proportion
  * to their current length, so the total stays exactly the project's target duration. The renderer
  * requires that sum to match to the millisecond, so nothing here may round loosely.
@@ -83,7 +93,7 @@ export function redistributeShotDuration(input: {
   readonly totalMilliseconds: number;
 }): readonly ShotDraft[] {
   const bounds = shotDurationBounds(input);
-  const target = clamp(Math.round(input.milliseconds), bounds.minMs, bounds.maxMs);
+  const target = clamp(snapped(input.milliseconds), bounds.minMs, bounds.maxMs);
   const others = input.shots.filter((shot) => shot.order !== input.order);
   if (others.length === 0) return input.shots.map((shot) => ({ ...shot, milliseconds: input.totalMilliseconds }));
 
@@ -134,6 +144,16 @@ export function shortCueCount(shot: PlanShotView): number {
   return shot.cues.filter((cue) => cue.endMs - cue.startMs < MIN_CUE_DURATION_MS).length;
 }
 
+/**
+ * Why the headline cannot be cleared here: the plan's text overlay requires it, and `updatePlan`
+ * reads a blank value as "keep the current one". Submitting the empty string would look accepted and
+ * then come back with the old headline still burned in, so the screen has to refuse it up front.
+ */
+export function planDraftProblem(draft: PlanDraft): string | undefined {
+  if (!draft.headlineText.trim()) return "主文字不能为空。想换文字就直接改写，留空不会删掉它。";
+  return undefined;
+}
+
 function shotUpdates(draft: PlanDraft, plan: ProductionPlanView): readonly ProductionShotUpdate[] {
   const before = new Map(plan.shots.map((shot) => [shot.order, shot]));
   return draft.shots.flatMap((shot) => {
@@ -156,7 +176,8 @@ function shotUpdates(draft: PlanDraft, plan: ProductionPlanView): readonly Produ
 
 /**
  * Only the fields the user actually moved. Omission means "leave as is" in the contract, so
- * restating unchanged values would turn every save into a whole-plan rewrite.
+ * restating unchanged values would turn every save into a whole-plan rewrite. Call
+ * `planDraftProblem` first: this assumes the draft is submittable.
  */
 export function buildPlanUpdate(input: {
   readonly draft: PlanDraft;
@@ -169,7 +190,7 @@ export function buildPlanUpdate(input: {
   const update: ProductionPlanUpdate = {
     expectedUpdatedAt: input.expectedUpdatedAt,
     ...(shots.length > 0 ? { shots } : {}),
-    ...(headline && headline !== plan.headlineText ? { headlineText: headline } : {}),
+    ...(headline !== plan.headlineText ? { headlineText: headline } : {}),
     ...(draft.speechRate !== plan.speechRate ? { speechRate: draft.speechRate } : {}),
     ...(draft.subtitleTemplateId && draft.subtitleTemplateId !== (plan.subtitle?.requestedTemplateId ?? "")
       ? { subtitleTemplateId: draft.subtitleTemplateId }
