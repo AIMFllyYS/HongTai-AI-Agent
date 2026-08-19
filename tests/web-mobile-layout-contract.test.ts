@@ -72,7 +72,7 @@ test("keyboard and bottom chrome use Android nav fallback without dvh", () => {
   assert.match(shell, /\.app-shell--with-nav\s*\{[^}]*var\(--safe-bottom\)[^;]*var\(--keyboard-inset\)/s);
   assert.match(components, /\.bottom-nav\s*\{[^}]*padding:[^;]*var\(--safe-bottom\)/s);
   assert.doesNotMatch(components, /\.bottom-nav\s*\{[^}]*--keyboard-inset/s);
-  assert.match(components, /\.contextual-action\s*\{[^}]*var\(--safe-bottom\)/s);
+  assert.match(components, /\.contextual-action\s*\{[^}]*var\(--safe-bottom\)[^;]*var\(--keyboard-inset/s);
   assert.match(observation, /\.observation-question-composer\s*\{[^}]*--safe-bottom[^;]*--keyboard-inset/s);
   assert.match(main, /installVisualViewportInset\(\)/);
   assert.match(inset, /visualViewport/);

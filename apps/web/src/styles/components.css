@@ -503,7 +503,7 @@
 .contextual-action {
   position: fixed;
   right: var(--page-gutter);
-  bottom: calc(var(--nav-height) + var(--space-3) + var(--safe-bottom));
+  bottom: calc(var(--nav-height) + var(--space-3) + var(--safe-bottom) + var(--keyboard-inset, 0px));
   left: var(--page-gutter);
   z-index: 25;
   display: flex;
@@ -513,12 +513,33 @@
 
 .contextual-action > * {
   width: min(100%, var(--content-max));
+}
+
+.contextual-action .button:not(:disabled) {
   pointer-events: auto;
+}
+
+.contextual-action-stack {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: stretch;
+}
+
+.contextual-action-hint {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  color: var(--color-text-subtle);
+  font-size: var(--text-caption);
+  line-height: 1.45;
+  text-align: center;
+  background: var(--color-surface-paper);
+  border: 1px solid var(--color-outline-soft);
+  border-radius: var(--radius-control);
 }
 
 .top-notification-viewport {
   position: fixed;
-  top: calc(env(safe-area-inset-top) + var(--space-2));
+  top: calc(var(--header-height) + max(env(safe-area-inset-top), var(--native-status-bar-inset, 0px)) + var(--space-2));
   right: 0;
   left: 0;
   z-index: 80;

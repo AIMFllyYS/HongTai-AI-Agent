@@ -78,7 +78,7 @@ test("顶部通知使用 Motion、5 秒倒计时和向上拖拽关闭", () => {
 
 test("顶部通知样式使用安全区、圆角和非阻断悬浮层", () => {
   const css = read("styles/components.css");
-  assert.match(css, /\.top-notification-viewport[\s\S]*env\(safe-area-inset-top\)/);
+  assert.match(css, /\.top-notification-viewport[\s\S]*--header-height[\s\S]*env\(safe-area-inset-top\)/);
   assert.match(css, /\.top-notification[\s\S]*border-radius:/);
   assert.match(css, /\.top-notification-viewport[\s\S]*pointer-events:\s*none/);
   assert.match(css, /\.top-notification[\s\S]*pointer-events:\s*auto/);

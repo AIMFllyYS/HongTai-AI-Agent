@@ -7,8 +7,11 @@ import { productionRenderStageCopy } from "./CreatePage";
 import {
   PRODUCTION_PRIMARY_LABELS,
   PRODUCTION_WORKBENCH_TABS,
+  productionComposerBlockedReason,
+  productionPlanBlockedReason,
   productionPlanReady,
   productionPreviewSource,
+  productionPrimaryBlockedReason,
   resolveProductionPrimaryAction,
   resolveProductionRetryKind,
   resolveProductionRetryOperation,
@@ -99,6 +102,36 @@ test("未出片预览用素材首帧，出片只播 output.uri", () => {
     assets: [{ role: "visual" }, { role: "visual" }],
     targetDurationSeconds: 30,
   }), false);
+  assert.equal(productionPlanBlockedReason({
+    mode: "montage",
+    assets: [{ role: "visual" }, { role: "visual" }],
+    targetDurationSeconds: 30,
+  }), "至少还要 1 个图片或视频素材，才能生成制作计划。");
+  assert.equal(productionPlanBlockedReason({
+    mode: "avatar",
+    assets: [],
+    targetDurationSeconds: 15,
+  }), "请先上传一个带原声的 MP4 数字人口播视频。");
+  assert.equal(productionComposerBlockedReason({
+    replica: false,
+    sourceId: "",
+    brief: "门店活动",
+    avatarMode: false,
+    avatarScript: "",
+  }), "先选一条已经拆解成功的内容。");
+  assert.equal(productionComposerBlockedReason({
+    replica: false,
+    sourceId: "task-1",
+    brief: "",
+    avatarMode: false,
+    avatarScript: "",
+  }), "先填写这次想讲什么。");
+  assert.equal(productionPrimaryBlockedReason({
+    stage: "no-plan",
+    planReady: false,
+    planBlockedReason: "至少还要 1 个图片或视频素材，才能生成制作计划。",
+  }), "至少还要 1 个图片或视频素材，才能生成制作计划。");
+  assert.equal(productionPrimaryBlockedReason({ stage: "rendering", busy: false }), "");
 });
 
 test("制作页用 contextualAction 单主按钮、三 Tab 与 9:16 预览，完成态没有发布入口", () => {
@@ -109,6 +142,13 @@ test("制作页用 contextualAction 单主按钮、三 Tab 与 9:16 预览，完
   const surface = `${page}\n${card}\n${css}\n${model}`;
 
   assert.match(page, /contextualAction=\{/);
+  assert.match(page, /contextual-action-stack/);
+  assert.match(page, /contextual-action-hint/);
+  assert.match(page, /productionPrimaryBlockedReason/);
+  assert.match(read("styles/components.css"), /\.contextual-action \.button:not\(:disabled\)\s*\{[^}]*pointer-events:\s*auto/s);
+  assert.match(read("styles/components.css"), /\.contextual-action\s*\{[^}]*pointer-events:\s*none/s);
+  assert.doesNotMatch(read("styles/components.css"), /\.contextual-action > \*\s*\{[^}]*pointer-events:\s*auto/s);
+  assert.match(card, /productionPlanBlockedReason/);
   assert.match(page, /resolveProductionPrimaryAction/);
   assert.match(page, /setComposingNew\(true\)/);
   assert.match(page, /创建制作项目|primary\.label/);

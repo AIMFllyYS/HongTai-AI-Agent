@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { resolveSubtitleTemplate, type JsonObject, type ProductionProjectRecord, type TaskIssue } from "@hongtai/core";
 
-import { PRODUCTION_TEXT_PRESET_LABELS, PRODUCTION_WORKBENCH_TABS, productionPreviewSource, resolveProductionWorkbenchStage } from "../pages/production-workbench-model";
+import { PRODUCTION_TEXT_PRESET_LABELS, PRODUCTION_WORKBENCH_TABS, productionPlanBlockedReason, productionPlanReady, productionPreviewSource, resolveProductionWorkbenchStage } from "../pages/production-workbench-model";
 import { readProductionPlan } from "../features/production/production-plan-view";
 import { Button } from "./Buttons";
 import { GlassCard } from "./GlassCard";
@@ -47,11 +47,9 @@ export function ProductionProjectCard({ project, progress, progressMessage, busy
     hasWordTiming: planView.subtitle?.precision === "word",
   }).template.layout.bottomOffsetPx;
   const avatarMode = project.mode === "avatar";
-  const requiredVisualAssets = avatarMode ? 1 : 3;
   const usableVisualAssets = project.assets.filter((asset) => avatarMode ? asset.role === "avatar" : asset.role === "visual").length;
-  const avatarAsset = avatarMode ? project.assets.find((asset) => asset.role === "avatar") : undefined;
-  const avatarDurationFits = !avatarMode || (avatarAsset?.durationSeconds !== undefined && avatarAsset.durationSeconds + 0.001 >= project.targetDurationSeconds);
-  const canGeneratePlan = usableVisualAssets >= requiredVisualAssets && avatarDurationFits && (!avatarMode || Boolean(project.avatarScript));
+  const canGeneratePlan = productionPlanReady(project);
+  const planBlockedReason = productionPlanBlockedReason(project);
   const issueActions: TaskIssueActionHandlers = {
     configureAi: onConfigureAi,
     selectMedia: onImport,
@@ -93,6 +91,8 @@ export function ProductionProjectCard({ project, progress, progressMessage, busy
         {activeTab === "预览" ? (
           <div className="production-preview-tab">
             {shots.length > 0 ? <div className="production-shot-list"><h3>制作计划</h3>{shots.map((shot) => <article key={shot.order}><em>{String(shot.order).padStart(2, "0")}</em><div><strong>{shot.caption}</strong><p>{shot.narration}</p></div><small>{shot.durationSeconds} 秒</small></article>)}</div> : <p className="production-hint"><Icon name="info" size={16} />还没有制作计划。添加素材后，用底部主按钮生成。</p>}
+            {planBlockedReason ? <p className="production-hint"><Icon name="info" size={16} />{planBlockedReason}</p> : null}
+            {changing ? <p className="production-hint"><Icon name="sync" size={16} />{rendering ? "正在本地合成，完成前不能改素材或计划。" : "正在生成制作计划，完成前不能改素材或计划。"}</p> : null}
             {onEditPlan && project.plan && project.plan.schemaVersion !== "production-plan.v1" ? <Button disabled={busy || changing} onClick={onEditPlan} variant="secondary"><Icon name="tune" size={16} />微调字幕与镜头</Button> : null}
             {stage === "no-output" ? <Button disabled={busy || changing || !canGeneratePlan} onClick={onGeneratePlan} variant="quiet"><Icon name="auto_awesome" size={16} />重新生成计划</Button> : null}
             {project.output ? <Button disabled={busy || changing} onClick={() => setConfirmation({ kind: "output" })} variant="quiet"><Icon name="close" size={16} />删除成片</Button> : null}
@@ -125,7 +125,7 @@ export function ProductionProjectCard({ project, progress, progressMessage, busy
               ))}
               <button className="production-add-asset" disabled={busy || project.assets.length >= 12 || avatarMode && usableVisualAssets >= 1} onClick={onImport} type="button"><Icon name="upload_file" size={24} /><span>{avatarMode ? "上传数字人视频" : "上传素材"}</span><small>{avatarMode ? `${usableVisualAssets}/1` : `${project.assets.length}/12`}</small></button>
             </div>
-            {!canGeneratePlan ? <p className="production-hint"><Icon name="info" size={16} />{avatarMode ? !avatarDurationFits && avatarAsset ? `该数字人视频不足 ${project.targetDurationSeconds} 秒，请上传更长视频或新建较短时长项目。` : "请上传一个带原声的 MP4 数字人口播视频，并确认已填写与它一致的口播稿。" : "至少上传 3 个图片或视频素材，才能生成制作计划。"}</p> : null}
+            {!canGeneratePlan ? <p className="production-hint"><Icon name="info" size={16} />{planBlockedReason}</p> : null}
           </div>
         ) : null}
       </TabPanel>

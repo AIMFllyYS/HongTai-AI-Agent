@@ -1,4 +1,4 @@
-import type { IssueAction, ProductionAsset, ProductionMode, ProductionProjectRecord, ProductionStatus, ProductionTextPreset } from "@hongtai/core";
+import { MIN_MONTAGE_VISUAL_ASSETS, type IssueAction, type ProductionAsset, type ProductionMode, type ProductionProjectRecord, type ProductionStatus, type ProductionTextPreset } from "@hongtai/core";
 
 export const PRODUCTION_WORKBENCH_TABS = ["预览", "文案", "素材"] as const;
 export type ProductionWorkbenchTab = (typeof PRODUCTION_WORKBENCH_TABS)[number];
@@ -107,12 +107,57 @@ export function productionPlanReady(project: {
   readonly avatarScript?: string;
   readonly targetDurationSeconds: number;
 }): boolean {
+  return productionPlanBlockedReason(project) === "";
+}
+
+export function productionPlanBlockedReason(project: {
+  readonly mode: ProductionMode;
+  readonly assets: readonly Pick<ProductionAsset, "role" | "durationSeconds">[];
+  readonly avatarScript?: string;
+  readonly targetDurationSeconds: number;
+}): string {
   const avatarMode = project.mode === "avatar";
-  const requiredVisualAssets = avatarMode ? 1 : 3;
+  const requiredVisualAssets = avatarMode ? 1 : MIN_MONTAGE_VISUAL_ASSETS;
   const usableVisualAssets = project.assets.filter((asset) => avatarMode ? asset.role === "avatar" : asset.role === "visual").length;
   const avatarAsset = avatarMode ? project.assets.find((asset) => asset.role === "avatar") : undefined;
   const avatarDurationFits = !avatarMode || (avatarAsset?.durationSeconds !== undefined && avatarAsset.durationSeconds + 0.001 >= project.targetDurationSeconds);
-  return usableVisualAssets >= requiredVisualAssets && avatarDurationFits && (!avatarMode || Boolean(project.avatarScript));
+  if (avatarMode) {
+    if (usableVisualAssets < 1) return "请先上传一个带原声的 MP4 数字人口播视频。";
+    if (!avatarDurationFits) return `该数字人视频不足 ${project.targetDurationSeconds} 秒，请上传更长视频或新建较短时长项目。`;
+    if (!project.avatarScript) return "请填写与视频一致的口播稿。";
+    return "";
+  }
+  if (usableVisualAssets < requiredVisualAssets) {
+    return `至少还要 ${requiredVisualAssets - usableVisualAssets} 个图片或视频素材，才能生成制作计划。`;
+  }
+  return "";
+}
+
+export function productionComposerBlockedReason(input: {
+  readonly replica: boolean;
+  readonly sourceId: string;
+  readonly brief: string;
+  readonly avatarMode: boolean;
+  readonly avatarScript: string;
+}): string {
+  if (!input.sourceId) return "先选一条已经拆解成功的内容。";
+  if (input.replica) return "";
+  if (!input.brief.trim()) return "先填写这次想讲什么。";
+  if (input.avatarMode && !input.avatarScript.trim()) return "先填写与数字人视频一致的口播稿。";
+  return "";
+}
+
+export function productionPrimaryBlockedReason(input: {
+  readonly stage: ProductionWorkbenchStage;
+  readonly busy?: boolean;
+  readonly planReady?: boolean;
+  readonly importBlocked?: boolean;
+  readonly planBlockedReason?: string;
+}): string {
+  if (input.busy || input.stage === "rendering") return "";
+  if (input.stage === "no-plan" && !input.planReady) return input.planBlockedReason || "素材还不够，先到「素材」页补齐。";
+  if (input.stage === "no-assets" && input.importBlocked) return "这台项目已经不能再添加素材。";
+  return "";
 }
 
 export function productionPreviewSource(project: {
