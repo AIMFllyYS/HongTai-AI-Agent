@@ -6,7 +6,7 @@ export type IconName =
   | "camera" | "check_circle" | "chevron_right" | "chevron_down" | "chevron_up" | "close" | "comment"
   | "content_paste" | "download" | "error" | "expand" | "face" | "file" | "filter" | "folder" | "folder_open"
   | "folder_special" | "forum" | "grid" | "health_cross" | "heart" | "history" | "info" | "key" | "keyboard_voice"
-  | "language" | "layers" | "layout_template" | "lightbulb" | "link" | "list" | "list_checks" | "memory" | "movie" | "movie_edit" | "notifications" | "pending"
+  | "language" | "layers" | "layout_template" | "lightbulb" | "link" | "list" | "list_checks" | "memory" | "more_horiz" | "movie" | "movie_edit" | "notifications" | "pending"
   | "scan_face"
   | "play" | "publish" | "query_stats" | "record_voice_over" | "restaurant" | "rocket" | "search" | "self_improvement"
   | "settings" | "share" | "sparkle" | "sunny" | "sync" | "tune" | "update" | "upload" | "upload_file"
@@ -56,6 +56,7 @@ const paths: Record<IconName, readonly string[]> = {
   list: ["M9 6h11M9 12h11M9 18h11", "M4.5 6h.1M4.5 12h.1M4.5 18h.1"],
   list_checks: ["M9 6h12M9 12h12M9 18h12", "m3.5 6 1.2 1.2L7 4.8", "m3.5 12 1.2 1.2L7 10.8", "m3.5 18 1.2 1.2L7 16.8"],
   memory: ["M6 6h12v12H6z", "M9 9h6v6H9z", "M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"],
+  more_horiz: ["M5 12a1 1 0 1 0 2 0 1 1 0 0 0-2 0Zm6 0a1 1 0 1 0 2 0 1 1 0 0 0-2 0Zm6 0a1 1 0 1 0 2 0 1 1 0 0 0-2 0"],
   movie: ["M4 6h16v12H4z", "M4 9h16M8 6v3M12 6v3M16 6v3"],
   movie_edit: ["M4 6h13v12H4z", "M4 9h13M8 6v3M12 6v3", "m17 16 3-3 2 2-3 3-3 1Z"],
   notifications: ["M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9", "M10 21h4"],

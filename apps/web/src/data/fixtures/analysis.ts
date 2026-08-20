@@ -61,8 +61,8 @@ export const videoDetail: DetailViewModel = {
     { icon: "comment", label: "评论", value: "16" },
     { icon: "share", label: "分享", value: "-" },
   ],
-  tabs: ["原始文稿", "AI自动拆解"],
-  activeTab: "AI自动拆解",
+  tabs: ["原始文稿", "AI 拆解"],
+  activeTab: "AI 拆解",
   transcript: [
     { time: "00:00", text: "兄弟们，不想多说了，给我使劲蹬codex。" },
     { time: "00:05", text: "这个工具简直是生产力神器，特别是做开发的朋友。" },

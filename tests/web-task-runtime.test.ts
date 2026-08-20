@@ -294,7 +294,7 @@ test("real task pages constrain technical text and expose persisted stage percen
   assert.match(home, /className=\{localVideo \? undefined : "technical-value"\}/);
   assert.match(processing, /className="technical-value"/);
   assert.match(detail, /className="technical-value"/);
-  assert.match(analysis, /className="technical-value"/);
+  assert.match(analysis, /可以离开此页|分析过程不会保留/);
   assert.match(processing, /task-page-actions mobile-action-group/);
   assert.match(detail, /analysis-confirm-card__actions mobile-action-group/);
   assert.match(progress, /role="progressbar"/);
@@ -370,7 +370,7 @@ test("three task URL aliases mount one TaskPage and stay mounted after ingest co
   assert.doesNotMatch([page, processing, read("pages/TaskDetailPage.tsx"), read("pages/TaskAnalysisPage.tsx")].join("\n"), /查看任务详情|查看拆解结果|查看当前状态|查看拆解状态/);
   const processingShell = page.slice(page.indexOf("if (surface === \"processing\")"), page.indexOf("if (surface === \"completed-missing\""));
   assert.doesNotMatch(processingShell, /contextualAction=/);
-  assert.match(processing, /进程在后台运行，可以放心离开此页/);
+  assert.match(processing, /任务在后台运行，可以放心离开此页/);
   assert.match(processing, /<Button variant="secondary"[\s\S]*?开始执行/);
   assert.doesNotMatch(processing, /<Button(?! variant="secondary")[\s\S]*?开始执行/);
 
@@ -474,7 +474,7 @@ test("处理页离开提示只在 queued/running 出现，失败态不伪造成�
   }
 
   const processing = read("pages/TaskProcessingPage.tsx");
-  assert.match(processing, /showProcessingLeaveHint\(task\.status\) \? <p className="task-processing-leave-hint">进程在后台运行，可以放心离开此页<\/p> : null/);
+  assert.match(processing, /showProcessingLeaveHint\(task\.status\) \? <p className="task-processing-leave-hint">任务在后台运行，可以放心离开此页<\/p> : null/);
   assert.match(processing, /TaskProgressSteps/);
   assert.match(processing, /IssueNotice/);
 });
@@ -499,6 +499,7 @@ test("完成态用共享 Tabs 恢复 URL 分栏，并按阶段给出底部主操
       readonly hasEvidence: boolean;
     }) => string;
     syncTaskResultTabPath?: (taskId: string, tab: string) => void;
+    completedTaskShellTitle?: (analysisStatus?: string) => string;
   };
 
   assert.equal(typeof model.sourceTabLabel, "function");
@@ -509,12 +510,15 @@ test("完成态用共享 Tabs 恢复 URL 分栏，并按阶段给出底部主操
   assert.equal(typeof model.sourceIdFromSearch, "function");
   assert.equal(typeof model.resolveCompletedPrimaryAction, "function");
   assert.equal(typeof model.syncTaskResultTabPath, "function");
+  assert.equal(model.completedTaskShellTitle?.("succeeded"), "拆解完成");
+  assert.equal(model.completedTaskShellTitle?.("running"), "拆解详情");
+  assert.equal(model.completedTaskShellTitle?.("not_started"), "拆解详情");
 
   assert.equal(model.sourceTabLabel?.("video"), "原始文稿");
   assert.equal(model.sourceTabLabel?.("image_text"), "图文正文");
   assert.equal(model.sourceTabLabel?.("unknown"), "原始文稿");
-  assert.deepEqual(model.taskResultTabs?.("video"), ["原始文稿", "AI自动拆解"]);
-  assert.deepEqual(model.taskResultTabs?.("image_text"), ["图文正文", "AI自动拆解"]);
+  assert.deepEqual(model.taskResultTabs?.("video"), ["原始文稿", "AI 拆解"]);
+  assert.deepEqual(model.taskResultTabs?.("image_text"), ["图文正文", "AI 拆解"]);
   assert.equal(model.taskResultTabFromPath?.("/tasks/task-1/analysis"), "analysis");
   assert.equal(model.taskResultTabFromPath?.("/tasks/task-1"), "source");
   assert.equal(model.taskResultTabFromPath?.("/tasks/task-1/processing"), "source");
@@ -543,7 +547,7 @@ test("完成态用共享 Tabs 恢复 URL 分栏，并按阶段给出底部主操
   assert.match(detail, /<Tabs\b/);
   assert.match(detail, /<TabPanel\b/);
   assert.doesNotMatch(detail, /role="tablist"/);
-  assert.match(completed, /AI自动拆解/);
+  assert.match(completed, /AI 拆解/);
   assert.match(detail, /原始文稿/);
   assert.match(detail, /图文正文/);
   assert.match(page, /taskResultTabFromPath/);
@@ -555,7 +559,12 @@ test("完成态用共享 Tabs 恢复 URL 分栏，并按阶段给出底部主操
   assert.match(completed, /用它做视频/);
   assert.match(completed, /createPagePathWithSource/);
   assert.match(completed, /重新拆解/);
-  assert.match(completed, /role="menuitem"/);
+  assert.match(detail, /TaskMoreActionsSheet/);
+  assert.match(completed, /更多操作/);
+  assert.match(completed, /Sheet/);
+  assert.match(completed, /按清单复刻/);
+  assert.doesNotMatch(completed, /分享结果/);
+  assert.doesNotMatch(detail, /role="menuitem"/);
   assert.match(completed, /确认删除这个任务/);
   assert.doesNotMatch(detail, /<Button[^>]*>删除任务</);
   assert.doesNotMatch(detail, /<Button[^>]*>重新拆解</);

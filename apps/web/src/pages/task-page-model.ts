@@ -6,7 +6,7 @@ import { matchRoute, pathForRoute, taskAnalysisPath, taskDetailPath, type Naviga
 export type TaskResultTab = "source" | "analysis";
 export type TaskCompletedPrimaryAction = "none" | "start-analysis" | "next-steps";
 
-export const ANALYSIS_TAB_LABEL = "AI自动拆解";
+export const ANALYSIS_TAB_LABEL = "AI 拆解";
 
 export function sourceTabLabel(contentType?: string): string {
   return contentType === "image_text" ? "图文正文" : "原始文稿";
@@ -83,6 +83,10 @@ export function navigateToCreateWithSource(navigate: Navigate, taskId: string): 
 
 export function showProcessingLeaveHint(status: TaskStatus): boolean {
   return status === "queued" || status === "running";
+}
+
+export function completedTaskShellTitle(analysisStatus?: string): string {
+  return analysisStatus === "succeeded" ? "拆解完成" : "拆解详情";
 }
 
 export function isEligibleCreateSourceTask(status: TaskStatus): boolean {

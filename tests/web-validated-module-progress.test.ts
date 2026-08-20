@@ -251,11 +251,13 @@ test("live generation renders runtime-only deep thinking and keeps busy primary 
   assert.match(thinking, /<details[\s\S]*深度思考[\s\S]*<pre/);
   assert.match(thinking, /thinking\.status === "streaming"[\s\S]*setOpen\(true\)/);
   assert.match(thinking, /thinking\.status === "completed"[\s\S]*setOpen\(false\)/);
-  assert.match(thinking, /本次生成期间[\s\S]*不会保存/);
+  assert.match(thinking, /本次生成期间[\s\S]*不会保存|推理内容仅在本次生成期间显示/);
   assert.doesNotMatch(thinking, /dangerouslySetInnerHTML|localStorage|sessionStorage/);
   assert.match(css, /\.deep-thinking-panel/);
-  assert.match(css, /\.deep-thinking-panel\s*\{[^}]*margin:\s*var\(--space-3\)\s+var\(--space-4\)\s*;/);
-  assert.doesNotMatch(css, /\.deep-thinking-panel\s*\{[^}]*margin:\s*var\(--space-3\)\s+var\(--space-4\)\s+0\s*;/);
+  assert.match(css, /\.validated-module-progress\s*\{[^}]*gap:\s*var\(--space-3\)/s);
+  assert.match(css, /\.deep-thinking-panel\s*\{[^}]*overflow:\s*visible/s);
+  assert.doesNotMatch(css, /\.deep-thinking-panel\s*\{[^}]*margin:\s*var\(--space-3\)\s+var\(--space-4\)\s+0/s);
+  assert.doesNotMatch(css, /\.validated-module-progress\s*\{[^}]*gap:\s*0\s*;/s);
   assert.match(css, /\.button--primary\.is-busy:disabled[\s\S]*color:\s*#000[\s\S]*opacity:\s*1/);
   assert.match(observationStart, /className=\{loading \? "is-busy" : ""\}/);
   assert.match(detail, /className=\{pendingAction === "analysis" \? "is-busy" : ""\}/);

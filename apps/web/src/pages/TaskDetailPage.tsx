@@ -11,10 +11,11 @@ import { RuntimeMediaFrame } from "../components/RuntimeMediaFrame";
 import { EmptyState } from "../components/StatePanels";
 import { TabPanel, Tabs, tabId, tabPanelId } from "../components/Tabs";
 import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
+import { TaskMoreActionsSheet, type TaskMoreActionItem } from "../components/TaskMoreActionsSheet";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
 import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
 import { contentAnalysisModuleDefinitions } from "../features/tasks/content-analysis-module-progress";
-import { contentTypeLabel, formatTaskTime, platformLabel } from "../features/tasks/task-presenters";
+import { contentTypeLabel, formatTaskTime, mediaOrientationLabel, platformLabel } from "../features/tasks/task-presenters";
 import { aiSettingsPath, pathForRoute, replicaWizardPath, type Navigate } from "../router";
 import { TaskAnalysisPage } from "./TaskAnalysisPage";
 import {
@@ -72,23 +73,6 @@ function uniqueMedia(media: readonly MediaReference[]): readonly MediaReference[
   });
 }
 
-function TaskOverflowMenu({ items, disabled }: { readonly items: readonly { readonly label: string; readonly onSelect: () => void }[]; readonly disabled?: boolean }) {
-  const [open, setOpen] = useState(false);
-  if (items.length === 0) return null;
-  return (
-    <div className="header-overflow-menu">
-      <button aria-expanded={open} aria-haspopup="menu" aria-label="更多操作" className="icon-button" disabled={disabled} onClick={() => setOpen((current) => !current)} type="button">⋮</button>
-      {open ? (
-        <div className="header-overflow-menu__list" role="menu">
-          {items.map((item) => (
-            <button key={item.label} onClick={() => { setOpen(false); item.onSelect(); }} role="menuitem" type="button">{item.label}</button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export function TaskDetailPage({
   runtime,
   detail,
@@ -104,6 +88,7 @@ export function TaskDetailPage({
 }: TaskDetailPageProps) {
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<"analysis" | "delete" | "template">();
   const [localIssue, setLocalIssue] = useState<TaskIssue>();
 
@@ -153,6 +138,7 @@ export function TaskDetailPage({
   ]), [detail]);
   const video = detail.media.find((item) => item.kind === "video");
   const audio = detail.media.find((item) => item.kind === "audio");
+  const cover = detail.content.cover;
   const task = detail.task;
   const localVideo = task.sourceKind === "local_video";
   const platform = localVideo ? "本地上传" : platformLabel(task.platform);
@@ -176,6 +162,13 @@ export function TaskDetailPage({
     configureAi: () => navigate(aiSettingsPath()),
     ...(hasPersistedPartial(detail) ? { partialResult: () => scrollToPersistedPartial(detail) } : {}),
   };
+  const validatedDocument = record?.result?.schemaVersion === "content-analysis.v1";
+  const orientation = mediaOrientationLabel(video ?? cover);
+  const metaBits = [
+    platform,
+    detail.content.durationSeconds === undefined ? undefined : `${detail.content.durationSeconds} 秒`,
+    orientation,
+  ].filter(Boolean);
 
   const requestAnalysis = () => {
     onSelectTab("analysis");
@@ -183,12 +176,61 @@ export function TaskDetailPage({
     setConfirmationOpen(true);
   };
 
+  const moreActions: readonly TaskMoreActionItem[] = [
+    ...(task.analysisStatus === "succeeded" && runtime.features.templates === "available"
+      ? [{
+        id: "template",
+        title: "存为模板",
+        description: "保存结构公式，随时复用",
+        icon: "bookmark" as const,
+        onSelect: () => { void saveAsTemplate(); },
+      }]
+      : []),
+    ...(task.analysisStatus === "succeeded"
+      ? [{
+        id: "replica",
+        title: "按清单复刻",
+        description: "逐镜拍摄或绑定素材",
+        icon: "list_checks" as const,
+        onSelect: () => navigate(replicaWizardPath(task.id)),
+      }]
+      : []),
+    ...(canRerun
+      ? [{
+        id: "rerun",
+        title: "重新拆解",
+        description: "用同一份证据重新生成拆解",
+        icon: "sync" as const,
+        onSelect: requestAnalysis,
+      }]
+      : []),
+    ...(terminalTask
+      ? [{
+        id: "delete",
+        title: "删除",
+        description: localVideo ? "永久删除本机任务和上传视频" : "永久删除本机任务及全部产物",
+        icon: "error" as const,
+        onSelect: () => { setConfirmationOpen(false); setDeleteConfirmationOpen(true); },
+      }]
+      : []),
+  ];
+
   useEffect(() => {
-    const headerItems = [
-      ...(canRerun ? [{ label: "重新拆解", onSelect: requestAnalysis }] : []),
-      ...(terminalTask ? [{ label: "删除任务", onSelect: () => { setConfirmationOpen(false); setDeleteConfirmationOpen(true); } }] : []),
-    ];
-    const headerAction = <TaskOverflowMenu disabled={pendingAction !== undefined} items={headerItems} />;
+    const headerAction = moreActions.length > 0
+      ? (
+        <button
+          aria-expanded={moreOpen}
+          aria-haspopup="dialog"
+          aria-label="更多操作"
+          className="icon-button"
+          disabled={pendingAction !== undefined}
+          onClick={() => setMoreOpen(true)}
+          type="button"
+        >
+          <Icon name="more_horiz" size={20} />
+        </button>
+      )
+      : undefined;
     const barAction = resolveCompletedBarAction({
       primary,
       confirmationOpen,
@@ -199,45 +241,43 @@ export function TaskDetailPage({
       : barAction === "start-analysis"
         ? <Button disabled={pendingAction !== undefined} icon={<Icon name="auto_awesome" size={18} />} onClick={requestAnalysis} size="lg">开始 AI 拆解</Button>
         : barAction === "next-steps"
-          ? (
-            <div className="task-completed-actions mobile-action-group">
-              <Button disabled={pendingAction !== undefined || runtime.features.templates !== "available"} icon={<Icon name="bookmark" size={17} />} onClick={() => void saveAsTemplate()} variant="secondary">存为模板</Button>
-              <Button disabled={pendingAction !== undefined} icon={<Icon name="list" size={17} />} onClick={() => navigate(replicaWizardPath(task.id))} variant="secondary">按清单复刻</Button>
-              <Button disabled={pendingAction !== undefined} icon={<Icon name="movie_edit" size={17} />} onClick={() => navigateToCreateWithSource(navigate, task.id)}>用它做视频</Button>
-            </div>
-          )
+          ? <Button disabled={pendingAction !== undefined} icon={<Icon name="movie_edit" size={17} />} onClick={() => navigateToCreateWithSource(navigate, task.id)} size="lg">用它做视频</Button>
           : undefined;
     onChromeChange({ headerAction, contextualAction });
-  }, [analysisAvailable, canRerun, confirmationOpen, deleteConfirmationOpen, hasEvidence, onChromeChange, pendingAction, primary, runtime.features.templates, task.analysisStatus, task.id, terminalTask]);
+  }, [confirmationOpen, deleteConfirmationOpen, moreActions.length, moreOpen, onChromeChange, pendingAction, primary, runtime.features.templates, task.id]);
 
   return (
     <>
       <TaskCapabilityNotice capability={runtime.features.ingest} feature="ingest" />
       {activeIssue ? <IssueNotice actions={issueActions} issue={activeIssue} /> : null}
 
+      <section className="task-detail-hero" id="task-detail-media">
+        {task.contentType === "image_text" ? (
+          imageMedia.length === 0 ? <EmptyState description="任务没有可展示的已保存图片。" icon="folder_open" title="暂无图片" /> : <div className="runtime-image-gallery">{imageMedia.map((media) => <RuntimeMediaFrame className="runtime-image-gallery__item" key={media.uri} label={media.displayName ?? "已保存图片"} media={media} />)}</div>
+        ) : video ? <RuntimeMediaFrame className="runtime-video-frame" label={detail.content.title ?? "已保存视频"} media={video} /> : cover ? <RuntimeMediaFrame className="runtime-video-frame" label={detail.content.title ?? "已保存封面"} media={cover} /> : <EmptyState description="任务没有可展示的已保存视频或封面。" icon="folder_open" title="暂无媒体" />}
+        {audio ? <RuntimeMediaFrame className="runtime-audio-frame" label={audio.displayName ?? "已保存音频"} media={audio} /> : null}
+      </section>
+
       <GlassCard className="task-detail-summary" id="task-detail-summary">
-        <div className="task-detail-summary__heading"><div><span className="eyebrow">LOCAL TASK</span><h2>{detail.content.title ?? (localVideo ? "本地上传视频" : "未提供标题")}</h2></div><TaskStatusBadge status={task.status} /></div>
+        <div className="task-detail-summary__heading">
+          <div>
+            <h2>{detail.content.title ?? (localVideo ? "本地上传视频" : "未提供标题")}</h2>
+            {metaBits.length > 0 ? <p>{metaBits.join(" · ")}</p> : null}
+          </div>
+          <TaskStatusBadge status={task.status} />
+        </div>
         <p className="technical-value">{localVideo ? "本地上传 · 私有任务文件" : safeUrlForDisplay(detail.content.canonicalUrl ?? task.sourceUrl)}</p>
         <div className="task-detail-summary__facts">
-          {platform ? <span><Icon name="language" size={15} />{platform}</span> : null}
-          {contentType ? <span><Icon name={task.contentType === "image_text" ? "grid" : "video_file"} size={15} />{contentType}</span> : null}
+          {contentType ? <span><Icon name={task.contentType === "image_text" ? "grid" : "video_file" } size={15} />{contentType}</span> : null}
           {detail.content.author ? <span><Icon name="face" size={15} />{detail.content.author}</span> : null}
-          {detail.content.durationSeconds === undefined ? null : <span><Icon name="update" size={15} />{detail.content.durationSeconds} 秒</span>}
           {formatTaskTime(task.updatedAt) ? <span><Icon name="history" size={15} />{formatTaskTime(task.updatedAt)}</span> : null}
+          {validatedDocument ? <span><Icon name="check_circle" size={15} />本地保存 · 已校验 content-analysis.v1</span> : null}
         </div>
         {detail.content.description ? <div className="task-detail-summary__description">{detail.content.description}</div> : null}
       </GlassCard>
 
-      <section className="page-section" id="task-detail-media">
-        <div className="section-heading"><h3>{task.contentType === "image_text" ? "已保存图片" : "已保存媒体"}</h3><span className="analysis-count">{detail.media.length} 个文件</span></div>
-        {task.contentType === "image_text" ? (
-          imageMedia.length === 0 ? <EmptyState description="任务没有可展示的已保存图片。" icon="folder_open" title="暂无图片" /> : <div className="runtime-image-gallery">{imageMedia.map((media) => <RuntimeMediaFrame className="runtime-image-gallery__item" key={media.uri} label={media.displayName ?? "已保存图片"} media={media} />)}</div>
-        ) : video ? <RuntimeMediaFrame className="runtime-video-frame" label={detail.content.title ?? "已保存视频"} media={video} /> : detail.content.cover ? <RuntimeMediaFrame className="runtime-video-frame" label={detail.content.title ?? "已保存封面"} media={detail.content.cover} /> : <EmptyState description="任务没有可展示的已保存视频或封面。" icon="folder_open" title="暂无媒体" />}
-        {audio ? <RuntimeMediaFrame className="runtime-audio-frame" label={audio.displayName ?? "已保存音频"} media={audio} /> : null}
-      </section>
-
       <section className="page-section task-result-tabs">
-        <Tabs active={activeLabel} ariaLabel="原文与拆解" id={tabGroupId} onSelect={(tab) => onSelectTab(tab === ANALYSIS_TAB_LABEL ? "analysis" : "source")} tabs={tabs} />
+        <Tabs active={activeLabel} ariaLabel="原文与拆解" id={tabGroupId} onSelect={(tab) => onSelectTab(tab === ANALYSIS_TAB_LABEL ? "analysis" : "source")} tabs={tabs} variant="segmented" />
         <TabPanel className="task-result-tabs__panel" id={tabPanelId(tabGroupId)} labelledBy={tabId(tabGroupId, activeTab === "analysis" ? 1 : 0)}>
           {activeTab === "source" ? (
             task.contentType === "image_text" ? (
@@ -272,7 +312,7 @@ export function TaskDetailPage({
       </section>
 
       {confirmationOpen ? <GlassCard className="analysis-confirm-card"><strong>开始 AI 内容拆解？</strong><p>AI 将根据已经获取的 {detail.evidenceUnits.length} 段内容，整理主题、结构和创作方法。</p><div className="analysis-confirm-card__actions mobile-action-group"><Button disabled={pendingAction === "analysis"} onClick={() => setConfirmationOpen(false)} variant="quiet">暂不运行</Button></div></GlassCard> : null}
-      {activeTab !== "analysis" && (pendingAction === "analysis" || streamProgress || task.analysisStatus === "running") ? <ValidatedModuleProgress definitions={contentAnalysisModuleDefinitions} failedTitle="内容拆解未完成" issue={localIssue ?? issue} progress={streamProgress} title="AI 正在拆解真实证据" /> : null}
+      {activeTab !== "analysis" && (pendingAction === "analysis" || streamProgress || task.analysisStatus === "running") ? <ValidatedModuleProgress definitions={contentAnalysisModuleDefinitions} failedTitle="内容拆解未完成" issue={localIssue ?? issue} progress={streamProgress} title="AI 正在整理内容" /> : null}
 
       {needsNewSubmission ? <GlassCard className="analysis-request-card"><Icon name="sync" size={22} /><p>本版本不会继续或复制旧任务。若需再次处理，请返回首页重新提交链接。</p><Button icon={<Icon name="arrow_back" size={18} />} onClick={() => navigate(pathForRoute("home"))} variant="secondary">重新提交链接</Button></GlassCard> : null}
       {deleteConfirmationOpen ? (
@@ -283,6 +323,8 @@ export function TaskDetailPage({
         </GlassCard>
       ) : null}
       {readIssue ? <Button icon={<Icon name="update" size={18} />} onClick={() => void onReload()} variant="quiet">重新读取任务详情</Button> : null}
+
+      <TaskMoreActionsSheet items={moreActions} onClose={() => setMoreOpen(false)} open={moreOpen} />
     </>
   );
 }

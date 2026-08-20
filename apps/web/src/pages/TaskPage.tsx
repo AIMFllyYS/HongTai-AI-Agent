@@ -11,7 +11,7 @@ import { LatestReadGuard, preferNewerByUpdatedAt } from "../features/tasks/lates
 import { useAppResume } from "../hooks/useAppResume";
 import { pathForRoute, type Navigate } from "../router";
 import { TaskDetailPage, type TaskCompletedChrome } from "./TaskDetailPage";
-import { applyTaskDetailChange, mergeEvents, newestIssue, resolveTaskPageSurface, syncTaskResultTabPath, taskResultTabFromPath, type TaskResultTab } from "./task-page-model";
+import { applyTaskDetailChange, completedTaskShellTitle, mergeEvents, newestIssue, resolveTaskPageSurface, syncTaskResultTabPath, taskResultTabFromPath, type TaskResultTab } from "./task-page-model";
 import { TaskProcessingPage } from "./TaskProcessingPage";
 
 export interface TaskPageProps {
@@ -211,7 +211,7 @@ export function TaskPage({ runtime, taskId, navigate }: TaskPageProps) {
   if (surface === "completed-missing" || !detail) {
     const unavailableIssue = readIssue ?? issue;
     return (
-      <AppShell activeNav="home" backPath="/" navigate={navigate} title="拆解完成">
+      <AppShell activeNav="home" backPath="/" navigate={navigate} title={completedTaskShellTitle(task.analysisStatus)}>
         <div className="page-stack page-task-detail">
           {unavailableIssue ? <IssueNotice issue={unavailableIssue} /> : null}
           <ErrorState description={unavailableIssue?.userMessage ?? "该任务不存在，或没有可展示的本地详情。"} title="找不到任务详情" />
@@ -221,7 +221,7 @@ export function TaskPage({ runtime, taskId, navigate }: TaskPageProps) {
   }
 
   return (
-    <AppShell activeNav="home" backPath="/" contextualAction={completedChrome.contextualAction} headerAction={completedChrome.headerAction} navigate={navigate} title="拆解完成">
+    <AppShell activeNav="home" backPath="/" contextualAction={completedChrome.contextualAction} headerAction={completedChrome.headerAction} navigate={navigate} title={completedTaskShellTitle(task.analysisStatus)}>
       <div className="page-stack page-task-detail">
         <TaskDetailPage
           activeTab={resultTab}

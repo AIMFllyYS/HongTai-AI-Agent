@@ -48,7 +48,7 @@ export function DeepThinkingPanel({ thinking }: DeepThinkingPanelProps) {
       </summary>
       <div className="deep-thinking-panel__content">
         <pre aria-live="off" ref={contentRef}>{thinking.text || emptyCopy(thinking.status)}</pre>
-        <small><Icon name="info" size={14} />深度思考仅在本次生成期间显示，结束后不会保存到任务、报告或历史。</small>
+        <small><Icon name="info" size={14} />推理内容仅在本次生成期间显示，不会保存到任务或历史。</small>
       </div>
     </details>
   );

@@ -5,6 +5,7 @@ import { GlassCard } from "./GlassCard";
 import { Icon } from "./Icon";
 import { SectionHeading } from "./Headings";
 import type { ContentAnalysisView } from "../features/tasks/content-analysis-presenters";
+import { riskLevelLabel, structureRoleLabel } from "../features/tasks/task-presenters";
 
 export interface ContentAnalysisDocumentProps {
   readonly analysis: ContentAnalysisView;
@@ -48,6 +49,31 @@ function InsightList({
   );
 }
 
+function RiskList({
+  items,
+  evidence,
+}: {
+  readonly items: ContentAnalysisView["risks"];
+  readonly evidence: ReadonlyMap<string, TaskEvidenceUnit>;
+}) {
+  if (items.length === 0) return <EmptyState className="analysis-document__empty" description="正式结果没有列出风险项。" icon="info" title="暂无风险项" />;
+  return (
+    <div className="analysis-insight-list">
+      {items.map((item, index) => (
+        <article className="analysis-insight" key={`${item.description}-${index}`}>
+          <span>{String(index + 1).padStart(2, "0")}</span>
+          <div>
+            {riskLevelLabel(item.level) || item.category ? <small>{[riskLevelLabel(item.level) ? `${riskLevelLabel(item.level)}风险` : undefined, item.category].filter(Boolean).join(" · ")}</small> : null}
+            <p>{item.description}</p>
+            {item.suggestion ? <p>{item.suggestion}</p> : null}
+            <EvidenceRefs evidence={evidence} refs={item.evidenceRefs} />
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
 function StringChips({ values, empty }: { readonly values: readonly string[]; readonly empty: string }) {
   if (values.length === 0) return <span className="analysis-evidence-refs__empty">{empty}</span>;
   return <div className="analysis-chip-row">{values.map((item) => <span className="analysis-chip" key={item}>{item}</span>)}</div>;
@@ -65,7 +91,7 @@ export function ContentAnalysisDocument({ analysis, evidenceUnits }: ContentAnal
             <p>{analysis.overview.summary}</p>
             <dl>
               <div><dt>主题</dt><dd>{analysis.overview.theme}</dd></div>
-              {analysis.overview.communicationGoal ? <div><dt>沟通目标</dt><dd>{analysis.overview.communicationGoal}</dd></div> : null}
+              {analysis.overview.communicationGoal ? <div><dt>表达目标</dt><dd>{analysis.overview.communicationGoal}</dd></div> : null}
             </dl>
             <StringChips empty="未列出目标受众" values={analysis.overview.targetAudiences} />
           </GlassCard>
@@ -97,7 +123,7 @@ export function ContentAnalysisDocument({ analysis, evidenceUnits }: ContentAnal
             {analysis.structure.map((item) => (
               <GlassCard className="analysis-structure" key={`${item.order}-${item.summary}`}>
                 <span>{String(item.order).padStart(2, "0")}</span>
-                <div><div className="analysis-structure__title"><strong>{item.summary}</strong>{item.role ? <small>{item.role}</small> : null}</div><StringChips empty="未列出技巧" values={item.techniques} /><EvidenceRefs evidence={evidence} refs={item.evidenceRefs} /></div>
+                <div><div className="analysis-structure__title"><strong>{item.summary}</strong>{structureRoleLabel(item.role) ? <small>{structureRoleLabel(item.role)}</small> : null}</div><StringChips empty="未列出技巧" values={item.techniques} /><EvidenceRefs evidence={evidence} refs={item.evidenceRefs} /></div>
               </GlassCard>
             ))}
           </div>
@@ -137,7 +163,7 @@ export function ContentAnalysisDocument({ analysis, evidenceUnits }: ContentAnal
 
       <section className="page-section">
         <SectionHeading title="风险与边界" />
-        {analysis.risks.length === 0 ? <EmptyState className="analysis-document__empty" description="正式结果没有列出风险项。" icon="info" title="暂无风险项" /> : <InsightList emptyTitle="暂无风险项" evidence={evidence} items={analysis.risks} />}
+        {analysis.risks.length === 0 ? <EmptyState className="analysis-document__empty" description="正式结果没有列出风险项。" icon="info" title="暂无风险项" /> : <RiskList evidence={evidence} items={analysis.risks} />}
       </section>
 
       <section className="page-section" id="analysis-evidence">
