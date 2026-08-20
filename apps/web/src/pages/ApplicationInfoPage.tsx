@@ -41,11 +41,11 @@ export function ApplicationInfoPage({ runtime, navigate }: ApplicationInfoPagePr
   }, [load]);
 
   if (!info && !issue) {
-    return <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="应用信息"><LoadingState description="正在读取版本信息" title="加载应用信息" /></AppShell>;
+    return <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="关于"><LoadingState description="正在读取版本信息" title="加载应用信息" /></AppShell>;
   }
 
   return (
-    <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="应用信息">
+    <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="关于">
       <div className="page-stack page-settings settings-detail">
         {issue ? <IssueNotice issue={issue} /> : null}
         {info ? <>
@@ -59,7 +59,7 @@ export function ApplicationInfoPage({ runtime, navigate }: ApplicationInfoPagePr
           </GlassCard>
 
           <section className="settings-update-list">
-            <div className="section-heading"><div><span className="eyebrow">LATEST UPDATE</span><h2>最近更新</h2></div><span className="analysis-count">v{info.versionName}</span></div>
+            <div className="section-heading"><div><h2>最近更新</h2></div><span className="analysis-count">v{info.versionName}</span></div>
             {latestUpdates.map((item, index) => <GlassCard className="settings-update-item" key={item}><span>{String(index + 1).padStart(2, "0")}</span><p>{item}</p></GlassCard>)}
           </section>
         </> : null}

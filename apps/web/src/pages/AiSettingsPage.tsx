@@ -250,11 +250,11 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
   };
 
   if (loading) {
-    return <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="AI 连接"><LoadingState description="正在读取公开配置与探测记录" title="加载 AI 设置" /></AppShell>;
+    return <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="AI 服务"><LoadingState description="正在读取公开配置与探测记录" title="加载 AI 设置" /></AppShell>;
   }
 
   return (
-    <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="AI 连接">
+    <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="AI 服务">
       <div className="page-stack page-settings settings-form">
         {readIssue ? <IssueNotice issue={readIssue} /> : null}
         {issue ? <IssueNotice actions={{ configureAi: focusAiConnectionForm }} issue={issue} /> : null}

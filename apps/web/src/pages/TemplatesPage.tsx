@@ -147,22 +147,21 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
     <AppShell
       activeNav="templates"
       headerAction={<Button className="header-action__button" disabled={busy} icon={<Icon name="sparkle" size={17} />} onClick={startCustom} variant="secondary">新建</Button>}
-      leadingAction={<span className="page-header-icon"><Icon name="content_paste" size={24} /></span>}
       navigate={navigate}
+      subtitle="只使用本机保存的结构"
       title="模板"
     >
       <div className="page-stack page-templates template-workspace" data-feature-capability={runtime.features.templates}>
         <section className="template-hero">
-          <span className="eyebrow">REUSABLE STRUCTURE</span>
-          <h2>把拆解方法变成自己的内容模版</h2>
-          <p>这里只保存公式、步骤与变量槽，不复制原视频、供应商响应或推理内容。保存后可独立编辑和删除。</p>
+          <h2>套用验证过的结构，快速开拍同款</h2>
+          <p>这里只保存本机公式、步骤与变量槽，不复制原视频、供应商响应或推理内容。保存后可独立编辑和删除。</p>
         </section>
 
         {readIssue ? <IssueNotice issue={readIssue} /> : null}
         {issue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), retry: () => void load(), editInput: focusTemplateName }} issue={issue} /> : null}
 
         <GlassCard className="template-import-card">
-          <div className="production-section-title"><span>01</span><div><strong>从拆解结果保存</strong><small>把内容结构保存成以后可以继续使用的模板</small></div></div>
+          <div className="production-section-title"><span>01</span><div><strong>从拆解结果保存新模板</strong><small>把内容结构保存成以后可以继续使用的模板</small></div></div>
           {sources.length > 0 ? (
             <div className="template-import-card__controls">
               <label className="field-label" htmlFor="template-source">拆解来源</label>
@@ -175,7 +174,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
         </GlassCard>
 
         <section className="template-library-section">
-          <div className="section-heading"><div><span className="eyebrow">LOCAL TEMPLATES</span><h3>我的模板</h3></div>{readIssue ? <button className="text-action" onClick={() => void load()} type="button">刷新</button> : null}</div>
+          <div className="section-heading"><div><h3>我的模板</h3></div>{readIssue ? <button className="text-action" onClick={() => void load()} type="button">刷新</button> : null}</div>
           {templates === undefined ? <LoadingState description="正在读取本地模板文件" title="读取模板" /> : templates.length === 0 ? <EmptyState action={<Button onClick={startCustom} variant="secondary">创建空白模板</Button>} description="你可以从拆解保存，也可以从空白结构开始自定义。" icon="content_paste" title="还没有模板" /> : (
             <div className="template-list">
               {templates.map((record) => (

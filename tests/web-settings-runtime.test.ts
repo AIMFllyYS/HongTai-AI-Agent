@@ -78,6 +78,7 @@ test("UI copy describes local app storage and Keystore without promising an encr
   assert.doesNotMatch(main, /title="本地运行时|description="[^"]*运行时/u);
   assert.match(settings, /本机应用数据/);
   assert.match(settings, /Android Keystore/);
+  assert.doesNotMatch(settings, /深色模式|清理缓存|检查更新|用户协议|通知提醒/);
 });
 
 test("AI capability probes cannot run against a saved connection while the visible form is unsaved", () => {
@@ -135,7 +136,8 @@ test("settings keep cloud TTS inside AI connection and expose app information th
   const router = read("router.ts");
 
   assert.match(settings, /appInfoSettingsPath/);
-  assert.match(settings, /应用信息/);
+  assert.match(settings, /关于/);
+  assert.doesNotMatch(settings, /深色模式|清理缓存|通知提醒|主题色|隐私说明|检查更新/);
   assert.match(ai, /一键配置/);
   assert.match(ai, /视频配音模型/);
   assert.match(ai, /AI_PROVIDER_PRESETS/);
@@ -145,4 +147,5 @@ test("settings keep cloud TTS inside AI connection and expose app information th
   assert.match(router, /settings-app-info/);
   assert.doesNotMatch(app, /TtsSettingsPage/);
   assert.match(app, /ApplicationInfoPage/);
+  assert.match(read("pages/ApplicationInfoPage.tsx"), /title="关于"/);
 });
