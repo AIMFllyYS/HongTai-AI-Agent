@@ -1,3 +1,8 @@
+/**
+ * Generates docs/Hong/新设计/hongtai-mobile.pen from the current apps/web page layer.
+ * Visual tokens stay as-is; screens, copy and routes must match the live UI.
+ * Run: node docs/Hong/新设计/_build-global-pen.mjs
+ */
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -44,6 +49,9 @@ const ICONS = {
   language: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", "M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"],
   lightbulb: ["M9 18h6M10 21h4", "M8 14a6 6 0 1 1 8 0c-.8.7-1 1.7-1 3H9c0-1.3-.2-2.3-1-3Z"],
   link: ["M9 15 7.5 16.5a3.5 3.5 0 0 1-5-5L5 9", "m15 9 1.5-1.5a3.5 3.5 0 0 1 5 5L19 15", "m7 12h10"],
+  list: ["M9 6h11M9 12h11M9 18h11", "M4.5 6h.1M4.5 12h.1M4.5 18h.1"],
+  add: ["M12 5v14M5 12h14"],
+  remove: ["M5 12h14"],
   memory: ["M6 6h12v12H6z", "M9 9h6v6H9z", "M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"],
   movie: ["M4 6h16v12H4z", "M4 9h16M8 6v3M12 6v3M16 6v3"],
   movie_edit: ["M4 6h13v12H4z", "M4 9h13M8 6v3M12 6v3", "m17 16 3-3 2 2-3 3-3 1Z"],
@@ -248,7 +256,13 @@ function headerBrand(title, right) {
   ]);
 }
 
-function headerDetail(title, right) {
+function headerDetail(title, right, subtitle) {
+  const titleNode = subtitle
+    ? frame("Title Wrap", { layout: "vertical", width: "fill_container", gap: 0, alignItems: "center" }, [
+      wrapText("Title", title, "fill_container", { size: 18, weight: 700, fill: "$action-primary", font: "$font-display", lh: 1.2, align: "center" }),
+      wrapText("Subtitle", subtitle, "fill_container", { size: 12, fill: "$text-muted", lh: 1.3, align: "center" }),
+    ])
+    : wrapText("Title", title, "fill_container", { size: 18, weight: 700, fill: "$action-primary", font: "$font-display", lh: 1.44, align: "center" });
   return frame("App Header / Detail", {
     width: 390,
     height: 56,
@@ -264,7 +278,7 @@ function headerDetail(title, right) {
     frame("Back", { width: 40, height: 40, layout: "horizontal", alignItems: "center", justifyContent: "center", cornerRadius: 999 }, [
       icon("arrow_back", 25, "$action-primary"),
     ]),
-    wrapText("Title", title, "fill_container", { size: 18, weight: 700, fill: "$action-primary", font: "$font-display", lh: 1.44, align: "center" }),
+    titleNode,
     right ?? frame("Header Action Slot", { width: 40, height: 40, layout: "horizontal", alignItems: "center", justifyContent: "center" }, [
       icon("more_vert", 22, "$action-primary"),
     ]),
@@ -514,14 +528,15 @@ function headerIcon(iconName, title, right) {
   ]);
 }
 
-function phoneHeader(mode, title, right, iconName) {
-  if (mode === "detail") return headerDetail(title, right);
+function phoneHeader(mode, title, right, iconName, subtitle) {
+  if (mode === "detail") return headerDetail(title, right, subtitle);
   if (mode === "icon") return headerIcon(iconName, title, right);
   return headerBrand(title, right);
 }
 
-function phone({ name, title, mode = "brand", iconName, active, warm = false, right, content, cta }) {
-  const contentH = PHONE_H - 80 - 64;
+function phone({ name, title, mode = "brand", iconName, active, warm = false, right, content, cta, ctaHeight = 56, subtitle }) {
+  const navH = 64;
+  const contentH = PHONE_H - 80 - navH;
   return frame(name, {
     width: PHONE_W,
     height: PHONE_H,
@@ -532,7 +547,7 @@ function phone({ name, title, mode = "brand", iconName, active, warm = false, ri
     strokeWidth: 1,
   }, [
     Object.assign(statusBar(), { x: 0, y: 0, layoutPosition: "absolute" }),
-    Object.assign(phoneHeader(mode, title, right, iconName), { x: 0, y: 24, layoutPosition: "absolute" }),
+    Object.assign(phoneHeader(mode, title, right, iconName, subtitle), { x: 0, y: 24, layoutPosition: "absolute" }),
     frame("Screen Content", {
       x: 0,
       y: 80,
@@ -542,10 +557,10 @@ function phone({ name, title, mode = "brand", iconName, active, warm = false, ri
       clip: true,
       layout: "vertical",
       gap: 24,
-      padding: [24, 16, cta ? 88 : 24, 16],
+      padding: [24, 16, cta ? ctaHeight + 24 : 24, 16],
     }, content),
-    ...(cta ? [Object.assign(cta, { x: 16, y: PHONE_H - 64 - 12 - 56, layoutPosition: "absolute" })] : []),
-    Object.assign(bottomNav(active, warm), { x: 0, y: PHONE_H - 64, layoutPosition: "absolute" }),
+    ...(cta ? [Object.assign(cta, { x: 16, y: PHONE_H - navH - 12 - ctaHeight, layoutPosition: "absolute" })] : []),
+    Object.assign(bottomNav(active, warm), { x: 0, y: PHONE_H - navH, layoutPosition: "absolute" }),
   ]);
 }
 
@@ -731,9 +746,9 @@ function buildCover() {
       colOf("Cover Copy", 16, [
         eyebrow("HONGTAI AI AGENT  ·  MOBILE DESIGN SYSTEM"),
         txt("Cover Title", "宏泰 AI 智能体", { size: 48, weight: 700, fill: "$forest-950", font: "$font-display", ls: -1, lh: 1.15 }),
-        wrapText("Cover Sub", "按当前手机端前端 1:1 复刻。色系、字体、组件与图标均来自 apps/web 的 tokens.css 与真实页面，不是示意稿。", 720, { size: 16, fill: "$text-subtle", lh: 1.6 }),
+        wrapText("Cover Sub", "按 v0.1.18 / versionCode 26 手机端真实页面层 1:1 复刻。色系、字体、组件与图标均来自 apps/web 的 tokens.css 与当前路由，不是示意稿。", 720, { size: 16, fill: "$text-subtle", lh: 1.6 }),
         rowOf("Cover Meta", 12, [
-          frame("Chip v", { padding: [6, 12], fill: "$action-primary", cornerRadius: 999 }, [txt("v", "v0.1.14", { size: 12, weight: 700, fill: "#FFFFFF", font: "$font-data" })]),
+          frame("Chip v", { padding: [6, 12], fill: "$action-primary", cornerRadius: 999 }, [txt("v", "v0.1.18", { size: 12, weight: 700, fill: "#FFFFFF", font: "$font-data" })]),
           frame("Chip theme", { padding: [6, 12], fill: "$mint", cornerRadius: 999 }, [txt("t", "Warm Soft Tech × Profound Logic", { size: 12, weight: 600, fill: "$action-primary" })]),
           frame("Chip w", { padding: [6, 12], fill: "#FFFFFFCC", cornerRadius: 999 }, [txt("w", "390 × 844", { size: 12, weight: 600, fill: "$text-subtle", font: "$font-data" })]),
         ], { width: "fit_content" }),
@@ -859,7 +874,7 @@ function buildIcons() {
     rows.push(rowOf(`Icon Row ${i / 12 + 1}`, 12, names.slice(i, i + 12).map(iconTile)));
   }
   return frame("A5 · 图标", {
-    x: 6080, y: 0, width: 1440, height: 980, clip: true, layout: "vertical",
+    x: 6080, y: 0, width: 1440, height: 1080, clip: true, layout: "vertical",
     fill: "$surface-paper", padding: 48, gap: 16,
   }, [
     colOf("Intro", 8, [
@@ -897,7 +912,7 @@ function buildRules() {
     ]),
     glassCard("Nav Map", [
       wrapText("t", "底栏五项与滑动顺序", "fill_container", { size: 16, weight: 700, fill: "$action-primary", font: "$font-display" }),
-      wrapText("p", "AI  /observation/new  →  拆解 /  →  制作 /create  →  模板 /templates  →  设置 /settings。富迪素材库是制作页右上角弹层，不占底栏。", "fill_container", { size: 14, fill: "$text-subtle", lh: 1.55 }),
+      wrapText("p", "AI /observation/new → 拆解 / → 制作 /create → 模板 /templates → 设置 /settings。制作子路由：/create/:projectId/edit 微调导出，/replica/:taskId 按清单复刻。富迪素材库是制作页右上角弹层，不占底栏。发布无入口。", "fill_container", { size: 14, fill: "$text-subtle", lh: 1.55 }),
     ]),
   ]);
 }
@@ -1137,6 +1152,73 @@ function hint(text) {
   ]);
 }
 
+function completedNextStepsCta() {
+  return ctaBar(frame("Next Steps", { layout: "vertical", width: 358, gap: 8 }, [
+    button({ name: "Save Tpl", label: "存为模板", variant: "secondary", iconName: "bookmark", width: "fill_container" }),
+    button({ name: "Replica", label: "按清单复刻", variant: "secondary", iconName: "list", width: "fill_container" }),
+    button({ name: "Make", label: "用它做视频", variant: "primary", iconName: "movie_edit", width: "fill_container" }),
+  ]));
+}
+
+function flowSwitch(iconName, label, action = "更换") {
+  return frame("Flow Switch", {
+    layout: "horizontal",
+    width: "fill_container",
+    padding: [12, 14],
+    gap: 12,
+    alignItems: "center",
+    fill: "$surface-card",
+    stroke: "$outline-soft",
+    strokeWidth: 1,
+    cornerRadius: 12,
+    effect: cardShadow(),
+  }, [
+    icon(iconName, 19, "$action-primary"),
+    wrapText("Label", label, "fill_container", { size: 14, weight: 700, fill: "$action-primary" }),
+    txt("Action", action, { size: 12, weight: 600, fill: "$action-primary" }),
+  ]);
+}
+
+function entryCard({ iconName, title, body, caveat, notes }) {
+  return glassCard(`Entry/${title}`, [
+    frame("Head", { layout: "horizontal", width: "fill_container", gap: 12, alignItems: "center" }, [
+      icon(iconName, 22, "$action-primary"),
+      wrapText("t", title, "fill_container", { size: 16, weight: 700, fill: "$action-primary", font: "$font-display" }),
+      icon("chevron_right", 19, "$text-muted"),
+    ]),
+    wrapText("p", body, "fill_container", { size: 13, fill: "$text-muted", lh: 1.55 }),
+    wrapText("c", caveat, "fill_container", { size: 13, fill: "$text-subtle", lh: 1.55 }),
+    ...notes.map((note, index) => wrapText(`n${index}`, note, "fill_container", { size: 12, fill: "$text-muted", lh: 1.5 })),
+  ], { padding: 16, gap: 12 });
+}
+
+function previewFrame(iconName, label, color = "#7EBDAC") {
+  return frame("Preview Wrap", { layout: "horizontal", width: "fill_container", justifyContent: "center" }, [
+    frame("Preview", {
+      width: 196, height: 348, layout: "vertical", gap: 8, alignItems: "center", justifyContent: "center",
+      fill: "#071C18", cornerRadius: 12,
+    }, [
+      icon(iconName, 36, color),
+      txt("ep", label, { size: 12, fill: "#BFC9C4" }),
+    ]),
+  ]);
+}
+
+function templateChip(name, selected) {
+  return frame(`Tpl/${name}`, {
+    layout: "vertical",
+    width: "fill_container",
+    padding: 10,
+    gap: 4,
+    fill: selected ? "$accent-soft" : "$surface-low",
+    stroke: selected ? "$primary-soft" : "$outline-soft",
+    strokeWidth: 1,
+    cornerRadius: 12,
+  }, [
+    wrapText("n", name, "fill_container", { size: 12, weight: 700, fill: "$action-primary" }),
+  ]);
+}
+
 function buildScreens() {
   const s1 = phone({
     name: "S1 拆解 · 粘贴链接",
@@ -1258,19 +1340,48 @@ function buildScreens() {
         ]),
       ]),
     ],
-    cta: ctaBar(frame("Dual CTA", { layout: "horizontal", width: 358, gap: 8 }, [
-      button({ name: "Save Tpl", label: "存为模板", variant: "secondary", iconName: "bookmark", width: "fill_container" }),
-      button({ name: "Make", label: "用它做视频", variant: "primary", iconName: "movie_edit", width: "fill_container" }),
-    ])),
+    cta: completedNextStepsCta(),
+    ctaHeight: 160,
   });
 
   const s5 = phone({
-    name: "S5 制作 · 新建",
+    name: "S5 制作 · 入口",
     title: "制作", mode: "icon", iconName: "movie_edit", active: "create",
     right: materialChip(),
     content: [
+      colOf("Heading", 8, [
+        wrapText("H2", "这次走哪条路？", "fill_container", { size: 24, weight: 700, fill: "$action-primary", font: "$font-display", lh: 1.3, ls: -0.4 }),
+        wrapText("Sub", "先选一种做法。两条路要准备的东西不一样。", "fill_container", { size: 13, fill: "$text-muted", lh: 1.55 }),
+      ]),
+      entryCard({
+        iconName: "movie_edit",
+        title: "Agent 模式",
+        body: "导入自己拍的照片或视频，选定目标时长。应用会写旁白和字幕；成片要导入素材后，在制作页再发起合成。",
+        caveat: "这台安装不一定能看画面：看不到就按拆解结构写，能看到才会参考画面里看得见的内容。生成后微调页会告诉你是哪一种。两种情况都不会核对文字是否对得上每个镜头，需要你逐镜核对。",
+        notes: [
+          "默认这条路需要一份成功拆解，再准备至少 3 张图片或视频。配音优先用 AI 连接里的云端旁白，没配才用系统语音。",
+          "数字人口播是下一步里的开关：一条已录好原声的 MP4 即可，只烧字幕、不配音，不需要 3 份素材。",
+        ],
+      }),
+      entryCard({
+        iconName: "list",
+        title: "爆款复刻",
+        body: "按拆解列出的分镜清单，逐项拍摄或绑定素材，再生成脚本和字幕。",
+        caveat: "清单只说该拍什么，不代表画面里真的有这些内容；绑错文件也不会被拦住。",
+        notes: ["需要一份成功拆解。还没有的话，先去采集并运行 AI 自动拆解。成片仍要回制作页合成。"],
+      }),
+    ],
+  });
+
+  const s6 = phone({
+    name: "S6 制作 · Agent 新建",
+    title: "制作", mode: "icon", iconName: "movie_edit", active: "create",
+    right: materialChip(),
+    content: [
+      flowSwitch("movie_edit", "Agent 模式"),
       wrapText("H2", "这次想讲什么？", "fill_container", { size: 28, weight: 700, fill: "$action-primary", font: "$font-display", lh: 1.16 }),
       glassCard("Setup", [
+        hint("这台安装不一定能看画面：看不到就按拆解结构写，能看到才会参考画面里看得见的内容。生成后微调页会告诉你是哪一种。两种情况都不会核对文字是否对得上每个镜头，需要你逐镜核对，看不清的素材要重拍。"),
         wrapText("L1", "你的经营需求", "fill_container", { size: 13, weight: 600, fill: "$text-subtle" }),
         frame("Textarea", {
           width: "fill_container", height: 104, padding: 12, fill: "$surface-low", stroke: "$outline-soft", strokeWidth: 1, cornerRadius: 12,
@@ -1281,75 +1392,35 @@ function buildScreens() {
           frame("Src On", { width: 148, padding: 12, fill: "$accent-soft", stroke: "$primary-soft", strokeWidth: 1, cornerRadius: 12 }, [wrapText("s", "抖音 · 2026/8/17", 124, { size: 12, weight: 600, fill: "$action-primary" })]),
           frame("Src Off", { width: 148, padding: 12, fill: "$surface-low", stroke: "$outline-soft", strokeWidth: 1, cornerRadius: 12 }, [wrapText("s", "本地上传 · 2026/8/16", 124, { size: 12, fill: "$text-subtle" })]),
         ]),
-        wrapText("L3", "制作方式", "fill_container", { size: 13, weight: 600, fill: "$text-subtle" }),
-        frame("Modes", { layout: "horizontal", width: "fill_container", gap: 8 }, [
-          frame("Mode On", { layout: "horizontal", width: "fill_container", padding: 12, gap: 8, alignItems: "start", fill: "$accent-soft", stroke: "$primary-soft", strokeWidth: 1, cornerRadius: 12 }, [
-            icon("movie_edit", 19, "$action-primary"),
-            colOf("M1", 3, [
-              wrapText("t", "素材剪辑 + TTS", "fill_container", { size: 12, weight: 700, fill: "$action-primary" }),
-              wrapText("d", "上传图片或视频，使用 AI 连接页配置的 TTS 配音并生成字幕", "fill_container", { size: 11, fill: "$text-muted", lh: 1.35 }),
-            ], { width: "fill_container" }),
-          ]),
-          frame("Mode Off", { layout: "horizontal", width: "fill_container", padding: 12, gap: 8, alignItems: "start", fill: "$surface-low", stroke: "$outline-soft", strokeWidth: 1, cornerRadius: 12 }, [
-            icon("record_voice_over", 19, "$action-primary"),
-            colOf("M2", 3, [
-              wrapText("t", "数字人口播", "fill_container", { size: 12, weight: 700, fill: "$action-primary" }),
-              wrapText("d", "上传带原声的数字人 MP4，本地按口播稿生成字幕", "fill_container", { size: 11, fill: "$text-muted", lh: 1.35 }),
-            ], { width: "fill_container" }),
-          ]),
+        wrapText("L3", "也可以改用数字人口播", "fill_container", { size: 13, weight: 600, fill: "$text-subtle" }),
+        frame("Avatar Option", {
+          layout: "horizontal", width: "fill_container", padding: 12, gap: 8, alignItems: "center",
+          fill: "$surface-low", stroke: "$outline-soft", strokeWidth: 1, cornerRadius: 12,
+        }, [
+          icon("record_voice_over", 19, "$action-primary"),
+          colOf("AV", 3, [
+            wrapText("t", "数字人口播", "fill_container", { size: 12, weight: 700, fill: "$action-primary" }),
+            wrapText("d", "改用已录好原声的 MP4，只烧字幕、不配音", "fill_container", { size: 11, fill: "$text-muted", lh: 1.35 }),
+          ], { width: "fill_container" }),
         ]),
         wrapText("L4", "主文字（可选）", "fill_container", { size: 13, weight: 600, fill: "$text-subtle" }),
         frame("Headline", { width: "fill_container", height: 45, padding: [0, 12], layout: "horizontal", alignItems: "center", fill: "$surface-low", stroke: "$outline-soft", strokeWidth: 1, cornerRadius: 12 }, [
           wrapText("ph", "例如：你出时间，我出货", "fill_container", { size: 14, fill: "$text-muted" }),
         ]),
+        wrapText("Help", "留空时由 AI 根据你的真实需求生成；填写后成片会逐字使用。", "fill_container", { size: 12, fill: "$text-muted" }),
         wrapText("L5", "文字预设", "fill_container", { size: 13, weight: 600, fill: "$text-subtle" }),
         frame("Preset", { width: "fill_container", height: 45, padding: [0, 12], layout: "horizontal", alignItems: "center", justifyContent: "space_between", fill: "$surface-low", stroke: "$outline-soft", strokeWidth: 1, cornerRadius: 12 }, [
           txt("pv", "经典顶部白字", { size: 14, fill: "$text-subtle" }),
-          icon("chevron_right", 16, "$text-muted"),
+          icon("chevron_down", 16, "$text-muted"),
+        ]),
+        wrapText("L6", "目标时长", "fill_container", { size: 13, weight: 600, fill: "$text-subtle" }),
+        frame("Duration", { width: "fill_container", height: 45, padding: [0, 12], layout: "horizontal", alignItems: "center", justifyContent: "space_between", fill: "$surface-low", stroke: "$outline-soft", strokeWidth: 1, cornerRadius: 12 }, [
+          txt("dv", "30 秒", { size: 14, fill: "$text-subtle" }),
+          icon("chevron_down", 16, "$text-muted"),
         ]),
       ]),
     ],
-    cta: ctaBar(button({ name: "CTA", label: "一键制作视频", variant: "primary", iconName: "movie_edit", size: "lg", width: 358 })),
-  });
-
-  const s6 = phone({
-    name: "S6 制作 · 项目中",
-    title: "制作", mode: "icon", iconName: "movie_edit", active: "create",
-    right: materialChip(),
-    content: [
-      glassCard("Project", [
-        frame("Preview Wrap", { layout: "horizontal", width: "fill_container", justifyContent: "center" }, [
-          frame("Preview", {
-            width: 196, height: 348, layout: "vertical", gap: 8, alignItems: "center", justifyContent: "center",
-            fill: "#071C18",
-            cornerRadius: 12,
-          }, [
-            icon("movie_edit", 36, "#7EBDAC"),
-            txt("ep", "成片会显示在这里", { size: 12, fill: "#BFC9C4" }),
-          ]),
-        ]),
-        hint("本地渲染会为制作计划中的每个镜头生成 AI 连接页已配置的中文 TTS 旁白和字幕。"),
-        tabs(["预览", "文案", "素材"], "素材"),
-        frame("Assets", { layout: "horizontal", width: "fill_container", gap: 8 }, [
-          frame("A1", { width: "fill_container", height: 92, layout: "vertical", gap: 4, padding: 8, alignItems: "center", fill: "$surface-low", cornerRadius: 12 }, [
-            icon("movie", 25, "$action-primary"),
-            wrapText("n", "门店实拍 01", 90, { size: 11, fill: "$text-subtle", align: "center" }),
-          ]),
-          frame("A2", { width: "fill_container", height: 92, layout: "vertical", gap: 4, padding: 8, alignItems: "center", fill: "$surface-low", cornerRadius: 12 }, [
-            icon("movie", 25, "$action-primary"),
-            wrapText("n", "产品特写", 90, { size: 11, fill: "$text-subtle", align: "center" }),
-          ]),
-          frame("Add", { width: "fill_container", height: 92, layout: "vertical", gap: 4, padding: 8, alignItems: "center", justifyContent: "center", fill: "$surface-card", stroke: "$outline-soft", strokeWidth: 1, cornerRadius: 12 }, [
-            icon("upload_file", 24, "$action-primary"),
-            txt("a", "上传素材", { size: 11, fill: "$text-subtle" }),
-            txt("c", "2/12", { size: 10, fill: "$text-muted", font: "$font-data" }),
-          ]),
-        ]),
-        hint("至少上传 3 个图片或视频素材，才能生成制作计划。"),
-        button({ name: "Delete Project", label: "删除整个项目", variant: "quiet", iconName: "close", width: "fill_container" }),
-      ], { padding: 16 }),
-    ],
-    cta: ctaBar(button({ name: "CTA", label: "添加素材", variant: "primary", iconName: "upload_file", size: "lg", width: 358 })),
+    cta: ctaBar(button({ name: "CTA", label: "创建制作项目", variant: "primary", iconName: "movie_edit", size: "lg", width: 358 })),
   });
 
   const s7 = phone({
@@ -1694,21 +1765,21 @@ function buildScreens() {
           frame("Ic", { width: 45, height: 45, layout: "horizontal", alignItems: "center", justifyContent: "center", fill: "$accent-soft", cornerRadius: 14 }, [icon("info", 25, "$action-primary")]),
           colOf("VB", 4, [
             txt("o", "HongTai AI Agent", { size: 10, weight: 700, fill: "$status-progress", font: "$font-data", ls: 0.8 }),
-            txt("h", "版本 0.1.14", { size: 18, weight: 700, fill: "$action-primary", font: "$font-display" }),
-            txt("p", "本机构建号 22", { size: 13, fill: "$text-muted" }),
+            txt("h", "版本 0.1.18", { size: 18, weight: 700, fill: "$action-primary", font: "$font-display" }),
+            txt("p", "本机构建号 26", { size: 13, fill: "$text-muted" }),
           ]),
         ]),
       ]),
       colOf("Updates", 12, [
         frame("UH", { layout: "horizontal", width: "fill_container", justifyContent: "space_between", alignItems: "center" }, [
           colOf("UHt", 4, [eyebrow("LATEST UPDATE"), txt("H2", "最近更新", { size: 16, weight: 700, fill: "$action-primary", font: "$font-display" })]),
-          txt("v", "v0.1.14", { size: 12, fill: "$text-muted", font: "$font-data" }),
+          txt("v", "v0.1.18", { size: 12, fill: "$text-muted", font: "$font-data" }),
         ]),
-        glassCard("U1", [frame("r", { layout: "horizontal", width: "fill_container", gap: 12, alignItems: "start" }, [txt("n", "01", { size: 12, weight: 700, fill: "$action-primary", font: "$font-data" }), wrapText("p", "拆解首页用「粘贴链接 / 上传视频」切换来源，结果页在同一处看原文和拆解。", "fill_container", { size: 13, fill: "$text-subtle", lh: 1.5 })])], { padding: 12 }),
-        glassCard("U2", [frame("r", { layout: "horizontal", width: "fill_container", gap: 12, alignItems: "start" }, [txt("n", "02", { size: 12, weight: 700, fill: "$action-primary", font: "$font-data" }), wrapText("p", "制作页改为竖屏预览和按阶段变化的唯一主按钮，完成后不会出现未接入的发布入口。", "fill_container", { size: 13, fill: "$text-subtle", lh: 1.5 })])], { padding: 12 }),
-        glassCard("U3", [frame("r", { layout: "horizontal", width: "fill_container", gap: 12, alignItems: "start" }, [txt("n", "03", { size: 12, weight: 700, fill: "$action-primary", font: "$font-data" }), wrapText("p", "底栏回到五项；富迪素材库改到制作页右上角，点了没反应的通知铃已去掉。", "fill_container", { size: 13, fill: "$text-subtle", lh: 1.5 })])], { padding: 12 }),
-        glassCard("U4", [frame("r", { layout: "horizontal", width: "fill_container", gap: 12, alignItems: "start" }, [txt("n", "04", { size: 12, weight: 700, fill: "$action-primary", font: "$font-data" }), wrapText("p", "合成失败会说明更具体的原因，并可从制作页重试；纯图片工程不再被要求更换 MP4。", "fill_container", { size: 13, fill: "$text-subtle", lh: 1.5 })])], { padding: 12 }),
-        glassCard("U5", [frame("r", { layout: "horizontal", width: "fill_container", gap: 12, alignItems: "start" }, [txt("n", "05", { size: 12, weight: 700, fill: "$action-primary", font: "$font-data" }), wrapText("p", "启动图标改为分层图标，减少桌面白边；模板删除按钮在窄屏下不再被拉成大圆。", "fill_container", { size: 13, fill: "$text-subtle", lh: 1.5 })])], { padding: 12 }),
+        glassCard("U1", [frame("r", { layout: "horizontal", width: "fill_container", gap: 12, alignItems: "start" }, [txt("n", "01", { size: 12, weight: 700, fill: "$action-primary", font: "$font-data" }), wrapText("p", "冷启动先显示项目图标和浅色开屏，大约两三秒后再进入内容。", "fill_container", { size: 13, fill: "$text-subtle", lh: 1.5 })])], { padding: 12 }),
+        glassCard("U2", [frame("r", { layout: "horizontal", width: "fill_container", gap: 12, alignItems: "start" }, [txt("n", "02", { size: 12, weight: 700, fill: "$action-primary", font: "$font-data" }), wrapText("p", "制作完成后，即使页面通知出错，也不会把已经成功的成片改成失败。", "fill_container", { size: 13, fill: "$text-subtle", lh: 1.5 })])], { padding: 12 }),
+        glassCard("U3", [frame("r", { layout: "horizontal", width: "fill_container", gap: 12, alignItems: "start" }, [txt("n", "03", { size: 12, weight: 700, fill: "$action-primary", font: "$font-data" }), wrapText("p", "深度思考和第一块正式内容之间留出缝隙，不再贴在一起。", "fill_container", { size: 13, fill: "$text-subtle", lh: 1.5 })])], { padding: 12 }),
+        glassCard("U4", [frame("r", { layout: "horizontal", width: "fill_container", gap: 12, alignItems: "start" }, [txt("n", "04", { size: 12, weight: 700, fill: "$action-primary", font: "$font-data" }), wrapText("p", "键盘弹出时输入框会跟着抬高；底栏不再贴到系统手势条上。", "fill_container", { size: 13, fill: "$text-subtle", lh: 1.5 })])], { padding: 12 }),
+        glassCard("U5", [frame("r", { layout: "horizontal", width: "fill_container", gap: 12, alignItems: "start" }, [txt("n", "05", { size: 12, weight: 700, fill: "$action-primary", font: "$font-data" }), wrapText("p", "打开应用更轻：非首页按需载入，中文字体也收成界面用字。", "fill_container", { size: 13, fill: "$text-subtle", lh: 1.5 })])], { padding: 12 }),
         glassCard("U6", [frame("r", { layout: "horizontal", width: "fill_container", gap: 12, alignItems: "start" }, [txt("n", "06", { size: 12, weight: 700, fill: "$action-primary", font: "$font-data" }), wrapText("p", "每个安装版本都会单独保留，更新时不会覆盖以前的安装包。", "fill_container", { size: 13, fill: "$text-subtle", lh: 1.5 })])], { padding: 12 }),
       ]),
     ],
@@ -1735,69 +1806,117 @@ function buildScreens() {
         wrapText("t3", "00:16  口播只保留可追溯的真实转写，不会用平台描述伪装成语音。", "fill_container", { size: 14, fill: "$text-subtle", lh: 1.6 }),
       ]),
     ],
-    cta: ctaBar(frame("Dual CTA", { layout: "horizontal", width: 358, gap: 8 }, [
-      button({ name: "Save Tpl", label: "存为模板", variant: "secondary", iconName: "bookmark", width: "fill_container" }),
-      button({ name: "Make", label: "用它做视频", variant: "primary", iconName: "movie_edit", width: "fill_container" }),
-    ])),
+    cta: completedNextStepsCta(),
+    ctaHeight: 160,
   });
 
   const s15 = phone({
-    name: "S15 制作 · 待合成",
+    name: "S15 制作 · 爆款复刻选拆解",
+    title: "制作", mode: "icon", iconName: "movie_edit", active: "create",
+    right: materialChip(),
+    content: [
+      flowSwitch("list", "爆款复刻"),
+      wrapText("H2", "按哪条拆解复刻？", "fill_container", { size: 24, weight: 700, fill: "$action-primary", font: "$font-display", lh: 1.2 }),
+      glassCard("Setup", [
+        wrapText("L2", "参考哪条拆解", "fill_container", { size: 13, weight: 600, fill: "$text-subtle" }),
+        rowOf("Sources", 8, [
+          frame("Src On", { width: 148, padding: 12, fill: "$accent-soft", stroke: "$primary-soft", strokeWidth: 1, cornerRadius: 12 }, [wrapText("s", "抖音 · 2026/8/17", 124, { size: 12, weight: 600, fill: "$action-primary" })]),
+          frame("Src Off", { width: 148, padding: 12, fill: "$surface-low", stroke: "$outline-soft", strokeWidth: 1, cornerRadius: 12 }, [wrapText("s", "本地上传 · 2026/8/16", 124, { size: 12, fill: "$text-subtle" })]),
+        ]),
+        hint("下一步会打开这条拆解的复刻向导，按清单逐项绑定素材。清单不代表画面里真的有这些内容；生成的是脚本和字幕，成片要回制作页合成。"),
+      ]),
+    ],
+    cta: ctaBar(button({ name: "CTA", label: "按清单复刻", variant: "primary", iconName: "list", size: "lg", width: 358 })),
+  });
+
+  const s16 = phone({
+    name: "S16 制作 · 缺素材",
     title: "制作", mode: "icon", iconName: "movie_edit", active: "create",
     right: materialChip(),
     content: [
       glassCard("Project", [
-        frame("Preview Wrap", { layout: "horizontal", width: "fill_container", justifyContent: "center" }, [
-          frame("Preview", {
-            width: 196, height: 348, layout: "vertical", gap: 8, alignItems: "center", justifyContent: "center",
-            fill: "#071C18", cornerRadius: 12,
-          }, [
-            icon("play", 36, "#7EBDAC"),
-            txt("ep", "制作计划已就绪", { size: 12, fill: "#BFC9C4" }),
+        previewFrame("movie_edit", "成片会显示在这里"),
+        hint("本地渲染会为制作计划中的每个镜头生成 AI 连接页已配置的中文 TTS 旁白和字幕；旧连接未配置云端 TTS 时才使用 Android 系统语音。"),
+        tabs(["预览", "文案", "素材"], "素材"),
+        frame("Assets", { layout: "horizontal", width: "fill_container", gap: 8 }, [
+          frame("A1", { width: "fill_container", height: 92, layout: "vertical", gap: 4, padding: 8, alignItems: "center", fill: "$surface-low", cornerRadius: 12 }, [
+            icon("movie", 25, "$action-primary"),
+            wrapText("n", "门店实拍 01", 90, { size: 11, fill: "$text-subtle", align: "center" }),
+          ]),
+          frame("A2", { width: "fill_container", height: 92, layout: "vertical", gap: 4, padding: 8, alignItems: "center", fill: "$surface-low", cornerRadius: 12 }, [
+            icon("movie", 25, "$action-primary"),
+            wrapText("n", "产品特写", 90, { size: 11, fill: "$text-subtle", align: "center" }),
+          ]),
+          frame("Add", { width: "fill_container", height: 92, layout: "vertical", gap: 4, padding: 8, alignItems: "center", justifyContent: "center", fill: "$surface-card", stroke: "$outline-soft", strokeWidth: 1, cornerRadius: 12 }, [
+            icon("upload_file", 24, "$action-primary"),
+            txt("a", "上传素材", { size: 11, fill: "$text-subtle" }),
+            txt("c", "2/12", { size: 10, fill: "$text-muted", font: "$font-data" }),
           ]),
         ]),
-        tabs(["预览", "文案", "素材"], "预览"),
-        wrapText("plan", "镜头 1–4 已按拆解结构编排。本地渲染会为每个镜头生成 AI 连接页已配置的中文 TTS 旁白和字幕。", "fill_container", { size: 13, fill: "$text-subtle", lh: 1.5 }),
+        hint("至少还要 1 个图片或视频素材，才能生成制作计划。"),
+        button({ name: "Delete Project", label: "删除整个项目", variant: "quiet", iconName: "close", width: "fill_container" }),
       ], { padding: 16 }),
+      flowSwitch("sparkle", "再做一条", "换一种做法"),
+    ],
+    cta: ctaBar(button({ name: "CTA", label: "添加素材", variant: "primary", iconName: "upload_file", size: "lg", width: 358 })),
+  });
+
+  const s17 = phone({
+    name: "S17 制作 · 待合成",
+    title: "制作", mode: "icon", iconName: "movie_edit", active: "create",
+    right: materialChip(),
+    content: [
+      glassCard("Project", [
+        previewFrame("play", "制作计划已就绪"),
+        hint("本地渲染会为制作计划中的每个镜头生成 AI 连接页已配置的中文 TTS 旁白和字幕；旧连接未配置云端 TTS 时才使用 Android 系统语音。"),
+        tabs(["预览", "文案", "素材"], "预览"),
+        colOf("Plan", 8, [
+          txt("H3", "制作计划", { size: 14, weight: 700, fill: "$action-primary" }),
+          frame("Shot1", { layout: "horizontal", width: "fill_container", gap: 8, alignItems: "start" }, [
+            txt("n", "01", { size: 12, weight: 700, fill: "$primary-soft", font: "$font-data" }),
+            colOf("b", 2, [
+              wrapText("c", "门口实拍", "fill_container", { size: 13, weight: 600, fill: "$text-subtle" }),
+              wrapText("n", "先说附近上班族最常犹豫的那件事。", "fill_container", { size: 12, fill: "$text-muted", lh: 1.4 }),
+            ], { width: "fill_container" }),
+            txt("d", "10.0 秒", { size: 11, fill: "$text-muted", font: "$font-data" }),
+          ]),
+        ]),
+        button({ name: "Edit Plan", label: "微调字幕与镜头", variant: "secondary", iconName: "tune", width: "fill_container" }),
+        button({ name: "Regen", label: "重新生成计划", variant: "quiet", iconName: "auto_awesome", width: "fill_container" }),
+        button({ name: "Delete Project", label: "删除整个项目", variant: "quiet", iconName: "close", width: "fill_container" }),
+      ], { padding: 16 }),
+      flowSwitch("sparkle", "再做一条", "换一种做法"),
     ],
     cta: ctaBar(button({ name: "CTA", label: "开始本地合成", variant: "primary", iconName: "bolt", size: "lg", width: 358 })),
   });
 
-  const s16 = phone({
-    name: "S16 制作 · 成片完成",
+  const s18 = phone({
+    name: "S18 制作 · 成片完成",
     title: "制作", mode: "icon", iconName: "movie_edit", active: "create",
     right: materialChip(),
     content: [
       glassCard("Project", [
-        frame("Preview Wrap", { layout: "horizontal", width: "fill_container", justifyContent: "center" }, [
-          frame("Preview", {
-            width: 196, height: 348, layout: "vertical", gap: 8, alignItems: "center", justifyContent: "center",
-            fill: "#071C18", cornerRadius: 12,
-          }, [
-            icon("sparkle", 36, "#BBE9E1"),
-            txt("ep", "成片已保存在本机", { size: 12, fill: "#BBE9E1" }),
-          ]),
-        ]),
+        previewFrame("sparkle", "成片已保存在本机", "#BBE9E1"),
         tabs(["预览", "文案", "素材"], "预览"),
         hint("完成后不会出现未接入的发布入口。成片只保存在本机私有目录。"),
+        button({ name: "Edit Plan", label: "微调字幕与镜头", variant: "secondary", iconName: "tune", width: "fill_container" }),
+        button({ name: "Delete Output", label: "删除成片", variant: "quiet", iconName: "close", width: "fill_container" }),
+        button({ name: "Delete Project", label: "删除整个项目", variant: "quiet", iconName: "close", width: "fill_container" }),
       ], { padding: 16 }),
     ],
     cta: ctaBar(button({ name: "CTA", label: "再做一条", variant: "primary", iconName: "sparkle", size: "lg", width: 358 })),
   });
 
-  const s17 = phone({
-    name: "S17 富迪素材库弹层",
+  const s19 = phone({
+    name: "S19 富迪素材库弹层",
     title: "制作", mode: "icon", iconName: "movie_edit", active: "create",
     right: materialChip(),
     content: [
-      wrapText("H2", "这次想讲什么？", "fill_container", { size: 28, weight: 700, fill: "$action-primary", font: "$font-display", lh: 1.16 }),
-      glassCard("Setup", [
-        wrapText("L1", "你的经营需求", "fill_container", { size: 13, weight: 600, fill: "$text-subtle" }),
-        wrapText("dim", "弹层打开时，制作页仍在下面，对象没有切换。", "fill_container", { size: 13, fill: "$text-muted" }),
-      ]),
+      wrapText("H2", "这次走哪条路？", "fill_container", { size: 24, weight: 700, fill: "$action-primary", font: "$font-display", lh: 1.3 }),
+      wrapText("dim", "弹层打开时，制作页仍在下面，对象没有切换。", "fill_container", { size: 13, fill: "$text-muted" }),
     ],
   });
-  s17.children.push(frame("Dialog Backdrop", {
+  s19.children.push(frame("Dialog Backdrop", {
     x: 0, y: 0, width: 390, height: 844, layout: "vertical", justifyContent: "center", alignItems: "center",
     fill: "#191C1B99", padding: 24,
   }, [
@@ -1819,8 +1938,8 @@ function buildScreens() {
     ]),
   ]));
 
-  const s18 = phone({
-    name: "S18 模板 · 空态",
+  const s20 = phone({
+    name: "S20 模板 · 空态",
     title: "模板", mode: "icon", iconName: "content_paste", active: "templates",
     right: frame("Header New", {
       layout: "horizontal", height: 40, padding: [8, 14], gap: 6, alignItems: "center",
@@ -1842,35 +1961,144 @@ function buildScreens() {
     ],
   });
 
+  const s21 = phone({
+    name: "S21 复刻向导 · 建项目",
+    title: "按清单复刻", mode: "detail", active: "create", subtitle: "5 项素材 · 清单合计 37 秒",
+    content: [
+      glassCard("Premise", [
+        txt("H2", "怎么复刻这条", { size: 16, weight: 700, fill: "$action-primary", font: "$font-display" }),
+        wrapText("p", "先拍门店真实环境，再拍服务过程，最后落到到店体验，不夸大承诺。", "fill_container", { size: 14, fill: "$text-subtle", lh: 1.55 }),
+        wrapText("l1", "共 5 项素材，清单建议合计 37 秒。", "fill_container", { size: 13, fill: "$text-muted", lh: 1.45 }),
+        wrapText("l2", "成片时长按清单合计定下，不用再从固定档位里挑。", "fill_container", { size: 13, fill: "$text-muted", lh: 1.45 }),
+        wrapText("l3", "素材齐了以后生成口播、配音和字幕计划；云端配音不可用时会回退到系统语音。确认微调后再回制作页合成成片。", "fill_container", { size: 13, fill: "$text-muted", lh: 1.45 }),
+      ]),
+      glassCard("Start", [
+        txt("H2", "开始准备素材", { size: 16, weight: 700, fill: "$action-primary", font: "$font-display" }),
+        wrapText("p", "先按这份清单建一个制作项目，之后逐项把拍好的素材放进对应位置。项目会记住每一项对应哪个文件。", "fill_container", { size: 13, fill: "$text-subtle", lh: 1.5 }),
+        button({ name: "Start", label: "按这份清单建项目", variant: "primary", iconName: "movie_edit", size: "lg", width: "fill_container" }),
+      ]),
+      wrapText("Foot", "清单来自这条爆款的正式拆解，只说明该拍什么，不代表画面里真的有这些内容。素材始终只留在本机，不会上传。", "fill_container", { size: 12, fill: "$text-muted", lh: 1.5 }),
+    ],
+  });
+
+  const s22 = phone({
+    name: "S22 复刻向导 · 绑定素材",
+    title: "按清单复刻", mode: "detail", active: "create", subtitle: "5 项素材 · 清单合计 37 秒",
+    content: [
+      wrapText("Progress", "已绑定 2/5 项 · 成片 37 秒", "fill_container", { size: 13, weight: 600, fill: "$action-primary" }),
+      hint("本地合成至少要 3 个画面。再绑定 1 项就可以生成脚本。"),
+      glassCard("Req1", [
+        frame("Head", { layout: "horizontal", width: "fill_container", gap: 8, alignItems: "start" }, [
+          txt("n", "01", { size: 16, weight: 700, fill: "$primary-soft", font: "$font-data" }),
+          colOf("T", 3, [
+            wrapText("t", "门口实拍，能看见店招", "fill_container", { size: 14, weight: 700, fill: "$action-primary" }),
+            wrapText("s", "环境 · 建议 视频 约 8 秒", "fill_container", { size: 12, fill: "$text-muted" }),
+          ], { width: "fill_container" }),
+          icon("check_circle", 20, "$status-success"),
+        ]),
+        wrapText("v", "要拍什么：自然光下拍门店门口，店招完整入画。", "fill_container", { size: 13, fill: "$text-subtle", lh: 1.45 }),
+        wrapText("d", "可以这样说：下班路过这里，先看一眼店里在忙什么。", "fill_container", { size: 13, fill: "$text-subtle", lh: 1.45 }),
+        frame("Bound", { layout: "horizontal", width: "fill_container", gap: 8, alignItems: "center" }, [
+          icon("movie_edit", 16, "$action-primary"),
+          wrapText("f", "门口实拍 01 · 8.0 秒", "fill_container", { size: 12, fill: "$text-subtle" }),
+        ]),
+        button({ name: "Swap", label: "换一个", variant: "quiet", iconName: "remove", width: "fill_container" }),
+        wrapText("note", "这段草稿只是参考。最终口播会按你真正绑定的素材重写，字幕也按重写后的文案生成。", "fill_container", { size: 12, fill: "$text-muted", lh: 1.4 }),
+      ], { padding: 16 }),
+      glassCard("Req3", [
+        frame("Head", { layout: "horizontal", width: "fill_container", gap: 8, alignItems: "start" }, [
+          txt("n", "03", { size: 16, weight: 700, fill: "$primary-soft", font: "$font-data" }),
+          colOf("T", 3, [
+            wrapText("t", "量尺或沟通过程", "fill_container", { size: 14, weight: 700, fill: "$action-primary" }),
+            wrapText("s", "过程 · 建议 视频 约 10 秒", "fill_container", { size: 12, fill: "$text-muted" }),
+          ], { width: "fill_container" }),
+        ]),
+        wrapText("v", "要拍什么：真实量尺或沟通，不摆拍夸张反应。", "fill_container", { size: 13, fill: "$text-subtle", lh: 1.45 }),
+        button({ name: "Pick", label: "选这一项的素材", variant: "secondary", iconName: "add", width: "fill_container" }),
+      ], { padding: 16 }),
+      button({ name: "Compose", label: "生成脚本与字幕", variant: "primary", iconName: "auto_awesome", size: "lg", width: "fill_container" }),
+      wrapText("Help", "已绑定的素材会按清单编号从前往后成镜；跳过的项不会留空镜头，后面的素材会往前顶。生成完可以在微调页改时长和文案，再回制作页合成成片。", "fill_container", { size: 12, fill: "$text-muted", lh: 1.5 }),
+    ],
+  });
+
+  const s23 = phone({
+    name: "S23 微调导出",
+    title: "微调导出", mode: "detail", active: "create", subtitle: "共 3 个镜头 · 30.0 秒",
+    content: [
+      hint("这条视频的口播是按拆解结构写的，系统没有看过你上传的画面，所以文字不一定对得上每个镜头，需要你逐镜核对。"),
+      glassCard("Global", [
+        txt("H2", "字幕模板", { size: 16, weight: 700, fill: "$action-primary", font: "$font-display" }),
+        wrapText("note", "选中的模板决定字幕的字号、描边和出场方式，导出时逐帧烧录进画面。", "fill_container", { size: 13, fill: "$text-muted", lh: 1.45 }),
+        frame("Tpls", { layout: "horizontal", width: "fill_container", gap: 8 }, [
+          templateChip("经典逐行", true),
+          templateChip("关键词高亮", false),
+          templateChip("综艺卡片", false),
+        ]),
+        wrapText("karaoke", "逐字点亮需要词级时间。这条视频还没有，所以会按降级后的模板烧录。", "fill_container", { size: 12, fill: "$text-muted", lh: 1.4 }),
+        wrapText("L1", "主文字", "fill_container", { size: 13, weight: 600, fill: "$text-subtle" }),
+        frame("Headline", { width: "fill_container", height: 45, padding: [0, 12], layout: "horizontal", alignItems: "center", fill: "$surface-low", stroke: "$outline-soft", strokeWidth: 1, cornerRadius: 12 }, [
+          txt("v", "你出时间，我出货", { size: 14, fill: "$text-subtle" }),
+        ]),
+        wrapText("L2", "旁白语速", "fill_container", { size: 13, weight: 600, fill: "$text-subtle" }),
+        wrapText("rate", "1.00 倍 · 只影响本地生成的旁白语速，不改字幕文字。", "fill_container", { size: 12, fill: "$text-muted" }),
+      ]),
+      colOf("Shots", 12, [
+        txt("H2", "逐镜微调", { size: 16, weight: 700, fill: "$action-primary", font: "$font-display" }),
+        glassCard("Shot1", [
+          frame("Head", { layout: "horizontal", width: "fill_container", gap: 8, alignItems: "center" }, [
+            txt("n", "01", { size: 16, weight: 700, fill: "$primary-soft", font: "$font-data" }),
+            colOf("T", 2, [
+              wrapText("c", "门口实拍", "fill_container", { size: 14, weight: 700, fill: "$action-primary" }),
+              wrapText("s", "1 条字幕", "fill_container", { size: 12, fill: "$text-muted" }),
+            ], { width: "fill_container" }),
+          ]),
+          wrapText("L1", "镜头时长  10.0 秒", "fill_container", { size: 13, weight: 600, fill: "$text-subtle" }),
+          wrapText("L2", "口播", "fill_container", { size: 13, weight: 600, fill: "$text-subtle" }),
+          wrapText("n", "先说附近上班族最常犹豫的那件事。", "fill_container", { size: 13, fill: "$text-subtle", lh: 1.45 }),
+        ], { padding: 16 }),
+      ]),
+      wrapText("Foot", "字幕的进出点按文案和模板重新推算，来源是文字长度而不是真实语音，所以只是接近而非逐字对齐。镜头的数量、顺序和画面比例在这里不能改。", "fill_container", { size: 12, fill: "$text-muted", lh: 1.5 }),
+    ],
+    cta: ctaBar(button({ name: "CTA", label: "保存微调", variant: "primary", size: "lg", width: 358 })),
+  });
+
   const rowH = 20 + 48 + 20 + 12 + PHONE_H;
   const y1 = 2700;
   const y2 = y1 + rowH + SECTION_GAP;
   const y3 = y2 + rowH + SECTION_GAP;
+  const y4 = y3 + rowH + SECTION_GAP;
 
   return [
-    screenSection("C · 主路径", 0, y1, "PRIMARY PATH", "拆解 → 制作 → 模板 → 设置", [
+    screenSection("C · 主路径", 0, y1, "PRIMARY PATH", "/ → /create 入口与 Agent → /templates → /settings", [
       deviceColumn("S1  拆解 · 粘贴链接", s1),
       deviceColumn("S2  拆解 · 上传视频", s2),
       deviceColumn("S3  拆解详情 · 处理中", s3),
       deviceColumn("S4  拆解完成 · AI拆解", s4),
-      deviceColumn("S5  制作 · 新建", s5),
-      deviceColumn("S6  制作 · 缺素材", s6),
+      deviceColumn("S5  制作 · 入口", s5),
+      deviceColumn("S6  制作 · Agent 新建", s6),
       deviceColumn("S7  模板", s7),
       deviceColumn("S8  设置", s8),
     ]),
-    screenSection("C · 观察与账户", 0, y2, "OBSERVE & ACCOUNT", "AI 观察、报告、档案、连接、应用信息", [
+    screenSection("C · 观察与账户", 0, y2, "OBSERVE & ACCOUNT", "/observation/new、报告、档案、AI 连接、应用信息", [
       deviceColumn("S9  AI 观察", s9),
       deviceColumn("S10  观察报告", s10),
       deviceColumn("S11  本地档案", s11),
       deviceColumn("S12  AI 连接", s12),
       deviceColumn("S13  应用信息", s13),
     ]),
-    screenSection("C · 状态变体", 0, y3, "STATE VARIANTS", "同一路由：原文稿 / 待合成 / 成片 / 素材库 / 模板空态", [
+    screenSection("C · 制作状态", 0, y3, "PRODUCTION STATES", "/create 复刻选拆解、缺素材、待合成、成片、素材库、模板空态", [
       deviceColumn("S14  拆解完成 · 原始文稿", s14),
-      deviceColumn("S15  制作 · 待合成", s15),
-      deviceColumn("S16  制作 · 成片完成", s16),
-      deviceColumn("S17  富迪素材库弹层", s17),
-      deviceColumn("S18  模板 · 空态", s18),
+      deviceColumn("S15  制作 · 爆款复刻选拆解", s15),
+      deviceColumn("S16  制作 · 缺素材", s16),
+      deviceColumn("S17  制作 · 待合成", s17),
+      deviceColumn("S18  制作 · 成片完成", s18),
+      deviceColumn("S19  富迪素材库弹层", s19),
+      deviceColumn("S20  模板 · 空态", s20),
+    ]),
+    screenSection("C · 复刻与微调", 0, y4, "REPLICA & EDIT", "/replica/:taskId 与 /create/:projectId/edit", [
+      deviceColumn("S21  复刻向导 · 建项目", s21),
+      deviceColumn("S22  复刻向导 · 绑定素材", s22),
+      deviceColumn("S23  微调导出", s23),
     ]),
   ];
 }
