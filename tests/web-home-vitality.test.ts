@@ -26,15 +26,12 @@ test("homepage keeps static display state and design-owned copy behind the view 
   assert.doesNotMatch(page, /<SectionHeading title="AI 能力"/);
 });
 
-test("observation pages keep the warm-soft-tech visual theme after vitality fixture pages were removed", () => {
-  for (const page of ["pages/ObservationStartPage.tsx", "pages/ObservationReportPage.tsx"]) {
-    assert.match(read(page), /visualTheme="warm-soft-tech"/);
-  }
-
+test("observation pages share the unified light theme after vitality fixture pages were removed", () => {
   const tokens = read("styles/tokens.css");
-  for (const value of ["#004d40", "#26a69a", "#f2f7f2", "#fbfdfa"]) {
-    assert.match(tokens, new RegExp(value, "i"), `${value} should be present in the warm-soft-tech mapping`);
+  for (const value of ["#10b981", "#1b1d1f", "#ffffff", "#e6f7f1"]) {
+    assert.match(tokens, new RegExp(value, "i"), `${value} should be present in the redesign palette`);
   }
+  assert.doesNotMatch(tokens, /\[data-visual-theme="warm-soft-tech"\]/);
 });
 
 test("vitality scan uses the HongTai AI brand in the shared app header", () => {

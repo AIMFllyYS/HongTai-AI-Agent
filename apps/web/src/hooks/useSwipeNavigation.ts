@@ -84,7 +84,7 @@ export function useSwipeNavigation(active: BottomNavProps["active"], navigate: N
 
   const onPointerDown = useCallback<PointerEventHandler<HTMLElement>>((event) => {
     if (isSettling) return;
-    if (!active || !isSupportedPointer(event.pointerType) || (event.pointerType === "mouse" && event.button !== 0) || isSwipeTarget(event.target)) {
+    if (!active || active === "create" || !isSupportedPointer(event.pointerType) || (event.pointerType === "mouse" && event.button !== 0) || isSwipeTarget(event.target)) {
       clearGesture();
       return;
     }

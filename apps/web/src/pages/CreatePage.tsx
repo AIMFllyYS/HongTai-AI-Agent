@@ -28,6 +28,7 @@ import {
   resolveProductionRetryOperation,
 } from "./production-workbench-model";
 import { consumeCreateSourceIdFromSearch, isEligibleCreateSourceTask, peekCreateSourceIdFromSearch, resolveCreateWorkbenchEntry } from "./task-page-model";
+import { composeEntryFromSearch, consumeComposeEntryFromSearch } from "../navigation/compose-actions";
 
 export { productionRenderStageCopy };
 
@@ -95,6 +96,7 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
 
   const load = useCallback(async () => {
     const requestedSourceId = peekCreateSourceIdFromSearch();
+    const composeEntry = typeof window === "undefined" ? "" : composeEntryFromSearch(window.location.search);
     try {
       const [succeededTasks, degradedTasks, savedProjects] = await Promise.all([
         runtime.tasks.list({ status: "succeeded", limit: 20 }),
@@ -120,6 +122,17 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
           ? issueFromAppError(new TaskError({ code: "CONTENT_NOT_FOUND", message: "没有找到这条可用于制作的拆解", action: "none" }), { code: "CONTENT_NOT_FOUND", message: "没有找到这条可用于制作的拆解", action: "none" })
           : undefined);
         consumeCreateSourceIdFromSearch();
+      } else if (composeEntry) {
+        setComposingNew(true);
+        setComposerFlow(composeEntry);
+        consumeComposeEntryFromSearch();
+        setSourceId((current) => resolveCreateWorkbenchEntry({
+          requestedSourceId: "",
+          availableSourceIds,
+          currentSourceId: current,
+          composingNew: true,
+        }).sourceId);
+        setIssue(undefined);
       } else {
         setSourceId((current) => resolveCreateWorkbenchEntry({
           requestedSourceId: "",

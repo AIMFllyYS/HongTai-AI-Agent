@@ -60,9 +60,10 @@ test("Chinese UI font is bundled locally for web and future APK packaging", () =
 
 test("visual type tokens keep Chinese labels out of tiny caption sizes", () => {
   const tokens = read("apps/web/src/styles/tokens.css");
-  assert.match(tokens, /--text-body:\s*1rem/);
-  assert.match(tokens, /--text-caption:\s*0\.8125rem/);
-  assert.match(tokens, /--text-meta:\s*0\.75rem/);
+  assert.match(tokens, /--text-body:\s*0\.9375rem/);
+  assert.match(tokens, /--text-caption:\s*0\.75rem/);
+  assert.match(tokens, /--text-meta:\s*0\.6875rem/);
+  assert.match(tokens, /--text-nav:\s*0\.625rem/);
 
   for (const relativePath of [
     "apps/web/src/styles/pages/home.css",
@@ -71,7 +72,7 @@ test("visual type tokens keep Chinese labels out of tiny caption sizes", () => {
     "apps/web/src/styles/pages/library.css",
     "apps/web/src/styles/pages/vitality.css",
   ]) {
-    assert.doesNotMatch(read(relativePath), /font-size:\s*0\.(?:5\d|6\d|7[0-4])rem/);
+    assert.doesNotMatch(read(relativePath), /font-size:\s*0\.(?:5\d|6\d)rem/);
   }
 });
 

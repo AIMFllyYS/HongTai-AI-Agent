@@ -9,7 +9,7 @@ import { matchRoute } from "../apps/web/src/router";
 const webRoot = join(process.cwd(), "apps", "web");
 const readSource = (relativePath: string) => readFileSync(join(webRoot, "src", relativePath), "utf8");
 
-test("bottom navigation has five route items and no material-library slot", () => {
+test("bottom navigation has five slots with a compose plus and no material-library slot", () => {
   const navigation = readSource("components/BottomNav.tsx");
   const styles = readSource("styles/components.css");
   const primaryNav = readSource("navigation/primary-nav.ts");
@@ -19,6 +19,11 @@ test("bottom navigation has five route items and no material-library slot", () =
   assert.doesNotMatch(navigation, /bottom-nav__item--materials/);
   assert.doesNotMatch(navigation, /material-library-dialog/);
   assert.doesNotMatch(primaryNav, /富迪素材库/);
+  assert.match(primaryNav, /label: "观察"/);
+  assert.match(primaryNav, /label: "拆解"/);
+  assert.doesNotMatch(primaryNav, /id: "create"/);
+  assert.match(navigation, /ComposeSheet/);
+  assert.match(navigation, /aria-label="新建"/);
   assert.match(styles, /\.bottom-nav\s*\{[^}]*grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/s);
   assert.doesNotMatch(styles, /repeat\(6,\s*minmax\(0,\s*1fr\)\)/);
   assert.doesNotMatch(styles, /\.bottom-nav__item--materials/);
@@ -54,7 +59,7 @@ test("AppShell keeps an empty header-action slot and never renders a inert notif
   assert.match(shell, /className="app-header__action">\{headerAction\}/);
   assert.doesNotMatch(shell, /aria-label="通知"/);
   assert.doesNotMatch(shell, /notifications/);
-  assert.match(shellStyles, /\.app-header__action\s*\{[^}]*min-width:\s*2\.5rem/s);
+  assert.match(shellStyles, /\.app-header__action\s*\{[^}]*min-width:\s*2\.75rem/s);
 });
 
 test("settings app-info keeps the settings tab active and /publish is not a live route", () => {

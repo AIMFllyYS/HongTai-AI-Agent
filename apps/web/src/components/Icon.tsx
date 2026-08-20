@@ -6,7 +6,8 @@ export type IconName =
   | "camera" | "check_circle" | "chevron_right" | "chevron_down" | "chevron_up" | "close" | "comment"
   | "content_paste" | "download" | "error" | "expand" | "face" | "file" | "filter" | "folder" | "folder_open"
   | "folder_special" | "forum" | "grid" | "health_cross" | "heart" | "history" | "info" | "key" | "keyboard_voice"
-  | "language" | "lightbulb" | "link" | "list" | "memory" | "movie" | "movie_edit" | "notifications" | "pending"
+  | "language" | "layers" | "layout_template" | "lightbulb" | "link" | "list" | "list_checks" | "memory" | "movie" | "movie_edit" | "notifications" | "pending"
+  | "scan_face"
   | "play" | "publish" | "query_stats" | "record_voice_over" | "restaurant" | "rocket" | "search" | "self_improvement"
   | "settings" | "share" | "sparkle" | "sunny" | "sync" | "tune" | "update" | "upload" | "upload_file"
   | "video_file" | "video_library" | "visibility" | "voice" | "smart_toy" | "robot" | "logout";
@@ -47,9 +48,13 @@ const paths: Record<IconName, readonly string[]> = {
   key: ["M14.5 9.5a4 4 0 1 1-7 2.5A4 4 0 0 1 14.5 9.5Z", "m13 11 7-7M17 4l3 3M15 6l3 3"],
   keyboard_voice: ["M8 11a4 4 0 0 0 8 0V7a4 4 0 0 0-8 0v4Z", "M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"],
   language: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", "M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"],
+  layers: ["m12 2 10 5-10 5L2 7l10-5Z", "m2 12 10 5 10-5", "m2 17 10 5 10-5"],
+  layout_template: ["M4 4h16v16H4z", "M4 9h16M10 9v11"],
+  scan_face: ["M8 3H5v3M16 3h3v3M5 16v3h3M19 16v3h-3", "M8.5 10h.1M15.4 10h.1M8 14.5c1.1 1 2.3 1.5 4 1.5s2.9-.5 4-1.5"],
   lightbulb: ["M9 18h6M10 21h4", "M8 14a6 6 0 1 1 8 0c-.8.7-1 1.7-1 3H9c0-1.3-.2-2.3-1-3Z"],
   link: ["M9 15 7.5 16.5a3.5 3.5 0 0 1-5-5L5 9", "m15 9 1.5-1.5a3.5 3.5 0 0 1 5 5L19 15", "m7 12h10"],
   list: ["M9 6h11M9 12h11M9 18h11", "M4.5 6h.1M4.5 12h.1M4.5 18h.1"],
+  list_checks: ["M9 6h12M9 12h12M9 18h12", "m3.5 6 1.2 1.2L7 4.8", "m3.5 12 1.2 1.2L7 10.8", "m3.5 18 1.2 1.2L7 16.8"],
   memory: ["M6 6h12v12H6z", "M9 9h6v6H9z", "M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"],
   movie: ["M4 6h16v12H4z", "M4 9h16M8 6v3M12 6v3M16 6v3"],
   movie_edit: ["M4 6h13v12H4z", "M4 9h13M8 6v3M12 6v3", "m17 16 3-3 2 2-3 3-3 1Z"],

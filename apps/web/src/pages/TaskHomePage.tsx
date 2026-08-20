@@ -4,18 +4,19 @@ import type { AppRuntime, AppTaskRecord, InputInspection, StructuredGenerationPr
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
-import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
-import { ErrorState, LoadingState, EmptyState } from "../components/StatePanels";
+import { ErrorState, LoadingState } from "../components/StatePanels";
 import { TabPanel, Tabs, tabId, tabPanelId } from "../components/Tabs";
 import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
-import { TaskStatusBadge } from "../components/TaskStatusBadge";
 import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
 import { LiveListReadReconciler } from "../features/generation/live-list-read-reconciler";
 import { contentAnalysisModuleDefinitions } from "../features/tasks/content-analysis-module-progress";
-import { formatTaskTime, platformLabel } from "../features/tasks/task-presenters";
+import { TaskHistory } from "../features/tasks/TaskHistory";
+import { platformLabel } from "../features/tasks/task-presenters";
 import { useAppResume } from "../hooks/useAppResume";
+import { HomeProfileAction } from "../components/HomeProfileAction";
+import { consumePasteIntentFromSearch } from "../navigation/compose-actions";
 import { aiSettingsPath, taskDetailPath, type Navigate } from "../router";
 
 const SOURCE_TABS = ["粘贴链接", "上传视频"] as const;
@@ -85,32 +86,6 @@ function inspectionFor(runtime: AppRuntime, input: string): InputInspection | un
   }
 }
 
-function TaskHistory({ tasks, navigate }: { readonly tasks: readonly AppTaskRecord[]; readonly navigate: Navigate }) {
-  if (tasks.length === 0) {
-    return <EmptyState description="完成一次真实采集后，任务会保存在本机并显示在这里。" icon="history" title="还没有本地任务" />;
-  }
-  return (
-    <div className="runtime-task-history">
-      {tasks.map((task) => {
-        const localVideo = task.sourceKind === "local_video";
-        const platform = localVideo ? "本地上传" : platformLabel(task.platform);
-        const updatedAt = formatTaskTime(task.updatedAt);
-        return (
-          <button className="runtime-task-history__item" key={task.id} onClick={() => navigate(taskDetailPath(task.id))} type="button">
-            <span className="runtime-task-history__icon"><Icon name={task.contentType === "image_text" ? "grid" : "video_file"} size={19} /></span>
-            <span className="runtime-task-history__body">
-              <strong className={localVideo ? undefined : "technical-value"}>{localVideo ? "我上传的视频" : safeUrlForDisplay(task.sourceUrl)}</strong>
-              <span>{[platform, updatedAt].filter(Boolean).join(" · ") || `任务 ${task.id}`}</span>
-            </span>
-            <TaskStatusBadge compact status={task.status} />
-            <Icon className="runtime-task-history__chevron" name="chevron_right" size={18} />
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
   const ingestAvailable = runtime.features.ingest === "available";
   const taskHistoryReads = useRef(new LiveListReadReconciler<TaskChangeEventV1>());
@@ -147,6 +122,12 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
   useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
+
+  useEffect(() => {
+    if (!consumePasteIntentFromSearch()) return;
+    setSourceTab("粘贴链接");
+    focusTaskShareInput();
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -250,29 +231,24 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
 
   const sourceBusy = submitting || videoImporting;
   const linkTab = sourceTab === "粘贴链接";
-  const contextualAction = linkTab
+  const primaryAction = linkTab
     ? (
-      <Button className={submitting ? "is-busy" : ""} disabled={!ingestAvailable || !inspection?.ok || submitting || videoImporting} icon={<Icon name={submitting ? "sync" : "bolt"} size={19} />} onClick={() => void submit()} size="lg">
+      <Button className={submitting ? "is-busy" : ""} disabled={!ingestAvailable || !inspection?.ok || submitting || videoImporting} icon={<Icon name={submitting ? "sync" : "bolt"} size={18} />} onClick={() => void submit()}>
         {submitting ? "正在创建本地任务" : "开始拆解"}
       </Button>
     )
     : (
-      <Button className={videoImporting ? "is-busy" : ""} disabled={!ingestAvailable || runtime.features.contentAnalysis !== "available" || submitting || videoImporting} icon={<Icon name={videoImporting ? "sync" : "upload_file"} size={19} />} onClick={() => void importVideo()} size="lg">
+      <Button className={videoImporting ? "is-busy" : ""} disabled={!ingestAvailable || runtime.features.contentAnalysis !== "available" || submitting || videoImporting} icon={<Icon name={videoImporting ? "sync" : "upload_file"} size={18} />} onClick={() => void importVideo()}>
         {videoImporting ? "正在识别视频内容" : "选择视频并拆解"}
       </Button>
     );
 
   return (
-    <AppShell activeNav="home" contextualAction={contextualAction} navigate={navigate} title="宏泰AI智能体">
+    <AppShell activeNav="home" headerAction={<HomeProfileAction navigate={navigate} runtime={runtime} />} navigate={navigate} subtitle="让 AI 帮你看懂爆款逻辑" title="拆解">
       <div className="page-stack page-task-home">
-        <section className="task-page-heading">
-          <h2>今天想拆解哪条爆款？</h2>
-          <p>让 AI 助你洞察爆款逻辑</p>
-        </section>
-
         <TaskCapabilityNotice capability={runtime.features.ingest} feature="ingest" />
 
-        <GlassCard className="task-source-card">
+        <div className="task-source-stack">
           <Tabs
             active={sourceTab}
             ariaLabel="拆解来源"
@@ -282,51 +258,51 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
               if (tab === "粘贴链接" || tab === "上传视频") setSourceTab(tab);
             }}
             tabs={SOURCE_TABS}
+            variant="segmented"
           />
           <TabPanel className="task-source-card__panel" id={tabPanelId(SOURCE_TAB_GROUP_ID)} labelledBy={tabId(SOURCE_TAB_GROUP_ID, linkTab ? 0 : 1)}>
             {linkTab ? (
               <>
-                <label className="field-label" htmlFor="task-share-input"><Icon name="link" size={20} />作品链接</label>
                 <div className="input-card__control">
+                  <Icon name="link" size={17} />
                   <input
                     aria-describedby="task-share-hint"
                     disabled={sourceBusy}
                     id="task-share-input"
                     onChange={(event) => updateInput(event.target.value)}
-                    placeholder="可直接粘贴平台分享文字，应用会从中提取第一个受支持链接"
+                    placeholder="粘贴作品链接"
                     type="text"
                     value={input}
                   />
                   <button aria-label="粘贴" className="input-card__paste" disabled={sourceBusy} onClick={() => void pasteShareInput()} type="button">
-                    <Icon name="content_paste" size={18} />
+                    粘贴
                   </button>
                 </div>
-                <p className="field-hint" id="task-share-hint"><Icon name="info" size={16} />支持抖音、小红书、B站；快手仅支持公开单条链接并会标记为实验性。</p>
                 {inspection?.ok ? (
                   <div className="task-input-inspection" data-platform={inspection.value.platform}>
-                    <Icon name="check_circle" size={18} />
+                    <Icon name="check_circle" size={16} />
                     <div>
-                      <strong>已识别 {platformLabel(inspection.value.platform)}</strong>
-                      <span className="technical-value">{safeUrlForDisplay(inspection.value.normalizedUrl)}</span>
+                      <p>已识别 {platformLabel(inspection.value.platform)} · {safeUrlForDisplay(inspection.value.normalizedUrl)}</p>
                       {inspection.value.ignoredSupportedUrlCount > 0 ? <small>其余 {inspection.value.ignoredSupportedUrlCount} 个受支持链接未被选作本次任务。</small> : null}
-                      {inspection.value.platform === "kuaishou" ? <small>快手为实验性支持，平台风控结果会如实记录。</small> : null}
                     </div>
                   </div>
                 ) : inspection ? <IssueNotice actions={{ editInput: focusTaskShareInput }} issue={inspection.issue} /> : null}
+                <p className="field-hint" id="task-share-hint">支持抖音、小红书、B站；快手仅支持公开单条链接（实验性）。</p>
               </>
             ) : (
               <>
                 <div className="task-source-card__upload">
-                  <strong>上传本地视频</strong>
-                  <p>请选择一段带有清晰人声的 MP4 视频，应用会先识别口播内容，再生成拆解结果。</p>
-                  <small>单个 MP4，最大 250MB。视频只保存在本机。</small>
+                  <strong>选择一段 MP4 视频</strong>
+                  <p>先识别口播，再生成拆解</p>
+                  <small>最大 250MB · 视频只保存在本机</small>
                 </div>
                 {videoImporting || videoProgress ? <ValidatedModuleProgress definitions={contentAnalysisModuleDefinitions} failedTitle="这次拆解没有完成" issue={submitIssue} progress={videoProgress} title="正在整理视频内容" /> : null}
               </>
             )}
             {submitIssue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), editInput: focusTaskShareInput, retry: () => void submit() }} issue={submitIssue} /> : null}
           </TabPanel>
-        </GlassCard>
+          {primaryAction}
+        </div>
 
         <section className="page-section">
           <div className="section-heading"><h3>最近拆解</h3>{historyIssue ? <Button onClick={() => void loadHistory()} variant="quiet">重新读取</Button> : null}</div>

@@ -244,7 +244,12 @@ export function observationReportPath(sessionId: string): string {
   return `/observation/${encodedPathSegment(sessionId)}`;
 }
 
-const primaryNavigationOrder = ["ai", "home", "create", "templates", "settings"] as const;
+const primaryNavigationOrder = ["ai", "home", "templates", "settings"] as const;
+
+function swipeNavIndex(navKey: PrimaryNavKey | undefined): number {
+  if (!navKey || navKey === "create") return -1;
+  return primaryNavigationOrder.indexOf(navKey);
+}
 
 function routeIndex(route: MatchedAppRoute): number {
   if (route.key === "not-found") return -1;
@@ -254,8 +259,8 @@ function routeIndex(route: MatchedAppRoute): number {
 export function routeTransitionDirection(fromPath: string, toPath: string): "forward" | "backward" {
   const fromRoute = matchRoute(fromPath);
   const toRoute = matchRoute(toPath);
-  const fromNavIndex = fromRoute.key === "not-found" || !fromRoute.navKey ? -1 : primaryNavigationOrder.indexOf(fromRoute.navKey);
-  const toNavIndex = toRoute.key === "not-found" || !toRoute.navKey ? -1 : primaryNavigationOrder.indexOf(toRoute.navKey);
+  const fromNavIndex = fromRoute.key === "not-found" ? -1 : swipeNavIndex(fromRoute.navKey);
+  const toNavIndex = toRoute.key === "not-found" ? -1 : swipeNavIndex(toRoute.navKey);
 
   if (fromNavIndex >= 0 && toNavIndex >= 0 && fromNavIndex !== toNavIndex) {
     return toNavIndex > fromNavIndex ? "forward" : "backward";

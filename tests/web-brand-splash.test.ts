@@ -34,7 +34,7 @@ test("brand splash dwells two to three seconds and is not a progress meter", () 
   assert.doesNotMatch(main, /正在启动应用|正在准备你的本地内容|假进度|progressbar|SplashScreen/);
   assert.match(splash, /hongtai-app-icon\.png/);
   assert.doesNotMatch(splash, /正在启动|准备你的本地内容|%/);
-  assert.match(css, /\.brand-splash\s*\{[^}]*--surface-vitality-low/s);
+  assert.match(css, /\.brand-splash\s*\{[^}]*--color-surface-canvas/s);
   assert.match(css, /\.brand-splash__plate\s*\{[^}]*box-shadow:/s);
 });
 

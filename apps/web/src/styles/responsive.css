@@ -5,7 +5,7 @@
 }
 
 @media (min-width: 48rem) {
-  .app-content {
+  .app-shell--detail .app-content {
     /* The header remains fixed at every viewport size.  Preserve its full
        occupied height here; replacing this with a bare desktop gutter makes
        the first card slide underneath the header. */

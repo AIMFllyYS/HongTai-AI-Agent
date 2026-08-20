@@ -1,6 +1,31 @@
 /* Runtime task surfaces: every value comes from AppRuntime rather than visual fixtures. */
 .page-task-home {
-  padding-bottom: calc(var(--space-5) + 4.75rem);
+  padding-bottom: var(--space-4);
+}
+
+.task-source-stack {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.task-source-stack > .button {
+  width: 100%;
+}
+
+.page-task-home .input-card__paste {
+  width: auto;
+  min-width: 2.75rem;
+  height: auto;
+  min-height: 2.75rem;
+  padding: 0 0.5rem;
+  color: var(--color-action-primary);
+  background: transparent;
+  font-size: var(--text-label);
+  font-weight: 600;
+}
+
+.page-task-home .input-card__control:focus-within {
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
 }
 
 .page-task-processing,

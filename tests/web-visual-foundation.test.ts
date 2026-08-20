@@ -25,18 +25,18 @@ test("visual styles expose an explicit responsibility-based cascade", () => {
   }
 });
 
-test("visual tokens provide semantic workbench and warm-soft-tech roles", () => {
+test("visual tokens provide the mobile redesign palette", () => {
   const tokens = read("styles/tokens.css");
 
   for (const token of [
-    "--palette-deep-emerald",
-    "--palette-vitality-turquoise",
+    "--palette-brand",
+    "--palette-ink-900",
     "--color-surface-canvas",
     "--color-action-primary",
     "--color-text-primary",
     "--color-focus-ring",
     "--color-status-success",
-    "[data-visual-theme=\"warm-soft-tech\"]",
+    "--palette-deep-emerald",
   ]) {
     assert.match(tokens, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `${token} should be defined`);
   }

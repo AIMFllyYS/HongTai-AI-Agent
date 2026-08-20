@@ -38,11 +38,11 @@ test("approved gesture shell and compact navigation remain mounted", () => {
   assert.doesNotMatch(shell, /\.route-transition\s*\{[^}]*will-change:[^;}]*transform/s);
   assert.match(read("components/RouteTransition.tsx"), /transitionEnd:\s*\{\s*transform:\s*"none"\s*\}/);
   assert.match(swipe, /useSwipeNavigation/);
-  assert.match(tokens, /--header-height:\s*3\.5rem/);
-  assert.match(tokens, /--nav-height:\s*4rem/);
+  assert.match(tokens, /--header-height:\s*2\.75rem/);
+  assert.match(tokens, /--nav-height:\s*3\.25rem/);
   assert.match(shell, /\.app-header\s*\{[^}]*position:\s*fixed/s);
-  assert.match(shell, /\.app-header\s*\{[^}]*padding-top:\s*calc\([^;]*safe-area-inset-top/s);
-  assert.match(shell, /\.app-content\s*\{[^}]*padding-top:\s*calc\([^;]*--header-height[^;]*safe-area-inset-top/s);
+  assert.match(shell, /\.app-header\s*\{[^}]*padding-top:\s*max\(env\(safe-area-inset-top\),\s*var\(--native-status-bar-inset\)\)/s);
+  assert.match(shell, /\.app-shell--detail \.app-content\s*\{[^}]*padding-top:\s*calc\([^;]*--header-height[^;]*safe-area-inset-top/s);
   assert.match(read("styles/components.css"), /\.bottom-nav/);
 });
 

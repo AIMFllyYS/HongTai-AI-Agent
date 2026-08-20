@@ -123,15 +123,16 @@ test("route transition direction follows dynamic task route order", () => {
   assert.equal(routeTransitionDirection("/observation/new", "/observation/session-42"), "forward");
 });
 
-test("homepage source card drops numbered dual cards and reserves bottom action space", () => {
+test("homepage source card drops numbered dual cards and keeps the primary action in the content flow", () => {
   const home = read("pages/TaskHomePage.tsx");
   const css = read("styles/pages/tasks-runtime.css");
 
   assert.match(home, /<Tabs\b/);
-  assert.match(home, /contextualAction=\{/);
+  assert.doesNotMatch(home, /contextualAction=\{/);
+  assert.match(home, /\{primaryAction\}/);
   assert.doesNotMatch(home, /task-source-index/);
   assert.doesNotMatch(css, /\.task-source-index/);
-  assert.match(css, /\.page-task-home[^{]*\{[^}]*padding-bottom:\s*calc\(/);
+  assert.match(css, /\.page-task-home[^{]*\{[^}]*padding-bottom:\s*var\(--space-4\)/);
 });
 
 test("static visual data is isolated behind the adapter boundary", () => {

@@ -97,7 +97,7 @@ test("bottom navigation stays outside route transforms and supports direct navig
   assert.match(navigation, /transition:\s*["']instant["']/);
   assert.match(app, /AppShellNavigationProvider/);
   assert.match(app, /<BottomNav active=/);
-  assert.match(shell, /visualTheme=\{visualTheme\}/);
+  assert.match(shell, /data-visual-theme=\{visualTheme\}/);
   assert.match(shell, /externalNavigationContext/);
   assert.match(app, /transitionMode/);
   assert.match(browserRoute, /transitionMode/);

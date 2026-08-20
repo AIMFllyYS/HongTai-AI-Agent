@@ -1,56 +1,73 @@
 :root {
   color-scheme: light;
 
-  /* Foundation values: stable visual vocabulary shared by every page. */
-  --palette-forest-950: #00342b;
-  --palette-deep-emerald: #004d40;
-  --palette-vitality-turquoise: #26a69a;
-  --palette-primary-soft: #7ebdac;
-  --palette-mint: #bbe9e1;
-  --palette-success: #2e7d32;
-  --palette-progress: #00796b;
-  --palette-warning: #b96100;
-  --palette-error: #ba1a1a;
-  --palette-text: #191c1b;
-  --palette-text-subtle: #3f4945;
-  --palette-text-muted: #707975;
-  --palette-vitality-muted: #606b66;
-  --palette-outline: #bfc9c4;
-  --palette-outline-soft: #e0e7e3;
+  /* New-design NA2 palette (hongtai-mobile.pen, non-archived). */
+  --palette-brand: #10b981;
+  --palette-brand-deep: #0c8a66;
+  --palette-brand-tint: #e6f7f1;
+  --palette-ink-900: #1b1d1f;
+  --palette-ink-600: #5f646a;
+  --palette-ink-400: #a0a5ab;
+  --palette-on-ink: #ffffff;
+  --palette-ok: #16a34a;
+  --palette-warn: #a8650a;
+  --palette-err: #c0392b;
+  --palette-fill: #f5f6f5;
+  --palette-hairline: #eeefed;
 
-  --surface-canvas: #f8faf7;
-  --surface-paper: #fbfdfa;
+  /* Compatibility names kept so page CSS can migrate without a hard cut. */
+  --palette-forest-950: var(--palette-brand-deep);
+  --palette-deep-emerald: var(--palette-brand-deep);
+  --palette-vitality-turquoise: var(--palette-brand);
+  --palette-primary-soft: #7ebdac;
+  --palette-mint: var(--palette-brand-tint);
+  --palette-success: var(--palette-ok);
+  --palette-progress: var(--palette-brand-deep);
+  --palette-warning: var(--palette-warn);
+  --palette-error: var(--palette-err);
+  --palette-text: var(--palette-ink-900);
+  --palette-text-subtle: var(--palette-ink-600);
+  --palette-text-muted: var(--palette-ink-400);
+  --palette-vitality-muted: var(--palette-ink-600);
+  --palette-outline: var(--palette-hairline);
+  --palette-outline-soft: var(--palette-hairline);
+
+  --surface-canvas: #ffffff;
+  --surface-paper: #ffffff;
   --surface-card: #ffffff;
-  --surface-low: #f2f4f1;
-  --surface-vitality-low: #f2f7f2;
-  --surface-container: #eceeec;
-  --surface-high: #e7e9e6;
-  --surface-pressed: #e1e3e0;
+  --surface-low: var(--palette-fill);
+  --surface-vitality-low: var(--palette-brand-tint);
+  --surface-container: var(--palette-fill);
+  --surface-high: #eceeed;
+  --surface-pressed: #e4e6e4;
   --surface-success: #dcfce7;
-  --surface-progress: #d9f3ee;
+  --surface-progress: var(--palette-brand-tint);
   --surface-warning: #ffedd5;
   --surface-error: #ffdad6;
 
   --font-display: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
-  --font-data: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-data: "Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 
-  --text-display: 2rem;
-  --text-display-line: 2.5rem;
+  /* NA3 type scale: 24 / 16 / 15 / 14 / 12 / 11 / 10. */
+  --text-display: 1.5rem;
+  --text-display-line: 2.1875rem;
   --text-headline: 1.5rem;
-  --text-headline-line: 2rem;
-  --text-module: 1.125rem;
-  --text-module-line: 1.625rem;
+  --text-headline-line: 2.1875rem;
+  --text-module: 1rem;
+  --text-module-line: 1.5rem;
   --text-section: 1rem;
   --text-section-line: 1.5rem;
-  --text-body: 1rem;
-  --text-body-line: 1.625rem;
-  --text-caption: 0.8125rem;
-  --text-caption-line: 1.25rem;
-  --text-meta: 0.75rem;
-  --text-meta-line: 1.125rem;
+  --text-body: 0.9375rem;
+  --text-body-line: 1.5rem;
+  --text-caption: 0.75rem;
+  --text-caption-line: 1.125rem;
+  --text-meta: 0.6875rem;
+  --text-meta-line: 1rem;
   --text-label: 0.875rem;
   --text-label-line: 1.25rem;
+  --text-nav: 0.625rem;
+  --text-nav-line: 0.875rem;
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -66,15 +83,16 @@
   --radius-control: 0.75rem;
   --radius-card: 1rem;
   --radius-large: 1.5rem;
+  --radius-plus: 0.75rem;
   --radius-pill: 999px;
 
-  --shadow-card: 0 0.25rem 0.75rem rgba(0, 77, 64, 0.04);
-  --shadow-floating: 0 0.75rem 1.75rem rgba(0, 77, 64, 0.1);
-  --shadow-nav: 0 -0.25rem 0.75rem rgba(0, 77, 64, 0.04);
-  --glass-fill: rgba(248, 250, 247, 0.84);
-  --glass-blur: 1.25rem;
+  --shadow-card: none;
+  --shadow-floating: 0 0.1875rem 0.5rem rgba(16, 185, 129, 0.35);
+  --shadow-nav: none;
+  --shadow-sheet: 0 -0.5rem 2rem rgba(27, 29, 31, 0.08);
+  --glass-fill: #ffffff;
+  --glass-blur: 0;
 
-  /* Motion roles: shared by CSS feedback and the React transition boundary. */
   --motion-duration-instant: 80ms;
   --motion-duration-fast: 140ms;
   --motion-duration-standard: 220ms;
@@ -84,7 +102,6 @@
   --motion-scale-press: 0.98;
   --motion-distance-page: 1rem;
 
-  /* Semantic roles: components should use these instead of raw palette values. */
   --color-surface-canvas: var(--surface-canvas);
   --color-surface-paper: var(--surface-paper);
   --color-surface-card: var(--surface-card);
@@ -92,43 +109,41 @@
   --color-surface-container: var(--surface-container);
   --color-surface-high: var(--surface-high);
   --color-surface-pressed: var(--surface-pressed);
-  --color-text-primary: var(--palette-text);
-  --color-text-on-primary: #ffffff;
+  --color-text-primary: var(--palette-ink-900);
+  --color-text-on-primary: var(--palette-on-ink);
   --color-text-on-secondary: var(--palette-text);
-  --color-text-subtle: var(--palette-text-subtle);
-  --color-text-muted: var(--palette-text-muted);
-  --color-action-primary: var(--palette-deep-emerald);
-  --color-action-primary-hover: var(--palette-forest-950);
-  --color-action-secondary: var(--palette-vitality-turquoise);
-  --color-action-secondary-soft: var(--palette-mint);
-  --color-focus-ring: rgba(38, 166, 154, 0.4);
-  --color-status-success: var(--palette-success);
+  --color-text-subtle: var(--palette-ink-600);
+  --color-text-muted: var(--palette-ink-400);
+  --color-action-primary: var(--palette-brand);
+  --color-action-primary-hover: var(--palette-brand-deep);
+  --color-action-secondary: var(--palette-brand);
+  --color-action-secondary-soft: var(--palette-brand-tint);
+  --color-focus-ring: rgba(16, 185, 129, 0.35);
+  --color-status-success: var(--palette-ok);
   --color-status-success-soft: var(--surface-success);
-  --color-status-progress: var(--palette-progress);
-  --color-status-progress-soft: var(--surface-progress);
-  --color-status-warning: var(--palette-warning);
+  --color-status-progress: var(--palette-brand-deep);
+  --color-status-progress-soft: var(--palette-brand-tint);
+  --color-status-warning: var(--palette-warn);
   --color-status-warning-soft: var(--surface-warning);
-  --color-status-error: var(--palette-error);
+  --color-status-error: var(--palette-err);
   --color-status-error-soft: var(--surface-error);
-  --color-outline: var(--palette-outline);
-  --color-outline-soft: var(--palette-outline-soft);
+  --color-outline: var(--palette-hairline);
+  --color-outline-soft: var(--palette-hairline);
 
-  /* Component roles: local components may override these within a theme scope. */
-  --button-height-md: 3rem;
-  --button-height-lg: 3.5rem;
-  --button-radius: var(--radius-pill);
-  --card-border: rgba(191, 201, 196, 0.42);
+  --button-height-md: 2.75rem;
+  --button-height-lg: 2.75rem;
+  --button-radius: var(--radius-control);
+  --card-border: var(--palette-hairline);
   --card-radius: var(--radius-card);
-  --nav-active-background: var(--color-action-secondary-soft);
+  --nav-active-background: transparent;
 
-  /* Compatibility aliases retained while page CSS migrates to semantic names. */
   --color-background: var(--color-surface-canvas);
   --color-surface: var(--color-surface-paper);
-  --color-primary: var(--palette-forest-950);
-  --color-primary-strong: var(--color-action-primary);
-  --color-primary-soft: var(--palette-primary-soft);
-  --color-accent: var(--color-action-secondary);
-  --color-accent-soft: var(--color-action-secondary-soft);
+  --color-primary: var(--palette-ink-900);
+  --color-primary-strong: var(--palette-brand);
+  --color-primary-soft: var(--palette-brand-tint);
+  --color-accent: var(--palette-brand);
+  --color-accent-soft: var(--palette-brand-tint);
   --color-text: var(--color-text-primary);
   --color-success: var(--color-status-success);
   --color-success-soft: var(--color-status-success-soft);
@@ -138,45 +153,16 @@
   --color-warning-soft: var(--color-status-warning-soft);
   --color-error: var(--color-status-error);
   --color-error-soft: var(--color-status-error-soft);
-  --color-data: #1a1c1a;
+  --color-data: var(--palette-ink-900);
 
-  --page-gutter: 1rem;
+  --page-gutter: 1.25rem;
   --content-max: 48.75rem;
-  --header-height: 3.5rem;
-  --nav-height: 4rem;
-}
-
-[data-visual-theme="warm-soft-tech"] {
-  color-scheme: light;
-
-  --color-background: var(--surface-paper);
-  --color-surface: var(--surface-paper);
-  --color-surface-canvas: var(--surface-paper);
-  --color-surface-low: var(--surface-vitality-low);
-  --color-surface-container: var(--surface-container);
-  --color-primary: var(--palette-deep-emerald);
-  --color-primary-strong: var(--palette-deep-emerald);
-  --color-primary-soft: #94d3c1;
-  --color-action-primary: var(--palette-deep-emerald);
-  --color-action-primary-hover: var(--palette-forest-950);
-  --color-accent: var(--palette-vitality-turquoise);
-  --color-accent-soft: var(--surface-vitality-low);
-  --color-action-secondary: var(--palette-vitality-turquoise);
-  --color-action-secondary-soft: var(--surface-vitality-low);
-  --color-text-muted: var(--palette-vitality-muted);
-  --color-progress: var(--palette-vitality-turquoise);
-  --color-progress-soft: var(--surface-vitality-low);
-  --glass-fill: rgba(251, 253, 250, 0.84);
-  --nav-active-background: rgba(187, 233, 225, 0.5);
-  --vitality-accent: var(--palette-vitality-turquoise);
-  --vitality-accent-soft: var(--surface-vitality-low);
-  --vitality-track: var(--surface-container);
+  --header-height: 2.75rem;
+  --nav-height: 3.25rem;
 }
 
 @media (min-width: 48rem) {
   :root {
     --page-gutter: 1.5rem;
-    --text-display: 2.5rem;
-    --text-display-line: 3rem;
   }
 }

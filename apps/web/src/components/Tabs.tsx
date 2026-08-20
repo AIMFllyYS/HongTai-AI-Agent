@@ -7,6 +7,7 @@ export interface TabsProps {
   readonly id?: string;
   readonly panelId?: string;
   readonly ariaLabel?: string;
+  readonly variant?: "underline" | "segmented";
 }
 
 export function tabId(groupId: string, index: number): string {
@@ -17,7 +18,7 @@ export function tabPanelId(groupId: string): string {
   return `${groupId}-panel`;
 }
 
-export function Tabs({ tabs, active, onSelect, id = "tabs", panelId = tabPanelId(id), ariaLabel = "内容切换" }: TabsProps) {
+export function Tabs({ tabs, active, onSelect, id = "tabs", panelId = tabPanelId(id), ariaLabel = "内容切换", variant = "underline" }: TabsProps) {
   const activeIndex = Math.max(0, tabs.indexOf(active));
 
   const moveFocus = (index: number) => {
@@ -41,7 +42,7 @@ export function Tabs({ tabs, active, onSelect, id = "tabs", panelId = tabPanelId
   };
 
   return (
-    <div aria-label={ariaLabel} className="tabs" id={id} role="tablist">
+    <div aria-label={ariaLabel} className={`tabs tabs--${variant}`} id={id} role="tablist">
       {tabs.map((tab, index) => {
         const selected = index === activeIndex;
         return (

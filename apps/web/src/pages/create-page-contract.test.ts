@@ -99,3 +99,11 @@ test("用它做视频会跳过两张卡，直接进入 Agent 表单", () => {
   assert.ok(load.indexOf("setComposingNew(true)") < load.indexOf("setComposerFlow(\"agent\")"));
   assert.match(load, /setComposerFlow\("agent"\)/u);
 });
+
+test("加号入口通过 entry 查询参数直接打开 Agent 或复刻表单", () => {
+  const load = page.slice(page.indexOf("const load = useCallback"), page.indexOf("}, [runtime]);"));
+  assert.match(page, /composeEntryFromSearch/u);
+  assert.match(page, /consumeComposeEntryFromSearch/u);
+  assert.match(load, /setComposerFlow\(composeEntry\)/u);
+  assert.ok(load.indexOf("requestedSourceId") < load.indexOf("composeEntry"), "拆解详情的 sourceId 优先于加号 entry");
+});

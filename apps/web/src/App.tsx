@@ -3,7 +3,7 @@ import type { AppRuntime } from "@hongtai/core";
 
 import { EmptyState, LoadingState } from "./components/StatePanels";
 import { activeNavForRoute, BottomNav } from "./components/BottomNav";
-import { AppShell, AppShellNavigationProvider, visualThemeForRoute } from "./components/AppShell";
+import { AppShell, AppShellNavigationProvider } from "./components/AppShell";
 import { RouteTransition } from "./components/RouteTransition";
 import { SwipeRouteViewport } from "./components/SwipeRouteViewport";
 import type { VisualDataAdapter } from "./data/visual-adapter";
@@ -115,7 +115,6 @@ export function App({ runtime, visualData }: AppProps = {}) {
 
   const route = matchRoute(pathname);
   const activeNav = activeNavForRoute(route.key);
-  const visualTheme = visualThemeForRoute(route.key);
 
   return (
     <AppShellNavigationProvider>
@@ -124,7 +123,7 @@ export function App({ runtime, visualData }: AppProps = {}) {
           <Suspense fallback={<LoadingState title="正在打开页面" />}>{renderRoute(pathname)}</Suspense>
         </RouteTransition>
       </SwipeRouteViewport>
-      <BottomNav active={activeNav} navigate={navigate} visualTheme={visualTheme} />
+      <BottomNav active={activeNav} navigate={navigate} />
     </AppShellNavigationProvider>
   );
 }

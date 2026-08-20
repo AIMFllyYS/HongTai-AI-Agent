@@ -235,7 +235,7 @@ test("runtime task pages are wired to AppRuntime and static fixtures remain outs
   assert.match(read("pages/TaskHomePage.tsx"), /runtime\.tasks\.inspectInput/);
   assert.match(read("pages/TaskHomePage.tsx"), /submitLocalTask\(runtime\.tasks/);
   assert.match(read("pages/TaskHomePage.tsx"), /runtime\.analysis\.importVideo\(/);
-  assert.match(read("pages/TaskHomePage.tsx"), /sourceKind === "local_video"/);
+  assert.match(read("features/tasks/TaskHistory.tsx"), /sourceKind === "local_video"/);
   assert.match(read("pages/TaskPage.tsx"), /runtime\.tasks\.subscribe/);
   assert.match(read("pages/TaskPage.tsx"), /runtime\.tasks\.listEvents/);
   assert.match(read("pages/TaskPage.tsx"), /runtime\.tasks\.getDetail/);
@@ -284,14 +284,14 @@ test("task pages keep real events but never offer stop or lineage-retry controls
 });
 
 test("real task pages constrain technical text and expose persisted stage percentages", () => {
-  const home = read("pages/TaskHomePage.tsx");
+  const home = `${read("pages/TaskHomePage.tsx")}\n${read("features/tasks/TaskHistory.tsx")}`;
   const processing = read("pages/TaskProcessingPage.tsx");
   const detail = read("pages/TaskDetailPage.tsx");
   const analysis = read("pages/TaskAnalysisPage.tsx");
   const progress = read("components/TaskProgressSteps.tsx");
   const css = read("styles/pages/tasks-runtime.css");
 
-  assert.match(home, /className="technical-value"/);
+  assert.match(home, /className=\{localVideo \? undefined : "technical-value"\}/);
   assert.match(processing, /className="technical-value"/);
   assert.match(detail, /className="technical-value"/);
   assert.match(analysis, /className="technical-value"/);
@@ -634,8 +634,9 @@ test("用它做视频先进入 /create 再写 sourceId，确认态底栏不再�
   assert.equal(model.resolveCompletedBarAction({ primary: "start-analysis", confirmationOpen: true, deleteConfirmationOpen: true }), "none");
 });
 
-test("首页来源用 Tabs，唯一主按钮在 contextualAction，成功后进入 /tasks/:id", () => {
+test("首页来源用 Tabs，唯一主按钮跟在输入区后，成功后进入 /tasks/:id", () => {
   const home = read("pages/TaskHomePage.tsx");
+  const history = read("features/tasks/TaskHistory.tsx");
   const css = read("styles/pages/tasks-runtime.css");
 
   assert.match(home, /from "\.\.\/components\/Tabs"/);
@@ -644,7 +645,8 @@ test("首页来源用 Tabs，唯一主按钮在 contextualAction，成功后进�
   assert.match(home, /tabs=\{SOURCE_TABS\}|tabs=\{\["粘贴链接", "上传视频"\]\}/);
   assert.match(home, /"粘贴链接"/);
   assert.match(home, /"上传视频"/);
-  assert.match(home, /contextualAction=\{/);
+  assert.doesNotMatch(home, /contextualAction=\{/);
+  assert.match(home, /\{primaryAction\}/);
   assert.match(home, /\{submitting \? "正在创建本地任务" : "开始拆解"\}/);
   assert.match(home, /\{videoImporting \? "正在识别视频内容" : "选择视频并拆解"\}/);
   assert.match(home, /disabled=\{!ingestAvailable \|\| !inspection\?\.ok \|\| submitting \|\| videoImporting\}/);
@@ -653,14 +655,14 @@ test("首页来源用 Tabs，唯一主按钮在 contextualAction，成功后进�
   assert.match(home, /aria-label="粘贴"/);
   assert.match(home, /navigator\.clipboard\.readText/);
   assert.match(home, /已识别 \{platformLabel/);
-  assert.match(home, /单个 MP4/);
+  assert.match(home, /选择一段 MP4 视频/);
   assert.match(home, /250MB/);
   assert.match(home, /只保存在本机/);
   assert.match(home, /<ValidatedModuleProgress/);
   assert.match(home, /navigate\(taskDetailPath\(result\.task\.id\)\)/);
   assert.match(home, /navigate\(taskDetailPath\(record\.taskId\)\)/);
   assert.match(home, /navigate\(taskDetailPath\(recovered\.record\.taskId\)\)/);
-  assert.match(home, /navigate\(taskDetailPath\(task\.id\)\)/);
+  assert.match(history, /navigate\(taskDetailPath\(task\.id\)\)/);
   assert.doesNotMatch(home, /taskAnalysisPath/);
   assert.doesNotMatch(home, /taskProcessingPath/);
   assert.doesNotMatch(home, /task-source-index/);
@@ -670,5 +672,5 @@ test("首页来源用 Tabs，唯一主按钮在 contextualAction，成功后进�
   assert.doesNotMatch(home, /"选择本地视频"/);
   assert.doesNotMatch(home, /<GlassCard[\s\S]*<Button[\s\S]*<\/GlassCard>/);
   assert.doesNotMatch(css, /\.task-source-index/);
-  assert.match(css, /\.page-task-home[^{]*\{[^}]*padding-bottom:\s*calc\(/);
+  assert.match(css, /\.page-task-home[^{]*\{[^}]*padding-bottom:\s*var\(--space-4\)/);
 });

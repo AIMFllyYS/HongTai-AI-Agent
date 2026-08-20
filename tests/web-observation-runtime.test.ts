@@ -51,7 +51,7 @@ test("observation pages use the real diagnosis runtime rather than a visual diag
   assert.match(app, /<ObservationReportPage key=\{sessionId\} navigate=\{navigate\} runtime=\{runtime\} sessionId=\{sessionId\} \/>/);
 
   const navigation = read("navigation/primary-nav.ts");
-  assert.match(navigation, /id: "ai", label: "AI", icon: "health_cross", path: pathForRoute\("observation-new"\)/);
+  assert.match(navigation, /id: "ai", label: "观察", icon: "scan_face", path: pathForRoute\("observation-new"\)/);
 });
 
 test("observation session creation uses a storage fallback instead of runtime unavailable", () => {
