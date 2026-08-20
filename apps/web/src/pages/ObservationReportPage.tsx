@@ -8,6 +8,7 @@ import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { RuntimeMediaFrame } from "../components/RuntimeMediaFrame";
+import { Sheet } from "../components/Sheet";
 import { EmptyState, ErrorState, LoadingState } from "../components/StatePanels";
 import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
 import {
@@ -59,6 +60,7 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
   const [streamedAnswer, setStreamedAnswer] = useState("");
   const [chatPending, setChatPending] = useState(false);
   const [failedQuestion, setFailedQuestion] = useState<string>();
+  const [followUpOpen, setFollowUpOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -159,8 +161,12 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
 
   const useQuestion = (value: string) => {
     setQuestion(value);
-    focusQuestion();
+    setFollowUpOpen(true);
   };
+
+  useEffect(() => {
+    if (followUpOpen) focusQuestion();
+  }, [followUpOpen]);
 
   if (loading) {
     return <AppShell activeNav="ai" backPath={observationNewPath()} navigate={navigate} title="观察报告" visualTheme="warm-soft-tech"><LoadingState description="正在读取本地保存的会话、正式报告与追问历史" title="读取观察报告" /></AppShell>;
@@ -181,14 +187,14 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
     retry: failedQuestion
       ? () => void askQuestion(failedQuestion)
       : reportRetryAllowed ? () => void runReport() : undefined,
-    editInput: focusQuestion,
+    editInput: () => setFollowUpOpen(true),
   };
 
   return (
     <AppShell activeNav="ai" backPath={observationNewPath()} navigate={navigate} title={observationModeLabel(session.mode)} visualTheme="warm-soft-tech">
       <div className="page-stack page-observation-report">
         <section className="observation-report-hero">
-          <div><span className="eyebrow">图片观察报告</span><h2>{report?.summary?.headline ?? reportStatusTitle(record)}</h2><p>单张图片观察 · 本地保存 · 日常参考</p></div>
+          <div><h2>{report?.summary?.headline ?? reportStatusTitle(record)}</h2><p>单张图片观察 · 本地保存 · 日常参考</p></div>
           <span className={`observation-report-hero__status is-${record?.status ?? "pending"}`}><Icon name={record?.status === "succeeded" ? "check_circle" : record?.status === "failed" ? "error" : "sync"} size={18} />{reportStatusTitle(record)}</span>
         </section>
 
@@ -196,7 +202,7 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
 
         <GlassCard className="observation-source-card">
           <RuntimeMediaFrame className="observation-source-card__image" label={`${observationModeLabel(session.mode)}原图`} media={session.image} />
-          <div><span className="eyebrow">本次观察图片</span><strong>{observationModeLabel(session.mode)}图片</strong><p>图片只保存在本机，仅用于生成本次报告和回答后续问题。</p></div>
+          <div><strong>{observationModeLabel(session.mode)}图片</strong><p>图片只保存在本机，仅用于生成本次报告和回答后续问题。</p></div>
         </GlassCard>
 
         {!diagnosisAvailable && record?.status !== "succeeded" ? <GlassCard className="observation-capability-notice" data-feature-capability="planned" tone="soft"><Icon name="pending" size={22} /><div><span>尚未接入</span><strong>本地 AI 报告能力尚未可用</strong><p>应用不会用示例结论替代真实报告。</p></div></GlassCard> : null}
@@ -212,21 +218,26 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
             {report.imageQuality?.limitations.length ? <ul>{report.imageQuality.limitations.map((item) => <li key={item}>{item}</li>)}</ul> : null}
           </GlassCard>
 
-          {report.summary?.keyPoints.length ? <section className="page-section"><div className="section-heading"><div><span className="eyebrow">SUMMARY</span><h3>可见要点</h3></div></div><div className="observation-key-points">{report.summary.keyPoints.map((item) => <GlassCard key={item} tone="soft"><Icon name="visibility" size={18} /><span>{item}</span></GlassCard>)}</div></section> : null}
+          {report.summary?.keyPoints.length ? <section className="page-section"><div className="section-heading"><div><h3>可见要点</h3></div></div><div className="observation-key-points">{report.summary.keyPoints.map((item) => <GlassCard key={item} tone="soft"><Icon name="visibility" size={18} /><span>{item}</span></GlassCard>)}</div></section> : null}
 
-          <section className="page-section"><div className="section-heading"><div><span className="eyebrow">OBSERVATIONS</span><h3>图片可见观察</h3></div><span className="analysis-count">{report.observations.length} 项</span></div>{report.observations.length ? <div className="observation-report-list">{report.observations.map((item) => <GlassCard className="observation-report-item" key={item.id}><div className="observation-report-item__title"><div><span>{item.region}</span><strong>{item.label}</strong></div><small className={`is-${item.visibility}`}>{visibilityLabel(item.visibility)}</small></div><p>{item.description}</p><em><Icon name="info" size={15} />{item.evidenceDescription}</em></GlassCard>)}</div> : <EmptyState description="该报告没有可安全展示的观察项。" icon="visibility" title="暂无可见观察" />}</section>
+          <section className="page-section"><div className="section-heading"><div><h3>图片可见观察</h3></div><span className="analysis-count">{report.observations.length} 项</span></div>{report.observations.length ? <div className="observation-report-list">{report.observations.map((item) => <GlassCard className="observation-report-item" key={item.id}><div className="observation-report-item__title"><div><span>{item.region}</span><strong>{item.label}</strong></div><small className={`is-${item.visibility}`}>{visibilityLabel(item.visibility)}</small></div><p>{item.description}</p><em><Icon name="info" size={15} />{item.evidenceDescription}</em></GlassCard>)}</div> : <EmptyState description="该报告没有可安全展示的观察项。" icon="visibility" title="暂无可见观察" />}</section>
 
-          <section className="page-section"><div className="section-heading"><div><span className="eyebrow">DAILY REFERENCE</span><h3>日常参考</h3></div></div>{report.wellnessReferences.length ? <div className="observation-reference-list">{report.wellnessReferences.map((item) => <GlassCard className="observation-reference-card" key={item.title}><span><Icon name="lightbulb" size={20} /></span><div><strong>{item.title}</strong><p>{item.statement}</p><small>{item.certainty === "possible" ? "可能的日常参考" : "存在不确定性"}</small></div></GlassCard>)}</div> : <EmptyState description="没有可基于当前图片提供的日常参考。" icon="lightbulb" title="暂无日常参考" />}</section>
+          <section className="page-section"><div className="section-heading"><div><h3>日常参考</h3></div></div>{report.wellnessReferences.length ? <div className="observation-reference-list">{report.wellnessReferences.map((item) => <GlassCard className="observation-reference-card" key={item.title}><span><Icon name="lightbulb" size={20} /></span><div><strong>{item.title}</strong><p>{item.statement}</p><small>{item.certainty === "possible" ? "可能的日常参考" : "存在不确定性"}</small></div></GlassCard>)}</div> : <EmptyState description="没有可基于当前图片提供的日常参考。" icon="lightbulb" title="暂无日常参考" />}</section>
 
-          <section className="page-section"><div className="section-heading"><div><span className="eyebrow">SUGGESTIONS</span><h3>日常建议</h3></div></div><div className="observation-recommendation-list">{report.recommendations.map((item) => <GlassCard className="observation-recommendation-card" key={item.title}><div><span className={`observation-recommendation-card__priority is-${item.priority}`}>{priorityLabel(item.priority)}</span><strong>{item.title}</strong></div><p>{item.action}</p><small>{item.rationale}</small></GlassCard>)}</div></section>
+          <section className="page-section"><div className="section-heading"><div><h3>日常建议</h3></div></div><div className="observation-recommendation-list">{report.recommendations.map((item) => <GlassCard className="observation-recommendation-card" key={item.title}><div><span className={`observation-recommendation-card__priority is-${item.priority}`}>{priorityLabel(item.priority)}</span><strong>{item.title}</strong></div><p>{item.action}</p><small>{item.rationale}</small></GlassCard>)}</div></section>
 
           {report.safetyGuidance ? <GlassCard className={`observation-safety-card is-${report.safetyGuidance.level}`}><Icon name={report.safetyGuidance.level === "urgent" ? "error" : "info"} size={22} /><div><strong>{safetyLabel(report.safetyGuidance.level)}</strong><p>{report.safetyGuidance.recommendedAction}</p>{report.safetyGuidance.reasons.length ? <ul>{report.safetyGuidance.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul> : null}</div></GlassCard> : null}
 
           <GlassCard className="observation-limits-card" tone="soft"><Icon name="info" size={20} /><div><strong>局限与免责声明</strong><ul>{report.limitations.map((item) => <li key={item}>{item}</li>)}</ul><p>{report.disclaimer}</p></div></GlassCard>
 
-          <section className="page-section observation-follow-up"><div className="section-heading"><div><span className="eyebrow">FOLLOW-UP</span><h3>继续追问</h3></div></div>{report.followUpQuestions.length ? <div className="chip-row chip-row--scroll">{report.followUpQuestions.map((item) => <button className="chip" key={item} onClick={() => useQuestion(item)} type="button">{item}</button>)}</div> : null}
-            <div className="observation-message-list">{messages.map((message) => <article className={`observation-message is-${message.role} is-${message.status}`.trim()} key={message.id}><span><Icon name={message.role === "assistant" ? "smart_toy" : "face"} size={18} /></span><p>{message.content}</p></article>)}{pendingQuestion ? <><article className="observation-message is-user is-pending"><span><Icon name="face" size={18} /></span><p>{pendingQuestion}</p></article><article className="observation-message is-assistant is-streaming"><span><Icon name="smart_toy" size={18} /></span><p>{streamedAnswer || "正在生成回复…"}</p></article></> : null}</div>
-            <div className="observation-question-composer"><label htmlFor="observation-follow-up">输入想继续了解的问题</label><textarea disabled={!diagnosisAvailable || chatPending} id="observation-follow-up" maxLength={20_000} onChange={(event) => setQuestion(event.target.value)} placeholder="例如：怎样在相近光线下做日常记录？" rows={4} value={question} /><div className="observation-question-composer__actions"><small>回复基于本次已保存报告和真实追问历史；深度思考只在报告生成进度中显示。{question.length}/20,000</small><Button className={chatPending ? "is-busy" : ""} disabled={!diagnosisAvailable || !question.trim() || chatPending} icon={<Icon name={chatPending ? "sync" : "forum"} size={18} />} onClick={() => void ask()}>{chatPending ? "正在回复" : "发送追问"}</Button></div></div>
+          <section className="page-section observation-follow-up">
+            <Button disabled={!diagnosisAvailable} icon={<Icon name="forum" size={18} />} onClick={() => setFollowUpOpen(true)} variant="secondary">{messages.length > 0 ? `继续追问 · ${messages.length} 条` : "继续追问"}</Button>
+            <Sheet labelledBy="observation-follow-up-title" onClose={() => setFollowUpOpen(false)} open={followUpOpen} title="追问">
+              {report.followUpQuestions.length ? <div className="chip-row chip-row--scroll">{report.followUpQuestions.map((item) => <button className="chip" key={item} onClick={() => useQuestion(item)} type="button">{item}</button>)}</div> : null}
+              <div className="observation-message-list">{messages.map((message) => <article className={`observation-message is-${message.role} is-${message.status}`.trim()} key={message.id}><span><Icon name={message.role === "assistant" ? "smart_toy" : "face" } size={18} /></span><p>{message.content}</p></article>)}{pendingQuestion ? <><article className="observation-message is-user is-pending"><span><Icon name="face" size={18} /></span><p>{pendingQuestion}</p></article><article className="observation-message is-assistant is-streaming"><span><Icon name="smart_toy" size={18} /></span><p>{streamedAnswer || "正在生成回复…"}</p></article></> : null}</div>
+              <div className="observation-question-composer"><label htmlFor="observation-follow-up">输入想继续了解的问题</label><textarea disabled={!diagnosisAvailable || chatPending} id="observation-follow-up" maxLength={20_000} onChange={(event) => setQuestion(event.target.value)} placeholder="例如：怎样在相近光线下做日常记录？" rows={4} value={question} /><div className="observation-question-composer__actions"><small>回复基于本次已保存报告和真实追问历史；深度思考只在报告生成进度中显示。{question.length}/20,000</small><Button className={chatPending ? "is-busy" : ""} disabled={!diagnosisAvailable || !question.trim() || chatPending} icon={<Icon name={chatPending ? "sync" : "forum"} size={18} />} onClick={() => void ask()}>{chatPending ? "正在回复" : "发送追问"}</Button></div></div>
+              <Button className="sheet-cancel" onClick={() => setFollowUpOpen(false)} variant="quiet">取消</Button>
+            </Sheet>
           </section>
         </> : null}
       </div>

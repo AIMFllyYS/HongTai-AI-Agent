@@ -6,6 +6,7 @@ import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
+import { Sheet, SheetActionRow } from "../components/Sheet";
 import { IssueNotice } from "../components/IssueNotice";
 import { RuntimeMediaFrame } from "../components/RuntimeMediaFrame";
 import { EmptyState, LoadingState } from "../components/StatePanels";
@@ -66,6 +67,7 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
   const [historyIssue, setHistoryIssue] = useState<TaskIssue>();
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(true);
+  const [captureOpen, setCaptureOpen] = useState(false);
   const [reportProgress, setReportProgress] = useState<StructuredGenerationProgressV1>();
 
   const applySessionChange = useCallback((session: DiagnosisSessionRecord) => {
@@ -176,6 +178,7 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
 
   const pickImage = async () => {
     if (!diagnosisAvailable || loading || importing) return;
+    setCaptureOpen(false);
     setImporting(true);
     setIssue(undefined);
     try {
@@ -189,6 +192,7 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
 
   const captureImage = async () => {
     if (!diagnosisAvailable || loading || importing) return;
+    setCaptureOpen(false);
     setImporting(true);
     setIssue(undefined);
     try {
@@ -245,10 +249,9 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
   };
 
   return (
-    <AppShell activeNav="ai" navigate={navigate} title="舌象与面部观察" visualTheme="warm-soft-tech">
+    <AppShell activeNav="ai" navigate={navigate} subtitle="舌象或面部，结果仅供日常参考" title="观察" visualTheme="warm-soft-tech">
       <div className="page-stack page-observation-start">
         <section className="observation-heading">
-          <span className="eyebrow">LOCAL OBSERVATION</span>
           <h2>选择一种观察方式</h2>
           <p>每个会话只能选择舌象或面部其中一种图片。结果只提供日常参考，不替代专业意见。</p>
         </section>
@@ -268,15 +271,23 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
         </section>
 
         <GlassCard className="observation-capture-card">
-          <div className="observation-capture-card__copy"><span className="eyebrow">STEP 2</span><h3>{observationModeLabel(mode)}图片</h3><p>{mode === "tongue" ? "尽量保持舌面清晰、避免滤镜和强色光。" : "尽量保持正面、自然光和无遮挡。"}</p></div>
+          <div className="observation-capture-card__copy"><h3>{observationModeLabel(mode)}图片</h3><p>{mode === "tongue" ? "尽量保持舌面清晰、避免滤镜和强色光。" : "尽量保持正面、自然光和无遮挡。"}</p></div>
           {importing ? <div aria-live="polite" className="observation-capture-card__empty" role="status"><Icon name="sync" size={30} /><span>正在导入图片</span></div> : image ? <RuntimeMediaFrame className="observation-capture-card__image" label={`${observationModeLabel(mode)}图片`} media={image} /> : <div className="observation-capture-card__empty"><Icon name="camera" size={30} /><span>尚未选择图片</span></div>}
-          <div className="observation-capture-card__actions mobile-action-group"><Button disabled={!diagnosisAvailable || loading || importing} icon={<Icon name="camera" size={18} />} onClick={() => void captureImage()} variant="secondary">拍摄图片</Button><Button disabled={!diagnosisAvailable || loading || importing} icon={<Icon name="upload_file" size={18} />} onClick={() => void pickImage()} variant="secondary">选择图片</Button><Button className={loading ? "is-busy" : ""} disabled={!diagnosisAvailable || !image || loading || importing} icon={<Icon name="auto_awesome" size={18} />} onClick={() => void createReport()}>{loading ? "AI 正在分析图片" : "生成观察报告"}</Button></div>
+          <div className="observation-capture-card__actions mobile-action-group"><Button disabled={!diagnosisAvailable || loading || importing} icon={<Icon name="add" size={18} />} onClick={() => setCaptureOpen(true)} variant="secondary">添加图片</Button><Button className={loading ? "is-busy" : ""} disabled={!diagnosisAvailable || !image || loading || importing} icon={<Icon name="auto_awesome" size={18} />} onClick={() => void createReport()}>{loading ? "AI 正在分析图片" : "生成观察报告"}</Button></div>
           {loading || reportProgress ? <ValidatedModuleProgress definitions={diagnosisModuleDefinitions} failedTitle="观察报告未完成" issue={issue} progress={reportProgress} title="正在生成真实观察报告" /> : null}
           <small className="observation-privacy-note"><Icon name="folder_special" size={15} />图片只保存在本机，不会自动上传或公开发布。</small>
         </GlassCard>
 
+        <Sheet labelledBy="observation-capture-title" onClose={() => setCaptureOpen(false)} open={captureOpen} title="添加图片">
+          <div className="sheet-action-list">
+            <SheetActionRow description="打开系统相机，拍一张本机保存的照片" icon={<Icon name="camera" size={20} />} onSelect={() => void captureImage()} title="拍摄照片" />
+            <SheetActionRow description="从系统相册选择一张已有图片" icon={<Icon name="upload_file" size={20} />} onSelect={() => void pickImage()} title="相册选择" />
+          </div>
+          <Button className="sheet-cancel" onClick={() => setCaptureOpen(false)} variant="quiet">取消</Button>
+        </Sheet>
+
         <section className="page-section">
-          <div className="section-heading"><div><span className="eyebrow">LOCAL HISTORY</span><h3>本地观察历史</h3></div>{historyIssue ? <Button onClick={() => void loadSessions()} variant="quiet">重新读取</Button> : null}</div>
+          <div className="section-heading"><div><h3>最近观察</h3></div>{historyIssue ? <Button onClick={() => void loadSessions()} variant="quiet">重新读取</Button> : null}</div>
           {historyIssue ? <IssueNotice issue={historyIssue} /> : null}
           {sessions === undefined ? <LoadingState description="正在读取本地会话投影" title="读取观察历史" /> : sessions.length === 0 ? <EmptyState description="完成一次真实图片观察后，会话和正式报告会保存在本地这里。" icon="history" title="尚无本地观察" /> : <div className="observation-history-list">{sessions.map((session) => <button className="observation-history-item" key={session.sessionId} onClick={() => navigate(observationReportPath(session.sessionId))} type="button"><span className={`observation-history-item__icon is-${session.reportStatus}`}><Icon name={statusIcon(session)} size={20} /></span><span><strong>{observationModeLabel(session.mode)}</strong><small>{statusLabel(session)}</small></span><Icon name="chevron_right" size={18} /></button>)}</div>}
         </section>

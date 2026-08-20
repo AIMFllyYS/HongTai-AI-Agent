@@ -33,6 +33,7 @@ test("observation pages use the real diagnosis runtime rather than a visual diag
   assert.match(report, /reportRetryAllowed/);
   assert.match(report, /selectMedia:\s*\(\) => navigate\(observationNewPath\(\)\)/);
   assert.match(report, /maxLength=\{20_000\}/);
+  assert.doesNotMatch(report, /复制回复|有用|FOLLOW-UP/);
 
   // A report page can only show an explicit retry when the persisted issue
   // itself authorizes it; storage/media/settings issues stay in IssueNotice.
@@ -52,6 +53,8 @@ test("observation pages use the real diagnosis runtime rather than a visual diag
 
   const navigation = read("navigation/primary-nav.ts");
   assert.match(navigation, /id: "ai", label: "观察", icon: "scan_face", path: pathForRoute\("observation-new"\)/);
+  assert.doesNotMatch(start, /AI 诊断/);
+  assert.doesNotMatch(start, /LOCAL OBSERVATION/);
 });
 
 test("observation session creation uses a storage fallback instead of runtime unavailable", () => {
