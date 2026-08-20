@@ -88,7 +88,7 @@ test("数字人口播不承诺素材剪辑才有的能力", () => {
   assert.match(entry, /不需要 \{MIN_MONTAGE_VISUAL_ASSETS\} 份素材/u);
 });
 
-test("入口卡与二次选项的触达高度不小于 44px，时长分段对齐未归档 S6", () => {
+test("入口卡与二次选项的触达高度不小于 44px，时长含真实 45 秒档", () => {
   assert.match(css, /\.production-entry-card \{[^}]*min-height: 44px/u);
   assert.match(css, /\.production-entry-card:focus-visible/u);
   assert.match(css, /\.production-entry-switch[\s\S]*min-height: 44px/u);
@@ -96,7 +96,7 @@ test("入口卡与二次选项的触达高度不小于 44px，时长分段对齐
   assert.match(css, /\.production-entry-grid \{[^}]*grid/u);
   assert.doesNotMatch(css, /\.production-entry-grid \{[^}]*grid-template-columns:\s*repeat\(2/u, "390px 下两张长文案卡必须上下排，不能挤成两列");
   assert.match(forms, /production-duration-segmented/u);
-  assert.match(forms, /\[15, 30, 60\]/u);
+  assert.match(forms, /\[15, 30, 45, 60\]/u);
   assert.match(css, /\.production-duration-segmented/u);
 });
 

@@ -148,12 +148,11 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
       activeNav="templates"
       headerAction={<Button className="header-action__button" disabled={busy} icon={<Icon name="sparkle" size={17} />} onClick={startCustom} variant="secondary">新建</Button>}
       navigate={navigate}
-      subtitle="只使用本机保存的结构"
+      subtitle="套用验证过的结构，快速开拍同款"
       title="模板"
     >
       <div className="page-stack page-templates template-workspace" data-feature-capability={runtime.features.templates}>
         <section className="template-hero">
-          <h2>套用验证过的结构，快速开拍同款</h2>
           <p>这里只保存本机公式、步骤与变量槽，不复制原视频、供应商响应或推理内容。保存后可独立编辑和删除。</p>
         </section>
 

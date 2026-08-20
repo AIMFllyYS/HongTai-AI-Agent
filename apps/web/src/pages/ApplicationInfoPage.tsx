@@ -52,14 +52,14 @@ export function ApplicationInfoPage({ runtime, navigate }: ApplicationInfoPagePr
           <GlassCard className="settings-detail-card settings-app-info-card">
             <span className="settings-detail-card__icon"><Icon name="info" size={25} /></span>
             <div>
-              <span className="settings-overline">HongTai AI Agent</span>
+              <span className="settings-overline">宏泰 AI 智能体</span>
               <h2>版本 {info.versionName}</h2>
               <p>本机构建号 {info.versionCode}</p>
             </div>
           </GlassCard>
 
           <section className="settings-update-list">
-            <div className="section-heading"><div><h2>最近更新</h2></div><span className="analysis-count">v{info.versionName}</span></div>
+            <div className="section-heading"><div><h2>新版本改了什么</h2></div><span className="analysis-count">v{info.versionName}</span></div>
             {latestUpdates.map((item, index) => <GlassCard className="settings-update-item" key={item}><span>{String(index + 1).padStart(2, "0")}</span><p>{item}</p></GlassCard>)}
           </section>
         </> : null}

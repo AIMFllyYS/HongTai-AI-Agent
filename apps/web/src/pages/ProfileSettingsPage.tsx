@@ -128,16 +128,16 @@ export function ProfileSettingsPage({ runtime, navigate }: ProfileSettingsPagePr
             <small>通过系统照片选择器导入，页面不直接读取外部文件路径。</small>
           </div>
           <div className="avatar-editor__actions mobile-action-group">
-            <Button disabled={picking} onClick={() => void chooseAvatar()} variant="secondary"><Icon name="camera" size={17} />{picking ? "导入中" : "选择头像"}</Button>
+            <Button disabled={picking} onClick={() => void chooseAvatar()} variant="secondary"><Icon name="camera" size={17} />{picking ? "导入中" : "更换头像"}</Button>
             {draft.avatarUri ? <Button disabled={picking} onClick={() => setDraft((current) => ({ ...current, avatarUri: null }))} variant="quiet">移除</Button> : null}
           </div>
         </GlassCard>
 
         <GlassCard className="settings-form__card">
           <label className="settings-field" htmlFor="profile-display-name"><span>名字 <em>必填</em></span><input autoComplete="nickname" id="profile-display-name" maxLength={80} onChange={(event) => setDraft((current) => ({ ...current, displayName: event.target.value }))} required value={draft.displayName} /></label>
-          <label className="settings-field" htmlFor="profile-business-name"><span>门店名</span><input autoComplete="organization" id="profile-business-name" maxLength={120} onChange={(event) => setDraft((current) => ({ ...current, businessName: event.target.value }))} value={draft.businessName} /></label>
+          <label className="settings-field" htmlFor="profile-business-name"><span>门店</span><input autoComplete="organization" id="profile-business-name" maxLength={120} onChange={(event) => setDraft((current) => ({ ...current, businessName: event.target.value }))} value={draft.businessName} /></label>
           <label className="settings-field" htmlFor="profile-industry"><span>行业</span><input id="profile-industry" maxLength={80} onChange={(event) => setDraft((current) => ({ ...current, industry: event.target.value }))} value={draft.industry} /></label>
-          <label className="settings-field" htmlFor="profile-tags"><span>经营标签</span><textarea id="profile-tags" maxLength={300} onChange={(event) => setDraft((current) => ({ ...current, businessTags: event.target.value }))} placeholder="例如：咖啡，烘焙，社区店" rows={3} value={draft.businessTags} /><small>使用逗号或换行分隔；空标签不会保存。</small></label>
+          <label className="settings-field" htmlFor="profile-tags"><span>经营标签</span><textarea id="profile-tags" maxLength={300} onChange={(event) => setDraft((current) => ({ ...current, businessTags: event.target.value }))} placeholder="例如：咖啡，烘焙，社区店" rows={3} value={draft.businessTags} /><small>标签用逗号分隔，空标签不会保存</small></label>
         </GlassCard>
 
         {savedAt ? <p className="settings-save-note"><Icon name="check_circle" size={16} />已保存到本机：{new Date(savedAt).toLocaleString()}</p> : null}

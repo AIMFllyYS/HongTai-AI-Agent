@@ -77,7 +77,7 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
   const profile = snapshot?.profile;
   const aiConnection = snapshot?.aiConnection;
   const profileName = profile?.displayName ?? "建立本地档案";
-  const versionLabel = snapshot?.versionName ? `版本 ${snapshot.versionName}` : "查看当前版本号与最近更新";
+  const versionLabel = snapshot?.versionName ? `版本 ${snapshot.versionName}` : "查看当前版本号";
 
   return (
     <AppShell activeNav="settings" navigate={navigate} subtitle="资料与 AI 配置都保存在本机" title="设置">

@@ -6,7 +6,7 @@ import { EmptyState } from "../../components/StatePanels";
 import { Switch } from "../../components/Switch";
 import { platformLabel } from "../tasks/task-presenters";
 
-const AGENT_DURATION_OPTIONS = [15, 30, 60] as const;
+const AGENT_DURATION_OPTIONS = [15, 30, 45, 60] as const;
 
 export interface AnalysisSource {
   readonly task: AppTaskRecord;
