@@ -161,7 +161,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
         {issue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), retry: () => void load(), editInput: focusTemplateName }} issue={issue} /> : null}
 
         <GlassCard className="template-import-card">
-          <div className="production-section-title"><span>01</span><div><strong>从拆解结果保存新模板</strong><small>把内容结构保存成以后可以继续使用的模板</small></div></div>
+          <div className="production-section-title"><div><strong>从拆解结果保存新模板</strong><small>把内容结构保存成以后可以继续使用的模板</small></div></div>
           {sources.length > 0 ? (
             <div className="template-import-card__controls">
               <label className="field-label" htmlFor="template-source">拆解来源</label>
@@ -199,7 +199,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
 
         {editingId ? (
           <GlassCard className="template-editor">
-            <div className="production-section-title"><span>02</span><div><strong>{editingId === "new" ? "自定义新模板" : `编辑 ${editedTemplate?.name ?? "模板"}`}</strong><small>每行一个步骤或变量；空行不会保存</small></div></div>
+            <div className="production-section-title"><div><strong>{editingId === "new" ? "自定义新模板" : `编辑 ${editedTemplate?.name ?? "模板"}`}</strong><small>每行一个步骤或变量；空行不会保存</small></div></div>
             <label className="field-label" htmlFor="template-name">模板名称</label>
             <input id="template-name" maxLength={80} onChange={(event) => updateDraft("name", event.target.value)} placeholder="例如：门店真实体验口播" value={draft.name} />
             <label className="field-label" htmlFor="template-summary">摘要</label>
