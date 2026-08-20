@@ -28,19 +28,21 @@ test("templates and production use real runtimes while publishing remains planne
   }
 
   const create = read("pages/CreatePage.tsx");
+  const createForms = read("features/production/production-setup-forms.tsx");
+  const createSurface = `${create}\n${createForms}`;
   assert.match(create, /runtime\.production\.(create|importAssets|generatePlan|render)/);
   assert.match(create, /runtime\.production\.(removeAsset|removeOutput|delete)/);
   assert.match(create, /IssueNotice/);
-  assert.match(create, /参考哪条拆解/);
-  assert.match(create, /这次想讲什么/);
-  assert.doesNotMatch(create, />(?:content-analysis\.v1|production-plan\.v1)</u);
+  assert.match(createSurface, /参考哪条拆解/);
+  assert.match(createSurface, /这次想讲什么/);
+  assert.doesNotMatch(createSurface, />(?:content-analysis\.v1|production-plan\.v1)</u);
   assert.match(create, /useAppResume\(\(\) => \{\s*void load\(\);\s*void applyAssetRecovery\(\);/u);
   assert.doesNotMatch(create, /useAppResume\(load\)/);
   assert.doesNotMatch(create, /@capacitor\/app/);
   assert.doesNotMatch(create, /viewModel\.(templates|profileTags|materialFilters|generationEta|actionLabel)/);
   assert.doesNotMatch(create, /template-tile__selected/);
-  assert.match(create, /<ProductionModeEntry /);
-  assert.match(create, /aria-pressed=\{mode === "avatar"\}/);
+  assert.match(create, /<ProductionComposerPanel\b/);
+  assert.match(createForms, /<Switch checked=\{avatarOn\}/);
   assert.match(create, /mode === "avatar" \? \{ avatarScript \}/);
 
   const templates = read("pages/TemplatesPage.tsx");
@@ -49,6 +51,7 @@ test("templates and production use real runtimes while publishing remains planne
   assert.match(templates, /确认删除模板/);
   assert.match(templates, /\{readIssue \? <button className="text-action" onClick=\{\(\) => void load\(\)\} type="button">刷新<\/button> : null\}/);
   assert.doesNotMatch(templates, /data\/fixtures|visualData|viewModel/);
+  assert.doesNotMatch(templates, /官方模板|热度/);
 
   const publish = read("pages/PublishPage.tsx");
   assert.doesNotMatch(publish, /viewModel\.(media|platforms|primaryAction|secondaryActions)/);

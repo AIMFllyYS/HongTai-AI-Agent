@@ -36,7 +36,7 @@ test("Fudi material library opens from the create-page header with token color a
   const materialPath = join(webRoot, "public", "materials", "fudi-material-library.jpg");
 
   assert.equal(existsSync(materialPath), true, "the supplied material image must live under public/materials");
-  assert.equal((createPage.match(/headerAction=\{<MaterialLibraryHeaderAction/g) ?? []).length, 3);
+  assert.equal((createPage.match(/<MaterialLibraryHeaderAction/g) ?? []).length, 3);
   assert.match(entry, /<button/);
   assert.match(entry, /aria-label="打开富迪素材库"/);
   assert.match(entry, /type="button"/);

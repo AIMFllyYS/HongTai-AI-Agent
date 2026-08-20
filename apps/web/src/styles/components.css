@@ -1339,3 +1339,44 @@
 .tabs--segmented button.is-active::after {
   content: none;
 }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.switch {
+  position: relative;
+  width: 2.75rem;
+  height: 1.625rem;
+  flex: none;
+  background: #d7dbd8;
+  border: 0;
+  border-radius: var(--radius-pill);
+  transition: background var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.switch.is-on {
+  background: var(--palette-brand);
+}
+
+.switch__thumb {
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 1.375rem;
+  height: 1.375rem;
+  background: #fff;
+  border-radius: var(--radius-pill);
+  box-shadow: 0 0.0625rem 0.1875rem rgba(27, 29, 31, 0.18);
+  transition: transform var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.switch.is-on .switch__thumb {
+  transform: translateX(1.125rem);
+}

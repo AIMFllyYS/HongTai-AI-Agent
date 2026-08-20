@@ -20,6 +20,9 @@ import {
 
 const webRoot = join(process.cwd(), "apps", "web", "src");
 const read = (relativePath: string) => readFileSync(join(webRoot, relativePath), "utf8");
+const page = read("pages/CreatePage.tsx");
+const forms = read("features/production/production-setup-forms.tsx");
+const createSurface = `${page}\n${forms}`;
 
 test("制作进度文案只按稳定 stage 白名单映射，未知 stage 不猜业务", () => {
   assert.equal(productionRenderStageCopy("validate_avatar_audio"), "正在校验数字人口播原声");
@@ -156,8 +159,8 @@ test("制作页用 contextualAction 单主按钮、三 Tab 与 9:16 预览，完
   assert.match(page, /runtime\.production\.importAssets/);
   assert.match(page, /runtime\.production\.generatePlan/);
   assert.match(page, /runtime\.production\.render/);
-  assert.match(page, /参考哪条拆解/);
-  assert.match(page, /这次想讲什么/);
+  assert.match(createSurface, /参考哪条拆解/);
+  assert.match(createSurface, /这次想讲什么/);
   assert.doesNotMatch(page, /新建制作项目/);
   assert.doesNotMatch(page, />01</);
   assert.doesNotMatch(page, /发布/);

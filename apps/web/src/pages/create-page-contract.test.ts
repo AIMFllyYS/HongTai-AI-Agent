@@ -10,25 +10,40 @@ const webRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (relativePath: string) => readFileSync(join(webRoot, relativePath), "utf8");
 
 const page = read("pages/CreatePage.tsx");
+const forms = read("features/production/production-setup-forms.tsx");
+const composer = read("features/production/production-composer-panel.tsx");
+const history = read("features/production/production-history-list.tsx");
 const entry = read("components/ProductionModeEntry.tsx");
 const css = read("styles/pages/production-runtime.css");
-const surface = `${page}\n${entry}`;
+const surface = `${page}\n${entry}\n${forms}\n${composer}`;
+
+test("制作首页拆成入口 / Agent 表单 / 历史列表子模块，路由仍挂 CreatePage", () => {
+  assert.match(page, /from "\.\.\/features\/production\/production-composer-panel"/u);
+  assert.match(page, /from "\.\.\/features\/production\/production-history-list"/u);
+  assert.match(page, /from "\.\.\/features\/production\/production-setup-forms"/u);
+  assert.match(page, /<ProductionComposerPanel/u);
+  assert.match(page, /<ProductionHistoryList/u);
+  assert.match(composer, /<ProductionModeEntry /u);
+  assert.match(composer, /<AgentSetupForm/u);
+  assert.match(composer, /<ReplicaSetupForm/u);
+  assert.match(history, /本地制作记录/u);
+});
 
 test("制作首页只有两张顶层入口卡，数字人不是第三张", () => {
   assert.equal([...entry.matchAll(/data-production-entry="/gu)].length, 2, "第一屏只能有两张入口卡");
   assert.match(entry, /data-production-entry="agent"/u);
   assert.match(entry, /data-production-entry="replica"/u);
   assert.doesNotMatch(entry, /data-production-entry="avatar"/u);
-  assert.match(entry, /<strong>Agent 模式<\/strong>/u);
+  assert.match(entry, /<strong>智能成片<\/strong>/u);
   assert.match(entry, /<strong>爆款复刻<\/strong>/u);
-  assert.match(page, /<ProductionModeEntry /u);
-  assert.match(page, /composerFlow === "pick"/u);
+  assert.match(composer, /flow === "pick"/u);
+  assert.match(page, /composerFlow/u);
 });
 
 test("数字人口播只作为 Agent 流程里的二次选项，不改服务契约", () => {
   assert.match(page, /composerFlow === "agent"/u);
-  assert.match(page, /aria-pressed=\{mode === "avatar"\}/u);
-  assert.match(page, /onMode\(avatarOn \? "montage" : "avatar"\)/u);
+  assert.match(forms, /<Switch checked=\{avatarOn\}/u);
+  assert.match(forms, /onMode\(checked \? "avatar" : "montage"\)/u);
   assert.match(page, /mode === "avatar" \? \{ avatarScript \}/u, "提交给 production.create 的仍是既有 mode + avatarScript");
   assert.doesNotMatch(page, /production-mode-grid/u, "不再用两列顶层单选把数字人和素材剪辑并列");
   assert.match(entry, /数字人口播是下一步里的开关/u, "入口卡只提示下一步有这个选项，本身不是第三张卡");
@@ -41,8 +56,8 @@ test("Agent 文案不声称看懂或理解素材，并要求逐镜核对", () =>
   assert.ok(fallbackAt >= 0 && referenceAt >= 0 && fallbackAt < referenceAt, "盲配回退必须写在「会参考画面」前面");
   assert.match(entry, /不会核对文字是否对得上每个镜头/u);
   assert.match(entry, /逐镜核对/u);
-  assert.match(page, /不会核对文字是否对得上每个镜头/u);
-  assert.match(page, /这台安装不一定能看画面/u);
+  assert.match(forms, /不会核对文字是否对得上每个镜头/u);
+  assert.match(forms, /这台安装不一定能看画面/u);
   assert.doesNotMatch(entry, /并在本地合成/u);
   assert.doesNotMatch(surface, /看懂/u);
   assert.doesNotMatch(surface, /理解你的素材/u);
@@ -57,29 +72,32 @@ test("爆款复刻走既有向导，没有拆解时说明下一步并导向拆�
   assert.equal(matchRoute("/replica/task-1").key, "replica-wizard");
   assert.equal(pathForRoute("home"), "/");
   assert.doesNotMatch(page, /runtime\.replica/u, "制作首页只负责选来源并跳转，不复制向导");
-  assert.match(page, /去拆解一条/u);
+  assert.match(forms, /去拆解一条/u);
   assert.match(page, /navigate\(pathForRoute\("home"\)\)/u);
   assert.match(entry, /不代表画面里真的有这些内容/u);
   assert.match(entry, /成片仍要回制作页合成/u);
 });
 
 test("数字人口播不承诺素材剪辑才有的能力", () => {
-  assert.match(page, /只按稿烧字幕，不合成语音，也不改原声/u);
-  assert.match(page, /生成后不能改口播和单镜时长/u);
-  assert.match(page, /切分按字数估算，不是对着录音识别的/u);
+  assert.match(forms, /只按稿烧字幕，不合成语音，也不改原声/u);
+  assert.match(forms, /生成后不能改口播和单镜时长/u);
+  assert.match(forms, /切分按字数估算，不是对着录音识别的/u);
   assert.doesNotMatch(page, /数字人口播[\s\S]{0,80}TTS/u);
   assert.doesNotMatch(page, /数字人口播[\s\S]{0,80}至少 3/u);
   assert.doesNotMatch(entry, /数字人口播[\s\S]{0,80}至少 3/u);
   assert.match(entry, /不需要 \{MIN_MONTAGE_VISUAL_ASSETS\} 份素材/u);
 });
 
-test("入口卡与二次选项的触达高度不小于 44px", () => {
+test("入口卡与二次选项的触达高度不小于 44px，时长含真实 45 秒档", () => {
   assert.match(css, /\.production-entry-card \{[^}]*min-height: 44px/u);
   assert.match(css, /\.production-entry-card:focus-visible/u);
-  assert.match(css, /\.production-entry-switch \{[^}]*min-height: 44px/u);
+  assert.match(css, /\.production-entry-switch[\s\S]*min-height: 44px/u);
   assert.match(css, /\.production-avatar-option \{[^}]*min-height: 44px/u);
   assert.match(css, /\.production-entry-grid \{[^}]*grid/u);
   assert.doesNotMatch(css, /\.production-entry-grid \{[^}]*grid-template-columns:\s*repeat\(2/u, "390px 下两张长文案卡必须上下排，不能挤成两列");
+  assert.match(forms, /production-duration-segmented/u);
+  assert.match(forms, /\[15, 30, 60\]/u);
+  assert.match(css, /\.production-duration-segmented/u);
 });
 
 test("离开 Agent 会清掉失败，重试不会在选择屏上重建项目", () => {
@@ -100,10 +118,16 @@ test("用它做视频会跳过两张卡，直接进入 Agent 表单", () => {
   assert.match(load, /setComposerFlow\("agent"\)/u);
 });
 
-test("加号入口通过 entry 查询参数直接打开 Agent 或复刻表单", () => {
+test("加号入口通过 entry 查询参数直接打开 Agent 或复刻表单，页头文案对齐稿面", () => {
   const load = page.slice(page.indexOf("const load = useCallback"), page.indexOf("}, [runtime]);"));
   assert.match(page, /composeEntryFromSearch/u);
   assert.match(page, /consumeComposeEntryFromSearch/u);
   assert.match(load, /setComposerFlow\(composeEntry\)/u);
   assert.ok(load.indexOf("requestedSourceId") < load.indexOf("composeEntry"), "拆解详情的 sourceId 优先于加号 entry");
+  assert.match(page, /智能成片/u);
+  assert.match(page, /爆款复刻/u);
+  assert.match(page, /production-header-switch/u);
+  assert.match(page, />更换</u);
+  assert.match(forms, /这次想讲什么？/u);
+  assert.match(forms, /按哪条拆解复刻？/u);
 });

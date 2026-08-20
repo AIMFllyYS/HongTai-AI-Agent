@@ -207,9 +207,9 @@ export function TaskDetailPage({
     ...(terminalTask
       ? [{
         id: "delete",
-        title: "删除",
+        title: "删除任务",
         description: localVideo ? "永久删除本机任务和上传视频" : "永久删除本机任务及全部产物",
-        icon: "error" as const,
+        icon: "close" as const,
         onSelect: () => { setConfirmationOpen(false); setDeleteConfirmationOpen(true); },
       }]
       : []),

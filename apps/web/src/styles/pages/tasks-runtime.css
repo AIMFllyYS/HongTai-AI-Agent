@@ -364,6 +364,15 @@
   gap: var(--space-3);
 }
 
+.task-analysis-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--text-caption-line);
+}
+
 .task-detail-summary {
   display: grid;
   gap: var(--space-3);
