@@ -31,7 +31,8 @@
 
 - Android 源码版本推进为 `0.1.18` / `versionCode=26`；只生成 Release 产品并按 `HongTai-AI-Agent-release-v0.1.18.apk` 独立归档。
 - 本地归档为 21,932,925 字节、SHA-256 `A5D39C07C62A37AF42F70242D17EB3F73C47E05E4BBEEA51759E5A3C931072CF`；证书锚点与既有 Release 身份一致。
-- 主机侧 `scripts/build-android-release.ps1` 已通过 Web production build、Capacitor sync、Release JVM、`lintRelease`、四 ABI `assembleRelease`、16 KiB zipalign、包身份与 v2/v3 签名后验。API 35 模拟器上已用归档 `v0.1.17` 以 `adb install --no-streaming -r` 覆盖安装，再同样方式升到 `v0.1.18`，未使用 `-d` 或卸载，`firstInstallTime` 保持 `2026-08-19 17:53:58`。冷启动后首页中文正常。下载页在公网上传回验前仍推荐 `v0.1.17`。
+- 主机侧 `scripts/build-android-release.ps1` 已通过 Web production build、Capacitor sync、Release JVM、`lintRelease`、四 ABI `assembleRelease`、16 KiB zipalign、包身份与 v2/v3 签名后验。API 35 模拟器上已用归档 `v0.1.17` 以 `adb install --no-streaming -r` 覆盖安装，再同样方式升到 `v0.1.18`，未使用 `-d` 或卸载，`firstInstallTime` 保持 `2026-08-19 17:53:58`。冷启动后首页中文正常。
+- 该版本已完成人工上传与公网文件回验；公网文件为 21,932,925 字节、SHA-256 `A5D39C07C62A37AF42F70242D17EB3F73C47E05E4BBEEA51759E5A3C931072CF`。下载页现推荐 `v0.1.18`；这表示安装包已公开分发并完成文件级回验，不表示真实 Provider、物理真机或最终成片已经验收通过。
 - API 35 模拟器上已有 v3 蒙太奇与数字人切片的 Media3 成片证据。物理真机、Agent 真实 `generatePlan` 与 B 站 APK 真网采集仍待用户端测。
 
 ## [0.1.17] - 2026-08-20
@@ -54,7 +55,7 @@
 - Android 源码版本推进为 `0.1.17` / `versionCode=25`；正式签名 Release 已按 `HongTai-AI-Agent-release-v0.1.17.apk` 独立归档并上传到固定公网地址。
 - 本地归档为 21,932,117 字节、SHA-256 `1358DFA5D16FB6C4F25C2684E4A23B3773296167FE51069CE5B466A1A9212B53`；证书锚点与既有 Release 身份一致。
 - 主机侧 Release JVM、`lintRelease`、四 ABI `assembleRelease`、16 KiB zipalign、包身份与签名后验已通过；公网重新下载后的文件大小与 SHA-256 已与本地归档一致。物理真机上的两条制作主链、数字人口播、贴纸与微调烧录仍待用户端测。
-- 下载页现推荐 `v0.1.17`；这表示安装包已公开分发并完成文件级回验，不表示真实 Provider、物理真机或最终成片已经验收通过。
+- 下载页现已作为历史版本保留 `v0.1.17`；当前推荐为 `v0.1.18`。公开分发只证明文件身份和下载链路已回验，不表示真实 Provider、物理真机或最终成片已经验收通过。
 
 ## [0.1.16] - 2026-08-18
 

@@ -962,15 +962,15 @@
         <h1 id="hero-title">让内容开始<span class="hero__accent">流动。</span></h1>
         <p class="hero__lead">宏泰 AI 智能体把公开内容采集、AI 拆解、图片观察与本地视频制作，收进一台 Android 设备。这里提供正式版本下载与真实更新记录。</p>
         <div class="hero__actions">
-          <a class="button button--primary" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.17.apk" aria-label="下载宏泰 AI 智能体 v0.1.17 Android 正式签名版">
-            下载 v0.1.17
+          <a class="button button--primary" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.18.apk" aria-label="下载宏泰 AI 智能体 v0.1.18 Android 正式签名版">
+            下载 v0.1.18
             <span class="button__arrow" aria-hidden="true">↓</span>
           </a>
           <span class="version-note">正式签名 Release · Android APK</span>
         </div>
       </div>
 
-      <aside class="release-object" aria-label="当前推荐版本 v0.1.17">
+      <aside class="release-object" aria-label="当前推荐版本 v0.1.18">
         <div class="release-object__top">
           <span class="release-object__status">Latest build</span>
           <span class="release-object__stamp">UPDATED 2026.08.20</span>
@@ -978,10 +978,10 @@
         <div class="release-object__body">
           <div class="release-logo"><img src="download-brand.png" alt=""></div>
           <div>
-            <div class="release-number" aria-label="版本 0.1.17">0.1.17</div>
+            <div class="release-number" aria-label="版本 0.1.18">0.1.18</div>
             <div class="release-object__meta">
               <div>
-                <strong>双模式制作 · 贴纸与微调</strong>
+                <strong>制作页可点 · 数字人原声</strong>
                 <span>正式签名 Release</span>
               </div>
               <span class="platform-pill">ANDROID</span>
@@ -1006,13 +1006,18 @@
         <noscript>
           <div class="release-list">
             <article class="release-card release-card--recommended">
-              <div class="release-card__top"><strong class="release-card__version">v0.1.17</strong><span class="badge">正式发布</span></div>
-              <p class="release-card__summary">制作首页提供 Agent 与爆款复刻两条入口，支持字幕模板、随包贴纸、素材观察和导出微调。</p>
-              <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.17.apk">下载 Android APK <span aria-hidden="true">↓</span></a>
+              <div class="release-card__top"><strong class="release-card__version">v0.1.18</strong><span class="badge">正式发布</span></div>
+              <p class="release-card__summary">制作页禁用按钮不再挡住卡片；选择器回来不会卡死；数字人合成保留原声。</p>
+              <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.18.apk">下载 Android APK <span aria-hidden="true">↓</span></a>
             </article>
             <details class="release-archive">
-              <summary class="release-archive__summary">历史版本 <span class="release-archive__count">16 个可下载版本</span></summary>
+              <summary class="release-archive__summary">历史版本 <span class="release-archive__count">17 个可下载版本</span></summary>
               <div class="release-archive__content">
+                <article class="release-card">
+                  <div class="release-card__top"><strong class="release-card__version">v0.1.17</strong><span class="badge">历史版本</span></div>
+                  <p class="release-card__summary">制作首页提供 Agent 与爆款复刻两条入口，支持字幕模板、随包贴纸、素材观察和导出微调。</p>
+                  <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.17.apk">下载 Android APK <span aria-hidden="true">↓</span></a>
+                </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.16</strong><span class="badge">历史版本</span></div>
                   <p class="release-card__summary">冷启动显示品牌开屏，键盘不再挡住输入，制作成功不会被改写成失败；打开应用也更轻。</p>
@@ -1100,7 +1105,7 @@
 
         <div class="release-boundary reveal" role="note">
           <span class="boundary-icon" aria-hidden="true">!</span>
-          <div><strong>版本说明：</strong>v0.1.17 使用 versionCode 25，公网文件为 21,932,117 字节、SHA-256 1358DFA5D16FB6C4F25C2684E4A23B3773296167FE51069CE5B466A1A9212B53，已与本地 Release 归档重新下载核对一致。尚未使用真实 AI Provider 分析真实照片，也未完成物理 Android 真机端测。</div>
+          <div><strong>版本说明：</strong>v0.1.18 使用 versionCode 26，公网文件为 21,932,925 字节、SHA-256 A5D39C07C62A37AF42F70242D17EB3F73C47E05E4BBEEA51759E5A3C931072CF，已与本地 Release 归档重新下载核对一致。尚未使用真实 AI Provider 分析真实照片，也未完成物理 Android 真机端测。</div>
         </div>
       </div>
     </section>
@@ -1132,9 +1137,19 @@
     // 版本维护区：新增或删除一个对象即可更新下载卡片。
     const RELEASES = [
       {
-        version: "v0.1.17",
+        version: "v0.1.18",
         recommended: true,
         status: "正式发布",
+        summary: "制作页禁用按钮不再挡住卡片；选择器回来不会卡死；数字人合成保留原声。",
+        versionCode: "26",
+        size: "21,932,925 bytes",
+        sha256: "A5D39C07C62A37AF42F70242D17EB3F73C47E05E4BBEEA51759E5A3C931072CF",
+        url: "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.18.apk"
+      },
+      {
+        version: "v0.1.17",
+        recommended: false,
+        status: "历史版本",
         summary: "制作首页提供 Agent 与爆款复刻两条入口，支持字幕模板、随包贴纸、素材观察和导出微调。",
         versionCode: "25",
         size: "21,932,117 bytes",
@@ -1299,6 +1314,17 @@
 
     // 更新维护区：所有时间统一使用北京时间（UTC+8）。
     const CHANGELOG = [
+      {
+        iso: "2026-08-20T08:15:11+08:00",
+        date: "2026.08.20",
+        time: "08:15:11 北京时间",
+        category: "正式发布 · v0.1.18",
+        title: "制作页可点、数字人原声进入正式签名版本",
+        description: "v0.1.18 修好制作页禁用主按钮挡住卡片、素材选择器回来后页面永久忙碌、以及卡住的规划或合成只有冷启动才恢复的问题。数字人合成保留原片声音；B 站音频若声明为 video/mp4 也能下载。公网文件大小和 SHA-256 已与本地 Release 归档重新下载核对一致。尚未使用真实 AI Provider 分析真实照片，也未完成物理 Android 真机端测。",
+        referenceLabel: "正式 Release · v0.1.18 / code26 · 公网哈希已回验",
+        downloadUrl: "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.18.apk",
+        downloadLabel: "下载 v0.1.18 正式签名 APK · 21,932,925 bytes"
+      },
       {
         iso: "2026-08-19T20:49:41+08:00",
         date: "2026.08.19",
