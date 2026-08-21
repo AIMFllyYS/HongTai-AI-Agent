@@ -61,5 +61,7 @@ test("real pages import playbook section glyphs instead of inventing a second ic
 test("playbook catalog lists every registered section id", () => {
   const ids = playbookSections.map((section) => section.id);
   assert.deepEqual(ids, ["color", "type", "icons", "tabbar", "navbar", "chrome", "paste", "compose", "analysis", "settings", "observation"]);
-  assert.ok(playbookSections.every((section) => typeof section.Render === "function"));
+  assert.equal(playbookSections.find((section) => section.id === "type")?.summary, "20 / 16 / 15 / 14 / 12 / 11 / 10");
+  assert.match(read("styles/shell.css"), /\.page-masthead__titles h1\s*\{[^}]*font-size:\s*var\(--text-display\)[^}]*line-height:\s*var\(--text-display-line\)/s);
+  assert.match(read("styles/tokens.css"), /--text-display:\s*1\.25rem/);
 });

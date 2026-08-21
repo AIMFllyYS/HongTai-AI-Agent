@@ -23,7 +23,7 @@ export interface PlaybookSection {
 
 export const playbookSections: readonly PlaybookSection[] = [
   { id: "color", title: "NA2 色系", group: "规范", summary: "白为主，绿为点", Render: PlaybookColorScale },
-  { id: "type", title: "NA3 字体", group: "规范", summary: "24 / 16 / 15 / 14 / 12 / 11 / 10", Render: PlaybookTypeScale },
+  { id: "type", title: "NA3 字体", group: "规范", summary: "20 / 16 / 15 / 14 / 12 / 11 / 10", Render: PlaybookTypeScale },
   { id: "icons", title: "NA5 图标", group: "规范", summary: "Lucide 描边 22px", Render: PlaybookIconGrid },
   { id: "tabbar", title: "M/Tab Bar", group: "组件", summary: "48px 栏，32px 方圆加号与左右项居中对齐", Render: PlaybookTabBarSpecimen },
   { id: "navbar", title: "M/Nav Bar", group: "组件", summary: "返回 24px Lucide chevron-left", Render: PlaybookNavBarSpecimen },

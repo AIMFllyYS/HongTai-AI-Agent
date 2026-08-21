@@ -20,7 +20,7 @@ const colorSwatches = [
 ] as const;
 
 const typeRows = [
-  { name: "大标题", size: "24px · 半粗", sample: "拆解", className: "playbook-type__display" },
+  { name: "大标题", size: "20px · 半粗", sample: "拆解", className: "playbook-type__display" },
   { name: "页面标题", size: "16px · 半粗", sample: "拆解详情", className: "playbook-type__headline" },
   { name: "区块标题", size: "15px · 半粗", sample: "最近拆解", className: "playbook-type__section" },
   { name: "正文", size: "14px · 常规", sample: "粘贴作品链接", className: "playbook-type__body" },
