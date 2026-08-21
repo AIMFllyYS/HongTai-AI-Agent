@@ -327,7 +327,7 @@
 .production-duration-segmented button.is-selected {
   color: var(--palette-ink-900);
   font-weight: 500;
-  background: #fff;
+  background: var(--surface-card);
   box-shadow: 0 0.0625rem 0.125rem rgba(27, 29, 31, 0.06);
 }
 

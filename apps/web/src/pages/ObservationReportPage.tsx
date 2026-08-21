@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { issueFromAppError } from "@hongtai/core";
-import type { AppRuntime, DiagnosisMessage, DiagnosisReportRecord, DiagnosisSessionRecord, StructuredGenerationProgressV1, TaskIssue } from "@hongtai/core";
+import type { AppRuntime, DiagnosisMessage, DiagnosisReportRecord, DiagnosisSessionRecord, LocalProfile, StructuredGenerationProgressV1, TaskIssue } from "@hongtai/core";
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
@@ -8,10 +8,14 @@ import { GlassCard } from "../components/GlassCard";
 import { Icon, type IconName } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { RuntimeMediaFrame } from "../components/RuntimeMediaFrame";
-import { Sheet } from "../components/Sheet";
 import { EmptyState, ErrorState } from "../components/StatePanels";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { useSkeletonHold } from "../motion/skeleton-hold";
+import {
+  OBSERVATION_FOLLOW_UP_PAGE_INPUT_ID,
+  ObservationFollowUpComposer,
+} from "../features/diagnosis/observation-follow-up-composer";
+import { ObservationFollowUpSheet } from "../features/diagnosis/observation-follow-up-sheet";
 import {
   imageQualityBadgeLabel,
   imageQualityDescription,
@@ -49,10 +53,6 @@ function reportStatusTitle(record: DiagnosisReportRecord | undefined): string {
   if (record.status === "running") return "正在生成报告";
   if (record.status === "failed") return "报告未完成";
   return "已保存观察报告";
-}
-
-function focusQuestion(): void {
-  if (typeof document !== "undefined") document.getElementById("observation-follow-up")?.focus();
 }
 
 function ReportSection({
@@ -95,6 +95,7 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
   const [chatPending, setChatPending] = useState(false);
   const [failedQuestion, setFailedQuestion] = useState<string>();
   const [followUpOpen, setFollowUpOpen] = useState(false);
+  const [profile, setProfile] = useState<LocalProfile>();
 
   const load = useCallback(async () => {
     try {
@@ -115,6 +116,18 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
   }, [runtime, sessionId]);
 
   useAppResume(load);
+
+  useEffect(() => {
+    let cancelled = false;
+    void runtime.profile.get().then((next) => {
+      if (!cancelled) setProfile(next);
+    }).catch(() => {
+      if (!cancelled) setProfile(undefined);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [runtime]);
 
   useEffect(() => {
     void load();
@@ -175,6 +188,7 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
   const askQuestion = async (value: string) => {
     const trimmed = value.trim();
     if (!diagnosisAvailable || !trimmed || chatPending) return;
+    setFollowUpOpen(true);
     setChatPending(true);
     setIssue(undefined);
     setFailedQuestion(undefined);
@@ -205,13 +219,12 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
   const ask = async () => askQuestion(question);
 
   const useQuestion = (value: string) => {
-    setQuestion(value);
-    setFollowUpOpen(true);
+    void askQuestion(value);
   };
 
-  useEffect(() => {
-    if (followUpOpen) focusQuestion();
-  }, [followUpOpen]);
+  const openFollowUpIfHistory = () => {
+    if (messages.length > 0 || pendingQuestion) setFollowUpOpen(true);
+  };
 
   const showSkeleton = useSkeletonHold(loading);
   if (showSkeleton) {
@@ -258,8 +271,19 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
     );
   }
 
+  const displayName = profile?.displayName?.trim();
+  const displayInitial = displayName ? Array.from(displayName)[0] : undefined;
+
   return (
-    <AppShell activeNav="ai" backPath={observationNewPath()} navigate={navigate} title="观察报告" visualTheme="warm-soft-tech">
+    <AppShell
+      activeNav="ai"
+      backPath={observationNewPath()}
+      headerMode="detail"
+      navigate={navigate}
+      showNav={false}
+      title="观察报告"
+      visualTheme="warm-soft-tech"
+    >
       <div className="page-stack page-observation-report">
         <aside className="observation-report-banner">{disclaimer}</aside>
 
@@ -276,14 +300,16 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
         {record?.status === "succeeded" && !canShowReport ? <ErrorState description="这份报告内容不完整，应用不会自行猜测或补写。请重新生成报告。" title="报告暂时无法展示" /> : null}
 
         {canShowReport && report ? <SucceededReport
+          avatarUri={profile?.avatarUri}
           chatPending={chatPending}
           diagnosisAvailable={diagnosisAvailable}
           disclaimer={disclaimer}
+          displayInitial={displayInitial}
           followUpOpen={followUpOpen}
           messages={messages}
           onAsk={() => void ask()}
           onCloseFollowUp={() => setFollowUpOpen(false)}
-          onOpenFollowUp={() => setFollowUpOpen(true)}
+          onFocusComposer={openFollowUpIfHistory}
           onQuestionChange={setQuestion}
           onUseQuestion={useQuestion}
           pendingQuestion={pendingQuestion}
@@ -298,14 +324,16 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
 }
 
 function SucceededReport({
+  avatarUri,
   chatPending,
   diagnosisAvailable,
   disclaimer,
+  displayInitial,
   followUpOpen,
   messages,
   onAsk,
   onCloseFollowUp,
-  onOpenFollowUp,
+  onFocusComposer,
   onQuestionChange,
   onUseQuestion,
   pendingQuestion,
@@ -314,14 +342,16 @@ function SucceededReport({
   session,
   streamedAnswer,
 }: {
+  readonly avatarUri: string | null | undefined;
   readonly chatPending: boolean;
   readonly diagnosisAvailable: boolean;
   readonly disclaimer: string;
+  readonly displayInitial: string | undefined;
   readonly followUpOpen: boolean;
   readonly messages: readonly DiagnosisMessage[];
   readonly onAsk: () => void;
   readonly onCloseFollowUp: () => void;
-  readonly onOpenFollowUp: () => void;
+  readonly onFocusComposer: () => void;
   readonly onQuestionChange: (value: string) => void;
   readonly onUseQuestion: (value: string) => void;
   readonly pendingQuestion: string | undefined;
@@ -449,19 +479,41 @@ function SucceededReport({
         <h3 className="observation-follow-up__title">可以继续问</h3>
         {report.followUpQuestions.length ? (
           <div className="chip-row chip-row--scroll">
-            {report.followUpQuestions.map((item) => <button className="chip" key={item} onClick={() => onUseQuestion(item)} type="button">{item}</button>)}
+            {report.followUpQuestions.map((item) => <button className="chip" disabled={!diagnosisAvailable || chatPending} key={item} onClick={() => onUseQuestion(item)} type="button">{item}</button>)}
           </div>
         ) : null}
-        <Button disabled={!diagnosisAvailable} icon={<Icon name="message_circle" size={18} />} onClick={onOpenFollowUp} variant="secondary">{messages.length > 0 ? `继续追问 · ${messages.length} 条` : "继续追问"}</Button>
-        <Sheet labelledBy="observation-follow-up-title" onClose={onCloseFollowUp} open={followUpOpen} title="追问">
-          {report.followUpQuestions.length ? <div className="chip-row chip-row--scroll">{report.followUpQuestions.map((item) => <button className="chip" key={item} onClick={() => onUseQuestion(item)} type="button">{item}</button>)}</div> : null}
-          <div className="observation-message-list">{messages.map((message) => <article className={`observation-message is-${message.role} is-${message.status}`.trim()} key={message.id}><span><Icon name={message.role === "assistant" ? "message_circle" : "user"} size={18} /></span><p>{message.content}</p></article>)}{pendingQuestion ? <><article className="observation-message is-user is-pending"><span><Icon name="user" size={18} /></span><p>{pendingQuestion}</p></article><article className="observation-message is-assistant is-streaming"><span><Icon name="message_circle" size={18} /></span><p>{streamedAnswer || "正在生成回复…"}</p></article></> : null}</div>
-          <div className="observation-question-composer"><label htmlFor="observation-follow-up">输入想继续了解的问题</label><textarea disabled={!diagnosisAvailable || chatPending} id="observation-follow-up" maxLength={20_000} onChange={(event) => onQuestionChange(event.target.value)} placeholder="例如：怎样在相近光线下做日常记录？" rows={4} value={question} /><div className="observation-question-composer__actions"><small>回复基于本次已保存报告和真实追问历史；深度思考只在报告生成进度中显示。{question.length}/20,000</small><Button className={chatPending ? "is-busy" : ""} disabled={!diagnosisAvailable || !question.trim() || chatPending} icon={<Icon name={chatPending ? "loader_circle" : "arrow_up"} size={18} />} onClick={onAsk}>{chatPending ? "正在回复" : "发送追问"}</Button></div></div>
-          <Button className="sheet-cancel" onClick={onCloseFollowUp} variant="quiet">取消</Button>
-        </Sheet>
       </section>
 
-      <p className="observation-report-foot">日常参考，不构成正式诊疗；如有不适请咨询专业人士</p>
+      <div className="observation-follow-up-dock">
+        <ObservationFollowUpComposer
+          disabled={!diagnosisAvailable}
+          id={OBSERVATION_FOLLOW_UP_PAGE_INPUT_ID}
+          onChange={onQuestionChange}
+          onFocus={onFocusComposer}
+          onSubmit={onAsk}
+          pending={chatPending}
+          placeholder="想继续了解什么？"
+          value={question}
+        />
+        <p className="observation-report-foot">日常参考，不构成诊断；如有不适请咨询专业人士</p>
+      </div>
+
+      <ObservationFollowUpSheet
+        avatarUri={avatarUri}
+        chatPending={chatPending}
+        diagnosisAvailable={diagnosisAvailable}
+        displayInitial={displayInitial}
+        messages={messages}
+        onAsk={onAsk}
+        onClose={onCloseFollowUp}
+        onQuestionChange={onQuestionChange}
+        onUseQuestion={onUseQuestion}
+        open={followUpOpen}
+        pendingQuestion={pendingQuestion}
+        question={question}
+        streamedAnswer={streamedAnswer}
+        suggestions={report.followUpQuestions}
+      />
     </>
   );
 }

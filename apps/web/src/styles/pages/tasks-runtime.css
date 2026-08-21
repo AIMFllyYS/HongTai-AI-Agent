@@ -90,7 +90,7 @@
   width: fit-content;
   padding: 0.125rem 0.45rem;
   color: var(--color-primary-strong);
-  background: rgba(187, 233, 225, 0.72);
+  background: var(--color-accent-soft);
   border-radius: var(--radius-pill);
   font-size: var(--text-caption);
   font-weight: 700;
@@ -148,7 +148,7 @@
   flex-shrink: 0;
   place-items: center;
   color: var(--palette-ink-600);
-  background: #ffffff;
+  background: var(--surface-paper);
   border-radius: 50%;
 }
 
@@ -643,7 +643,7 @@
   display: grid;
   gap: var(--space-3);
   padding: var(--space-4);
-  background: linear-gradient(135deg, rgba(255, 244, 238, 0.96), var(--color-surface-card));
+  background: linear-gradient(135deg, var(--surface-warning), var(--color-surface-card));
   border-color: rgba(186, 26, 26, 0.22);
 }
 

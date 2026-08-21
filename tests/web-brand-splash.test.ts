@@ -47,6 +47,7 @@ test("Android theme covers the pre-WebView frame without a SplashScreen plugin",
   const activity = read("android/app/src/main/java/com/hongtai/aiagent/MainActivity.kt");
 
   assert.match(colors, /name="brand_splash_background">#F2F7F2/);
+  assert.match(read("android/app/src/main/res/values-night/colors.xml"), /name="brand_splash_background">#121413/);
   assert.match(styles, /android:windowBackground">@drawable\/launch_background/);
   assert.match(launch, /@color\/brand_splash_background/);
   assert.match(launch, /@drawable\/ic_launcher_foreground/);

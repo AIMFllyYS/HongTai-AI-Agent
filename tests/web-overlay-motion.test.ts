@@ -21,7 +21,7 @@ test("all product sheets and the compose plus share Overlay rise", () => {
   const more = read("components/TaskMoreActionsSheet.tsx");
   const settings = read("pages/SettingsPage.tsx");
   const confirm = read("features/diagnosis/observation-start-panels.tsx");
-  const report = read("pages/ObservationReportPage.tsx");
+  const followUp = read("features/diagnosis/observation-follow-up-sheet.tsx");
 
   assert.match(overlay, /data-no-swipe/);
   assert.match(overlay, /dragControls/);
@@ -33,7 +33,10 @@ test("all product sheets and the compose plus share Overlay rise", () => {
   assert.match(more, /title="更多操作"/);
   assert.match(settings, /<Sheet /);
   assert.match(confirm, /observation-confirm-sheet/);
-  assert.match(report, /title="追问"/);
+  assert.match(followUp, /placement="rise"/);
+  assert.match(followUp, /OverlayDragRegion/);
+  assert.match(followUp, /AI 追问/);
+  assert.match(followUp, /关闭追问/);
   assert.doesNotMatch(sheet, /createPortal/);
 });
 

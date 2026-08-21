@@ -39,7 +39,8 @@ test("observation pages use the real diagnosis runtime rather than a visual diag
   assert.match(report, /content_delta/);
   assert.match(report, /reportRetryAllowed/);
   assert.match(report, /selectMedia:\s*\(\) => navigate\(observationNewPath\(\)\)/);
-  assert.match(report, /maxLength=\{20_000\}/);
+  assert.match(report, /ObservationFollowUpComposer/);
+  assert.match(read("features/diagnosis/observation-follow-up-composer.tsx"), /maxLength=\{20_000\}/);
   assert.doesNotMatch(report, /复制回复|有用|FOLLOW-UP/);
 
   // A report page can only show an explicit retry when the persisted issue
@@ -241,8 +242,9 @@ test("the packaged source contains no diagnostic-treatment or health-score copy"
   assert.match(report, /本次观察的局限/);
   assert.match(report, /可以继续问/);
   assert.match(report, /图像质量/);
-  assert.match(report, /日常参考，不构成正式诊疗/);
-  assert.match(report, /<Sheet[\s\S]*title="追问"/);
+  assert.match(report, /日常参考，不构成诊断/);
+  assert.match(report, /ObservationFollowUpSheet/);
+  assert.match(read("features/diagnosis/observation-follow-up-sheet.tsx"), /AI 追问/);
   assert.doesNotMatch(report, /可见要点|图片可见观察|局限与免责声明/);
   assert.match(report, /observationEvidenceText/);
   assert.match(report, /imageQualityDescription/);
@@ -261,12 +263,24 @@ test("observation controls stay compact and clear above the fixed Android naviga
   assert.match(panels, /observation-capture-card__laser/);
   assert.match(panels, /拍摄照片/);
   assert.match(panels, /相册选择/);
-  assert.match(report, /observation-question-composer__actions/);
+  const composer = read("features/diagnosis/observation-follow-up-composer.tsx");
+  const sheet = read("features/diagnosis/observation-follow-up-sheet.tsx");
+  assert.match(report, /ObservationFollowUpComposer/);
+  assert.match(report, /ObservationFollowUpSheet/);
+  assert.match(report, /headerMode="detail"/);
+  assert.match(report, /showNav=\{false\}/);
+  assert.doesNotMatch(report, /继续追问/);
+  assert.doesNotMatch(report, /from "\.\.\/components\/Sheet"/);
+  assert.match(composer, /observation-follow-up-composer/);
+  assert.match(sheet, /navigator\.clipboard\.writeText/);
+  assert.match(sheet, /AI 追问/);
+  assert.match(sheet, /关闭追问/);
   assert.match(css, /\.observation-capture-card__actions\s*\{[^}]*grid-template-columns:\s*1fr\s+1fr/s);
-  assert.match(css, /\.observation-confirm-actions\s+\.button--primary\s*\{[^}]*color:\s*#000/s);
-  assert.match(css, /\.observation-question-composer\s*\{[^}]*bottom:\s*calc\([^;]*--nav-height[^;]*--safe-bottom[^;]*--keyboard-inset/s);
+  assert.match(css, /\.observation-confirm-actions\s+\.button--primary\s*\{[^}]*color:\s*var\(--color-text-on-primary\)/s);
+  assert.match(css, /\.observation-follow-up-dock\s*\{[^}]*--safe-bottom[^;]*--keyboard-inset/s);
+  assert.doesNotMatch(css, /\.observation-follow-up-dock\s*\{[^}]*--nav-height/);
   assert.match(css, /\.observation-message p\s*\{[^}]*overflow-wrap:\s*anywhere/s);
-  assert.match(css, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.observation-question-composer__actions[^}]*grid-template-columns:\s*1fr/);
+  assert.match(css, /\.observation-follow-up-composer__send\.is-busy svg\s*\{[^}]*animation:\s*spin/s);
   assert.match(css, /\.page-observation-report \.observation-quality-card/);
   assert.match(report, /observation-recommendation-card__top/);
   assert.doesNotMatch(report, /observation-recommendation-card__icon|observation-recommendation-card__body|observationRecommendationIcon/);
@@ -305,7 +319,8 @@ test("observation in-progress page follows unarchived S9b without vitals HUD or 
   assert.match(css, /observation-laser-scan/);
   assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.observation-capture-card__laser::after[\s\S]*animation:\s*none/);
   assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.observation-observing-module__skeleton span[\s\S]*animation:\s*none/);
-  assert.match(css, /#26a69a/);
+  assert.match(css, /\.observation-observing-scan__brackets i\s*\{[^}]*border:\s*0\.125rem solid var\(--palette-brand\)/s);
+  assert.match(css, /\.observation-observing-scan__live\s*\{[^}]*background:\s*var\(--palette-brand-tint\)/s);
 
   assert.match(report, /autoStartedFor/);
   assert.match(report, /onCancel=\{\(\) => navigate\(observationNewPath\(\)\)\}/);

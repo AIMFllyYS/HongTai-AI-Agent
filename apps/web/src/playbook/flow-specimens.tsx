@@ -118,6 +118,55 @@ export function PlaybookObservationSpecimen() {
   );
 }
 
+export function PlaybookFollowUpSpecimen() {
+  return (
+    <div className="playbook-overlay" aria-hidden="true">
+      <div className="playbook-overlay__page">
+        <span />
+        <span />
+        <span />
+      </div>
+      <div className="playbook-overlay__scrim" />
+      <div className="observation-follow-up-sheet playbook-follow-up-sheet">
+        <div className="observation-follow-up-sheet__head">
+          <div className="observation-follow-up-sheet__grab">
+            <div className="observation-follow-up-sheet__handle" />
+            <div className="observation-follow-up-sheet__title">
+              <Icon name="message_circle" size={18} />
+              <strong>AI 追问</strong>
+            </div>
+          </div>
+          <span className="icon-button observation-follow-up-sheet__close"><Icon name="close" size={20} /></span>
+        </div>
+        <div className="observation-follow-up-sheet__messages">
+          <article className="observation-message is-user">
+            <div className="observation-message__bubble">
+              <p>标本用户追问，不是真实会话。</p>
+            </div>
+            <span className="observation-message__avatar">宏</span>
+          </article>
+          <article className="observation-message is-assistant">
+            <div className="observation-message__bubble">
+              <p>标本助手回复，仅对照设计稿。</p>
+              <span className="observation-message__copy"><Icon name="copy" size={14} />复制</span>
+            </div>
+          </article>
+        </div>
+        <div className="observation-follow-up-sheet__suggest">
+          <p>追问推荐：</p>
+          <div className="chip-row">
+            <span className="chip">标本推荐问句</span>
+          </div>
+        </div>
+        <form className="observation-follow-up-composer">
+          <span className="playbook-follow-up-sheet__input">继续针对本次记录追问...</span>
+          <span className="observation-follow-up-composer__send"><Icon name="arrow_up" size={18} /></span>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 const PLAYBOOK_OBSERVING_SESSION: DiagnosisSessionRecord = {
   sessionId: "playbook-observing",
   mode: "face",

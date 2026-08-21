@@ -46,7 +46,7 @@
   width: 9rem;
   height: 9rem;
   place-items: center;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 20%, rgba(242, 247, 242, 0.75) 51%, rgba(38, 166, 154, 0.15) 52%, transparent 70%);
+  background: radial-gradient(circle, var(--surface-paper) 20%, var(--palette-mint-whisper) 51%, rgba(38, 166, 154, 0.15) 52%, transparent 70%);
   border-radius: var(--radius-pill);
 }
 
@@ -56,7 +56,7 @@
   height: 6rem;
   place-items: center;
   color: var(--vitality-accent);
-  background: rgba(255, 255, 255, 0.65);
+  background: var(--surface-paper);
   border: 1px solid rgba(38, 166, 154, 0.25);
   border-radius: var(--radius-pill);
 }

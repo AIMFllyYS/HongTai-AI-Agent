@@ -169,14 +169,20 @@
   --nav-height: 3rem;
 }
 
+/* Dark remaps must stay identical in both selectors. Light :root values stay unchanged. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-color-scheme="light"]) {
     color-scheme: dark;
+    --palette-brand-deep: #34d399;
+    --palette-brand-tint: #16352c;
     --palette-ink-900: #f4f5f4;
     --palette-ink-600: #c2c6c3;
     --palette-ink-400: #8b908c;
     --palette-fill: #1c1f1d;
     --palette-hairline: #2e322f;
+    --palette-silk: #1c1f1d;
+    --palette-mint-whisper: #1a2e28;
+    --palette-deep-emerald: #6ee7c5;
     --surface-canvas: #121413;
     --surface-paper: #121413;
     --surface-card: #1c1f1d;
@@ -184,17 +190,27 @@
     --surface-container: #1c1f1d;
     --surface-high: #2a2e2c;
     --surface-pressed: #323734;
+    --surface-success: #16351f;
+    --surface-warning: #3a2c14;
+    --surface-error: #3a1c1a;
     --glass-fill: #1c1f1d;
+    --shadow-sheet: 0 -0.5rem 2rem rgba(0, 0, 0, 0.4);
+    --overlay-scrim: rgba(0, 0, 0, 0.56);
   }
 }
 
 :root[data-color-scheme="dark"] {
   color-scheme: dark;
+  --palette-brand-deep: #34d399;
+  --palette-brand-tint: #16352c;
   --palette-ink-900: #f4f5f4;
   --palette-ink-600: #c2c6c3;
   --palette-ink-400: #8b908c;
   --palette-fill: #1c1f1d;
   --palette-hairline: #2e322f;
+  --palette-silk: #1c1f1d;
+  --palette-mint-whisper: #1a2e28;
+  --palette-deep-emerald: #6ee7c5;
   --surface-canvas: #121413;
   --surface-paper: #121413;
   --surface-card: #1c1f1d;
@@ -202,7 +218,12 @@
   --surface-container: #1c1f1d;
   --surface-high: #2a2e2c;
   --surface-pressed: #323734;
+  --surface-success: #16351f;
+  --surface-warning: #3a2c14;
+  --surface-error: #3a1c1a;
   --glass-fill: #1c1f1d;
+  --shadow-sheet: 0 -0.5rem 2rem rgba(0, 0, 0, 0.4);
+  --overlay-scrim: rgba(0, 0, 0, 0.56);
 }
 
 @media (min-width: 48rem) {

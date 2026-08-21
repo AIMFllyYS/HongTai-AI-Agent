@@ -262,6 +262,26 @@
   padding-inline: var(--space-4);
 }
 
+.playbook-follow-up-sheet {
+  position: relative;
+  z-index: 1;
+  height: auto;
+  max-height: none;
+  margin-top: 3.25rem;
+  padding-bottom: 0.75rem;
+}
+
+.playbook-follow-up-sheet__input {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  color: var(--color-text-muted);
+  background: var(--color-surface-low);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-caption);
+}
+
 .playbook-sheet {
   display: grid;
   gap: var(--space-3);

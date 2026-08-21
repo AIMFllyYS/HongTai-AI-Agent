@@ -24,7 +24,9 @@ test("playbook route is a catalog, not a product tab, and does not call AppRunti
   assert.doesNotMatch(specimens, /AppRuntime/);
   assert.match(page, /设计稿对照/);
   assert.doesNotMatch(read("navigation/primary-nav.ts"), /playbook/);
-  assert.match(specimens, /PlaybookObservingSpecimen/);
+  assert.match(specimens, /PlaybookFollowUpSpecimen/);
+  assert.match(specimens, /标本用户追问，不是真实会话/);
+  assert.equal(playbookSections.find((section) => section.id === "follow-up")?.title, "S10b AI 追问");
   assert.match(specimens, /设计稿标本 · 不是真实观察会话/);
   assert.match(specimens, /标本推理文案，仅用于对照设计稿，不是真实观察/);
   assert.equal(playbookSections.find((section) => section.id === "observing")?.title, "S9b 观察中");
@@ -67,7 +69,7 @@ test("real pages import playbook section glyphs instead of inventing a second ic
 
 test("playbook catalog lists every registered section id", () => {
   const ids = playbookSections.map((section) => section.id);
-  assert.deepEqual(ids, ["color", "type", "icons", "tabbar", "navbar", "chrome", "overlay", "skeleton", "paste", "compose", "analysis", "settings", "observing", "observation"]);
+  assert.deepEqual(ids, ["color", "type", "icons", "tabbar", "navbar", "chrome", "overlay", "skeleton", "paste", "compose", "analysis", "settings", "observing", "observation", "follow-up"]);
   assert.equal(playbookSections.find((section) => section.id === "type")?.summary, "20 / 16 / 15 / 14 / 12 / 11 / 10");
   assert.match(read("styles/shell.css"), /\.page-masthead__titles h1\s*\{[^}]*font-size:\s*var\(--text-display\)[^}]*line-height:\s*var\(--text-display-line\)/s);
   assert.match(read("styles/tokens.css"), /--text-display:\s*1\.25rem/);

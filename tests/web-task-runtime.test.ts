@@ -678,7 +678,7 @@ test("首页来源用 Tabs，唯一主按钮跟在输入区后，成功后进入
   assert.match(css, /\.task-source-card__upload\s*\{[^}]*min-height:\s*12rem/s);
   assert.match(css, /\.task-source-card__upload\s*\{[^}]*padding:\s*1\.5rem 1\.25rem/s);
   assert.match(css, /\.task-source-card__upload-icon\s*\{[^}]*width:\s*3\.75rem[^}]*height:\s*3\.75rem/s);
-  assert.match(css, /\.task-source-card__upload-icon\s*\{[^}]*background:\s*#ffffff/s);
+  assert.match(css, /\.task-source-card__upload-icon\s*\{[^}]*background:\s*var\(--surface-paper\)/s);
   assert.match(css, /\.task-source-card__upload-icon\s*\{[^}]*border-radius:\s*50%/s);
   assert.match(home, /<br \/>最大 250MB/);
   assert.match(home, /<ValidatedModuleProgress/);

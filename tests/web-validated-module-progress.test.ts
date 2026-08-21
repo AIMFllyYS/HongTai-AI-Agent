@@ -247,7 +247,7 @@ test("live generation renders runtime-only deep thinking and keeps busy primary 
   const detail = read("pages/TaskDetailPage.tsx");
   const observationStart = read("pages/ObservationStartPage.tsx");
   const observationPanels = read("features/diagnosis/observation-start-panels.tsx");
-  const observationReport = read("pages/ObservationReportPage.tsx");
+  const followUpComposer = read("features/diagnosis/observation-follow-up-composer.tsx");
 
   assert.match(component, /DeepThinkingPanel/);
   assert.match(component, /progress\?\.thinking/);
@@ -261,12 +261,12 @@ test("live generation renders runtime-only deep thinking and keeps busy primary 
   assert.match(css, /\.deep-thinking-panel\s*\{[^}]*overflow:\s*visible/s);
   assert.doesNotMatch(css, /\.deep-thinking-panel\s*\{[^}]*margin:\s*var\(--space-3\)\s+var\(--space-4\)\s+0/s);
   assert.doesNotMatch(css, /\.validated-module-progress\s*\{[^}]*gap:\s*0\s*;/s);
-  assert.match(css, /\.button--primary\.is-busy:disabled[\s\S]*color:\s*#000[\s\S]*opacity:\s*1/);
+  assert.match(css, /\.button--primary\.is-busy:disabled[\s\S]*color:\s*var\(--color-text-on-primary\)[\s\S]*opacity:\s*1/);
   assert.match(observationPanels, /className=\{confirming \? "is-busy" : ""\}/);
   assert.match(detail, /className=\{pendingAction === "analysis" \? "is-busy" : ""\}/);
   assert.match(home, /className=\{videoImporting \? "is-busy" : ""\}/);
   assert.match(home, /<ValidatedModuleProgress/);
   assert.doesNotMatch(home, /taskAnalysisPath/);
-  assert.match(observationReport, /className=\{chatPending \? "is-busy" : ""\}/);
+  assert.match(followUpComposer, /pending \? "observation-follow-up-composer__send is-busy"/);
   assert.doesNotMatch([component, home, detail, observationStart, observationPanels].join("\n"), /正在生成五个板块|正在按顺序生成当前板块/);
 });

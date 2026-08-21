@@ -52,7 +52,7 @@
 }
 
 .asset-template__badge--dark { background: rgba(0, 52, 43, 0.88); }
-.asset-template__badge--soft { color: var(--color-primary-strong); background: rgba(220, 246, 237, 0.94); }
+.asset-template__badge--soft { color: var(--color-primary-strong); background: var(--palette-brand-tint); }
 
 .tag-text {
   color: var(--color-progress);
@@ -237,7 +237,7 @@
   min-height: 9.5rem;
   padding: var(--space-5);
   background:
-    linear-gradient(135deg, rgba(187, 233, 225, 0.68), rgba(242, 244, 241, 0.94)),
+    linear-gradient(135deg, var(--palette-brand-tint), var(--color-surface-low)),
     var(--color-surface-low);
   border: 1px dashed var(--color-outline);
   border-radius: var(--radius-control);
@@ -250,7 +250,7 @@
   height: 3.6rem;
   place-items: center;
   color: var(--color-primary-strong);
-  background: rgba(255, 255, 255, 0.64);
+  background: var(--surface-paper);
   border-radius: 1rem;
 }
 
@@ -327,7 +327,7 @@
 .template-card__open small { color: var(--color-text-muted); font-size: var(--text-meta); }
 .template-card > .button { align-self: start; justify-self: end; height: auto; max-height: var(--button-height-md); }
 
-.template-delete-confirm { display: grid; grid-column: 1 / -1; gap: var(--space-2); padding: var(--space-3); background: rgba(255, 244, 238, 0.86); border: 1px solid rgba(186, 26, 26, 0.18); border-radius: var(--radius-control); }
+.template-delete-confirm { display: grid; grid-column: 1 / -1; gap: var(--space-2); padding: var(--space-3); background: var(--surface-error); border: 1px solid rgba(186, 26, 26, 0.18); border-radius: var(--radius-control); }
 .template-delete-confirm strong { color: var(--color-error); font-size: var(--text-caption); }
 .template-delete-confirm p { color: var(--color-text-muted); font-size: var(--text-meta); line-height: 1.45; }
 

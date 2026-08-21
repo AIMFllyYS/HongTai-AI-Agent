@@ -18,10 +18,10 @@ test("observation capture prompt sits at the bottom of the photo with luminous b
   assert.doesNotMatch(panels, /点击添加图片进行诊断/);
   assert.match(panels, /observationScanCaption/);
   assert.match(css, /\.observation-capture-card__laser::after\s*\{[^}]*animation:\s*observation-laser-scan/s);
-  assert.match(css, /\.observation-confirm-actions\s+\.button--primary\s*\{[^}]*color:\s*#000/s);
-  assert.match(css, /\.observation-confirm-actions\s+\.button--primary:disabled\s*\{[^}]*color:\s*#000/s);
+  assert.match(css, /\.observation-confirm-actions\s+\.button--primary\s*\{[^}]*color:\s*var\(--color-text-on-primary\)/s);
+  assert.match(css, /\.observation-confirm-actions\s+\.button--primary:disabled\s*\{[^}]*color:\s*var\(--color-text-muted\)/s);
   assert.match(css, /\.observation-confirm-actions\s+\.button--primary\.is-busy:disabled\s*\{[^}]*linear-gradient/s);
-  assert.match(css, /\.observation-question-composer\s+\.button\.is-busy:disabled\s*\{[^}]*color:\s*#000[^}]*linear-gradient/s);
+  assert.match(css, /\.observation-follow-up-composer__send\.is-busy:disabled\s*\{[^}]*opacity:\s*1/s);
 });
 
 test("Android edge-to-edge keeps header content below status icons without reintroducing a separate page spacer", () => {
@@ -73,10 +73,10 @@ test("Android device settings bridge exposes build identity without creating a s
 test("application information explains recent improvements in product language", () => {
   const page = read("apps/web/src/pages/ApplicationInfoPage.tsx");
 
-  assert.match(page, /点底栏加号进入「智能成片」或「爆款复刻」时，会打开制作页，不再变成「页面不存在」/u);
-  assert.match(page, /拆解首页切到「上传视频」后，选择说明会显示成完整卡片/u);
-  assert.match(page, /底栏中间加号改成更小的方圆钮/u);
-  assert.match(page, /模板页可以按名称搜索本机精选/u);
-  assert.match(page, /观察采集卡加上镭射扫光/u);
+  assert.match(page, /弹层、骨架、底栏切页、二级页滑入和分段 Tab 共用同一套动效/u);
+  assert.match(page, /加号新建、观察确认等底部面板支持上滑打开/u);
+  assert.match(page, /冷启动开屏补上产品名与标语/u);
+  assert.match(page, /下载与更新页按本版功能重写说明/u);
+  assert.match(page, /每个安装版本仍会单独保留/u);
   assert.doesNotMatch(page, /紧凑结构化生成|字段校验|整文校正|半截 JSON|私有地址|pathname|查询串/u);
 });

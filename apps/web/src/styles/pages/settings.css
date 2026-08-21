@@ -28,7 +28,7 @@
   color: var(--color-primary-strong);
   object-fit: cover;
   background: linear-gradient(145deg, var(--color-accent-soft), var(--color-surface-container));
-  border: 1px solid rgba(0, 77, 64, 0.14);
+  border: 1px solid var(--color-outline);
   border-radius: var(--radius-pill);
 }
 
@@ -38,7 +38,7 @@
 }
 
 .runtime-avatar--empty {
-  background: linear-gradient(145deg, rgba(187, 233, 225, 0.92), rgba(236, 238, 236, 0.92));
+  background: linear-gradient(145deg, var(--color-accent-soft), var(--color-surface-high));
 }
 
 .settings-profile-overview__body,
@@ -209,7 +209,7 @@
 
 .ai-preset-card {
   border-color: rgba(38, 166, 154, 0.38);
-  background: linear-gradient(140deg, rgba(220, 245, 237, 0.92), rgba(255, 255, 255, 0.9));
+  background: linear-gradient(140deg, var(--palette-brand-tint), var(--surface-paper));
 }
 
 .ai-preset-card__heading {
@@ -248,8 +248,8 @@
   min-width: 0;
   gap: 0.18rem;
   padding: var(--space-3);
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(0, 77, 64, 0.1);
+  background: var(--surface-paper);
+  border: 1px solid var(--color-outline);
   border-radius: var(--radius-control);
 }
 
