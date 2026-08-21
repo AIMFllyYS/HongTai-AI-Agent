@@ -46,6 +46,41 @@ test("visual tokens provide the mobile redesign palette", () => {
   }
 });
 
+test("shared tabs stay in the components layer so segmented pills survive Android WebView", () => {
+  const components = read("styles/components.css");
+  const pageSheets = [
+    "styles/pages/analysis.css",
+    "styles/pages/home.css",
+    "styles/pages/tasks-runtime.css",
+    "styles/pages/creation.css",
+    "styles/pages/production-runtime.css",
+    "styles/pages/production-edit.css",
+    "styles/pages/replica-wizard.css",
+    "styles/pages/library.css",
+    "styles/pages/settings.css",
+    "styles/pages/observation-runtime.css",
+    "styles/pages/vitality.css",
+  ];
+
+  for (const relativePath of pageSheets) {
+    assert.doesNotMatch(
+      read(relativePath),
+      /(?:^|[^a-z-])\.tabs(?:\s|\{|,|:|\.|--)/m,
+      `${relativePath} must not restyle shared .tabs; layer(pages) would clip segmented labels`,
+    );
+  }
+
+  assert.match(components, /\.tabs--segmented\s*\{[^}]*display:\s*grid/s);
+  assert.match(components, /\.tabs--segmented\s*\{[^}]*grid-auto-columns:\s*minmax\(0,\s*1fr\)/s);
+  assert.match(components, /\.tabs button\s*\{[^}]*appearance:\s*none/s);
+  assert.match(components, /\.tabs--segmented button\s*\{[^}]*appearance:\s*none/s);
+  assert.match(components, /\.tabs--segmented button\s*\{[^}]*min-height:\s*0/s);
+  assert.match(components, /\.tabs--segmented button\s*\{[^}]*height:\s*1\.75rem/s);
+  assert.match(components, /\.tabs--segmented button\s*\{[^}]*background:\s*transparent/s);
+  assert.match(components, /\.tabs--segmented button\.is-active\s*\{[^}]*background:\s*var\(--color-surface-card\)/s);
+  assert.match(components, /\.tabs--segmented button\.is-active::after\s*\{[^}]*display:\s*none/s);
+});
+
 test("legacy vitality brown overrides are removed from the stylesheet graph", () => {
   const stylesheetPaths = [
     "styles/tokens.css",

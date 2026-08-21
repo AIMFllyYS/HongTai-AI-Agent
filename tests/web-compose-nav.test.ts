@@ -59,7 +59,7 @@ test("compose sheet, home paste intent, and create swipe lock stay wired", () =>
   assert.match(sheet, />取消</);
   assert.match(home, /consumePasteIntentFromSearch/);
   assert.match(home, /variant="segmented"/);
-  assert.match(home, /HomeProfileAction/);
+  assert.match(home, /HomeMastheadActions/);
   assert.match(swipe, /active === "create"/);
   assert.match(nav, /aria-label="新建"/);
   assert.match(styles, /\.bottom-nav__plus\s*\{[^}]*width:\s*2\.5rem[^}]*height:\s*2\.5rem[^}]*border-radius:\s*var\(--radius-plus\)/s);

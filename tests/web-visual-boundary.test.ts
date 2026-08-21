@@ -40,6 +40,7 @@ test("web application routes expose canonical runtime paths", () => {
     "/settings/app-info",
     "/observation/new",
     "/observation/:sessionId",
+    "/playbook",
   ];
 
   assert.deepEqual(

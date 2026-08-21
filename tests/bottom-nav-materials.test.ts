@@ -29,14 +29,30 @@ test("bottom navigation has five slots with a compose plus and no material-libra
   assert.doesNotMatch(styles, /\.bottom-nav__item--materials/);
 });
 
-test("Fudi material library opens from the create-page header with token color and reduced-motion stillness", () => {
+test("Fudi material library opens from masthead promo and create-page header with token color and reduced-motion stillness", () => {
   const createPage = readSource("pages/CreatePage.tsx");
+  const observation = readSource("pages/ObservationStartPage.tsx");
+  const home = readSource("pages/TaskHomePage.tsx");
+  const templates = readSource("pages/TemplatesPage.tsx");
+  const cluster = readSource("components/HomeMastheadActions.tsx");
   const entry = readSource("components/MaterialLibraryHeaderAction.tsx");
   const styles = readSource("styles/components.css");
+  const shell = readSource("styles/shell.css");
   const materialPath = join(webRoot, "public", "materials", "fudi-material-library.jpg");
+  const promoPath = join(webRoot, "public", "materials", "fudi-library-promo.png");
 
   assert.equal(existsSync(materialPath), true, "the supplied material image must live under public/materials");
+  assert.equal(existsSync(promoPath), true, "the promo sticker must live under public/materials");
   assert.equal((createPage.match(/<MaterialLibraryHeaderAction/g) ?? []).length, 3);
+  assert.match(cluster, /<MaterialLibraryHeaderAction/);
+  assert.match(cluster, /<HomeProfileAction/);
+  assert.match(observation, /<HomeMastheadActions /);
+  assert.match(home, /<HomeMastheadActions /);
+  assert.match(templates, /<HomeMastheadActions /);
+  assert.doesNotMatch(templates, /header-action__button/);
+  assert.doesNotMatch(templates, />新建</);
+  assert.match(templates, /创建空白模板/);
+  assert.match(shell, /\.masthead-actions\s*\{[^}]*display:\s*flex/s);
   assert.match(entry, /<button/);
   assert.match(entry, /aria-label="打开富迪素材库"/);
   assert.match(entry, /type="button"/);
@@ -44,9 +60,12 @@ test("Fudi material library opens from the create-page header with token color a
   assert.match(entry, /aria-modal="true"/);
   assert.match(entry, /Escape/);
   assert.match(entry, /focus\(/);
+  assert.match(entry, /\/materials\/fudi-library-promo\.png/);
+  assert.match(entry, /material-library-entry__caption/);
   assert.match(entry, /\/materials\/fudi-material-library\.jpg/);
   assert.match(entry, /alt="富迪素材库宣传图"/);
-  assert.match(styles, /\.material-library-entry[\s\S]*?background:\s*var\(--color-error-soft\)/);
+  assert.match(styles, /\.material-library-entry\s*\{[^}]*background:\s*transparent/s);
+  assert.match(styles, /\.material-library-entry__caption\s*\{[^}]*background:\s*var\(--color-action-primary\)/s);
   assert.match(styles, /\.material-library-entry[\s\S]*?var\(--motion-ease-standard\)/);
   assert.match(styles, /prefers-reduced-motion:\s*reduce[\s\S]*\.material-library-entry[\s\S]*animation:\s*none/);
   assert.doesNotMatch(styles, /\.material-library-entry\s*\{[^}]*#[0-9a-fA-F]{3,8}/s);
@@ -65,5 +84,6 @@ test("AppShell keeps an empty header-action slot and never renders a inert notif
 test("settings app-info keeps the settings tab active and /publish is not a live route", () => {
   assert.equal(activeNavForRoute("settings-app-info"), "settings");
   assert.equal(activeNavForRoute("settings"), "settings");
+  assert.equal(activeNavForRoute("playbook"), "settings");
   assert.equal(matchRoute("/publish").key, "not-found");
 });

@@ -53,9 +53,10 @@ test("observation pages use the real diagnosis runtime rather than a visual diag
 
   const navigation = read("navigation/primary-nav.ts");
   assert.match(navigation, /id: "ai", label: "观察", icon: "scan_face", path: pathForRoute\("observation-new"\)/);
-  assert.match(start, /title="AI 诊断"/);
-  assert.match(start, /OBSERVATION_REPORT_DISCLAIMER_FALLBACK/);
+  assert.match(start, /title="AI 智能诊断"/);
+  assert.equal((start.match(/\{OBSERVATION_REPORT_DISCLAIMER_FALLBACK\}/g) ?? []).length, 1);
   assert.match(start, /observation-disclaimer--foot/);
+  assert.doesNotMatch(start, /<p className="observation-disclaimer">/);
   assert.doesNotMatch(start, /LOCAL OBSERVATION/);
 });
 
@@ -221,13 +222,14 @@ test("the packaged source contains no diagnostic-treatment or health-score copy"
 
   const report = read("pages/ObservationReportPage.tsx");
   const presenters = read("features/diagnosis/diagnosis-presenters.ts");
+  const reportSections = read("playbook/document-sections.ts");
   assert.match(report, /title="观察报告"/);
-  assert.match(report, /观察摘要/);
-  assert.match(report, /观察明细/);
-  assert.match(report, /日常参考/);
+  assert.match(reportSections, /观察摘要/);
+  assert.match(reportSections, /观察明细/);
+  assert.match(reportSections, /日常参考/);
   assert.match(report, /非诊断 · 不确定/);
-  assert.match(report, /日常建议/);
-  assert.match(report, /安全提醒/);
+  assert.match(reportSections, /日常建议/);
+  assert.match(reportSections, /安全提醒/);
   assert.match(report, /本次观察的局限/);
   assert.match(report, /可以继续问/);
   assert.match(report, /图像质量/);
