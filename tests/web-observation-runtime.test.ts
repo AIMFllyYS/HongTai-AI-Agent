@@ -268,6 +268,10 @@ test("observation controls stay compact and clear above the fixed Android naviga
   assert.match(css, /\.observation-message p\s*\{[^}]*overflow-wrap:\s*anywhere/s);
   assert.match(css, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.observation-question-composer__actions[^}]*grid-template-columns:\s*1fr/);
   assert.match(css, /\.page-observation-report \.observation-quality-card/);
+  assert.match(css, /\.observation-recommendation-card > div\s*\{[^}]*display:\s*grid/s);
+  assert.match(css, /\.page-observation-report \.observation-recommendation-card > div\s*\{[^}]*display:\s*grid/s);
+  assert.match(css, /\.page-observation-report \.observation-recommendation-card__top strong\s*\{[^}]*min-width:\s*0/s);
+  assert.doesNotMatch(css, /\.observation-report-item__title,\s*\.observation-recommendation-card > div\s*\{/);
 });
 
 test("observation in-progress page follows unarchived S9b without vitals HUD or old progress chrome", async () => {

@@ -554,8 +554,29 @@
 .observation-reference-card small { color: var(--color-text-muted); font-size: var(--text-meta); }
 
 .observation-recommendation-card { border-left: 3px solid var(--observation-accent); }
+.observation-recommendation-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.observation-recommendation-card__top strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
 .observation-recommendation-card small { color: var(--color-text-muted); font-size: var(--text-meta); line-height: var(--text-meta-line); }
-.observation-recommendation-card__priority { padding: 0.2rem 0.48rem; color: var(--observation-accent); background: var(--observation-accent-soft); border-radius: var(--radius-pill); font-size: 0.64rem; font-weight: 700; white-space: nowrap; }
+.observation-recommendation-card__priority {
+  flex: 0 0 auto;
+  padding: 0.2rem 0.48rem;
+  color: var(--observation-accent);
+  background: var(--observation-accent-soft);
+  border-radius: var(--radius-pill);
+  font-size: 0.64rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
 .observation-recommendation-card__priority.is-high { color: #875500; background: var(--color-warning-soft); }
 
 .observation-safety-card { color: #875500; border-color: rgba(139, 91, 0, 0.2); background: linear-gradient(120deg, var(--color-warning-soft), rgba(255, 255, 255, 0.92)); }
