@@ -250,6 +250,7 @@ test("observation controls stay compact and clear above the fixed Android naviga
 
   assert.match(start, /ObservationCapturePanel/);
   assert.match(panels, /observation-capture-card__actions/);
+  assert.match(panels, /observation-capture-card__laser/);
   assert.match(panels, /拍摄照片/);
   assert.match(panels, /相册选择/);
   assert.match(report, /observation-question-composer__actions/);

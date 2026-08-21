@@ -65,14 +65,14 @@ export function ObservationCapturePanel({
         <button className="observation-capture-card__scan" disabled={disabled} onClick={onScan} type="button">
           <img alt="" className="observation-capture-card__plate" src={plate} />
           {image && !importing ? <RuntimeMediaFrame className="observation-capture-card__image" label={`${mode === "tongue" ? "舌象" : "面部"}图片`} media={image} /> : null}
+          <span aria-hidden="true" className="observation-capture-card__laser" />
           <span aria-hidden="true" className="observation-capture-card__brackets">
             <i /><i /><i /><i />
           </span>
           {showPrompt ? (
             <div aria-live="polite" className="observation-capture-card__empty" role={importing ? "status" : undefined}>
               {importing ? <Icon name="sync" size={30} /> : null}
-              <strong>{importing ? "正在导入图片" : "点击添加图片进行诊断"}</strong>
-              {importing ? null : <span>{observationScanCaption(mode)}</span>}
+              {importing ? <strong>正在导入图片</strong> : <span>{observationScanCaption(mode)}</span>}
             </div>
           ) : null}
         </button>

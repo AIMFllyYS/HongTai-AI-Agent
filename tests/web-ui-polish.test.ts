@@ -6,11 +6,18 @@ import test from "node:test";
 const root = process.cwd();
 const read = (relativePath: string) => readFileSync(join(root, relativePath), "utf8");
 
-test("observation image choice centers each placeholder item and keeps the confirm action black-on-green", () => {
+test("observation capture prompt sits at the bottom of the photo with luminous body type and a laser scan", () => {
   const css = read("apps/web/src/styles/pages/observation-runtime.css");
+  const panels = read("apps/web/src/features/diagnosis/observation-start-panels.tsx");
 
-  assert.match(css, /\.observation-capture-card__empty\s*\{[^}]*place-items:\s*center[^}]*justify-items:\s*center/s);
+  assert.match(css, /\.observation-capture-card__empty\s*\{[^}]*bottom:\s*0[^}]*padding:\s*3\.25rem 1rem 1\.7rem/s);
   assert.match(css, /\.observation-capture-card__empty\s+svg\s*\{[^}]*justify-self:\s*center/s);
+  assert.match(css, /\.observation-capture-card__empty strong,\s*\.observation-capture-card__empty span\s*\{[^}]*font-weight:\s*500[^}]*letter-spacing:\s*0\.06em[^}]*text-shadow/s);
+  assert.match(css, /\.observation-capture-card__empty span\s*\{[^}]*color:\s*rgba\(255,\s*255,\s*255,\s*0\.78\)/s);
+  assert.match(css, /\.observation-capture-card__brackets i\s*\{[^}]*border:\s*0\.125rem solid var\(--palette-on-ink\)/s);
+  assert.doesNotMatch(panels, /点击添加图片进行诊断/);
+  assert.match(panels, /observationScanCaption/);
+  assert.match(css, /\.observation-capture-card__laser::after\s*\{[^}]*animation:\s*observation-laser-scan/s);
   assert.match(css, /\.observation-confirm-actions\s+\.button--primary\s*\{[^}]*color:\s*#000/s);
   assert.match(css, /\.observation-confirm-actions\s+\.button--primary:disabled\s*\{[^}]*color:\s*#000/s);
   assert.match(css, /\.observation-confirm-actions\s+\.button--primary\.is-busy:disabled\s*\{[^}]*linear-gradient/s);
