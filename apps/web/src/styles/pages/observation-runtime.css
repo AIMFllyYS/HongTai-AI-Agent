@@ -984,18 +984,32 @@
   box-shadow: none;
 }
 
+.page-observation-report .observation-recommendation-card > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.35rem;
+}
+
 .page-observation-report .observation-recommendation-card svg {
+  flex: 0 0 auto;
   color: var(--palette-brand);
 }
 
 .page-observation-report .observation-recommendation-card__top {
   display: flex;
-  align-items: start;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.5rem;
 }
 
+.page-observation-report .observation-recommendation-card__top strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .page-observation-report .observation-recommendation-card__priority {
+  flex: 0 0 auto;
   padding: 0.12rem 0.5rem;
   color: var(--palette-progress);
   background: var(--surface-progress);
