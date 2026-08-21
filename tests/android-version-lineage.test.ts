@@ -11,17 +11,17 @@ function requireMatch(value: string, pattern: RegExp, label: string): string {
   return matched;
 }
 
-test("the published v0.1.19/code 27 download matches the Android source version", () => {
+test("the published v0.1.19/code 27 download stays public while source advances to 0.1.20", () => {
   const gradle = readFileSync(join(root, "android", "app", "build.gradle.kts"), "utf8");
   const downloadPage = readFileSync(join(root, "download.html"), "utf8");
   const sourceCode = Number(requireMatch(gradle, /versionCode\s*=\s*(\d+)/u, "Android versionCode"));
   const sourceName = requireMatch(gradle, /versionName\s*=\s*"([^"]+)"/u, "Android versionName");
   const publishedName = requireMatch(downloadPage, /aria-label="当前推荐版本 v([0-9.]+)"/u, "published download version");
 
-  assert.equal(sourceCode, 27);
-  assert.equal(sourceName, "0.1.19");
-  assert.equal(publishedName, sourceName);
+  assert.equal(sourceCode, 28);
+  assert.equal(sourceName, "0.1.20");
   assert.equal(publishedName, "0.1.19");
+  assert.notEqual(publishedName, sourceName);
   assert.match(downloadPage, /versionCode:\s*"27"/u);
   assert.match(downloadPage, /23,202,490 bytes/u);
   assert.match(downloadPage, /B47A95F68900804C43F15AB2472D598C1E78355BCE53F75A285DF68AA4AAEB1B/iu);
@@ -119,6 +119,7 @@ test("the repository maintains a changelog and a patch-only default version poli
   assert.match(changelog, /^## \[0\.1\.17\] - 2026-08-20/mu);
   assert.match(changelog, /^## \[0\.1\.18\] - 2026-08-20/mu);
   assert.match(changelog, /^## \[0\.1\.19\] - 2026-08-21/mu);
+  assert.match(changelog, /^## \[0\.1\.20\] - 2026-08-21/mu);
   assert.match(changelog, /^## \[0\.1\.7\] - 2026-08-14/mu);
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.12` \/ `versionCode=20`/u);
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.13` \/ `versionCode=21`/u);
@@ -128,6 +129,7 @@ test("the repository maintains a changelog and a patch-only default version poli
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.17` \/ `versionCode=25`/u);
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.18` \/ `versionCode=26`/u);
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.19` \/ `versionCode=27`/u);
+  assert.match(changelog, /Android 源码版本推进为 `0\.1\.20` \/ `versionCode=28`/u);
   assert.match(changelog, /默认只递增第三位补丁版本/u);
   assert.match(changelog, /第一位或第二位版本号.*明确授权/u);
 });

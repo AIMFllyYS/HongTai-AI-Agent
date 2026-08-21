@@ -73,10 +73,10 @@ test("Android device settings bridge exposes build identity without creating a s
 test("application information explains recent improvements in product language", () => {
   const page = read("apps/web/src/pages/ApplicationInfoPage.tsx");
 
-  assert.match(page, /冷启动先显示项目图标和浅色开屏/u);
-  assert.match(page, /即使页面通知出错，也不会把已经成功的成片改成失败/u);
-  assert.match(page, /深度思考和第一块正式内容之间留出缝隙/u);
-  assert.match(page, /键盘弹出时输入框会跟着抬高/u);
-  assert.match(page, /非首页按需载入，中文字体也收成界面用字/u);
-  assert.doesNotMatch(page, /紧凑结构化生成|字段校验|整文校正|半截 JSON|私有地址/u);
+  assert.match(page, /点底栏加号进入「智能成片」或「爆款复刻」时，会打开制作页，不再变成「页面不存在」/u);
+  assert.match(page, /拆解首页切到「上传视频」后，选择说明会显示成完整卡片/u);
+  assert.match(page, /底栏中间加号改成更小的方圆钮/u);
+  assert.match(page, /模板页可以按名称搜索本机精选/u);
+  assert.match(page, /观察采集卡加上镭射扫光/u);
+  assert.doesNotMatch(page, /紧凑结构化生成|字段校验|整文校正|半截 JSON|私有地址|pathname|查询串/u);
 });
