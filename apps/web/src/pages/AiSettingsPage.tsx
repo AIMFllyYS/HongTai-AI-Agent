@@ -9,7 +9,7 @@ import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
-import { LoadingState } from "../components/StatePanels";
+import { PageSkeleton } from "../components/PageSkeleton";
 
 export interface AiSettingsPageProps {
   readonly runtime: AppRuntime;
@@ -250,7 +250,7 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
   };
 
   if (loading) {
-    return <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="AI 服务"><LoadingState description="正在读取公开配置与探测记录" title="加载 AI 设置" /></AppShell>;
+    return <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="AI 服务"><PageSkeleton layout="settings" /></AppShell>;
   }
 
   return (

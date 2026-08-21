@@ -27,7 +27,7 @@ export function useBrowserRoute() {
   const [pathname, setPathname] = useState(currentPath);
   const [searchEpoch, setSearchEpoch] = useState(0);
   const [direction, setDirection] = useState<RouteTransitionDirection>("forward");
-  const [transitionMode, setTransitionMode] = useState<NavigationTransition>("animated");
+  const [transitionMode, setTransitionMode] = useState<NavigationTransition>("push");
   const previousPath = useRef(pathname);
   const previousSearch = useRef(currentSearch());
 
@@ -49,7 +49,7 @@ export function useBrowserRoute() {
 
   useEffect(() => {
     const update = () => {
-      applyLocation(currentPath(), currentSearch(), "animated");
+      applyLocation(currentPath(), currentSearch(), "push");
     };
     window.addEventListener("popstate", update);
     return () => window.removeEventListener("popstate", update);
@@ -57,7 +57,7 @@ export function useBrowserRoute() {
 
   const navigate = useCallback<Navigate>((path: string, options: NavigateOptions = {}) => {
     if (typeof window === "undefined") return;
-    const transition = options.transition ?? "animated";
+    const transition = options.transition ?? "push";
     const scrollBehavior = options.scroll ?? (transition === "instant" ? "auto" : undefined);
     const { pathname: nextPathname, search: nextSearch, hash: nextHash } = splitLocationHref(path);
     const href = `${nextPathname}${nextSearch}${nextHash}`;

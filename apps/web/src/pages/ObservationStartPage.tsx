@@ -8,7 +8,8 @@ import { GlassCard } from "../components/GlassCard";
 import { HomeMastheadActions } from "../components/HomeMastheadActions";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
-import { EmptyState, LoadingState } from "../components/StatePanels";
+import { EmptyState } from "../components/StatePanels";
+import { PageSkeleton } from "../components/PageSkeleton";
 import { Tabs } from "../components/Tabs";
 import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
 import { diagnosisModuleDefinitions } from "../features/diagnosis/diagnosis-module-progress";
@@ -300,7 +301,7 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
         <section className="page-section">
           <div className="section-heading"><div><h3>最近观察</h3></div>{historyIssue ? <Button onClick={() => void loadSessions()} variant="quiet">重新读取</Button> : null}</div>
           {historyIssue ? <IssueNotice issue={historyIssue} /> : null}
-          {sessions === undefined ? <LoadingState description="正在读取本地会话投影" title="读取观察历史" /> : sessions.length === 0 ? <EmptyState description="完成一次真实图片观察后，会话和正式报告会保存在本地这里。" icon="history" title="尚无本地观察" /> : <div className="observation-history-list">{sessions.map((session) => <ObservationHistoryCard key={session.sessionId} onOpen={() => navigate(observationReportPath(session.sessionId))} session={session} />)}</div>}
+          {sessions === undefined ? <PageSkeleton layout="observation-list" /> : sessions.length === 0 ? <EmptyState description="完成一次真实图片观察后，会话和正式报告会保存在本地这里。" icon="history" title="尚无本地观察" /> : <div className="observation-history-list">{sessions.map((session) => <ObservationHistoryCard key={session.sessionId} onOpen={() => navigate(observationReportPath(session.sessionId))} session={session} />)}</div>}
         </section>
       </div>
     </AppShell>

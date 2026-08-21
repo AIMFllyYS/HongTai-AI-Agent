@@ -8,7 +8,8 @@ import { GlassCard } from "../components/GlassCard";
 import { HomeMastheadActions } from "../components/HomeMastheadActions";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
-import { EmptyState, LoadingState } from "../components/StatePanels";
+import { EmptyState } from "../components/StatePanels";
+import { PageSkeleton } from "../components/PageSkeleton";
 import { formatTaskTime, platformLabel } from "../features/tasks/task-presenters";
 import { aiSettingsPath, type Navigate } from "../router";
 
@@ -234,7 +235,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
             </label>
             <span className="templates-section-hint">本机精选 · 滑动查看</span>
           </div>
-          {templates === undefined ? <LoadingState description="正在读取本地模板文件" title="读取模板" /> : templates.length === 0 ? (
+          {templates === undefined ? <PageSkeleton layout="templates-list" /> : templates.length === 0 ? (
             <EmptyState description="保存本机公式后，会在这里横向滑动查看。" icon="layout_template" title="还没有可滑动的本机模板" />
           ) : featured.length === 0 ? (
             <EmptyState description="搜索只匹配本机模板的名称、摘要或公式，不会编造结果。" icon="filter" title="未解析到这类模板" />

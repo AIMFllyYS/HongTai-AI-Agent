@@ -1,4 +1,5 @@
 import { Icon } from "../components/Icon";
+import { PageSkeleton } from "../components/PageSkeleton";
 import { composeActions } from "../navigation/compose-actions";
 import { primaryNavItems } from "../navigation/primary-nav";
 import { analysisDocumentSections, observationReportSections, settingsRowGlyphs } from "./document-sections";
@@ -49,6 +50,24 @@ export function PlaybookPasteSpecimen() {
       <p className="playbook-hint">支持抖音、小红书、B站；快手仅支持公开单条链接（实验性）。</p>
     </div>
   );
+}
+
+export function PlaybookOverlaySpecimen() {
+  return (
+    <div className="playbook-overlay">
+      <div className="playbook-overlay__page" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+      <div className="playbook-overlay__scrim" />
+      <PlaybookComposeSpecimen />
+    </div>
+  );
+}
+
+export function PlaybookSkeletonSpecimen() {
+  return <PageSkeleton layout="home" />;
 }
 
 export function PlaybookComposeSpecimen() {

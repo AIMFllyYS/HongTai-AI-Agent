@@ -6,8 +6,10 @@ import {
   PlaybookComposeSpecimen,
   PlaybookNavBarSpecimen,
   PlaybookObservationSpecimen,
+  PlaybookOverlaySpecimen,
   PlaybookPasteSpecimen,
   PlaybookSettingsSpecimen,
+  PlaybookSkeletonSpecimen,
   PlaybookTabBarSpecimen,
 } from "./flow-specimens";
 
@@ -28,6 +30,8 @@ export const playbookSections: readonly PlaybookSection[] = [
   { id: "tabbar", title: "M/Tab Bar", group: "组件", summary: "48px 栏，32px 方圆加号与左右项居中对齐", Render: PlaybookTabBarSpecimen },
   { id: "navbar", title: "M/Nav Bar", group: "组件", summary: "返回 24px Lucide chevron-left", Render: PlaybookNavBarSpecimen },
   { id: "chrome", title: "按钮与控件", group: "组件", summary: "主按钮、分段、输入、开关、头像", Render: PlaybookChromePrimitives },
+  { id: "overlay", title: "Overlay / Sheet", group: "组件", summary: "遮罩上滑，可点可拖", Render: PlaybookOverlaySpecimen },
+  { id: "skeleton", title: "骨架屏", group: "组件", summary: "灰块占位，不填假数据", Render: PlaybookSkeletonSpecimen },
   { id: "paste", title: "S1 粘贴链接", group: "主路径", summary: "链接图标、识别行、开始拆解", Render: PlaybookPasteSpecimen },
   { id: "compose", title: "S14 新建", group: "主路径", summary: "智能成片 / 爆款复刻 / 拆解新链接", Render: PlaybookComposeSpecimen },
   { id: "analysis", title: "S4 拆解板块", group: "主路径", summary: "九个展示板块图标", Render: PlaybookAnalysisSpecimen },

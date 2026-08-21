@@ -12,6 +12,14 @@ export const motionEasing = {
   emphasized: [0.2, 0.8, 0.2, 1] as CubicBezier,
 } as const;
 
-export const routeOffset = 16;
+/** Nested / `push` route travel, in pixels. */
+export const routeOffset = 24;
+
+const PRIMARY_ROUTE_OFFSET_RATIO = 0.28;
+const PRIMARY_ROUTE_OFFSET_MAX = 140;
+
+export function primaryRouteOffset(width = typeof window === "undefined" ? 390 : window.innerWidth): number {
+  return Math.min(Math.round(width * PRIMARY_ROUTE_OFFSET_RATIO), PRIMARY_ROUTE_OFFSET_MAX);
+}
 
 export type RouteTransitionDirection = "forward" | "backward";

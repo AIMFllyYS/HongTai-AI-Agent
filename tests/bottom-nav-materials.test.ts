@@ -56,10 +56,14 @@ test("Fudi material library opens from masthead promo and create-page header wit
   assert.match(entry, /<button/);
   assert.match(entry, /aria-label="打开富迪素材库"/);
   assert.match(entry, /type="button"/);
-  assert.match(entry, /role="dialog"/);
-  assert.match(entry, /aria-modal="true"/);
-  assert.match(entry, /Escape/);
-  assert.match(entry, /focus\(/);
+  const overlay = readSource("components/Overlay.tsx");
+  assert.match(entry, /<Overlay/);
+  assert.match(entry, /placement="center"/);
+  assert.match(overlay, /role="dialog"/);
+  assert.match(overlay, /aria-modal="true"/);
+  assert.match(overlay, /Escape/);
+  assert.match(entry, /initialFocusRef/);
+  assert.match(entry, /returnFocusRef/);
   assert.match(entry, /\/materials\/fudi-library-promo\.png/);
   assert.match(entry, /material-library-entry__caption/);
   assert.match(entry, /\/materials\/fudi-material-library\.jpg/);

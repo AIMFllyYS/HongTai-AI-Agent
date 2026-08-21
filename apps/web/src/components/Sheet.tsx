@@ -1,6 +1,6 @@
 import type { PropsWithChildren, ReactNode } from "react";
-import { useEffect } from "react";
-import { createPortal } from "react-dom";
+
+import { Overlay, OverlayDragRegion } from "./Overlay";
 
 export interface SheetProps extends PropsWithChildren {
   readonly open: boolean;
@@ -11,33 +11,14 @@ export interface SheetProps extends PropsWithChildren {
 }
 
 export function Sheet({ open, title, onClose, labelledBy = "sheet-title", className = "", children }: SheetProps) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open || typeof document === "undefined") return null;
-
-  return createPortal(
-    <div className="sheet-backdrop" data-no-swipe="" onClick={onClose} role="presentation">
-      <div
-        aria-labelledby={labelledBy}
-        aria-modal="true"
-        className={`sheet ${className}`.trim()}
-        data-no-swipe=""
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-      >
+  return (
+    <Overlay labelledBy={labelledBy} onClose={onClose} open={open} panelClassName={`sheet ${className}`.trim()} placement="rise">
+      <OverlayDragRegion className="sheet__grab">
         <div className="sheet__handle" />
         <h2 id={labelledBy}>{title}</h2>
-        {children}
-      </div>
-    </div>,
-    document.body,
+      </OverlayDragRegion>
+      <div className="sheet__body">{children}</div>
+    </Overlay>
   );
 }
 

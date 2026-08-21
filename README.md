@@ -36,7 +36,7 @@ Keystore、私有文件、Photo Picker、受控网络、Media3
 - Kotlin 只做系统 I/O；不复制 Prompt、Schema、平台解析、业务状态机或 UI 决策。
 - 制作计划：模型输出 v2 JSON，本地组装并校验 v3 后再交给 Media3。
 - CLI 是开发期回归入口，不是 APK 的服务端或运行依赖。
-- 详细规则见[架构与工程规范](docs/架构与工程规范.md)，源码树见[项目架构解析](docs/项目架构解析.md)，AI/开发任务规则见[AGENTS.md](AGENTS.md)。
+- 详细规则见[架构与工程规范](docs/架构与工程规范.md)，源码树见[项目架构解析](docs/项目架构解析.md)，弹层与切页见[动效规范](docs/动效规范.md)，AI/开发任务规则见[AGENTS.md](AGENTS.md)。
 
 ## 环境与安装
 

@@ -8,7 +8,8 @@ import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
 import { IssueNotice, isInlineIssueAction, issueTitle } from "../components/IssueNotice";
 import { ReplicaRequirementCard } from "../components/ReplicaRequirementCard";
-import { EmptyState, LoadingState } from "../components/StatePanels";
+import { EmptyState } from "../components/StatePanels";
+import { PageSkeleton } from "../components/PageSkeleton";
 import {
   readReplicaBlueprint,
   requirementBindings,
@@ -157,7 +158,7 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
     </AppShell>
   );
 
-  if (loading) return shell(<LoadingState title="正在打开复刻清单" />);
+  if (loading) return shell(<PageSkeleton layout="create" />);
 
   if (!record || record.status === "failed" || !blueprint.usable) {
     const failed = record?.status === "failed";

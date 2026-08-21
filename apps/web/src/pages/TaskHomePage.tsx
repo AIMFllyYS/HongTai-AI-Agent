@@ -7,7 +7,8 @@ import { Button } from "../components/Buttons";
 import { HomeMastheadActions } from "../components/HomeMastheadActions";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
-import { ErrorState, LoadingState } from "../components/StatePanels";
+import { ErrorState } from "../components/StatePanels";
+import { PageSkeleton } from "../components/PageSkeleton";
 import { TabPanel, Tabs, tabId, tabPanelId } from "../components/Tabs";
 import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
 import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
@@ -310,7 +311,7 @@ export function TaskHomePage({ runtime, navigate, searchEpoch = 0 }: TaskHomePag
         <section className="page-section">
           <div className="section-heading"><h3>最近拆解</h3>{historyIssue ? <Button onClick={() => void loadHistory()} variant="quiet">重新读取</Button> : null}</div>
           {historyIssue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), editInput: focusTaskShareInput }} issue={historyIssue} /> : null}
-          {historyIssue && tasks === undefined ? <ErrorState description={historyIssue.userMessage} title="任务历史无法读取" /> : tasks === undefined ? <LoadingState description="正在从本地仓储读取任务记录" title="读取任务历史" /> : <TaskHistory navigate={navigate} tasks={tasks} />}
+          {historyIssue && tasks === undefined ? <ErrorState description={historyIssue.userMessage} title="任务历史无法读取" /> : tasks === undefined ? <PageSkeleton layout="home-list" /> : <TaskHistory navigate={navigate} tasks={tasks} />}
         </section>
       </div>
     </AppShell>

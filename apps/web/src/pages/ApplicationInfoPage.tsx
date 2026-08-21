@@ -7,7 +7,7 @@ import { AppShell } from "../components/AppShell";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
-import { LoadingState } from "../components/StatePanels";
+import { PageSkeleton } from "../components/PageSkeleton";
 import { playbookPath } from "../router";
 
 export interface ApplicationInfoPageProps {
@@ -42,7 +42,7 @@ export function ApplicationInfoPage({ runtime, navigate }: ApplicationInfoPagePr
   }, [load]);
 
   if (!info && !issue) {
-    return <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="关于"><LoadingState description="正在读取版本信息" title="加载应用信息" /></AppShell>;
+    return <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="关于"><PageSkeleton layout="settings" /></AppShell>;
   }
 
   return (

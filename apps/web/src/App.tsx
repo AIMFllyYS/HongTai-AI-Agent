@@ -1,7 +1,8 @@
 import { lazy, Suspense } from "react";
 import type { AppRuntime } from "@hongtai/core";
 
-import { EmptyState, LoadingState } from "./components/StatePanels";
+import { EmptyState } from "./components/StatePanels";
+import { PageSkeleton } from "./components/PageSkeleton";
 import { activeNavForRoute, BottomNav } from "./components/BottomNav";
 import { AppShell, AppShellNavigationProvider } from "./components/AppShell";
 import { RouteTransition } from "./components/RouteTransition";
@@ -125,7 +126,7 @@ export function App({ runtime, visualData }: AppProps = {}) {
     <AppShellNavigationProvider>
       <SwipeRouteViewport active={activeNav} currentPath={pathname} navigate={navigate}>
         <RouteTransition direction={direction} pathname={pathname} transitionMode={transitionMode}>
-          <Suspense fallback={<LoadingState title="正在打开页面" />}>{renderRoute(pathname)}</Suspense>
+          <Suspense fallback={<PageSkeleton path={pathname} />}>{renderRoute(pathname)}</Suspense>
         </RouteTransition>
       </SwipeRouteViewport>
       <BottomNav active={activeNav} navigate={navigate} />

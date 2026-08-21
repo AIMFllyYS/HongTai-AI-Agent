@@ -228,6 +228,40 @@
   font-size: var(--text-caption);
 }
 
+.playbook-overlay {
+  position: relative;
+  overflow: hidden;
+  min-height: 18rem;
+  background: var(--surface-canvas);
+  border-radius: var(--radius-card);
+}
+
+.playbook-overlay__page {
+  display: grid;
+  gap: 0.6rem;
+  padding: var(--space-4);
+}
+
+.playbook-overlay__page span {
+  display: block;
+  height: 0.7rem;
+  background: var(--palette-fill);
+  border-radius: var(--radius-pill);
+}
+
+.playbook-overlay__scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--overlay-scrim);
+}
+
+.playbook-overlay .playbook-sheet {
+  position: relative;
+  z-index: 1;
+  margin-top: 4.5rem;
+  padding-inline: var(--space-4);
+}
+
 .playbook-sheet {
   display: grid;
   gap: var(--space-3);

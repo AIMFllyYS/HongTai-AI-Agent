@@ -28,7 +28,7 @@ export function BottomNav({ active, navigate }: BottomNavProps) {
               key={item.id}
               onClick={(event) => {
                 event.preventDefault();
-                navigate(item.path, { scroll: "auto", transition: "instant" });
+                navigate(item.path, { scroll: "auto", transition: "primary" });
               }}
               transition={{ duration: 0.14 }}
               whileTap={{ scale: 0.96 }}
@@ -60,7 +60,7 @@ export function BottomNav({ active, navigate }: BottomNavProps) {
               key={item.id}
               onClick={(event) => {
                 event.preventDefault();
-                navigate(item.path, { scroll: "auto", transition: "instant" });
+                navigate(item.path, { scroll: "auto", transition: "primary" });
               }}
               transition={{ duration: 0.14 }}
               whileTap={{ scale: 0.96 }}

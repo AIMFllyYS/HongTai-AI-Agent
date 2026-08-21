@@ -47,7 +47,7 @@ export interface NotFoundRoute {
 
 export type MatchedAppRoute = MatchedRoute | NotFoundRoute;
 
-export type NavigationTransition = "animated" | "instant";
+export type NavigationTransition = "primary" | "push" | "instant";
 
 export interface NavigateOptions {
   readonly transition?: NavigationTransition;

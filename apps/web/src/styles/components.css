@@ -332,17 +332,6 @@
   justify-content: center;
 }
 
-.material-library-dialog__backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 45;
-  display: grid;
-  place-items: center;
-  padding: max(var(--space-4), env(safe-area-inset-top)) var(--space-4) max(var(--space-4), var(--safe-bottom));
-  background: rgba(13, 25, 22, 0.68);
-  backdrop-filter: blur(0.35rem);
-}
-
 .material-library-dialog {
   display: grid;
   width: min(100%, 28rem);
@@ -517,9 +506,7 @@
 }
 
 .state-panel--empty svg { color: var(--color-accent); }
-.state-panel--loading svg { color: var(--color-progress); }
 .state-panel--error svg { color: var(--color-error); }
-.state-panel__spinner { animation: spin 1.4s linear infinite; }
 
 .media-frame {
   position: relative;
@@ -1281,14 +1268,32 @@
   border-radius: 1.45rem;
 }
 
-.sheet-backdrop {
+.overlay-scrim {
   position: fixed;
   inset: 0;
   z-index: 50;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background: rgba(27, 29, 31, 0.4);
+  background: var(--overlay-scrim);
+}
+
+.overlay-scrim[data-placement="center"] {
+  align-items: center;
+  padding: max(var(--space-4), env(safe-area-inset-top)) var(--space-4) max(var(--space-4), var(--safe-bottom));
+}
+
+.overlay-panel {
+  max-height: 100%;
+  touch-action: none;
+}
+
+.overlay-panel--rise {
+  width: min(100%, 26.25rem);
+}
+
+.overlay-panel--center {
+  width: min(100%, 28rem);
 }
 
 .sheet {
@@ -1301,12 +1306,28 @@
   box-shadow: var(--shadow-sheet);
 }
 
+.sheet__grab {
+  display: grid;
+  gap: var(--space-2);
+  touch-action: none;
+  cursor: grab;
+}
+
 .sheet__handle {
   width: 2.25rem;
   height: 0.25rem;
-  margin: var(--space-1) auto var(--space-2);
+  margin: var(--space-1) auto 0;
   background: var(--color-outline);
   border-radius: var(--radius-pill);
+}
+
+.sheet__body {
+  display: grid;
+  gap: var(--space-3);
+  overflow: auto;
+  overscroll-behavior: contain;
+  max-height: min(70vh, 36rem);
+  touch-action: pan-y;
 }
 
 .sheet h2 {
@@ -1461,6 +1482,70 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+.page-skeleton {
+  display: grid;
+  gap: var(--space-3);
+  padding: 0 0 var(--space-4);
+}
+
+.page-skeleton--framed {
+  padding: calc(var(--header-height) + max(env(safe-area-inset-top), var(--native-status-bar-inset), 0px) + var(--space-4)) var(--space-4) var(--space-4);
+}
+
+.page-skeleton__masthead {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.page-skeleton__stack,
+.page-skeleton__row {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.page-skeleton__row {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.page-skeleton__carousel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.page-skeleton__block {
+  display: block;
+  height: 0.7rem;
+  background: linear-gradient(100deg, rgba(27, 29, 31, 0.06) 12%, rgba(27, 29, 31, 0.12) 34%, rgba(27, 29, 31, 0.06) 56%);
+  background-size: 220% 100%;
+  border-radius: var(--radius-pill);
+  animation: page-skeleton-shimmer 1.35s linear infinite;
+}
+
+.page-skeleton__block--title { width: 4.5rem; height: 1.25rem; }
+.page-skeleton__block--caption { width: 9rem; height: 0.65rem; }
+.page-skeleton__block--segment { width: 11rem; height: 2rem; border-radius: var(--radius-pill); }
+.page-skeleton__block--field { width: 100%; height: 3rem; border-radius: var(--radius-card); }
+.page-skeleton__block--button { width: 100%; height: 2.75rem; border-radius: var(--radius-card); }
+.page-skeleton__block--hero { width: 100%; height: 12rem; border-radius: var(--radius-card); }
+.page-skeleton__block--media { width: 100%; height: 8rem; border-radius: var(--radius-card); }
+.page-skeleton__block--stage { width: min(100%, 17.5rem); height: 14rem; margin-inline: auto; border-radius: var(--radius-card); }
+.page-skeleton__block--card { width: 100%; height: 8.5rem; border-radius: var(--radius-card); }
+.page-skeleton__block--thumb { width: 2.75rem; height: 2.75rem; border-radius: var(--radius-card); }
+.page-skeleton__block--avatar { width: 3rem; height: 3rem; border-radius: 50%; }
+
+@keyframes page-skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-skeleton__block { animation: none; }
 }
 
 .switch {

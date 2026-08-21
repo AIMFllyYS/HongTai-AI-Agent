@@ -9,7 +9,7 @@ import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
-import { LoadingState } from "../components/StatePanels";
+import { PageSkeleton } from "../components/PageSkeleton";
 import { pathForRoute } from "../router";
 
 export interface ProfileSettingsPageProps {
@@ -112,7 +112,7 @@ export function ProfileSettingsPage({ runtime, navigate }: ProfileSettingsPagePr
   };
 
   if (loading) {
-    return <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="我的资料"><LoadingState description="正在读取本地档案" title="加载档案" /></AppShell>;
+    return <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="我的资料"><PageSkeleton layout="settings" /></AppShell>;
   }
 
   return (

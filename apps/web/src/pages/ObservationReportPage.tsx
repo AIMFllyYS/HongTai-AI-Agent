@@ -9,7 +9,8 @@ import { Icon, type IconName } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { RuntimeMediaFrame } from "../components/RuntimeMediaFrame";
 import { Sheet } from "../components/Sheet";
-import { EmptyState, ErrorState, LoadingState } from "../components/StatePanels";
+import { EmptyState, ErrorState } from "../components/StatePanels";
+import { PageSkeleton } from "../components/PageSkeleton";
 import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
 import {
   imageQualityBadgeLabel,
@@ -200,7 +201,7 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
   }, [followUpOpen]);
 
   if (loading) {
-    return <AppShell activeNav="ai" backPath={observationNewPath()} navigate={navigate} title="观察报告" visualTheme="warm-soft-tech"><LoadingState description="正在读取本地保存的会话、正式报告与追问历史" title="读取观察报告" /></AppShell>;
+    return <AppShell activeNav="ai" backPath={observationNewPath()} navigate={navigate} title="观察报告" visualTheme="warm-soft-tech"><PageSkeleton layout="report" /></AppShell>;
   }
   if (!session) {
     const unavailableIssue = readIssue ?? issue;

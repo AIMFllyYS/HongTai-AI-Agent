@@ -102,7 +102,9 @@
   --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --motion-ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
   --motion-scale-press: 0.98;
-  --motion-distance-page: 1rem;
+  --motion-distance-page: 1.5rem;
+  --motion-distance-primary: 28vw;
+  --overlay-scrim: rgba(27, 29, 31, 0.4);
 
   --color-surface-canvas: var(--surface-canvas);
   --color-surface-paper: var(--surface-paper);

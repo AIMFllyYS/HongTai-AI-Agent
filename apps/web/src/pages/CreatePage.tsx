@@ -11,7 +11,7 @@ import { GlassCard } from "../components/GlassCard";
 import { Icon, type IconName } from "../components/Icon";
 import { IssueNotice, issueTitle } from "../components/IssueNotice";
 import { ProductionProjectCard } from "../components/ProductionProjectCard";
-import { LoadingState } from "../components/StatePanels";
+import { PageSkeleton } from "../components/PageSkeleton";
 import { ProductionComposerPanel, type ComposerFlow } from "../features/production/production-composer-panel";
 import { ProductionHistoryList } from "../features/production/production-history-list";
 import { sourceCardFromTask, type AnalysisSource } from "../features/production/production-setup-forms";
@@ -429,7 +429,7 @@ function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { readonly 
   if (loading) {
     return (
       <AppShell activeNav="create" headerAction={<MaterialLibraryHeaderAction />} navigate={navigate} title="制作">
-        <LoadingState description="正在读取正式拆解与本地制作项目" title="打开制作工作台" />
+        <PageSkeleton layout="create" />
       </AppShell>
     );
   }

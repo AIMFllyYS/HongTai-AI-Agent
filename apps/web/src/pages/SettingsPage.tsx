@@ -7,7 +7,7 @@ import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
 import { Icon, type IconName } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
-import { LoadingState } from "../components/StatePanels";
+import { PageSkeleton } from "../components/PageSkeleton";
 import { Sheet } from "../components/Sheet";
 import { Switch } from "../components/Switch";
 import { useNotification } from "../notifications/NotificationProvider";
@@ -141,7 +141,7 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
   if (!snapshot && !issue) {
     return (
       <AppShell activeNav="settings" navigate={navigate} title="设置">
-        <LoadingState description="正在读取本机档案与 AI 设置" title="加载设置" />
+        <PageSkeleton layout="settings" />
       </AppShell>
     );
   }

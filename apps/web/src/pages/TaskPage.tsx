@@ -5,7 +5,8 @@ import type { AppRuntime, AppTaskRecord, ContentAnalysisRecord, StructuredGenera
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
 import { IssueNotice } from "../components/IssueNotice";
-import { ErrorState, LoadingState } from "../components/StatePanels";
+import { ErrorState } from "../components/StatePanels";
+import { PageSkeleton } from "../components/PageSkeleton";
 import { LiveListReadReconciler } from "../features/generation/live-list-read-reconciler";
 import { LatestReadGuard, preferNewerByUpdatedAt } from "../features/tasks/latest-read-guard";
 import { useAppResume } from "../hooks/useAppResume";
@@ -176,7 +177,7 @@ export function TaskPage({ runtime, taskId, navigate }: TaskPageProps) {
   });
 
   if (surface === "loading") {
-    return <AppShell activeNav="home" backPath="/" navigate={navigate} title="拆解详情"><LoadingState description="正在读取已保存任务与阶段事件" title="读取任务进度" /></AppShell>;
+    return <AppShell activeNav="home" backPath="/" navigate={navigate} title="拆解详情"><PageSkeleton layout="task" /></AppShell>;
   }
 
   if (surface === "missing-task" || !task) {
