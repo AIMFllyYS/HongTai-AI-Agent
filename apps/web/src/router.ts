@@ -27,6 +27,12 @@ export interface AppRoute {
   readonly path: string;
   readonly key: ActiveRouteKey;
   readonly navKey?: PrimaryNavKey;
+  /**
+   * Hosted primary tab bar. Default true.
+   * Detail routes set false so App can unmount the portal BottomNav;
+   * AppShell still uses the matching `showNav` prop for content padding.
+   */
+  readonly showNav?: boolean;
 }
 
 export interface MatchedRoute {
@@ -79,7 +85,7 @@ export const appRoutes: readonly AppRoute[] = [
   { path: "/settings/app-info", key: "settings-app-info", navKey: "settings" },
   { path: "/settings/app-info/updates", key: "settings-update-log", navKey: "settings" },
   { path: "/observation/new", key: "observation-new", navKey: "ai" },
-  { path: "/observation/:sessionId", key: "observation-report", navKey: "ai" },
+  { path: "/observation/:sessionId", key: "observation-report", navKey: "ai", showNav: false },
   { path: "/playbook", key: "playbook" },
 ];
 
@@ -219,6 +225,14 @@ export function matchRoute(pathname: string): MatchedAppRoute {
   }
 
   return { path: normalized, pattern: undefined, key: "not-found", params: EMPTY_ROUTE_PARAMS };
+}
+
+/**
+ * Primary tab bar is on for tab roots; detail routes opt out in `appRoutes`.
+ */
+export function showsPrimaryNav(key: RouteKey): boolean {
+  if (key === "not-found") return true;
+  return appRoutes.find((route) => route.key === key)?.showNav !== false;
 }
 
 /**

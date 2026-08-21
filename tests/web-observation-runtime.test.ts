@@ -3,6 +3,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
+import { showsPrimaryNav } from "../apps/web/src/router";
+
 const webRoot = join(process.cwd(), "apps", "web", "src");
 const read = (relativePath: string) => readFileSync(join(webRoot, relativePath), "utf8");
 
@@ -35,6 +37,8 @@ test("observation pages use the real diagnosis runtime rather than a visual diag
   assert.match(report, /ObservationObservingScreen/);
   assert.match(report, /title="AI 正在观察"/);
   assert.match(report, /showNav=\{false\}/);
+  assert.equal(showsPrimaryNav("observation-report"), false);
+  assert.equal(showsPrimaryNav("observation-new"), true);
   assert.match(report, /followUpQuestions/);
   assert.match(report, /content_delta/);
   assert.match(report, /reportRetryAllowed/);
@@ -279,7 +283,9 @@ test("observation controls stay compact and clear above the fixed Android naviga
   assert.match(css, /\.observation-confirm-actions\s+\.button--primary\s*\{[^}]*color:\s*var\(--color-text-on-primary\)/s);
   assert.match(css, /\.observation-follow-up-dock\s*\{[^}]*--safe-bottom[^;]*--keyboard-inset/s);
   assert.doesNotMatch(css, /\.observation-follow-up-dock\s*\{[^}]*--nav-height/);
-  assert.match(css, /\.observation-message p\s*\{[^}]*overflow-wrap:\s*anywhere/s);
+  assert.match(css, /\.observation-message__body\s*\{[^}]*overflow-wrap:\s*anywhere/s);
+  assert.match(css, /\.observation-follow-up-composer__send\s*\{[^}]*width:\s*2rem[^}]*height:\s*2rem/s);
+  assert.match(sheet, /MarkdownText/);
   assert.match(css, /\.observation-follow-up-composer__send\.is-busy svg\s*\{[^}]*animation:\s*spin/s);
   assert.match(css, /\.page-observation-report \.observation-quality-card/);
   assert.match(report, /observation-recommendation-card__top/);

@@ -277,7 +277,7 @@ test("后续对话只继承安全边界而不继承JSON输出约束", () => {
     disclaimer: "本报告不是疾病诊断。",
     followUpQuestions: [],
   });
-  assert.match(prompt, /回复自然中文文本，不输出JSON/u);
+  assert.match(prompt, /回复自然中文文本，可用简单 Markdown/u);
   assert.match(prompt, /需医院核实的不确定初步判断/u);
   assert.doesNotMatch(prompt, /八个顶层字段|最终结果只输出一个JSON对象/u);
 });

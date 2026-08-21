@@ -141,13 +141,17 @@ export function PlaybookFollowUpSpecimen() {
         <div className="observation-follow-up-sheet__messages">
           <article className="observation-message is-user">
             <div className="observation-message__bubble">
-              <p>标本用户追问，不是真实会话。</p>
+              <div className="observation-message__body">
+                <p>标本用户追问，不是真实会话。</p>
+              </div>
             </div>
             <span className="observation-message__avatar">宏</span>
           </article>
           <article className="observation-message is-assistant">
             <div className="observation-message__bubble">
-              <p>标本助手回复，仅对照设计稿。</p>
+              <div className="observation-message__body">
+                <p>标本助手回复，仅对照设计稿。</p>
+              </div>
               <span className="observation-message__copy"><Icon name="copy" size={14} />复制</span>
             </div>
           </article>

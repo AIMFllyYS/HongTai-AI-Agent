@@ -111,7 +111,8 @@ test("bottom navigation stays outside route transforms and supports direct navig
   assert.match(navigation, /transition:\s*["']primary["']/);
   assert.match(read("components/SwipeRouteViewport.tsx"), /transition:\s*["']instant["']/);
   assert.match(app, /AppShellNavigationProvider/);
-  assert.match(app, /<BottomNav active=/);
+  assert.match(app, /showsPrimaryNav/);
+  assert.match(app, /showPrimaryNav \? <BottomNav active=/);
   assert.match(shell, /data-visual-theme=\{visualTheme\}/);
   assert.match(shell, /externalNavigationContext/);
   assert.match(app, /transitionMode/);

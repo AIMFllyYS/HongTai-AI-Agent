@@ -11,7 +11,7 @@ import type { VisualDataAdapter } from "./data/visual-adapter";
 import { useInteractionFeedback } from "./hooks/useInteractionFeedback";
 import { useBrowserRoute } from "./hooks/useBrowserRoute";
 import { holdLazyModule } from "./motion/skeleton-hold";
-import { isTaskPageAlias, matchRoute } from "./router";
+import { isTaskPageAlias, matchRoute, showsPrimaryNav } from "./router";
 import { HomePage } from "./pages/HomePage";
 import { TaskHomePage } from "./pages/TaskHomePage";
 
@@ -126,15 +126,16 @@ export function App({ runtime, visualData }: AppProps = {}) {
 
   const route = matchRoute(pathname);
   const activeNav = activeNavForRoute(route.key);
+  const showPrimaryNav = showsPrimaryNav(route.key);
 
   return (
     <AppShellNavigationProvider>
-      <SwipeRouteViewport active={activeNav} currentPath={pathname} navigate={navigate}>
+      <SwipeRouteViewport active={showPrimaryNav ? activeNav : undefined} currentPath={pathname} navigate={navigate}>
         <RouteTransition direction={direction} pathname={pathname} transitionMode={transitionMode}>
           <Suspense fallback={<PageSkeleton path={pathname} />}>{renderRoute(pathname)}</Suspense>
         </RouteTransition>
       </SwipeRouteViewport>
-      <BottomNav active={activeNav} navigate={navigate} />
+      {showPrimaryNav ? <BottomNav active={activeNav} navigate={navigate} /> : null}
     </AppShellNavigationProvider>
   );
 }
