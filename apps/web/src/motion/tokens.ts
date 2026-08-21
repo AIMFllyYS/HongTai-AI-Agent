@@ -3,6 +3,8 @@ export const motionDurations = {
   fast: 140,
   standard: 220,
   page: 260,
+  /** Minimum time a route/list skeleton stays visible so it does not flash. */
+  skeleton: 400,
 } as const;
 
 type CubicBezier = [number, number, number, number];

@@ -7,6 +7,7 @@ import { Button } from "../components/Buttons";
 import { IssueNotice } from "../components/IssueNotice";
 import { ErrorState } from "../components/StatePanels";
 import { PageSkeleton } from "../components/PageSkeleton";
+import { useSkeletonHold } from "../motion/skeleton-hold";
 import { LiveListReadReconciler } from "../features/generation/live-list-read-reconciler";
 import { LatestReadGuard, preferNewerByUpdatedAt } from "../features/tasks/latest-read-guard";
 import { useAppResume } from "../hooks/useAppResume";
@@ -176,7 +177,8 @@ export function TaskPage({ runtime, taskId, navigate }: TaskPageProps) {
     hasDetail: detail !== undefined,
   });
 
-  if (surface === "loading") {
+  const showSkeleton = useSkeletonHold(surface === "loading");
+  if (showSkeleton) {
     return <AppShell activeNav="home" backPath="/" navigate={navigate} title="拆解详情"><PageSkeleton layout="task" /></AppShell>;
   }
 

@@ -12,6 +12,7 @@ import { Icon, type IconName } from "../components/Icon";
 import { IssueNotice, issueTitle } from "../components/IssueNotice";
 import { ProductionProjectCard } from "../components/ProductionProjectCard";
 import { PageSkeleton } from "../components/PageSkeleton";
+import { useSkeletonHold } from "../motion/skeleton-hold";
 import { ProductionComposerPanel, type ComposerFlow } from "../features/production/production-composer-panel";
 import { ProductionHistoryList } from "../features/production/production-history-list";
 import { sourceCardFromTask, type AnalysisSource } from "../features/production/production-setup-forms";
@@ -426,7 +427,8 @@ function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { readonly 
     ? <button className="production-header-switch" onClick={() => enterComposer("pick")} type="button">更换</button>
     : <MaterialLibraryHeaderAction />;
 
-  if (loading) {
+  const showSkeleton = useSkeletonHold(loading);
+  if (showSkeleton) {
     return (
       <AppShell activeNav="create" headerAction={<MaterialLibraryHeaderAction />} navigate={navigate} title="制作">
         <PageSkeleton layout="create" />

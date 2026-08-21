@@ -9,6 +9,7 @@ import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { ErrorState } from "../components/StatePanels";
 import { PageSkeleton } from "../components/PageSkeleton";
+import { useSkeletonHold } from "../motion/skeleton-hold";
 import { TabPanel, Tabs, tabId, tabPanelId } from "../components/Tabs";
 import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
 import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
@@ -244,6 +245,7 @@ export function TaskHomePage({ runtime, navigate, searchEpoch = 0 }: TaskHomePag
         {videoImporting ? "正在识别视频内容" : "选择视频并拆解"}
       </Button>
     );
+  const historyPending = useSkeletonHold(tasks === undefined && !historyIssue);
 
   return (
     <AppShell activeNav="home" headerAction={<HomeMastheadActions navigate={navigate} runtime={runtime} />} navigate={navigate} subtitle="让 AI 帮你看懂爆款逻辑" title="拆解">
@@ -262,7 +264,7 @@ export function TaskHomePage({ runtime, navigate, searchEpoch = 0 }: TaskHomePag
             tabs={SOURCE_TABS}
             variant="segmented"
           />
-          <TabPanel className="task-source-card__panel" id={tabPanelId(SOURCE_TAB_GROUP_ID)} labelledBy={tabId(SOURCE_TAB_GROUP_ID, linkTab ? 0 : 1)}>
+          <TabPanel className="task-source-card__panel" id={tabPanelId(SOURCE_TAB_GROUP_ID)} labelledBy={tabId(SOURCE_TAB_GROUP_ID, linkTab ? 0 : 1)} slideKey={sourceTab} tabs={SOURCE_TABS}>
             {linkTab ? (
               <>
                 <div className="input-card__control">
@@ -311,7 +313,7 @@ export function TaskHomePage({ runtime, navigate, searchEpoch = 0 }: TaskHomePag
         <section className="page-section">
           <div className="section-heading"><h3>最近拆解</h3>{historyIssue ? <Button onClick={() => void loadHistory()} variant="quiet">重新读取</Button> : null}</div>
           {historyIssue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), editInput: focusTaskShareInput }} issue={historyIssue} /> : null}
-          {historyIssue && tasks === undefined ? <ErrorState description={historyIssue.userMessage} title="任务历史无法读取" /> : tasks === undefined ? <PageSkeleton layout="home-list" /> : <TaskHistory navigate={navigate} tasks={tasks} />}
+          {historyIssue && tasks === undefined ? <ErrorState description={historyIssue.userMessage} title="任务历史无法读取" /> : historyPending ? <PageSkeleton layout="home-list" /> : <TaskHistory navigate={navigate} tasks={tasks ?? []} />}
         </section>
       </div>
     </AppShell>

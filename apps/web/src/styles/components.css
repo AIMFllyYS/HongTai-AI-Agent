@@ -1308,16 +1308,19 @@
 
 .sheet__grab {
   display: grid;
+  justify-items: center;
   gap: var(--space-2);
+  min-height: 2.75rem;
+  padding-top: var(--space-2);
   touch-action: none;
   cursor: grab;
 }
 
 .sheet__handle {
-  width: 2.25rem;
-  height: 0.25rem;
-  margin: var(--space-1) auto 0;
-  background: var(--color-outline);
+  width: 3rem;
+  height: 0.3125rem;
+  margin: 0;
+  background: var(--color-text-muted);
   border-radius: var(--radius-pill);
 }
 
@@ -1425,6 +1428,7 @@
 }
 
 .tabs--segmented {
+  position: relative;
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
@@ -1440,9 +1444,26 @@
   gap: 0.125rem;
 }
 
+.tabs--segmented__thumb {
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  z-index: 0;
+  width: calc((100% - 0.25rem - (var(--tab-count, 2) - 1) * 0.125rem) / var(--tab-count, 2));
+  height: 1.75rem;
+  background: var(--color-surface-card);
+  border-radius: 0.4375rem;
+  box-shadow: 0 0.0625rem 0.125rem rgba(27, 29, 31, 0.06);
+  transform: translateX(calc(var(--tab-index, 0) * (100% + 0.125rem)));
+  transition: transform var(--motion-duration-standard) var(--motion-ease-emphasized);
+  pointer-events: none;
+}
+
 .tabs--segmented button {
   appearance: none;
   -webkit-appearance: none;
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1464,14 +1485,25 @@
 
 .tabs--segmented button.is-active {
   color: var(--color-text-primary);
-  background: var(--color-surface-card);
+  background: transparent;
   font-weight: 600;
-  box-shadow: 0 0.0625rem 0.125rem rgba(27, 29, 31, 0.06);
+  box-shadow: none;
 }
 
 .tabs--segmented button.is-active::after {
   content: none;
   display: none;
+}
+
+.tabs__panel--slide {
+  overflow: hidden;
+  position: relative;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabs--segmented__thumb {
+    transition: none;
+  }
 }
 
 .visually-hidden {

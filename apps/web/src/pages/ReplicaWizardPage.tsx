@@ -10,6 +10,7 @@ import { IssueNotice, isInlineIssueAction, issueTitle } from "../components/Issu
 import { ReplicaRequirementCard } from "../components/ReplicaRequirementCard";
 import { EmptyState } from "../components/StatePanels";
 import { PageSkeleton } from "../components/PageSkeleton";
+import { useSkeletonHold } from "../motion/skeleton-hold";
 import {
   readReplicaBlueprint,
   requirementBindings,
@@ -158,7 +159,8 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
     </AppShell>
   );
 
-  if (loading) return shell(<PageSkeleton layout="create" />);
+  const showSkeleton = useSkeletonHold(loading);
+  if (showSkeleton) return shell(<PageSkeleton layout="create" />);
 
   if (!record || record.status === "failed" || !blueprint.usable) {
     const failed = record?.status === "failed";

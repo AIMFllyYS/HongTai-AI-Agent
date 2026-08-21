@@ -302,7 +302,7 @@ export function TaskDetailPage({
 
       <section className="page-section task-result-tabs">
         <Tabs active={activeLabel} ariaLabel="原文与拆解" id={tabGroupId} onSelect={(tab) => onSelectTab(tab === ANALYSIS_TAB_LABEL ? "analysis" : "source")} tabs={tabs} variant="segmented" />
-        <TabPanel className="task-result-tabs__panel" id={tabPanelId(tabGroupId)} labelledBy={tabId(tabGroupId, activeTab === "analysis" ? 1 : 0)}>
+        <TabPanel className="task-result-tabs__panel" id={tabPanelId(tabGroupId)} labelledBy={tabId(tabGroupId, activeTab === "analysis" ? 1 : 0)} slideKey={activeLabel} tabs={tabs}>
           {activeTab === "source" ? (
             task.contentType === "image_text" ? (
               <div id="task-detail-image-text">

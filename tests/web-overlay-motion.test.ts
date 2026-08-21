@@ -27,6 +27,8 @@ test("all product sheets and the compose plus share Overlay rise", () => {
   assert.match(overlay, /dragControls/);
   assert.match(sheet, /placement="rise"/);
   assert.match(sheet, /OverlayDragRegion/);
+  assert.match(sheet, /向下拖动关闭/);
+  assert.match(read("styles/components.css"), /\.sheet__handle\s*\{[^}]*width:\s*3rem[^}]*height:\s*0\.3125rem/s);
   assert.match(compose, /title="新建"/);
   assert.match(more, /title="更多操作"/);
   assert.match(settings, /<Sheet /);

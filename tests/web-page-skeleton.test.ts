@@ -4,9 +4,18 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import { pageSkeletonLayoutForPath } from "../apps/web/src/components/PageSkeleton";
+import { remainingSkeletonHold } from "../apps/web/src/motion/skeleton-hold";
 
 const webRoot = join(process.cwd(), "apps", "web", "src");
 const read = (relativePath: string) => readFileSync(join(webRoot, relativePath), "utf8");
+
+test("skeleton hold uses a shared minimum without inventing progress", () => {
+  assert.equal(remainingSkeletonHold(1_000, 1_200, 400), 200);
+  assert.equal(remainingSkeletonHold(1_000, 1_500, 400), 0);
+  assert.equal(remainingSkeletonHold(null, 1_500, 400), 0);
+  assert.match(read("motion/skeleton-hold.ts"), /motionDurations\.skeleton/);
+  assert.match(read("App.tsx"), /holdLazyModule/);
+});
 
 test("route paths pick an honest skeleton layout without fake copy", () => {
   assert.equal(pageSkeletonLayoutForPath("/"), "home");

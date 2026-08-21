@@ -8,6 +8,7 @@ import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { PageSkeleton } from "../components/PageSkeleton";
+import { useSkeletonHold } from "../motion/skeleton-hold";
 import { playbookPath } from "../router";
 
 export interface ApplicationInfoPageProps {
@@ -41,7 +42,8 @@ export function ApplicationInfoPage({ runtime, navigate }: ApplicationInfoPagePr
     void load();
   }, [load]);
 
-  if (!info && !issue) {
+  const showSkeleton = useSkeletonHold(!info && !issue);
+  if (showSkeleton) {
     return <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="关于"><PageSkeleton layout="settings" /></AppShell>;
   }
 

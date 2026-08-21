@@ -10,7 +10,8 @@ import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { EmptyState } from "../components/StatePanels";
 import { PageSkeleton } from "../components/PageSkeleton";
-import { Tabs } from "../components/Tabs";
+import { TabPanel, Tabs, tabId, tabPanelId } from "../components/Tabs";
+import { useSkeletonHold } from "../motion/skeleton-hold";
 import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
 import { diagnosisModuleDefinitions } from "../features/diagnosis/diagnosis-module-progress";
 import { OBSERVATION_REPORT_DISCLAIMER_FALLBACK } from "../features/diagnosis/diagnosis-presenters";
@@ -250,6 +251,10 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
     }
   };
 
+  const modeTitles = modes.map((item) => item.title);
+  const activeModeTitle = modes.find((item) => item.id === mode)?.title ?? "面部观察";
+  const historyPending = useSkeletonHold(sessions === undefined && !historyIssue);
+
   return (
     <AppShell activeNav="ai" headerAction={<HomeMastheadActions navigate={navigate} runtime={runtime} />} navigate={navigate} subtitle="舌象或面部，结果仅供日常参考" title="AI 智能诊断" visualTheme="warm-soft-tech">
       <div className="page-stack page-observation-start">
@@ -257,27 +262,35 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
         {issue ? <IssueNotice actions={{ selectMedia: () => void pickImage() }} issue={issue} /> : null}
 
         <Tabs
-          active={modes.find((item) => item.id === mode)?.title ?? "面部观察"}
+          active={activeModeTitle}
           ariaLabel="选择观察方式"
           id="observation-mode"
           onSelect={(tab) => {
             const next = modes.find((item) => item.title === tab);
             if (next) chooseMode(next.id);
           }}
-          tabs={modes.map((item) => item.title)}
+          tabs={modeTitles}
           variant="segmented"
         />
 
-        <ObservationCapturePanel
-          busy={loading}
-          diagnosisAvailable={diagnosisAvailable}
-          image={image}
-          importing={importing}
-          mode={mode}
-          onCapture={() => void captureImage()}
-          onPick={() => void pickImage()}
-          onScan={() => void pickImage()}
-        />
+        <TabPanel
+          className="observation-mode-panel"
+          id={tabPanelId("observation-mode")}
+          labelledBy={tabId("observation-mode", Math.max(0, modeTitles.indexOf(activeModeTitle)))}
+          slideKey={activeModeTitle}
+          tabs={modeTitles}
+        >
+          <ObservationCapturePanel
+            busy={loading}
+            diagnosisAvailable={diagnosisAvailable}
+            image={image}
+            importing={importing}
+            mode={mode}
+            onCapture={() => void captureImage()}
+            onPick={() => void pickImage()}
+            onScan={() => void pickImage()}
+          />
+        </TabPanel>
 
         {loading || reportProgress ? <ValidatedModuleProgress definitions={diagnosisModuleDefinitions} failedTitle="观察报告未完成" issue={issue} progress={reportProgress} title="正在生成真实观察报告" /> : null}
         <small className="observation-privacy-note">图片只保存在本机，不会上传或公开</small>
@@ -301,7 +314,7 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
         <section className="page-section">
           <div className="section-heading"><div><h3>最近观察</h3></div>{historyIssue ? <Button onClick={() => void loadSessions()} variant="quiet">重新读取</Button> : null}</div>
           {historyIssue ? <IssueNotice issue={historyIssue} /> : null}
-          {sessions === undefined ? <PageSkeleton layout="observation-list" /> : sessions.length === 0 ? <EmptyState description="完成一次真实图片观察后，会话和正式报告会保存在本地这里。" icon="history" title="尚无本地观察" /> : <div className="observation-history-list">{sessions.map((session) => <ObservationHistoryCard key={session.sessionId} onOpen={() => navigate(observationReportPath(session.sessionId))} session={session} />)}</div>}
+          {historyPending ? <PageSkeleton layout="observation-list" /> : sessions && sessions.length > 0 ? <div className="observation-history-list">{sessions.map((session) => <ObservationHistoryCard key={session.sessionId} onOpen={() => navigate(observationReportPath(session.sessionId))} session={session} />)}</div> : <EmptyState description="完成一次真实图片观察后，会话和正式报告会保存在本地这里。" icon="history" title="尚无本地观察" />}
         </section>
       </div>
     </AppShell>

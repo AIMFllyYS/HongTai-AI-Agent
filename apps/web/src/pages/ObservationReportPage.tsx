@@ -11,6 +11,7 @@ import { RuntimeMediaFrame } from "../components/RuntimeMediaFrame";
 import { Sheet } from "../components/Sheet";
 import { EmptyState, ErrorState } from "../components/StatePanels";
 import { PageSkeleton } from "../components/PageSkeleton";
+import { useSkeletonHold } from "../motion/skeleton-hold";
 import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
 import {
   imageQualityBadgeLabel,
@@ -200,7 +201,8 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
     if (followUpOpen) focusQuestion();
   }, [followUpOpen]);
 
-  if (loading) {
+  const showSkeleton = useSkeletonHold(loading);
+  if (showSkeleton) {
     return <AppShell activeNav="ai" backPath={observationNewPath()} navigate={navigate} title="观察报告" visualTheme="warm-soft-tech"><PageSkeleton layout="report" /></AppShell>;
   }
   if (!session) {

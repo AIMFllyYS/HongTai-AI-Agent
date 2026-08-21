@@ -15,10 +15,11 @@ import { shouldDismissSheet } from "../motion/sheet-dismiss";
 
 const OverlayDragContext = createContext<((event: ReactPointerEvent<HTMLElement>) => void) | undefined>(undefined);
 
-export function OverlayDragRegion({ className, children }: PropsWithChildren<{ readonly className?: string }>) {
+export function OverlayDragRegion({ className, label, children }: PropsWithChildren<{ readonly className?: string; readonly label?: string }>) {
   const startDrag = useContext(OverlayDragContext);
   return (
     <div
+      aria-label={label}
       className={className}
       onPointerDown={(event) => {
         if (event.button !== 0 || !startDrag) return;

@@ -10,22 +10,23 @@ import { SwipeRouteViewport } from "./components/SwipeRouteViewport";
 import type { VisualDataAdapter } from "./data/visual-adapter";
 import { useInteractionFeedback } from "./hooks/useInteractionFeedback";
 import { useBrowserRoute } from "./hooks/useBrowserRoute";
+import { holdLazyModule } from "./motion/skeleton-hold";
 import { isTaskPageAlias, matchRoute } from "./router";
 import { HomePage } from "./pages/HomePage";
 import { TaskHomePage } from "./pages/TaskHomePage";
 
-const TemplatesPage = lazy(async () => ({ default: (await import("./pages/TemplatesPage")).TemplatesPage }));
-const CreatePage = lazy(async () => ({ default: (await import("./pages/CreatePage")).CreatePage }));
-const ProductionEditPage = lazy(async () => ({ default: (await import("./pages/ProductionEditPage")).ProductionEditPage }));
-const ReplicaWizardPage = lazy(async () => ({ default: (await import("./pages/ReplicaWizardPage")).ReplicaWizardPage }));
-const ObservationReportPage = lazy(async () => ({ default: (await import("./pages/ObservationReportPage")).ObservationReportPage }));
-const ObservationStartPage = lazy(async () => ({ default: (await import("./pages/ObservationStartPage")).ObservationStartPage }));
-const TaskPage = lazy(async () => ({ default: (await import("./pages/TaskPage")).TaskPage }));
-const AiSettingsPage = lazy(async () => ({ default: (await import("./pages/AiSettingsPage")).AiSettingsPage }));
-const ApplicationInfoPage = lazy(async () => ({ default: (await import("./pages/ApplicationInfoPage")).ApplicationInfoPage }));
-const ProfileSettingsPage = lazy(async () => ({ default: (await import("./pages/ProfileSettingsPage")).ProfileSettingsPage }));
-const SettingsPage = lazy(async () => ({ default: (await import("./pages/SettingsPage")).SettingsPage }));
-const PlaybookPage = lazy(async () => ({ default: (await import("./playbook/PlaybookPage")).PlaybookPage }));
+const TemplatesPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/TemplatesPage"))).TemplatesPage }));
+const CreatePage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/CreatePage"))).CreatePage }));
+const ProductionEditPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ProductionEditPage"))).ProductionEditPage }));
+const ReplicaWizardPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ReplicaWizardPage"))).ReplicaWizardPage }));
+const ObservationReportPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ObservationReportPage"))).ObservationReportPage }));
+const ObservationStartPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ObservationStartPage"))).ObservationStartPage }));
+const TaskPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/TaskPage"))).TaskPage }));
+const AiSettingsPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/AiSettingsPage"))).AiSettingsPage }));
+const ApplicationInfoPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ApplicationInfoPage"))).ApplicationInfoPage }));
+const ProfileSettingsPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ProfileSettingsPage"))).ProfileSettingsPage }));
+const SettingsPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/SettingsPage"))).SettingsPage }));
+const PlaybookPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./playbook/PlaybookPage"))).PlaybookPage }));
 
 export interface AppProps {
   /** Real application runtime supplied only by the application composition root. */

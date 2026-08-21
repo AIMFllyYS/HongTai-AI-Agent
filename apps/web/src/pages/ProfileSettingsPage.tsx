@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import type { FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useSkeletonHold } from "../motion/skeleton-hold";
 
 import { issueFromAppError } from "@hongtai/core";
 import type { AppRuntime, LocalProfile, TaskIssue } from "@hongtai/core";
@@ -111,7 +111,8 @@ export function ProfileSettingsPage({ runtime, navigate }: ProfileSettingsPagePr
     }
   };
 
-  if (loading) {
+  const showSkeleton = useSkeletonHold(loading);
+  if (showSkeleton) {
     return <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="我的资料"><PageSkeleton layout="settings" /></AppShell>;
   }
 

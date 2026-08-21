@@ -70,6 +70,7 @@ test("compose sheet, home paste intent, and create swipe lock stay wired", () =>
   assert.match(home, /searchEpoch/);
   assert.match(home, /\[searchEpoch\]/);
   assert.match(home, /variant="segmented"/);
+  assert.match(home, /slideKey=\{sourceTab\}/);
   assert.match(home, /HomeMastheadActions/);
   assert.match(swipe, /active === "create"/);
   assert.match(nav, /aria-label="新建"/);

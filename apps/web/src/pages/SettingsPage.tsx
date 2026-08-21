@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useSkeletonHold } from "../motion/skeleton-hold";
 
 import { issueFromAppError } from "@hongtai/core";
 import type { AppRuntime, LocalProfile, PublicAiConnectionConfig, TaskIssue } from "@hongtai/core";
@@ -138,7 +139,8 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
     }
   };
 
-  if (!snapshot && !issue) {
+  const showSkeleton = useSkeletonHold(!snapshot && !issue);
+  if (showSkeleton) {
     return (
       <AppShell activeNav="settings" navigate={navigate} title="设置">
         <PageSkeleton layout="settings" />

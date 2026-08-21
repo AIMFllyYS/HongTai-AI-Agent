@@ -10,6 +10,7 @@ test("mobile motion foundation keeps each interaction responsibility isolated", 
   for (const relativePath of [
     "motion/tokens.ts",
     "motion/sheet-dismiss.ts",
+    "motion/skeleton-hold.ts",
     "components/Overlay.tsx",
     "components/PageSkeleton.tsx",
     "components/RouteTransition.tsx",
@@ -56,6 +57,7 @@ test("motion stylesheet exposes shared timing and keeps scrolling available", ()
     "--motion-ease-standard",
     "--motion-scale-press",
     "--motion-distance-primary",
+    "--motion-duration-skeleton",
     "--overlay-scrim",
   ]) {
     assert.match(tokens, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `${token} should exist`);

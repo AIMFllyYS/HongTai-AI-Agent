@@ -10,6 +10,7 @@ import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { PageSkeleton } from "../components/PageSkeleton";
+import { useSkeletonHold } from "../motion/skeleton-hold";
 
 export interface AiSettingsPageProps {
   readonly runtime: AppRuntime;
@@ -249,7 +250,8 @@ export function AiSettingsPage({ runtime, navigate }: AiSettingsPageProps) {
     }
   };
 
-  if (loading) {
+  const showSkeleton = useSkeletonHold(loading);
+  if (showSkeleton) {
     return <AppShell activeNav="settings" backPath="/settings" navigate={navigate} title="AI 服务"><PageSkeleton layout="settings" /></AppShell>;
   }
 

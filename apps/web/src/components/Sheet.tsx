@@ -13,8 +13,8 @@ export interface SheetProps extends PropsWithChildren {
 export function Sheet({ open, title, onClose, labelledBy = "sheet-title", className = "", children }: SheetProps) {
   return (
     <Overlay labelledBy={labelledBy} onClose={onClose} open={open} panelClassName={`sheet ${className}`.trim()} placement="rise">
-      <OverlayDragRegion className="sheet__grab">
-        <div className="sheet__handle" />
+      <OverlayDragRegion className="sheet__grab" label="向下拖动关闭">
+        <div aria-hidden="true" className="sheet__handle" />
         <h2 id={labelledBy}>{title}</h2>
       </OverlayDragRegion>
       <div className="sheet__body">{children}</div>

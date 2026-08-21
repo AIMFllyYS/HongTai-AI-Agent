@@ -10,6 +10,7 @@ import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { EmptyState } from "../components/StatePanels";
 import { PageSkeleton } from "../components/PageSkeleton";
+import { useSkeletonHold } from "../motion/skeleton-hold";
 import { formatTaskTime, platformLabel } from "../features/tasks/task-presenters";
 import { aiSettingsPath, type Navigate } from "../router";
 
@@ -205,6 +206,8 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
     setFeaturedIndex(Math.min(Math.max(next, 0), Math.max(featured.length - 1, 0)));
   };
 
+  const templatesPending = useSkeletonHold(templates === undefined);
+
   return (
     <AppShell
       activeNav="templates"
@@ -235,7 +238,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
             </label>
             <span className="templates-section-hint">本机精选 · 滑动查看</span>
           </div>
-          {templates === undefined ? <PageSkeleton layout="templates-list" /> : templates.length === 0 ? (
+          {templatesPending ? <PageSkeleton layout="templates-list" /> : templates?.length === 0 ? (
             <EmptyState description="保存本机公式后，会在这里横向滑动查看。" icon="layout_template" title="还没有可滑动的本机模板" />
           ) : featured.length === 0 ? (
             <EmptyState description="搜索只匹配本机模板的名称、摘要或公式，不会编造结果。" icon="filter" title="未解析到这类模板" />
@@ -286,7 +289,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
             {readIssue ? <button className="text-action" onClick={() => void load()} type="button">刷新</button> : null}
             {!readIssue && templates ? <span className="templates-section-hint">{filtered.length} 个</span> : null}
           </div>
-          {templates === undefined ? <PageSkeleton layout="templates-list" /> : templates.length === 0 ? (
+          {templatesPending ? <PageSkeleton layout="templates-list" /> : templates?.length === 0 ? (
             <EmptyState action={<Button onClick={startCustom} variant="secondary">创建空白模板</Button>} className="templates-catalog-empty" description="你可以从拆解保存，也可以从空白结构开始自定义。" icon="content_paste" title="还没有模板" />
           ) : filtered.length === 0 ? (
             <EmptyState description="当前筛选只匹配名称、摘要或公式里的关键字。" icon="filter" title="未解析到这类模板" />

@@ -77,7 +77,8 @@ test("shared tabs stay in the components layer so segmented pills survive Androi
   assert.match(components, /\.tabs--segmented button\s*\{[^}]*min-height:\s*0/s);
   assert.match(components, /\.tabs--segmented button\s*\{[^}]*height:\s*1\.75rem/s);
   assert.match(components, /\.tabs--segmented button\s*\{[^}]*background:\s*transparent/s);
-  assert.match(components, /\.tabs--segmented button\.is-active\s*\{[^}]*background:\s*var\(--color-surface-card\)/s);
+  assert.match(components, /\.tabs--segmented__thumb\s*\{[^}]*background:\s*var\(--color-surface-card\)/s);
+  assert.match(components, /\.tabs--segmented button\.is-active\s*\{[^}]*background:\s*transparent/s);
   assert.match(components, /\.tabs--segmented button\.is-active::after\s*\{[^}]*display:\s*none/s);
 });
 

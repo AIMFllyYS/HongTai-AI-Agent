@@ -99,6 +99,7 @@
   --motion-duration-fast: 140ms;
   --motion-duration-standard: 220ms;
   --motion-duration-page: 260ms;
+  --motion-duration-skeleton: 400ms;
   --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --motion-ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
   --motion-scale-press: 0.98;
