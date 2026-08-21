@@ -60,6 +60,14 @@ export function useSwipeNavigation(active: BottomNavProps["active"], { onCommit 
   const [isDragging, setIsDragging] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
 
+  const capturePointer = useCallback((event: PointerEvent<HTMLElement>) => {
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Synthetic audit events do not have an active pointer; real browser events still capture normally.
+    }
+  }, []);
+
   const releasePointer = useCallback((event?: PointerEvent<HTMLElement>) => {
     if (event?.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -95,11 +103,6 @@ export function useSwipeNavigation(active: BottomNavProps["active"], { onCommit 
       y: event.clientY,
       direction: null,
     };
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      // Synthetic audit events do not have an active pointer; real browser events still capture normally.
-    }
   }, [active, clearGesture, isSettling]);
 
   const onPointerMove = useCallback<PointerEventHandler<HTMLElement>>((event) => {
@@ -112,8 +115,10 @@ export function useSwipeNavigation(active: BottomNavProps["active"], { onCommit 
       if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < SWIPE_LOCK_DISTANCE) return;
       if (Math.abs(deltaX) > Math.abs(deltaY) * SWIPE_DIRECTION_RATIO) {
         start.direction = "horizontal";
+        capturePointer(event);
       } else if (Math.abs(deltaY) > Math.abs(deltaX) * SWIPE_DIRECTION_RATIO) {
         start.direction = "vertical";
+        releasePointer(event);
         return;
       } else {
         return;
@@ -122,7 +127,7 @@ export function useSwipeNavigation(active: BottomNavProps["active"], { onCommit 
 
     setIsDragging(true);
     setSwipeOffset(clampDragOffset(deltaX));
-  }, [isSettling]);
+  }, [capturePointer, isSettling, releasePointer]);
 
   const onPointerUp = useCallback<PointerEventHandler<HTMLElement>>((event) => {
     const start = origin.current;

@@ -11,25 +11,34 @@ function requireMatch(value: string, pattern: RegExp, label: string): string {
   return matched;
 }
 
-test("the published v0.1.21/code 29 download matches the Android source version", () => {
+test("the published v0.1.22/code 30 download matches the Android source version", () => {
   const gradle = readFileSync(join(root, "android", "app", "build.gradle.kts"), "utf8");
   const downloadPage = readFileSync(join(root, "download.html"), "utf8");
   const sourceCode = Number(requireMatch(gradle, /versionCode\s*=\s*(\d+)/u, "Android versionCode"));
   const sourceName = requireMatch(gradle, /versionName\s*=\s*"([^"]+)"/u, "Android versionName");
   const publishedName = requireMatch(downloadPage, /aria-label="当前推荐版本 v([0-9.]+)"/u, "published download version");
 
-  assert.equal(sourceCode, 29);
-  assert.equal(sourceName, "0.1.21");
+  assert.equal(sourceCode, 30);
+  assert.equal(sourceName, "0.1.22");
   assert.equal(publishedName, sourceName);
-  assert.equal(publishedName, "0.1.21");
+  assert.equal(publishedName, "0.1.22");
+  assert.match(downloadPage, /"versionCode":\s*"30"/u);
+  assert.match(downloadPage, /23,329,541 bytes/u);
+  assert.match(downloadPage, /27558531BA4EA77810761EB4A4448865EE142DCCCCB9754CDA2216A6060D4B3E/iu);
+  assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.22\.apk/u);
+  assert.match(downloadPage, /修复上下猛拉到顶\/到底时整页拉伸跟着晃的问题/u);
+  assert.doesNotMatch(downloadPage, /进入正式签名版本/u);
+  assert.doesNotMatch(downloadPage, /公网哈希已回验/u);
+  assert.doesNotMatch(downloadPage, /批次 6 已合入/u);
+});
+
+test("the superseded v0.1.21/code 29 release stays archived instead of being overwritten", () => {
+  const downloadPage = readFileSync(join(root, "download.html"), "utf8");
+
   assert.match(downloadPage, /"versionCode":\s*"29"/u);
   assert.match(downloadPage, /23,323,128 bytes/u);
   assert.match(downloadPage, /E95B1A1E0845522BBD25469AC2E6F8F4F42F117BED020C8C15A8E6826102CDFD/iu);
   assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.21\.apk/u);
-  assert.match(downloadPage, /统一全应用动效/u);
-  assert.doesNotMatch(downloadPage, /进入正式签名版本/u);
-  assert.doesNotMatch(downloadPage, /公网哈希已回验/u);
-  assert.doesNotMatch(downloadPage, /批次 6 已合入/u);
 });
 
 test("the superseded v0.1.20/code 28 release stays archived instead of being overwritten", () => {
@@ -142,6 +151,7 @@ test("the repository maintains a changelog and a patch-only default version poli
   assert.match(changelog, /^## \[0\.1\.19\] - 2026-08-21/mu);
   assert.match(changelog, /^## \[0\.1\.20\] - 2026-08-21/mu);
   assert.match(changelog, /^## \[0\.1\.21\] - 2026-08-21/mu);
+  assert.match(changelog, /^## \[0\.1\.22\] - 2026-08-21/mu);
   assert.match(changelog, /^## \[0\.1\.7\] - 2026-08-14/mu);
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.12` \/ `versionCode=20`/u);
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.13` \/ `versionCode=21`/u);
@@ -153,6 +163,7 @@ test("the repository maintains a changelog and a patch-only default version poli
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.19` \/ `versionCode=27`/u);
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.20` \/ `versionCode=28`/u);
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.21` \/ `versionCode=29`/u);
+  assert.match(changelog, /Android 源码版本推进为 `0\.1\.22` \/ `versionCode=30`/u);
   assert.match(changelog, /默认只递增第三位补丁版本/u);
   assert.match(changelog, /第一位或第二位版本号.*明确授权/u);
 });

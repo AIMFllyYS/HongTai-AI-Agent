@@ -68,6 +68,8 @@ test("motion stylesheet exposes shared timing and keeps scrolling available", ()
   assert.match(foundation, /scrollbar-width:\s*none/);
   assert.match(foundation, /::-webkit-scrollbar/);
   assert.match(foundation, /prefers-reduced-motion/);
+  assert.match(foundation, /html\s*\{[^}]*overscroll-behavior:\s*none/s);
+  assert.match(foundation, /body\s*\{[^}]*overscroll-behavior:\s*none/s);
 });
 
 test("web app declares Motion as its only new animation runtime", () => {
@@ -134,6 +136,9 @@ test("horizontal navigation renders an adjacent route pane during movement", () 
   assert.match(swipe, /pointerType\s*===\s*["']mouse["']/);
   assert.match(swipe, /onPointerMove/);
   assert.match(swipe, /setPointerCapture/);
+  assert.match(swipe, /start\.direction = "horizontal"[\s\S]*capturePointer\(event\)/);
+  assert.match(swipe, /start\.direction = "vertical"[\s\S]*releasePointer\(event\)/);
+  assert.doesNotMatch(swipe, /origin\.current = \{[\s\S]*?setPointerCapture/);
   assert.match(swipe, /onCommit/);
   assert.match(swipe, /isSettling/);
   assert.match(swipe, /window\.innerWidth/);

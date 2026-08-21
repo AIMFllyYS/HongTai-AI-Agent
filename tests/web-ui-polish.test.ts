@@ -73,10 +73,10 @@ test("Android device settings bridge exposes build identity without creating a s
 test("application information explains recent improvements in product language", () => {
   const page = read("apps/web/src/pages/ApplicationInfoPage.tsx");
 
-  assert.match(page, /弹层、骨架、底栏切页、二级页滑入和分段 Tab 共用同一套动效/u);
-  assert.match(page, /加号新建、观察确认等底部面板支持上滑打开/u);
-  assert.match(page, /冷启动开屏补上产品名与标语/u);
-  assert.match(page, /下载与更新页按本版功能重写说明/u);
+  assert.match(page, /到顶或到底再用力上下拉，页面不再整页拉伸或跟着晃动/u);
+  assert.match(page, /深色模式补全淡绿底、状态软底与观察纸面配色/u);
+  assert.match(page, /确认使用图片后直接进入「AI 正在观察」进行中页/u);
+  assert.match(page, /观察报告详情页改为底部胶囊追问输入/u);
   assert.match(page, /每个安装版本仍会单独保留/u);
   assert.doesNotMatch(page, /紧凑结构化生成|字段校验|整文校正|半截 JSON|私有地址|pathname|查询串/u);
 });

@@ -30,7 +30,11 @@ test("approved gesture shell and compact navigation remain mounted", () => {
   const swipe = read("components/SwipeRouteViewport.tsx");
 
   assert.match(shell, /--swipe-offset/);
-  assert.match(shell, /overscroll-behavior-x:\s*contain/);
+  assert.match(shell, /\.route-swipe-viewport\s*\{[^}]*overflow-x:\s*hidden/s);
+  assert.match(shell, /\.route-swipe-viewport\s*\{[^}]*overscroll-behavior-x:\s*contain/s);
+  assert.match(shell, /\.app-content\s*\{[^}]*overscroll-behavior-x:\s*contain/s);
+  assert.doesNotMatch(shell, /\.route-swipe-viewport\s*\{[^}]*overscroll-behavior(?:-y)?:\s*none/s);
+  assert.doesNotMatch(shell, /\.app-content\s*\{[^}]*overscroll-behavior(?:-y)?:\s*none/s);
   assert.match(shell, /\.route-swipe-track\s*\{[^}]*left:\s*calc\(-100% \+ var\(--swipe-offset/s);
   assert.doesNotMatch(shell, /\.route-swipe-track(?:--dragging|--settling)?\s*\{[^}]*transform:/s);
   assert.match(swipe, /event\.propertyName !== "left"/);
@@ -53,7 +57,7 @@ test("Android WebView has one safe-area owner and never double-pads the page", (
   assert.match(mainActivity, /window\.statusBarColor\s*=\s*Color\.TRANSPARENT/);
   assert.match(mainActivity, /Web document[\s\S]*owns its safe-area spacing/);
   assert.doesNotMatch(mainActivity, /setOnApplyWindowInsetsListener|setPadding\(safeInsets|requestApplyInsets/);
-  assert.match(mainActivity, /bridge\.webView\.overScrollMode\s*=\s*View\.OVER_SCROLL_ALWAYS/);
+  assert.match(mainActivity, /bridge\.webView\.overScrollMode\s*=\s*View\.OVER_SCROLL_NEVER/);
   assert.match(mainActivity, /isAppearanceLightStatusBars\s*=\s*true/);
   assert.match(mainActivity, /isAppearanceLightNavigationBars\s*=\s*true/);
 });

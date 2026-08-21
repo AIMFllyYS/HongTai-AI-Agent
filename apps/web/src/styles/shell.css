@@ -27,6 +27,7 @@
   min-height: 100vh;
   overflow-x: hidden;
   touch-action: pan-y;
+  /* overflow-x:hidden makes this a scroller; none/contain on Y would swallow vertical chaining to the document. */
   overscroll-behavior-x: contain;
 }
 

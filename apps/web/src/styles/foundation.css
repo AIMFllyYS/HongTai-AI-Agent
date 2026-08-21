@@ -30,12 +30,14 @@ html {
   min-width: 320px;
   background: var(--color-background);
   scroll-behavior: smooth;
+  overscroll-behavior: none;
 }
 
 body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  overscroll-behavior: none;
   background: var(--color-background);
   color: var(--color-text);
   font-family: var(--font-body);
