@@ -35,7 +35,7 @@ test("浏览器入口仅在非原生平台注入本地 I/O，且不把 Node runt
 });
 
 test("制作页在列表成功或明确未找到后才消费 sourceId", () => {
-  const page = read("apps/web/src/pages/CreatePage.tsx");
+  const page = `${read("apps/web/src/pages/CreatePage.tsx")}\n${read("apps/web/src/features/production/production-workbench-page.tsx")}`;
   const model = read("apps/web/src/pages/task-page-model.ts");
   assert.match(model, /export function peekCreateSourceIdFromSearch/);
   assert.match(page, /peekCreateSourceIdFromSearch\(\)/);

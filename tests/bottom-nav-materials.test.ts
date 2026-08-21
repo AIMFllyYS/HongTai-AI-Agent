@@ -30,7 +30,7 @@ test("bottom navigation has five slots with a compose plus and no material-libra
 });
 
 test("Fudi material library opens from masthead promo and create-page header with token color and reduced-motion stillness", () => {
-  const createPage = readSource("pages/CreatePage.tsx");
+  const createPage = `${readSource("pages/CreatePage.tsx")}\n${readSource("features/production/production-workbench-page.tsx")}`;
   const observation = readSource("pages/ObservationStartPage.tsx");
   const home = readSource("pages/TaskHomePage.tsx");
   const templates = readSource("pages/TemplatesPage.tsx");

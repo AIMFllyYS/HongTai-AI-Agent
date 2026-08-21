@@ -1,6 +1,6 @@
 import type { ProductionProjectRecord } from "@hongtai/core";
 
-import { productionStatusLabel } from "../../pages/production-workbench-model";
+import { productionStatusLabel } from "./production-workbench-model";
 
 export interface ProductionHistoryListProps {
   readonly projects: readonly ProductionProjectRecord[];

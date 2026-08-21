@@ -16,11 +16,11 @@ import {
   resolveProductionRetryKind,
   resolveProductionRetryOperation,
   resolveProductionWorkbenchStage,
-} from "./production-workbench-model";
+} from "../features/production/production-workbench-model";
 
 const webRoot = join(process.cwd(), "apps", "web", "src");
 const read = (relativePath: string) => readFileSync(join(webRoot, relativePath), "utf8");
-const page = read("pages/CreatePage.tsx");
+const page = `${read("pages/CreatePage.tsx")}\n${read("features/production/production-workbench-page.tsx")}`;
 const forms = read("features/production/production-setup-forms.tsx");
 const createSurface = `${page}\n${forms}`;
 
@@ -138,10 +138,10 @@ test("未出片预览用素材首帧，出片只播 output.uri", () => {
 });
 
 test("制作页用 contextualAction 单主按钮、三 Tab 与 9:16 预览，完成态没有发布入口", () => {
-  const page = read("pages/CreatePage.tsx");
+  const page = `${read("pages/CreatePage.tsx")}\n${read("features/production/production-workbench-page.tsx")}`;
   const card = read("components/ProductionProjectCard.tsx");
   const css = read("styles/pages/production-runtime.css");
-  const model = read("pages/production-workbench-model.ts");
+  const model = read("features/production/production-workbench-model.ts");
   const surface = `${page}\n${card}\n${css}\n${model}`;
 
   assert.match(page, /contextualAction=\{/);
@@ -188,7 +188,7 @@ test("制作页用 contextualAction 单主按钮、三 Tab 与 9:16 预览，完
 });
 
 test("制作页回到前台会消费素材恢复，且成功或失败才清 busy", () => {
-  const page = read("pages/CreatePage.tsx");
+  const page = `${read("pages/CreatePage.tsx")}\n${read("features/production/production-workbench-page.tsx")}`;
   assert.match(page, /useAppResume\(\(\) => \{\s*void load\(\);\s*void applyAssetRecovery\(\);/u);
   assert.match(page, /runtime\.production\.consumeAssetRecovery\(\)/u);
   assert.match(page, /runtime\.production\.list\(\)/u, "list 会把 SPA 内卡住的 planning/rendering 收成可重试失败");
@@ -248,7 +248,7 @@ test("带 sourceId 进入制作页强制新建并选中该来源，匹配失败�
     composingNew: true,
   }), { composingNew: true, sourceId: "task-kept", sourceMatchFailed: false });
 
-  const page = read("pages/CreatePage.tsx");
+  const page = `${read("pages/CreatePage.tsx")}\n${read("features/production/production-workbench-page.tsx")}`;
   const model = read("pages/task-page-model.ts");
   assert.match(page, /resolveCreateWorkbenchEntry/);
   assert.match(page, /status:\s*"degraded"/);
@@ -334,7 +334,7 @@ test("带 sourceId 首次进入会新建，同一地址再次 load 不再强制�
     else (globalThis as { window: unknown }).window = previousWindow;
   }
 
-  const page = read("pages/CreatePage.tsx");
+  const page = `${read("pages/CreatePage.tsx")}\n${read("features/production/production-workbench-page.tsx")}`;
   assert.match(page, /peekCreateSourceIdFromSearch/);
   assert.match(page, /consumeCreateSourceIdFromSearch/);
   assert.doesNotMatch(page, /sourceIdFromSearch\(window\.location\.search\)/);

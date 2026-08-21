@@ -27,7 +27,7 @@ test("templates and production use real runtimes while publishing remains planne
     assert.match(source, /尚未接入/, `${page} should use clear planned-capability copy`);
   }
 
-  const create = read("pages/CreatePage.tsx");
+  const create = `${read("pages/CreatePage.tsx")}\n${read("features/production/production-workbench-page.tsx")}`;
   const createForms = read("features/production/production-setup-forms.tsx");
   const createSurface = `${create}\n${createForms}`;
   assert.match(create, /runtime\.production\.(create|importAssets|generatePlan|render)/);

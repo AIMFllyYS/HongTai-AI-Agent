@@ -1,4 +1,5 @@
 import {
+  inspectProductionPlanReadiness,
   MAX_PRODUCTION_DURATION_SECONDS,
   MAX_SHOTS_PER_PRODUCTION,
   MIN_MONTAGE_VISUAL_ASSETS,
@@ -67,16 +68,19 @@ function validateInput(input: ProductionPlanInput): void {
   if (!input.originalSourceText.trim() || input.originalSourceText.length > 12_000) throw invalidPlan("爆款原文必须在1到12000字符之间");
   if (input.headlineText !== undefined && (!input.headlineText.trim() || input.headlineText.trim().length > 24)) throw invalidPlan("主文字必须在1到24字符之间");
   if (input.analysis.source.taskId !== input.analysisTaskId) throw invalidPlan("正式拆解与制作来源任务不一致");
-  if (input.mode === "montage" && input.assets.length < MIN_MONTAGE_VISUAL_ASSETS) {
-    throw invalidPlan(`素材剪辑模式至少需要${MIN_MONTAGE_VISUAL_ASSETS}个制作素材`);
-  }
-  if (input.mode === "avatar") {
-    if (!input.avatarScript?.trim()) throw invalidPlan("数字人口播模式需要填写与视频一致的口播稿");
-    const avatars = input.assets.filter((asset) => asset.role === "avatar" && asset.kind === "video");
-    if (avatars.length !== 1) throw invalidPlan("数字人口播模式需要且只能使用一个数字人口播视频");
-    if (avatars[0]?.durationSeconds === undefined || avatars[0].durationSeconds + 0.001 < input.targetDurationSeconds) {
-      throw invalidPlan("数字人口播视频时长不足，请选择更长的视频或缩短目标时长");
+  const readiness = inspectProductionPlanReadiness({
+    mode: input.mode,
+    assets: input.assets,
+    avatarScript: input.avatarScript,
+    targetDurationSeconds: input.targetDurationSeconds,
+  });
+  if (!readiness.ok) {
+    if (readiness.reason === "need-visuals") {
+      throw invalidPlan(`素材剪辑模式至少需要${MIN_MONTAGE_VISUAL_ASSETS}个制作素材`);
     }
+    if (readiness.reason === "need-avatar-script") throw invalidPlan("数字人口播模式需要填写与视频一致的口播稿");
+    if (readiness.reason === "need-avatar-video") throw invalidPlan("数字人口播模式需要且只能使用一个数字人口播视频");
+    throw invalidPlan("数字人口播视频时长不足，请选择更长的视频或缩短目标时长");
   }
 }
 

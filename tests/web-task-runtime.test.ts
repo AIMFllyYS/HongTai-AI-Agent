@@ -539,7 +539,7 @@ test("完成态用共享 Tabs 恢复 URL 分栏，并按阶段给出底部主操
   const detail = read("pages/TaskDetailPage.tsx");
   const analysis = read("pages/TaskAnalysisPage.tsx");
   const modelSource = read("pages/task-page-model.ts");
-  const create = read("pages/CreatePage.tsx");
+  const create = `${read("pages/CreatePage.tsx")}\n${read("features/production/production-workbench-page.tsx")}`;
   const home = read("pages/TaskHomePage.tsx");
   const completed = [page, detail, analysis, modelSource].join("\n");
 

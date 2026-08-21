@@ -175,7 +175,7 @@ test("task, observation, and settings pages use the one IssueNotice action bound
     "pages/SettingsPage.tsx",
     "pages/ProfileSettingsPage.tsx",
     "pages/AiSettingsPage.tsx",
-    "pages/CreatePage.tsx",
+    "features/production/production-workbench-page.tsx",
   ];
 
   for (const page of pages) {
@@ -194,7 +194,7 @@ test("task, observation, and settings pages use the one IssueNotice action bound
   assert.match(read("pages/ProfileSettingsPage.tsx"), /selectMedia:/);
 
   const home = read("pages/TaskHomePage.tsx");
-  const create = read("pages/CreatePage.tsx");
+  const create = `${read("pages/CreatePage.tsx")}\n${read("features/production/production-workbench-page.tsx")}`;
   const templates = read("pages/TemplatesPage.tsx");
   const observation = read("pages/ObservationReportPage.tsx");
   const processing = read("pages/TaskProcessingPage.tsx");
@@ -247,7 +247,7 @@ test("publishing remains disabled while templates, observation and production us
     assert.doesNotMatch(source, /onClick=/);
   }
 
-  const create = read("pages/CreatePage.tsx");
+  const create = `${read("pages/CreatePage.tsx")}\n${read("features/production/production-workbench-page.tsx")}`;
   assert.match(create, /runtime\.production\.importAssets/);
   assert.match(create, /runtime\.production\.render/);
   assert.match(create, /IssueNotice/);

@@ -22,11 +22,12 @@ test("production v2 prompt separates original copy from analysis and forbids spo
 });
 
 test("production v2 UI captures main text preset and Media3 renders top and bottom overlays", () => {
-  const page = read("apps/web/src/pages/CreatePage.tsx");
+  const page = `${read("apps/web/src/pages/CreatePage.tsx")}\n${read("apps/web/src/features/production/production-workbench-page.tsx")}`;
   const forms = read("apps/web/src/features/production/production-setup-forms.tsx");
   const schema = read("packages/ai/src/schemas/production-plan.ts");
   const parser = read("android/app/src/main/java/com/hongtai/aiagent/production/ProductionPlanParser.kt");
   const renderer = read("android/app/src/main/java/com/hongtai/aiagent/production/ProductionRenderer.kt");
+  const staticOverlays = read("android/app/src/main/java/com/hongtai/aiagent/production/ProductionStaticTextOverlays.kt");
 
   assert.match(forms, /主文字/u);
   assert.match(forms, /文字预设/u);
@@ -38,5 +39,6 @@ test("production v2 UI captures main text preset and Media3 renders top and bott
   assert.match(schema, /textOverlay/u);
   assert.match(parser, /ProductionTextOverlay/u);
   assert.match(renderer, /headlineOverlays/u);
-  assert.match(renderer, /captionOverlays/u);
+  assert.match(staticOverlays, /headlineOverlays/u);
+  assert.match(staticOverlays, /captionOverlays/u);
 });

@@ -5,6 +5,7 @@ import androidx.media3.common.OverlaySettings
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.BitmapOverlay
 import androidx.media3.effect.StaticOverlaySettings
+import androidx.media3.effect.TextureOverlay
 
 /**
  * Media3 overlays that burn a `subtitle-template.v1` caption and its decorations into a shot.
@@ -106,6 +107,34 @@ internal class ProductionDecorationOverlay(
     if (timeMs < decoration.startMs || timeMs >= decoration.endMs) return null
     return (timeMs - decoration.startMs).toFloat() / (decoration.endMs - decoration.startMs)
   }
+}
+
+/**
+ * v3 plans burn a template driven caption plus its bounded decorations; older plans keep the
+ * static caption they were exported with so a re-render of an old project looks unchanged.
+ *
+ * @param shotOffsetMs where this media item starts inside its shot, which is non-zero only when a
+ *   clip shorter than the shot is repeated to fill it.
+ */
+@UnstableApi
+internal fun productionShotOverlays(
+  plan: NativeProductionPlan,
+  shot: ProductionShot,
+  shotOffsetMs: Long,
+  stickers: Map<String, Bitmap>,
+): List<TextureOverlay> {
+  val template = plan.subtitleTemplate ?: return captionOverlays(shot.caption)
+  val decorations = plan.decorations.filter { it.shotOrder == shot.order }.map { decoration ->
+    ProductionDecorationOverlay(
+      decoration,
+      template,
+      plan.width,
+      plan.height,
+      shotOffsetMs,
+      decoration.assetRef?.let(stickers::get),
+    )
+  }
+  return listOf(ProductionCaptionOverlay(template, shot.cues, plan.width, plan.height, shotOffsetMs)) + decorations
 }
 
 @UnstableApi

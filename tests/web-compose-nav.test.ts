@@ -75,7 +75,7 @@ test("compose sheet, home paste intent, and create swipe lock stay wired", () =>
   assert.match(swipe, /active === "create"/);
   assert.match(nav, /aria-label="新建"/);
   const app = read("App.tsx");
-  const create = read("pages/CreatePage.tsx");
+  const create = `${read("pages/CreatePage.tsx")}\n${read("features/production/production-workbench-page.tsx")}`;
   const browserRoute = read("hooks/useBrowserRoute.ts");
   assert.match(app, /searchEpoch=\{searchEpoch\}/);
   assert.match(create, /searchEpoch/);

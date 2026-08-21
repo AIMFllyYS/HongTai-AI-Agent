@@ -1,4 +1,4 @@
-import { MIN_MONTAGE_VISUAL_ASSETS, type IssueAction, type ProductionAsset, type ProductionMode, type ProductionProjectRecord, type ProductionStatus, type ProductionTextPreset } from "@hongtai/core";
+import { inspectProductionPlanReadiness, type IssueAction, type ProductionAsset, type ProductionMode, type ProductionProjectRecord, type ProductionStatus, type ProductionTextPreset } from "@hongtai/core";
 
 export const PRODUCTION_WORKBENCH_TABS = ["预览", "文案", "素材"] as const;
 export type ProductionWorkbenchTab = (typeof PRODUCTION_WORKBENCH_TABS)[number];
@@ -103,7 +103,7 @@ export function resolveProductionRetryOperation(project: {
 
 export function productionPlanReady(project: {
   readonly mode: ProductionMode;
-  readonly assets: readonly Pick<ProductionAsset, "role" | "durationSeconds">[];
+  readonly assets: readonly Pick<ProductionAsset, "role" | "kind" | "durationSeconds">[];
   readonly avatarScript?: string;
   readonly targetDurationSeconds: number;
 }): boolean {
@@ -112,25 +112,20 @@ export function productionPlanReady(project: {
 
 export function productionPlanBlockedReason(project: {
   readonly mode: ProductionMode;
-  readonly assets: readonly Pick<ProductionAsset, "role" | "durationSeconds">[];
+  readonly assets: readonly Pick<ProductionAsset, "role" | "kind" | "durationSeconds">[];
   readonly avatarScript?: string;
   readonly targetDurationSeconds: number;
 }): string {
-  const avatarMode = project.mode === "avatar";
-  const requiredVisualAssets = avatarMode ? 1 : MIN_MONTAGE_VISUAL_ASSETS;
-  const usableVisualAssets = project.assets.filter((asset) => avatarMode ? asset.role === "avatar" : asset.role === "visual").length;
-  const avatarAsset = avatarMode ? project.assets.find((asset) => asset.role === "avatar") : undefined;
-  const avatarDurationFits = !avatarMode || (avatarAsset?.durationSeconds !== undefined && avatarAsset.durationSeconds + 0.001 >= project.targetDurationSeconds);
-  if (avatarMode) {
-    if (usableVisualAssets < 1) return "请先上传一个带原声的 MP4 数字人口播视频。";
-    if (!avatarDurationFits) return `该数字人视频不足 ${project.targetDurationSeconds} 秒，请上传更长视频或新建较短时长项目。`;
-    if (!project.avatarScript) return "请填写与视频一致的口播稿。";
-    return "";
+  const readiness = inspectProductionPlanReadiness(project);
+  if (readiness.ok) return "";
+  if (readiness.reason === "need-visuals") {
+    return `至少还要 ${readiness.missingVisualCount} 个图片或视频素材，才能生成制作计划。`;
   }
-  if (usableVisualAssets < requiredVisualAssets) {
-    return `至少还要 ${requiredVisualAssets - usableVisualAssets} 个图片或视频素材，才能生成制作计划。`;
+  if (readiness.reason === "need-avatar-video") return "请先上传一个带原声的 MP4 数字人口播视频。";
+  if (readiness.reason === "avatar-too-short") {
+    return `该数字人视频不足 ${readiness.targetDurationSeconds} 秒，请上传更长视频或新建较短时长项目。`;
   }
-  return "";
+  return "请填写与视频一致的口播稿。";
 }
 
 export function productionComposerBlockedReason(input: {

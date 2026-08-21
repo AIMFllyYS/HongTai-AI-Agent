@@ -452,7 +452,8 @@ export interface AnalysisService {
 export type ProductionStatus = "draft" | "planning" | "ready" | "rendering" | "succeeded" | "failed";
 export type ProductionMode = "montage" | "avatar";
 export type ProductionAssetRole = "visual" | "avatar" | "music";
-export type ProductionTextPreset = "classic_top" | "clean_card" | "aqua_accent";
+export const PRODUCTION_TEXT_PRESET_VALUES = ["classic_top", "clean_card", "aqua_accent"] as const;
+export type ProductionTextPreset = (typeof PRODUCTION_TEXT_PRESET_VALUES)[number];
 
 export interface ProductionAsset extends MediaReference {
   readonly id: string;

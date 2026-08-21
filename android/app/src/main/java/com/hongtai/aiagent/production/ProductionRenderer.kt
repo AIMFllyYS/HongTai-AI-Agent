@@ -2,20 +2,12 @@ package com.hongtai.aiagent.production
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Color
-import android.graphics.Typeface
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
-import android.text.SpannableString
-import android.text.Spanned
-import android.text.style.AbsoluteSizeSpan
-import android.text.style.BackgroundColorSpan
-import android.text.style.ForegroundColorSpan
-import android.text.style.StyleSpan
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.audio.DefaultGainProvider
@@ -23,9 +15,6 @@ import androidx.media3.common.audio.GainProcessor
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.Presentation
-import androidx.media3.effect.StaticOverlaySettings
-import androidx.media3.effect.TextOverlay
-import androidx.media3.effect.TextureOverlay
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.EditedMediaItem
@@ -233,39 +222,12 @@ internal class ProductionRenderer(private val context: Context, private val stor
         plan.width, plan.height,
         if (shot.fit == "cover") Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP else Presentation.LAYOUT_SCALE_TO_FIT,
       )
-      val overlay = OverlayEffect(headlineOverlays(plan.textOverlay) + subtitleOverlays(plan, shot, shotOffsetMs, stickers))
+      val overlay = OverlayEffect(headlineOverlays(plan.textOverlay) + productionShotOverlays(plan, shot, shotOffsetMs, stickers))
       shotOffsetMs += duration
       EditedMediaItem.Builder(media).setRemoveAudio(plan.renderMode == ProductionRenderMode.MONTAGE)
         .apply { if (shot.input.kind == ProductionAssetKind.IMAGE) setFrameRate(plan.fps) }
         .setEffects(Effects(emptyList(), listOf(presentation, overlay))).build()
     }
-  }
-
-  /**
-   * v3 plans burn a template driven caption plus its bounded decorations; older plans keep the
-   * static caption they were exported with so a re-render of an old project looks unchanged.
-   *
-   * @param shotOffsetMs where this media item starts inside its shot, which is non-zero only when a
-   *   clip shorter than the shot is repeated to fill it.
-   */
-  private fun subtitleOverlays(
-    plan: NativeProductionPlan,
-    shot: ProductionShot,
-    shotOffsetMs: Long,
-    stickers: Map<String, Bitmap>,
-  ): List<TextureOverlay> {
-    val template = plan.subtitleTemplate ?: return captionOverlays(shot.caption)
-    val decorations = plan.decorations.filter { it.shotOrder == shot.order }.map { decoration ->
-      ProductionDecorationOverlay(
-        decoration,
-        template,
-        plan.width,
-        plan.height,
-        shotOffsetMs,
-        decoration.assetRef?.let(stickers::get),
-      )
-    }
-    return listOf(ProductionCaptionOverlay(template, shot.cues, plan.width, plan.height, shotOffsetMs)) + decorations
   }
 
   private fun decodeStickers(plan: NativeProductionPlan): Map<String, Bitmap> {
@@ -278,53 +240,6 @@ internal class ProductionRenderer(private val context: Context, private val stor
       throw error
     }
     return decoded
-  }
-
-  private fun headlineOverlays(value: ProductionTextOverlay): List<TextOverlay> {
-    if (value.primaryText.isBlank()) return emptyList()
-    val combined = listOfNotNull(value.primaryText, value.secondaryText).joinToString("\n")
-    val secondaryStart = value.secondaryText?.let { value.primaryText.length + 1 }
-    fun styledText(foreground: Int, background: Int?): SpannableString = SpannableString(combined).apply {
-      setSpan(ForegroundColorSpan(foreground), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-      background?.let { setSpan(BackgroundColorSpan(it), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
-      setSpan(StyleSpan(Typeface.BOLD), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-      setSpan(AbsoluteSizeSpan(54), 0, secondaryStart ?: length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-      secondaryStart?.let { setSpan(AbsoluteSizeSpan(34), it, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
-    }
-    val mainSettings = StaticOverlaySettings.Builder().setBackgroundFrameAnchor(0f, 0.72f).setOverlayFrameAnchor(0f, 0f).build()
-    return when (value.preset) {
-      "clean_card" -> listOf(TextOverlay.createStaticTextOverlay(styledText(Color.rgb(18, 34, 31), Color.argb(224, 255, 255, 255)), mainSettings))
-      "aqua_accent" -> listOf(TextOverlay.createStaticTextOverlay(styledText(Color.rgb(100, 244, 218), Color.argb(205, 0, 37, 34)), mainSettings))
-      else -> {
-        val shadowSettings = StaticOverlaySettings.Builder().setBackgroundFrameAnchor(0.014f, 0.706f).setOverlayFrameAnchor(0f, 0f).build()
-        listOf(
-          TextOverlay.createStaticTextOverlay(styledText(Color.argb(225, 0, 0, 0), null), shadowSettings),
-          TextOverlay.createStaticTextOverlay(styledText(Color.WHITE, null), mainSettings),
-        )
-      }
-    }
-  }
-
-  private fun captionOverlays(value: String): List<TextOverlay> {
-    val shadow = SpannableString("  ▌  $value  ").apply {
-      setSpan(ForegroundColorSpan(Color.argb(210, 0, 0, 0)), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-      setSpan(BackgroundColorSpan(Color.argb(220, 0, 24, 21)), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-      setSpan(StyleSpan(Typeface.BOLD), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-      setSpan(AbsoluteSizeSpan(42), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-    }
-    val foreground = SpannableString("  ▌  $value  ").apply {
-      setSpan(ForegroundColorSpan(Color.WHITE), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-      setSpan(ForegroundColorSpan(Color.rgb(126, 189, 172)), 2, 3, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-      setSpan(BackgroundColorSpan(Color.argb(196, 0, 48, 42)), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-      setSpan(StyleSpan(Typeface.BOLD), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-      setSpan(AbsoluteSizeSpan(42), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-    }
-    val shadowSettings = StaticOverlaySettings.Builder().setBackgroundFrameAnchor(0.012f, -0.708f).setOverlayFrameAnchor(0f, 0f).build()
-    val foregroundSettings = StaticOverlaySettings.Builder().setBackgroundFrameAnchor(0f, -0.72f).setOverlayFrameAnchor(0f, 0f).build()
-    return listOf(
-      TextOverlay.createStaticTextOverlay(shadow, shadowSettings),
-      TextOverlay.createStaticTextOverlay(foreground, foregroundSettings),
-    )
   }
 
   private fun finalizeOutput(temporary: File, output: File) {

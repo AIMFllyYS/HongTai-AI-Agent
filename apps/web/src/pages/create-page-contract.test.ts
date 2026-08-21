@@ -9,7 +9,9 @@ import { matchRoute, pathForRoute, replicaWizardPath } from "../router";
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (relativePath: string) => readFileSync(join(webRoot, relativePath), "utf8");
 
-const page = read("pages/CreatePage.tsx");
+const shell = read("pages/CreatePage.tsx");
+const workbench = read("features/production/production-workbench-page.tsx");
+const page = `${shell}\n${workbench}`;
 const forms = read("features/production/production-setup-forms.tsx");
 const composer = read("features/production/production-composer-panel.tsx");
 const history = read("features/production/production-history-list.tsx");
@@ -18,9 +20,10 @@ const css = read("styles/pages/production-runtime.css");
 const surface = `${page}\n${entry}\n${forms}\n${composer}`;
 
 test("制作首页拆成入口 / Agent 表单 / 历史列表子模块，路由仍挂 CreatePage", () => {
-  assert.match(page, /from "\.\.\/features\/production\/production-composer-panel"/u);
-  assert.match(page, /from "\.\.\/features\/production\/production-history-list"/u);
-  assert.match(page, /from "\.\.\/features\/production\/production-setup-forms"/u);
+  assert.match(shell, /from "\.\.\/features\/production\/production-workbench-page"/u);
+  assert.match(workbench, /from "\.\/production-composer-panel"/u);
+  assert.match(workbench, /from "\.\/production-history-list"/u);
+  assert.match(workbench, /from "\.\/production-setup-forms"/u);
   assert.match(page, /<ProductionComposerPanel/u);
   assert.match(page, /<ProductionHistoryList/u);
   assert.match(composer, /<ProductionModeEntry /u);

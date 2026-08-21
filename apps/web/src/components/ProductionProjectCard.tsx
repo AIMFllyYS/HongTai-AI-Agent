@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { resolveSubtitleTemplate, type JsonObject, type ProductionProjectRecord, type TaskIssue } from "@hongtai/core";
 
-import { PRODUCTION_TEXT_PRESET_LABELS, PRODUCTION_WORKBENCH_TABS, productionPlanBlockedReason, productionPlanReady, productionPreviewSource, resolveProductionWorkbenchStage } from "../pages/production-workbench-model";
+import { PRODUCTION_TEXT_PRESET_LABELS, PRODUCTION_WORKBENCH_TABS, productionPlanBlockedReason, productionPlanReady, productionPreviewSource, resolveProductionWorkbenchStage } from "../features/production/production-workbench-model";
 import { readProductionPlan } from "../features/production/production-plan-view";
 import { Button } from "./Buttons";
 import { GlassCard } from "./GlassCard";
