@@ -17,8 +17,10 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
   const key = `md-${index}`;
   if (block.type === "p") return <p key={key}>{renderInline(block.children, key)}</p>;
   if (block.type === "h") {
-    const Tag = `h${block.level}` as const;
-    return <Tag key={key}>{renderInline(block.children, key)}</Tag>;
+    const children = renderInline(block.children, key);
+    if (block.level === 1) return <h1 key={key}>{children}</h1>;
+    if (block.level === 2) return <h2 key={key}>{children}</h2>;
+    return <h3 key={key}>{children}</h3>;
   }
   if (block.type === "pre") return <pre key={key}><code>{block.value}</code></pre>;
   const Tag = block.type === "ul" ? "ul" : "ol";
