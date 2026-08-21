@@ -164,7 +164,7 @@ export function PlaybookFollowUpSpecimen() {
         </div>
         <form className="observation-follow-up-composer">
           <span className="playbook-follow-up-sheet__input">继续针对本次记录追问...</span>
-          <span className="observation-follow-up-composer__send"><Icon name="arrow_up" size={18} /></span>
+          <span className="observation-follow-up-composer__send"><Icon name="arrow_up" size={16} /></span>
         </form>
       </div>
     </div>
