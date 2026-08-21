@@ -411,7 +411,7 @@ function SucceededReport({
               return (
                 <article className="observation-recommendation-card" key={item.title}>
                   <Icon name={observationRecommendationIcon(item.category)} size={18} />
-                  <div>
+                  <div className="observation-recommendation-card__body">
                     <div className="observation-recommendation-card__top">
                       <strong>{item.title}</strong>
                       {priority ? <span className={`observation-recommendation-card__priority is-${item.priority}`}>{priority}</span> : null}

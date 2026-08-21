@@ -516,7 +516,7 @@
 }
 
 /* Content column under the leading icon: title row then body, never side-by-side. */
-.observation-recommendation-card > div {
+.observation-recommendation-card__body {
   display: grid;
   min-width: 0;
   gap: 0.35rem;
@@ -564,7 +564,6 @@
   flex: 1 1 auto;
   min-width: 0;
   line-height: 1.4;
-  overflow-wrap: anywhere;
 }
 .observation-recommendation-card small { color: var(--color-text-muted); font-size: var(--text-meta); line-height: var(--text-meta-line); }
 .observation-recommendation-card__priority {
@@ -1005,7 +1004,7 @@
   box-shadow: none;
 }
 
-.page-observation-report .observation-recommendation-card > div {
+.page-observation-report .observation-recommendation-card__body {
   display: grid;
   min-width: 0;
   gap: 0.35rem;
@@ -1026,7 +1025,7 @@
 .page-observation-report .observation-recommendation-card__top strong {
   flex: 1 1 auto;
   min-width: 0;
-  overflow-wrap: anywhere;
+  line-height: 1.4;
 }
 
 .page-observation-report .observation-recommendation-card__priority {
