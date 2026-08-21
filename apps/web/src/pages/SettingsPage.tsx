@@ -14,6 +14,7 @@ import { useNotification } from "../notifications/NotificationProvider";
 import { type ColorSchemePreference, applyStoredAppearancePreferences, colorSchemeLabel, readAppearancePreferences, writeAppearancePreferences } from "../runtime/appearance-preferences";
 import { clearAppCaches, estimateCacheUsageBytes, formatByteSize } from "../runtime/local-cache";
 import { aiSettingsPath, appInfoSettingsPath, profileSettingsPath } from "../router";
+import { settingsRowGlyphs } from "../playbook/document-sections";
 
 export interface SettingsPageProps {
   readonly runtime: AppRuntime;
@@ -167,10 +168,10 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
         <section className="settings-section">
           <p className="settings-group-label">通用</p>
           <div className="settings-list">
-            <SettingsRow icon="person" onClick={() => navigate(profileSettingsPath())} title="我的资料" value="名字、门店与经营标签" />
-            <SettingsRow icon="key" onClick={() => navigate(aiSettingsPath())} title="AI 服务" value={aiServiceDetail(aiConnection)} />
+            <SettingsRow icon={settingsRowGlyphs.profile} onClick={() => navigate(profileSettingsPath())} title="我的资料" value="名字、门店与经营标签" />
+            <SettingsRow icon={settingsRowGlyphs.ai} onClick={() => navigate(aiSettingsPath())} title="AI 服务" value={aiServiceDetail(aiConnection)} />
             <SettingsRow
-              icon="notifications"
+              icon={settingsRowGlyphs.alerts}
               title="通知提醒"
               trailing={<Switch checked={prefs.alertsEnabled} labelledBy="settings-alerts" onChange={setAlertsEnabled} />}
             />
@@ -180,9 +181,9 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
         <section className="settings-section">
           <p className="settings-group-label">外观</p>
           <div className="settings-list">
-            <SettingsRow icon="sunny" onClick={() => setSheet("scheme")} title="深色模式" value={colorSchemeLabel(prefs.colorScheme)} />
+            <SettingsRow icon={settingsRowGlyphs.scheme} onClick={() => setSheet("scheme")} title="深色模式" value={colorSchemeLabel(prefs.colorScheme)} />
             <SettingsRow
-              icon="sparkle"
+              icon={settingsRowGlyphs.theme}
               onClick={() => setSheet("theme")}
               title="主题色"
               trailing={<><span className="settings-color-dot" /><Icon className="settings-row__chevron" name="chevron_right" size={16} /></>}
@@ -193,15 +194,15 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
         <section className="settings-section">
           <p className="settings-group-label">数据</p>
           <div className="settings-list">
-            <SettingsRow icon="folder" onClick={() => setSheet("cache")} title="清理缓存" value={cacheLabel} />
+            <SettingsRow icon={settingsRowGlyphs.cache} onClick={() => setSheet("cache")} title="清理缓存" value={cacheLabel} />
           </div>
         </section>
 
         <section className="settings-section">
           <p className="settings-group-label">其他</p>
           <div className="settings-list">
-            <SettingsRow icon="info" onClick={() => navigate(appInfoSettingsPath())} title="关于" value={versionLabel} />
-            <SettingsRow icon="lock" onClick={() => setSheet("privacy")} title="隐私说明" />
+            <SettingsRow icon={settingsRowGlyphs.about} onClick={() => navigate(appInfoSettingsPath())} title="关于" value={versionLabel} />
+            <SettingsRow icon={settingsRowGlyphs.privacy} onClick={() => setSheet("privacy")} title="隐私说明" />
           </div>
         </section>
 

@@ -24,6 +24,7 @@ const AiSettingsPage = lazy(async () => ({ default: (await import("./pages/AiSet
 const ApplicationInfoPage = lazy(async () => ({ default: (await import("./pages/ApplicationInfoPage")).ApplicationInfoPage }));
 const ProfileSettingsPage = lazy(async () => ({ default: (await import("./pages/ProfileSettingsPage")).ProfileSettingsPage }));
 const SettingsPage = lazy(async () => ({ default: (await import("./pages/SettingsPage")).SettingsPage }));
+const PlaybookPage = lazy(async () => ({ default: (await import("./playbook/PlaybookPage")).PlaybookPage }));
 
 export interface AppProps {
   /** Real application runtime supplied only by the application composition root. */
@@ -99,6 +100,10 @@ export function App({ runtime, visualData }: AppProps = {}) {
     }
     if (runtime && renderedRoute.key === "templates") {
       return <TemplatesPage navigate={navigate} runtime={runtime} />;
+    }
+
+    if (renderedRoute.key === "playbook") {
+      return <PlaybookPage navigate={navigate} sectionId={renderedRoute.params.sectionId} />;
     }
 
     // Visual fixtures remain available only to explicit design/test callers.

@@ -23,14 +23,15 @@ export function PageHeading({ eyebrow, title, description, action, className = "
 
 export interface SectionHeadingProps {
   readonly title: string;
+  readonly leading?: ReactNode;
   readonly action?: ReactNode;
   readonly className?: string;
 }
 
-export function SectionHeading({ title, action, className = "" }: SectionHeadingProps) {
+export function SectionHeading({ title, leading, action, className = "" }: SectionHeadingProps) {
   return (
     <div className={`section-heading ${className}`.trim()}>
-      <h3>{title}</h3>
+      <h3>{leading}{title}</h3>
       {action ? <div>{action}</div> : null}
     </div>
   );

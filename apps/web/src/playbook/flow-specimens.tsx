@@ -1,0 +1,121 @@
+import { Icon } from "../components/Icon";
+import { composeActions } from "../navigation/compose-actions";
+import { primaryNavItems } from "../navigation/primary-nav";
+import { analysisDocumentSections, observationReportSections, settingsRowGlyphs } from "./document-sections";
+
+export function PlaybookTabBarSpecimen() {
+  return (
+    <div className="playbook-tabbar" aria-hidden="true">
+      {primaryNavItems.slice(0, 2).map((item) => (
+        <span className="playbook-tabbar__item" key={item.id}>
+          <Icon name={item.icon} size={22} />
+          {item.label}
+        </span>
+      ))}
+      <span className="playbook-tabbar__item playbook-tabbar__item--plus">
+        <span className="playbook-fab"><Icon name="plus" size={22} /></span>
+      </span>
+      {primaryNavItems.slice(2).map((item) => (
+        <span className="playbook-tabbar__item" key={item.id}>
+          <Icon name={item.icon} size={22} />
+          {item.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+export function PlaybookNavBarSpecimen() {
+  return (
+    <div className="playbook-navbar">
+      <Icon name="chevron_left" size={24} />
+      <strong>页面标题</strong>
+      <span className="playbook-navbar__slot" />
+    </div>
+  );
+}
+
+export function PlaybookPasteSpecimen() {
+  return (
+    <div className="playbook-phone">
+      <p className="playbook-phone__title">拆解</p>
+      <p className="playbook-phone__caption">让 AI 帮你看懂爆款逻辑</p>
+      <div className="playbook-input">
+        <Icon name="link" size={17} />
+        <span>粘贴作品链接</span>
+        <em>粘贴</em>
+      </div>
+      <p className="playbook-recognized"><Icon name="circle_check" size={15} />已识别 抖音 · 设计稿示例链接</p>
+      <p className="playbook-hint">支持抖音、小红书、B站；快手仅支持公开单条链接（实验性）。</p>
+    </div>
+  );
+}
+
+export function PlaybookComposeSpecimen() {
+  return (
+    <div className="playbook-sheet">
+      <span className="playbook-sheet__handle" />
+      <h3>新建</h3>
+      {composeActions.map((action) => (
+        <div className="playbook-sheet__row" key={action.id}>
+          <Icon name={action.icon} size={16} />
+          <div>
+            <strong>{action.title}</strong>
+            <small>{action.description}</small>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function PlaybookAnalysisSpecimen() {
+  return (
+    <div className="playbook-doc-list">
+      {analysisDocumentSections.map((section) => (
+        <div className="playbook-doc-row" key={section.id}>
+          <Icon name={section.icon} size={16} />
+          <span>{section.title}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function PlaybookObservationSpecimen() {
+  return (
+    <div className="playbook-doc-list">
+      {Object.values(observationReportSections).map((section) => (
+        <div className="playbook-doc-row" key={section.title}>
+          <Icon name={section.icon} size={16} />
+          <span>{section.title}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function PlaybookSettingsSpecimen() {
+  const rows = [
+    { icon: settingsRowGlyphs.profile, title: "我的资料", value: "名字、门店与经营标签" },
+    { icon: settingsRowGlyphs.ai, title: "AI 服务", value: "已连接时显示模型名" },
+    { icon: settingsRowGlyphs.alerts, title: "通知提醒", value: "本机开关" },
+    { icon: settingsRowGlyphs.scheme, title: "深色模式", value: "跟随系统" },
+    { icon: settingsRowGlyphs.theme, title: "主题色", value: "品牌绿" },
+    { icon: settingsRowGlyphs.cache, title: "清理缓存", value: "真实估算，不写死体积" },
+    { icon: settingsRowGlyphs.about, title: "关于", value: "运行中版本号" },
+    { icon: settingsRowGlyphs.privacy, title: "隐私说明", value: "" },
+  ] as const;
+  return (
+    <div className="playbook-settings">
+      {rows.map((row) => (
+        <div className="playbook-settings__row" key={row.title}>
+          <Icon name={row.icon} size={19} />
+          <span>{row.title}</span>
+          {row.value ? <small>{row.value}</small> : null}
+          <Icon name="chevron_right" size={16} />
+        </div>
+      ))}
+    </div>
+  );
+}

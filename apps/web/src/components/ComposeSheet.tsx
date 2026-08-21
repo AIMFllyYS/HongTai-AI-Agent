@@ -4,12 +4,6 @@ import { Button } from "./Buttons";
 import { Icon } from "./Icon";
 import { Sheet, SheetActionRow } from "./Sheet";
 
-const actionIcons = {
-  agent: "sparkle",
-  replica: "list_checks",
-  paste: "link",
-} as const;
-
 export interface ComposeSheetProps {
   readonly open: boolean;
   readonly onClose: () => void;
@@ -23,7 +17,7 @@ export function ComposeSheet({ open, onClose, navigate }: ComposeSheetProps) {
         {composeActions.map((action) => (
           <SheetActionRow
             description={action.description}
-            icon={<Icon name={actionIcons[action.id]} size={20} />}
+            icon={<Icon name={action.icon} size={16} />}
             key={action.id}
             onSelect={() => {
               onClose();

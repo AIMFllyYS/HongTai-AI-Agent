@@ -15,5 +15,6 @@
 @import "./pages/library.css" layer(pages);
 @import "./pages/settings.css" layer(pages);
 @import "./pages/observation-runtime.css" layer(pages);
+@import "./pages/playbook.css" layer(pages);
 @import "./pages/vitality.css" layer(themes);
 @import "./responsive.css" layer(responsive);

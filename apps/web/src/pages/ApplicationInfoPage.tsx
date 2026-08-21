@@ -8,6 +8,7 @@ import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { LoadingState } from "../components/StatePanels";
+import { playbookPath } from "../router";
 
 export interface ApplicationInfoPageProps {
   readonly runtime: AppRuntime;
@@ -62,6 +63,13 @@ export function ApplicationInfoPage({ runtime, navigate }: ApplicationInfoPagePr
             <div className="section-heading"><div><h2>新版本改了什么</h2></div><span className="analysis-count">v{info.versionName}</span></div>
             {latestUpdates.map((item, index) => <GlassCard className="settings-update-item" key={item}><span>{String(index + 1).padStart(2, "0")}</span><p>{item}</p></GlassCard>)}
           </section>
+
+          <button className="settings-row" onClick={() => navigate(playbookPath())} type="button">
+            <Icon className="settings-row__glyph" name="layout_template" size={19} />
+            <span className="settings-row__title">设计稿对照</span>
+            <span className="settings-row__value">页面层板块</span>
+            <Icon className="settings-row__chevron" name="chevron_right" size={16} />
+          </button>
         </> : null}
       </div>
     </AppShell>

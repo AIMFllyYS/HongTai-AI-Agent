@@ -1,11 +1,12 @@
 import type { TaskEvidenceUnit } from "@hongtai/core";
 
+import type { ContentAnalysisView } from "../features/tasks/content-analysis-presenters";
+import { riskLevelLabel, structureRoleLabel } from "../features/tasks/task-presenters";
+import { analysisDocumentSections } from "../playbook/document-sections";
 import { EmptyState } from "./StatePanels";
 import { GlassCard } from "./GlassCard";
 import { Icon } from "./Icon";
 import { SectionHeading } from "./Headings";
-import type { ContentAnalysisView } from "../features/tasks/content-analysis-presenters";
-import { riskLevelLabel, structureRoleLabel } from "../features/tasks/task-presenters";
 
 export interface ContentAnalysisDocumentProps {
   readonly analysis: ContentAnalysisView;
@@ -79,13 +80,18 @@ function StringChips({ values, empty }: { readonly values: readonly string[]; re
   return <div className="analysis-chip-row">{values.map((item) => <span className="analysis-chip" key={item}>{item}</span>)}</div>;
 }
 
+function sectionIcon(id: (typeof analysisDocumentSections)[number]["id"]) {
+  const section = analysisDocumentSections.find((item) => item.id === id);
+  return section ? <Icon name={section.icon} size={16} /> : undefined;
+}
+
 /** Displays the formal content-analysis.v1 projection and its actual evidence only. */
 export function ContentAnalysisDocument({ analysis, evidenceUnits }: ContentAnalysisDocumentProps) {
   const evidence = new Map(evidenceUnits.map((item) => [item.id, item]));
   return (
     <div className="analysis-document">
       <section className="page-section">
-        <SectionHeading title="概览" />
+        <SectionHeading leading={sectionIcon("overview")} title="概览" />
         {analysis.overview ? (
           <GlassCard className="analysis-overview">
             <p>{analysis.overview.summary}</p>
@@ -99,17 +105,17 @@ export function ContentAnalysisDocument({ analysis, evidenceUnits }: ContentAnal
       </section>
 
       <section className="page-section">
-        <SectionHeading title="开场钩子" />
+        <SectionHeading leading={sectionIcon("hook")} title="开场钩子" />
         {analysis.hook ? (
           <GlassCard className="analysis-hook">
-            <span className="analysis-hook__icon"><Icon name="bolt" size={22} /></span>
+            <span className="analysis-hook__icon"><Icon name="zap" size={22} /></span>
             <div><strong>{analysis.hook.description}</strong>{analysis.hook.mechanism ? <p>{analysis.hook.mechanism}</p> : null}{analysis.hook.type ? <small>类型：{analysis.hook.type}</small> : null}<EvidenceRefs evidence={evidence} refs={analysis.hook.evidenceRefs} /></div>
           </GlassCard>
         ) : <EmptyState className="analysis-document__empty" description="正式结果没有列出开场钩子。" icon="info" title="暂无钩子结论" />}
       </section>
 
       <section className="page-section">
-        <SectionHeading title="痛点与情绪驱动" />
+        <SectionHeading leading={sectionIcon("drivers")} title="痛点与情绪驱动" />
         <GlassCard className="analysis-split-card">
           <div><h4>痛点</h4><InsightList emptyTitle="暂无痛点结论" evidence={evidence} items={analysis.painPoints} /></div>
           <div><h4>情绪驱动</h4><InsightList emptyTitle="暂无情绪驱动结论" evidence={evidence} items={analysis.emotionalDrivers} /></div>
@@ -117,7 +123,7 @@ export function ContentAnalysisDocument({ analysis, evidenceUnits }: ContentAnal
       </section>
 
       <section className="page-section">
-        <SectionHeading action={<span className="analysis-count">{analysis.structure.length} 个结构段</span>} title="内容结构" />
+        <SectionHeading action={<span className="analysis-count">{analysis.structure.length} 个结构段</span>} leading={sectionIcon("structure")} title="内容结构" />
         {analysis.structure.length === 0 ? <EmptyState className="analysis-document__empty" description="正式结果没有列出内容结构。" icon="info" title="暂无结构结论" /> : (
           <div className="analysis-structure-list">
             {analysis.structure.map((item) => (
@@ -131,7 +137,7 @@ export function ContentAnalysisDocument({ analysis, evidenceUnits }: ContentAnal
       </section>
 
       <section className="page-section">
-        <SectionHeading title="核心论点" />
+        <SectionHeading leading={sectionIcon("claims")} title="核心论点" />
         {analysis.coreClaims.length === 0 ? <EmptyState className="analysis-document__empty" description="正式结果没有列出可追溯的论点。" icon="info" title="暂无论点结论" /> : (
           <div className="analysis-claim-list">
             {analysis.coreClaims.map((item) => <GlassCard className="analysis-claim" key={item.claim}><p>{item.claim}</p><div>{item.supportLevel ? <span>{item.supportLevel === "explicit" ? "原文明确表达" : "基于证据推断"}</span> : null}<EvidenceRefs evidence={evidence} refs={item.evidenceRefs} /></div></GlassCard>)}
@@ -140,7 +146,7 @@ export function ContentAnalysisDocument({ analysis, evidenceUnits }: ContentAnal
       </section>
 
       <section className="page-section">
-        <SectionHeading title="表达风格" />
+        <SectionHeading leading={sectionIcon("style")} title="表达风格" />
         {analysis.style ? (
           <GlassCard className="analysis-style-card">
             {analysis.style.pacing ? <div><span>节奏</span><strong>{analysis.style.pacing}</strong></div> : null}
@@ -152,22 +158,22 @@ export function ContentAnalysisDocument({ analysis, evidenceUnits }: ContentAnal
       </section>
 
       <section className="page-section">
-        <SectionHeading title="可复用模板" />
+        <SectionHeading leading={sectionIcon("template")} title="可复用模板" />
         {analysis.reusableTemplate ? (
           <GlassCard className="analysis-template-card">
-            <span className="analysis-template-card__icon"><Icon name="auto_awesome" size={24} /></span>
+            <span className="analysis-template-card__icon"><Icon name="sparkles" size={24} /></span>
             <div><strong>{analysis.reusableTemplate.formula}</strong><ol>{analysis.reusableTemplate.steps.map((step) => <li key={step}>{step}</li>)}</ol><div><small>可变槽位</small><StringChips empty="未列出可变槽位" values={analysis.reusableTemplate.variableSlots} /></div><div><small>不可照搬</small><StringChips empty="未列出风险提示" values={analysis.reusableTemplate.doNotCopy} /></div></div>
           </GlassCard>
         ) : <EmptyState className="analysis-document__empty" description="正式结果没有给出可复用模板。" icon="info" title="暂无模板" />}
       </section>
 
       <section className="page-section">
-        <SectionHeading title="风险与边界" />
+        <SectionHeading leading={sectionIcon("risks")} title="风险与边界" />
         {analysis.risks.length === 0 ? <EmptyState className="analysis-document__empty" description="正式结果没有列出风险项。" icon="info" title="暂无风险项" /> : <RiskList evidence={evidence} items={analysis.risks} />}
       </section>
 
       <section className="page-section" id="analysis-evidence">
-        <SectionHeading action={<span className="analysis-count">{evidenceUnits.length} 条真实证据</span>} title="证据" />
+        <SectionHeading action={<span className="analysis-count">{evidenceUnits.length} 条真实证据</span>} leading={sectionIcon("evidence")} title="证据" />
         {evidenceUnits.length === 0 ? <EmptyState className="analysis-document__empty" description="任务详情没有可展示的文稿或图文证据。" icon="folder_open" title="暂无证据" /> : (
           <div className="analysis-evidence-list">
             {evidenceUnits.map((item) => <GlassCard className="analysis-evidence" id={evidenceAnchor(item.id)} key={item.id}><span>{item.source === "transcript" ? "文稿" : "图文"}</span><div><small>{item.id}{item.startSeconds === undefined ? "" : ` · ${item.startSeconds}s`}{item.endSeconds === undefined ? "" : `–${item.endSeconds}s`}</small><p>{item.text}</p></div></GlassCard>)}

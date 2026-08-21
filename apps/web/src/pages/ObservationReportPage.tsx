@@ -27,12 +27,12 @@ import {
   referenceCertaintyLabel,
   safetyLevelChipLabel,
   visibilityLabel,
-  type DiagnosisRecommendationView,
   type DiagnosisReportView,
 } from "../features/diagnosis/diagnosis-presenters";
 import { diagnosisModuleDefinitions } from "../features/diagnosis/diagnosis-module-progress";
 import { useAppResume } from "../hooks/useAppResume";
 import { observationNewPath, type Navigate } from "../router";
+import { observationRecommendationIcon, observationReportSections } from "../playbook/document-sections";
 
 export interface ObservationReportPageProps {
   readonly runtime: AppRuntime;
@@ -49,12 +49,6 @@ function reportStatusTitle(record: DiagnosisReportRecord | undefined): string {
 
 function focusQuestion(): void {
   if (typeof document !== "undefined") document.getElementById("observation-follow-up")?.focus();
-}
-
-function recommendationIcon(category: DiagnosisRecommendationView["category"]): IconName {
-  if (category === "daily_care") return "camera";
-  if (category === "diet_lifestyle") return "restaurant";
-  return "visibility";
 }
 
 function ReportSection({
@@ -325,7 +319,7 @@ function SucceededReport({
         </div>
       </GlassCard>
 
-      <ReportSection icon="list_checks" title="观察摘要">
+      <ReportSection icon={observationReportSections.summary.icon} title={observationReportSections.summary.title}>
         {report.summary?.keyPoints.length ? (
           <ul className="observation-report-bullets">
             {report.summary.keyPoints.map((item) => <li key={item}>{item}</li>)}
@@ -334,7 +328,7 @@ function SucceededReport({
         {report.summary?.narrative ? <p className="observation-report-narrative">{report.summary.narrative}</p> : null}
       </ReportSection>
 
-      <ReportSection extra={`${report.observations.length} 项`} icon="visibility" title="观察明细">
+      <ReportSection extra={`${report.observations.length} 项`} icon={observationReportSections.details.icon} title={observationReportSections.details.title}>
         {report.observations.length ? (
           <div className="observation-report-list">
             {report.observations.map((item) => {
@@ -355,10 +349,10 @@ function SucceededReport({
               );
             })}
           </div>
-        ) : <EmptyState description="该报告没有可安全展示的观察项。" icon="visibility" title="暂无可见观察" />}
+        ) : <EmptyState description="该报告没有可安全展示的观察项。" icon="eye" title="暂无可见观察" />}
       </ReportSection>
 
-      <ReportSection extra="非诊断 · 不确定" icon="bookmark" title="日常参考">
+      <ReportSection extra="非诊断 · 不确定" icon={observationReportSections.references.icon} title={observationReportSections.references.title}>
         {report.wellnessReferences.length ? (
           <div className="observation-reference-list">
             {report.wellnessReferences.map((item) => {
@@ -375,14 +369,14 @@ function SucceededReport({
               );
             })}
           </div>
-        ) : <EmptyState description="没有可基于当前图片提供的日常参考。" icon="bookmark" title="暂无日常参考" />}
+        ) : <EmptyState description="没有可基于当前图片提供的日常参考。" icon="book_open" title="暂无日常参考" />}
       </ReportSection>
 
       <GlassCard className="observation-recommendation-panel">
         <div className="observation-report-sec">
           <div className="observation-report-sec__left">
-            <Icon name="lightbulb" size={18} />
-            <h3>日常建议</h3>
+            <Icon name={observationReportSections.recommendations.icon} size={18} />
+            <h3>{observationReportSections.recommendations.title}</h3>
           </div>
         </div>
         {report.recommendations.length ? (
@@ -391,7 +385,7 @@ function SucceededReport({
               const priority = recommendationPriorityLabel(item.priority);
               return (
                 <article className="observation-recommendation-card" key={item.title}>
-                  <Icon name={recommendationIcon(item.category)} size={18} />
+                  <Icon name={observationRecommendationIcon(item.category)} size={18} />
                   <div>
                     <div className="observation-recommendation-card__top">
                       <strong>{item.title}</strong>
@@ -408,10 +402,10 @@ function SucceededReport({
 
       {report.safetyGuidance ? (
         <GlassCard className={`observation-safety-card is-${report.safetyGuidance.level}`}>
-          <Icon name={report.safetyGuidance.level === "urgent" ? "error" : "info"} size={22} />
+          <Icon name={report.safetyGuidance.level === "urgent" ? "shield_alert" : observationReportSections.safety.icon} size={22} />
           <div>
             <div className="observation-safety-card__top">
-              <strong>安全提醒</strong>
+              <strong>{observationReportSections.safety.title}</strong>
               <small>{safetyLevelChipLabel(report.safetyGuidance.level)}</small>
             </div>
             <p>{report.safetyGuidance.recommendedAction}</p>
@@ -436,11 +430,11 @@ function SucceededReport({
             {report.followUpQuestions.map((item) => <button className="chip" key={item} onClick={() => onUseQuestion(item)} type="button">{item}</button>)}
           </div>
         ) : null}
-        <Button disabled={!diagnosisAvailable} icon={<Icon name="forum" size={18} />} onClick={onOpenFollowUp} variant="secondary">{messages.length > 0 ? `继续追问 · ${messages.length} 条` : "继续追问"}</Button>
+        <Button disabled={!diagnosisAvailable} icon={<Icon name="message_circle" size={18} />} onClick={onOpenFollowUp} variant="secondary">{messages.length > 0 ? `继续追问 · ${messages.length} 条` : "继续追问"}</Button>
         <Sheet labelledBy="observation-follow-up-title" onClose={onCloseFollowUp} open={followUpOpen} title="追问">
           {report.followUpQuestions.length ? <div className="chip-row chip-row--scroll">{report.followUpQuestions.map((item) => <button className="chip" key={item} onClick={() => onUseQuestion(item)} type="button">{item}</button>)}</div> : null}
-          <div className="observation-message-list">{messages.map((message) => <article className={`observation-message is-${message.role} is-${message.status}`.trim()} key={message.id}><span><Icon name={message.role === "assistant" ? "smart_toy" : "face"} size={18} /></span><p>{message.content}</p></article>)}{pendingQuestion ? <><article className="observation-message is-user is-pending"><span><Icon name="face" size={18} /></span><p>{pendingQuestion}</p></article><article className="observation-message is-assistant is-streaming"><span><Icon name="smart_toy" size={18} /></span><p>{streamedAnswer || "正在生成回复…"}</p></article></> : null}</div>
-          <div className="observation-question-composer"><label htmlFor="observation-follow-up">输入想继续了解的问题</label><textarea disabled={!diagnosisAvailable || chatPending} id="observation-follow-up" maxLength={20_000} onChange={(event) => onQuestionChange(event.target.value)} placeholder="例如：怎样在相近光线下做日常记录？" rows={4} value={question} /><div className="observation-question-composer__actions"><small>回复基于本次已保存报告和真实追问历史；深度思考只在报告生成进度中显示。{question.length}/20,000</small><Button className={chatPending ? "is-busy" : ""} disabled={!diagnosisAvailable || !question.trim() || chatPending} icon={<Icon name={chatPending ? "sync" : "forum"} size={18} />} onClick={onAsk}>{chatPending ? "正在回复" : "发送追问"}</Button></div></div>
+          <div className="observation-message-list">{messages.map((message) => <article className={`observation-message is-${message.role} is-${message.status}`.trim()} key={message.id}><span><Icon name={message.role === "assistant" ? "message_circle" : "user"} size={18} /></span><p>{message.content}</p></article>)}{pendingQuestion ? <><article className="observation-message is-user is-pending"><span><Icon name="user" size={18} /></span><p>{pendingQuestion}</p></article><article className="observation-message is-assistant is-streaming"><span><Icon name="message_circle" size={18} /></span><p>{streamedAnswer || "正在生成回复…"}</p></article></> : null}</div>
+          <div className="observation-question-composer"><label htmlFor="observation-follow-up">输入想继续了解的问题</label><textarea disabled={!diagnosisAvailable || chatPending} id="observation-follow-up" maxLength={20_000} onChange={(event) => onQuestionChange(event.target.value)} placeholder="例如：怎样在相近光线下做日常记录？" rows={4} value={question} /><div className="observation-question-composer__actions"><small>回复基于本次已保存报告和真实追问历史；深度思考只在报告生成进度中显示。{question.length}/20,000</small><Button className={chatPending ? "is-busy" : ""} disabled={!diagnosisAvailable || !question.trim() || chatPending} icon={<Icon name={chatPending ? "loader_circle" : "arrow_up"} size={18} />} onClick={onAsk}>{chatPending ? "正在回复" : "发送追问"}</Button></div></div>
           <Button className="sheet-cancel" onClick={onCloseFollowUp} variant="quiet">取消</Button>
         </Sheet>
       </section>

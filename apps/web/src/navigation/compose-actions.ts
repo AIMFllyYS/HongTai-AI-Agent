@@ -1,3 +1,4 @@
+import type { IconName } from "../playbook/icon-catalog";
 import { pathForRoute } from "../router";
 
 export type ComposeAction = "agent" | "replica" | "paste";
@@ -6,12 +7,13 @@ export interface ComposeActionItem {
   readonly id: ComposeAction;
   readonly title: string;
   readonly description: string;
+  readonly icon: IconName;
 }
 
 export const composeActions: readonly ComposeActionItem[] = [
-  { id: "agent", title: "智能成片", description: "AI 写旁白与字幕，导入素材即可" },
-  { id: "replica", title: "爆款复刻", description: "按分镜清单逐项拍摄" },
-  { id: "paste", title: "拆解新链接", description: "粘贴链接开始分析" },
+  { id: "agent", title: "智能成片", description: "AI 写旁白与字幕，导入素材即可", icon: "sparkles" },
+  { id: "replica", title: "爆款复刻", description: "按分镜清单逐项拍摄", icon: "list_checks" },
+  { id: "paste", title: "拆解新链接", description: "粘贴链接开始分析", icon: "link" },
 ];
 
 export function pathForComposeAction(action: ComposeAction): string {

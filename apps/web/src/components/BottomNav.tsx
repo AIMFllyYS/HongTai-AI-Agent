@@ -47,7 +47,7 @@ export function BottomNav({ active, navigate }: BottomNavProps) {
             onClick={() => setComposeOpen(true)}
             type="button"
           >
-            <Icon name="add" size={22} />
+            <Icon name="plus" size={22} />
           </button>
         </div>
         {primaryNavItems.slice(2).map((item) => {
@@ -82,7 +82,7 @@ export function activeNavForRoute(route: RouteKey): BottomNavProps["active"] {
   if (route === "observation-new" || route === "observation-report") return "ai";
   if (route === "create" || route === "production-edit" || route === "replica-wizard") return "create";
   if (route === "templates") return "templates";
-  if (route === "settings" || route === "settings-profile" || route === "settings-ai" || route === "settings-app-info") return "settings";
+  if (route === "settings" || route === "settings-profile" || route === "settings-ai" || route === "settings-app-info" || route === "playbook") return "settings";
   if (route === "home" || route === "task-processing" || route === "task-detail" || route === "task-analysis") return "home";
   return undefined;
 }

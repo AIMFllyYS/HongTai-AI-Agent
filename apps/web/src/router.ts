@@ -15,7 +15,8 @@ export type ActiveRouteKey =
   | "settings-ai"
   | "settings-app-info"
   | "observation-new"
-  | "observation-report";
+  | "observation-report"
+  | "playbook";
 
 export type RouteKey = ActiveRouteKey | "not-found";
 export type RouteParams = Readonly<Record<string, string>>;
@@ -77,19 +78,26 @@ export const appRoutes: readonly AppRoute[] = [
   { path: "/settings/app-info", key: "settings-app-info", navKey: "settings" },
   { path: "/observation/new", key: "observation-new", navKey: "ai" },
   { path: "/observation/:sessionId", key: "observation-report", navKey: "ai" },
+  { path: "/playbook", key: "playbook" },
 ];
 
 const EMPTY_ROUTE_PARAMS: RouteParams = Object.freeze({});
 
 interface DynamicRouteDefinition {
-  readonly key: Extract<ActiveRouteKey, "task-processing" | "task-detail" | "task-analysis" | "observation-report" | "production-edit" | "replica-wizard">;
+  readonly key: Extract<ActiveRouteKey, "task-processing" | "task-detail" | "task-analysis" | "observation-report" | "production-edit" | "replica-wizard" | "playbook">;
   readonly pattern: string;
-  readonly navKey: PrimaryNavKey;
+  readonly navKey?: PrimaryNavKey;
   readonly matcher: RegExp;
-  readonly paramName: "taskId" | "sessionId" | "projectId";
+  readonly paramName: "taskId" | "sessionId" | "projectId" | "sectionId";
 }
 
 const dynamicRoutes: readonly DynamicRouteDefinition[] = [
+  {
+    key: "playbook",
+    pattern: "/playbook/:sectionId",
+    matcher: /^\/playbook\/([^/]+)$/u,
+    paramName: "sectionId",
+  },
   {
     key: "production-edit",
     pattern: "/create/:projectId/edit",
@@ -242,6 +250,14 @@ export function observationNewPath(): string {
 
 export function observationReportPath(sessionId: string): string {
   return `/observation/${encodedPathSegment(sessionId)}`;
+}
+
+export function playbookPath(): string {
+  return "/playbook";
+}
+
+export function playbookSectionPath(sectionId: string): string {
+  return `/playbook/${encodedPathSegment(sectionId)}`;
 }
 
 const primaryNavigationOrder = ["ai", "home", "templates", "settings"] as const;

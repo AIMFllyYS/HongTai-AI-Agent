@@ -51,7 +51,7 @@ export function AppShell({
   const isDetailHeader = headerMode === "detail" || Boolean(backPath);
   const hideHeader = headerMode === "hidden";
   const leading = leadingAction ?? (backPath
-    ? <button aria-label="返回" className="icon-button" onClick={back} type="button"><Icon name="arrow_back" size={24} /></button>
+    ? <button aria-label="返回" className="icon-button" onClick={back} type="button"><Icon name="chevron_left" size={24} /></button>
     : null);
   const scrollState = useScrollMotion();
   const hasExternalNavigation = useContext(externalNavigationContext);
