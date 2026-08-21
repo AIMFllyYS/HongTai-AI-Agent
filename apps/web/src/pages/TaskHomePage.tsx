@@ -25,6 +25,7 @@ const SOURCE_TAB_GROUP_ID = "task-source-tabs";
 export interface TaskHomePageProps {
   readonly runtime: AppRuntime;
   readonly navigate: Navigate;
+  readonly searchEpoch?: number;
 }
 
 interface TaskSubmissionPort {
@@ -86,7 +87,7 @@ function inspectionFor(runtime: AppRuntime, input: string): InputInspection | un
   }
 }
 
-export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
+export function TaskHomePage({ runtime, navigate, searchEpoch = 0 }: TaskHomePageProps) {
   const ingestAvailable = runtime.features.ingest === "available";
   const taskHistoryReads = useRef(new LiveListReadReconciler<TaskChangeEventV1>());
   const [sourceTab, setSourceTab] = useState<(typeof SOURCE_TABS)[number]>("粘贴链接");
@@ -127,7 +128,7 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
     if (!consumePasteIntentFromSearch()) return;
     setSourceTab("粘贴链接");
     focusTaskShareInput();
-  }, []);
+  }, [searchEpoch]);
 
   useEffect(() => {
     let active = true;
@@ -292,9 +293,15 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
             ) : (
               <>
                 <div className="task-source-card__upload">
+                  <span aria-hidden="true" className="task-source-card__upload-icon">
+                    <Icon name="video" size={26} />
+                  </span>
                   <strong>选择一段 MP4 视频</strong>
-                  <p>先识别口播，再生成拆解</p>
-                  <small>最大 250MB · 视频只保存在本机</small>
+                  <p>
+                    先识别口播，再生成拆解
+                    {"\n"}
+                    最大 250MB · 视频只保存在本机
+                  </p>
                 </div>
                 {videoImporting || videoProgress ? <ValidatedModuleProgress definitions={contentAnalysisModuleDefinitions} failedTitle="这次拆解没有完成" issue={submitIssue} progress={videoProgress} title="正在整理视频内容" /> : null}
               </>

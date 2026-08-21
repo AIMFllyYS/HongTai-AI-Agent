@@ -112,14 +112,14 @@ test("离开 Agent 会清掉失败，重试不会在选择屏上重建项目", (
 });
 
 test("用它做视频会跳过两张卡，直接进入 Agent 表单", () => {
-  const load = page.slice(page.indexOf("const load = useCallback"), page.indexOf("}, [runtime]);"));
+  const load = page.slice(page.indexOf("const load = useCallback"), page.indexOf("}, [runtime, searchEpoch]);"));
   assert.match(load, /setComposingNew\(true\)/u);
   assert.ok(load.indexOf("setComposingNew(true)") < load.indexOf("setComposerFlow(\"agent\")"));
   assert.match(load, /setComposerFlow\("agent"\)/u);
 });
 
 test("加号入口通过 entry 查询参数直接打开 Agent 或复刻表单，页头文案对齐稿面", () => {
-  const load = page.slice(page.indexOf("const load = useCallback"), page.indexOf("}, [runtime]);"));
+  const load = page.slice(page.indexOf("const load = useCallback"), page.indexOf("}, [runtime, searchEpoch]);"));
   assert.match(page, /composeEntryFromSearch/u);
   assert.match(page, /consumeComposeEntryFromSearch/u);
   assert.match(load, /setComposerFlow\(composeEntry\)/u);

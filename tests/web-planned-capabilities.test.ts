@@ -83,7 +83,7 @@ test("planned feature styling makes disabled controls legible without inventing 
 test("production runtime uses capability-gated shells while fixtures stay explicit", () => {
   const app = read("App.tsx");
 
-  assert.match(app, /runtime && renderedRoute\.key === "create"[\s\S]*<CreatePage navigate=\{navigate\} runtime=\{runtime\} \/>/);
+  assert.match(app, /runtime && renderedRoute\.key === "create"[\s\S]*<CreatePage navigate=\{navigate\} runtime=\{runtime\} searchEpoch=\{searchEpoch\} \/>/);
   assert.match(app, /runtime && renderedRoute\.key === "templates"[\s\S]*<TemplatesPage navigate=\{navigate\} runtime=\{runtime\} \/>/);
   assert.doesNotMatch(app, /renderedRoute\.key === "publish"/);
   assert.doesNotMatch(app, /<PublishPage/);

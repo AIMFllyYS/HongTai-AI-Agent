@@ -148,9 +148,29 @@ const legacyAliases: Readonly<Record<string, Pick<AppRoute, "key" | "navKey">>> 
   "/vitality/scan": { key: "observation-new", navKey: "ai" },
 };
 
+export interface LocationHrefParts {
+  readonly pathname: string;
+  readonly search: string;
+  readonly hash: string;
+}
+
+/** Splits a navigation target so query and hash never participate in route matching. */
+export function splitLocationHref(href: string): LocationHrefParts {
+  const trimmed = href.trim();
+  if (!trimmed) return { pathname: "/", search: "", hash: "" };
+  const hashIndex = trimmed.indexOf("#");
+  const hash = hashIndex >= 0 ? trimmed.slice(hashIndex) : "";
+  const withoutHash = hashIndex >= 0 ? trimmed.slice(0, hashIndex) : trimmed;
+  const searchIndex = withoutHash.indexOf("?");
+  const search = searchIndex >= 0 ? withoutHash.slice(searchIndex) : "";
+  const rawPath = searchIndex >= 0 ? withoutHash.slice(0, searchIndex) : withoutHash;
+  return { pathname: rawPath || "/", search, hash };
+}
+
 function normalizePath(pathname: string): string {
-  if (!pathname || pathname === "/") return "/";
-  const path = pathname.replace(/\/+$/, "");
+  const pathOnly = splitLocationHref(pathname).pathname;
+  if (!pathOnly || pathOnly === "/") return "/";
+  const path = pathOnly.replace(/\/+$/, "");
   return path || "/";
 }
 

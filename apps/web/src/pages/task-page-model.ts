@@ -1,7 +1,7 @@
 import type { AppTaskRecord, TaskChangeEventV1, TaskDetailRecord, TaskEventRecord, TaskIssue, TaskStatus } from "@hongtai/core";
 
 import { preferNewerByUpdatedAt } from "../features/tasks/latest-read-guard";
-import { matchRoute, pathForRoute, taskAnalysisPath, taskDetailPath, type Navigate } from "../router";
+import { matchRoute, taskAnalysisPath, taskDetailPath, type Navigate } from "../router";
 
 export type TaskResultTab = "source" | "analysis";
 export type TaskCompletedPrimaryAction = "none" | "start-analysis" | "next-steps";
@@ -74,11 +74,7 @@ export function consumeCreateSourceIdFromSearch(): string {
 }
 
 export function navigateToCreateWithSource(navigate: Navigate, taskId: string): void {
-  navigate(pathForRoute("create"));
-  if (typeof window === "undefined") return;
-  const next = createPagePathWithSource(taskId);
-  if (`${window.location.pathname}${window.location.search}` === next) return;
-  window.history.replaceState(window.history.state ?? {}, "", next);
+  navigate(createPagePathWithSource(taskId));
 }
 
 export function showProcessingLeaveHint(status: TaskStatus): boolean {

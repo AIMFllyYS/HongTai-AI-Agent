@@ -42,7 +42,7 @@ function RuntimePendingPage({ navigate, title, description }: { readonly navigat
 }
 
 export function App({ runtime, visualData }: AppProps = {}) {
-  const { pathname, direction, transitionMode, navigate } = useBrowserRoute();
+  const { pathname, direction, transitionMode, navigate, searchEpoch } = useBrowserRoute();
   useInteractionFeedback();
 
   const renderRoute = (path: string) => {
@@ -67,7 +67,7 @@ export function App({ runtime, visualData }: AppProps = {}) {
         ? <ApplicationInfoPage navigate={navigate} runtime={runtime} />
         : <RuntimePendingPage description="版本信息暂时无法读取，请重新打开应用。" navigate={navigate} title="应用信息暂时不可用" />;
     }
-    if (runtime && renderedRoute.key === "home") return <TaskHomePage navigate={navigate} runtime={runtime} />;
+    if (runtime && renderedRoute.key === "home") return <TaskHomePage navigate={navigate} runtime={runtime} searchEpoch={searchEpoch} />;
     if (runtime && isTaskPageAlias(renderedRoute.key)) {
       const taskId = renderedRoute.params.taskId;
       return taskId
@@ -84,7 +84,7 @@ export function App({ runtime, visualData }: AppProps = {}) {
         : <RuntimePendingPage description="这个报告链接不完整，请返回观察记录重新进入。" navigate={navigate} title="无法打开观察报告" />;
     }
     if (runtime && renderedRoute.key === "create") {
-      return <CreatePage navigate={navigate} runtime={runtime} />;
+      return <CreatePage navigate={navigate} runtime={runtime} searchEpoch={searchEpoch} />;
     }
     if (runtime && renderedRoute.key === "production-edit") {
       const projectId = renderedRoute.params.projectId;

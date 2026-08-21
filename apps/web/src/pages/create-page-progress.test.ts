@@ -336,7 +336,7 @@ test("带 sourceId 首次进入会新建，同一地址再次 load 不再强制�
   assert.match(page, /peekCreateSourceIdFromSearch/);
   assert.match(page, /consumeCreateSourceIdFromSearch/);
   assert.doesNotMatch(page, /sourceIdFromSearch\(window\.location\.search\)/);
-  const load = page.slice(page.indexOf("const load = useCallback"), page.indexOf("}, [runtime]);"));
+  const load = page.slice(page.indexOf("const load = useCallback"), page.indexOf("}, [runtime, searchEpoch]);"));
   assert.match(load, /peekCreateSourceIdFromSearch\(\)/);
   assert.ok(load.indexOf("peekCreateSourceIdFromSearch") < load.indexOf("runtime.tasks.list"));
   assert.ok(load.indexOf("runtime.tasks.list") < load.indexOf("consumeCreateSourceIdFromSearch"));

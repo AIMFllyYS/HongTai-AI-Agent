@@ -100,7 +100,10 @@ test("bottom navigation stays outside route transforms and supports direct navig
   assert.match(shell, /data-visual-theme=\{visualTheme\}/);
   assert.match(shell, /externalNavigationContext/);
   assert.match(app, /transitionMode/);
+  assert.match(app, /searchEpoch/);
   assert.match(browserRoute, /transitionMode/);
+  assert.match(browserRoute, /searchEpoch/);
+  assert.match(browserRoute, /splitLocationHref/);
   assert.match(routeTransition, /transitionMode\s*===\s*["']instant["']/);
 });
 

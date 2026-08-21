@@ -39,11 +39,12 @@ export interface CreatePageProps {
   readonly viewModel?: CreateShellViewModel;
   readonly navigate: (path: string) => void;
   readonly runtime?: AppRuntime;
+  readonly searchEpoch?: number;
 }
 
-export function CreatePage({ viewModel, navigate, runtime }: CreatePageProps) {
+export function CreatePage({ viewModel, navigate, runtime, searchEpoch = 0 }: CreatePageProps) {
   if (!runtime) return <PlannedCreatePage navigate={navigate} title={viewModel?.title} />;
-  return <ProductionWorkbenchPage navigate={navigate} runtime={runtime} />;
+  return <ProductionWorkbenchPage navigate={navigate} runtime={runtime} searchEpoch={searchEpoch} />;
 }
 
 function focusProductionInput(): void {
@@ -75,7 +76,7 @@ function shellTitleFor(flow: ComposerFlow, showComposer: boolean): string {
   return "制作";
 }
 
-function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppRuntime; readonly navigate: (path: string) => void }) {
+function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { readonly runtime: AppRuntime; readonly navigate: (path: string) => void; readonly searchEpoch: number }) {
   const [sources, setSources] = useState<readonly AnalysisSource[]>([]);
   const [projects, setProjects] = useState<readonly ProductionProjectRecord[]>([]);
   const [project, setProject] = useState<ProductionProjectRecord>();
@@ -153,7 +154,7 @@ function ProductionWorkbenchPage({ runtime, navigate }: { readonly runtime: AppR
     } finally {
       setLoading(false);
     }
-  }, [runtime]);
+  }, [runtime, searchEpoch]);
 
   const applyAssetRecovery = useCallback(async () => {
     try {

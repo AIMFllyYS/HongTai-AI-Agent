@@ -612,7 +612,7 @@ test("completed task detail always renders engagement cells without fabricated c
   assert.match(css, /\.task-detail-engagement__item\s*\{[^}]*overflow-wrap:\s*anywhere/s);
 });
 
-test("用它做视频先进入 /create 再写 sourceId，确认态底栏不再出现第二个主按钮", async () => {
+test("用它做视频一次导航到带 sourceId 的 /create，确认态底栏不再出现第二个主按钮", async () => {
   const model = await import("../apps/web/src/pages/task-page-model") as {
     createPagePathWithSource: (taskId: string) => string;
     sourceIdFromSearch: (search: string) => string;
@@ -625,36 +625,17 @@ test("用它做视频先进入 /create 再写 sourceId，确认态底栏不再�
   };
   const { matchRoute, pathForRoute } = await import("../apps/web/src/router");
 
-  assert.equal(matchRoute(model.createPagePathWithSource("task-88")).key, "not-found");
+  assert.equal(matchRoute(model.createPagePathWithSource("task-88")).key, "create");
   assert.equal(matchRoute(pathForRoute("create")).key, "create");
 
-  const location = { pathname: "/tasks/task-88", search: "" };
-  const previousWindow = (globalThis as { window?: unknown }).window;
-  (globalThis as { window: unknown }).window = {
-    location,
-    history: {
-      state: {},
-      replaceState(_data: unknown, _title: string, url: string) {
-        const parsed = new URL(url, "https://hongtai.local");
-        location.pathname = parsed.pathname;
-        location.search = parsed.search;
-      },
-    },
-  };
-
-  try {
-    const navigated: string[] = [];
-    model.navigateToCreateWithSource((path) => {
-      navigated.push(path);
-    }, "task-88");
-    assert.equal(navigated.length, 1);
-    assert.equal(matchRoute(navigated[0] ?? "").key, "create");
-    assert.doesNotMatch(navigated[0] ?? "", /\?/);
-    assert.equal(model.sourceIdFromSearch(location.search), "task-88");
-  } finally {
-    if (previousWindow === undefined) delete (globalThis as { window?: unknown }).window;
-    else (globalThis as { window: unknown }).window = previousWindow;
-  }
+  const navigated: string[] = [];
+  model.navigateToCreateWithSource((path) => {
+    navigated.push(path);
+  }, "task-88");
+  assert.equal(navigated.length, 1);
+  assert.equal(navigated[0], "/create?sourceId=task-88");
+  assert.equal(matchRoute(navigated[0] ?? "").key, "create");
+  assert.equal(model.sourceIdFromSearch("?sourceId=task-88"), "task-88");
 
   assert.equal(model.resolveCompletedBarAction({ primary: "start-analysis", confirmationOpen: false, deleteConfirmationOpen: false }), "start-analysis");
   assert.equal(model.resolveCompletedBarAction({ primary: "next-steps", confirmationOpen: false, deleteConfirmationOpen: false }), "next-steps");
@@ -686,8 +667,15 @@ test("首页来源用 Tabs，唯一主按钮跟在输入区后，成功后进入
   assert.match(home, /navigator\.clipboard\.readText/);
   assert.match(home, /已识别 \{platformLabel/);
   assert.match(home, /选择一段 MP4 视频/);
+  assert.match(home, /task-source-card__upload-icon/);
+  assert.match(home, /name="video"/);
   assert.match(home, /250MB/);
   assert.match(home, /只保存在本机/);
+  assert.match(css, /\.task-source-card__upload\s*\{[^}]*background:\s*var\(--color-surface-low\)/s);
+  assert.match(css, /\.task-source-card__upload\s*\{[^}]*border-radius:\s*var\(--radius-card\)/s);
+  assert.match(css, /\.task-source-card__upload\s*\{[^}]*align-items:\s*center/s);
+  assert.match(css, /\.task-source-card__upload-icon\s*\{[^}]*width:\s*3\.75rem[^}]*height:\s*3\.75rem/s);
+  assert.match(css, /\.task-source-card__upload-icon\s*\{[^}]*border-radius:\s*50%/s);
   assert.match(home, /<ValidatedModuleProgress/);
   assert.match(home, /navigate\(taskDetailPath\(result\.task\.id\)\)/);
   assert.match(home, /navigate\(taskDetailPath\(record\.taskId\)\)/);

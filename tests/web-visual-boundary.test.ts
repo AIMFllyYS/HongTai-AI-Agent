@@ -54,6 +54,11 @@ test("web application routes expose canonical runtime paths", () => {
   assert.equal(matchRoute("/assets").key, "templates");
   assert.equal(matchRoute("/unknown").key, "not-found");
   assert.equal(matchRoute("/publish").key, "not-found");
+  assert.equal(matchRoute("/create?entry=agent").key, "create");
+  assert.equal(matchRoute("/create?entry=replica").key, "create");
+  assert.equal(matchRoute("/?intent=paste").key, "home");
+  assert.equal(matchRoute("/create?sourceId=task-88").key, "create");
+  assert.equal(matchRoute("/create#preview").key, "create");
   assert.doesNotMatch(read("router.ts"), /path:\s*"\/publish"/);
   assert.doesNotMatch(read("router.ts"), /\|\s*"publish"/);
 });
@@ -122,6 +127,13 @@ test("route transition direction follows dynamic task route order", () => {
   assert.equal(routeTransitionDirection("/tasks/task-42/processing", "/tasks/task-42"), "forward");
   assert.equal(routeTransitionDirection("/tasks/task-42/analysis", "/tasks/task-42"), "backward");
   assert.equal(routeTransitionDirection("/observation/new", "/observation/session-42"), "forward");
+  assert.equal(routeTransitionDirection("/", "/create?entry=agent"), routeTransitionDirection("/", "/create"));
+});
+
+test("splitLocationHref keeps query and hash out of the pathname", () => {
+  assert.deepEqual(router.splitLocationHref("/create?entry=agent"), { pathname: "/create", search: "?entry=agent", hash: "" });
+  assert.deepEqual(router.splitLocationHref("/?intent=paste#top"), { pathname: "/", search: "?intent=paste", hash: "#top" });
+  assert.deepEqual(router.splitLocationHref(""), { pathname: "/", search: "", hash: "" });
 });
 
 test("homepage source card drops numbered dual cards and keeps the primary action in the content flow", () => {
