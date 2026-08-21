@@ -58,7 +58,7 @@ export function PlaybookComposeSpecimen() {
       <h3>新建</h3>
       {composeActions.map((action) => (
         <div className="playbook-sheet__row" key={action.id}>
-          <Icon name={action.icon} size={16} />
+          <span className="sheet-action__icon"><Icon name={action.icon} size={16} /></span>
           <div>
             <strong>{action.title}</strong>
             <small>{action.description}</small>

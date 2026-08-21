@@ -23,6 +23,9 @@ test("加号三项只指向已接入的真实入口", () => {
   assert.equal(composeActions[1]?.description, "按分镜清单逐项拍摄");
   assert.equal(composeActions[2]?.title, "拆解新链接");
   assert.equal(composeActions[2]?.description, "粘贴链接开始分析");
+  assert.equal(composeActions[0]?.icon, "sparkles");
+  assert.equal(composeActions[1]?.icon, "list_checks");
+  assert.equal(composeActions[2]?.icon, "link");
   assert.equal(pathForComposeAction("agent"), `${pathForRoute("create")}?entry=agent`);
   assert.equal(pathForComposeAction("replica"), `${pathForRoute("create")}?entry=replica`);
   assert.equal(pathForComposeAction("paste"), `${pathForRoute("home")}?intent=paste`);
@@ -56,12 +59,15 @@ test("compose sheet, home paste intent, and create swipe lock stay wired", () =>
   const styles = read("styles/components.css");
 
   assert.match(sheet, /title="新建"/);
+  assert.match(sheet, /size=\{16\}/);
   assert.match(sheet, />取消</);
   assert.match(home, /consumePasteIntentFromSearch/);
   assert.match(home, /variant="segmented"/);
   assert.match(home, /HomeMastheadActions/);
   assert.match(swipe, /active === "create"/);
   assert.match(nav, /aria-label="新建"/);
+  assert.match(styles, /\.sheet-action__icon\s*\{[^}]*width:\s*2\.125rem[^}]*height:\s*2\.125rem[^}]*border-radius:\s*50%/s);
+  assert.match(styles, /\.sheet-action__icon\s*\{[^}]*color:\s*var\(--palette-brand-deep\)/s);
   assert.match(styles, /\.bottom-nav__item\s*\{[^}]*justify-content:\s*center[^}]*padding:\s*0/s);
   assert.match(styles, /\.bottom-nav__plus\s*\{[^}]*width:\s*2rem[^}]*height:\s*2rem[^}]*border-radius:\s*50%/s);
   assert.doesNotMatch(styles, /\.bottom-nav__item\s*\{[^}]*padding:\s*0\.75rem 0 0/s);

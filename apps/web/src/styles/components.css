@@ -1337,12 +1337,16 @@
 
 .sheet-action__icon {
   display: grid;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.125rem;
+  height: 2.125rem;
   place-items: center;
-  color: var(--color-action-primary);
-  background: var(--color-action-secondary-soft);
-  border-radius: var(--radius-control);
+  color: var(--palette-brand-deep);
+  background: var(--palette-brand-tint);
+  border-radius: 50%;
+}
+
+.sheet-action__icon .playbook-icon {
+  display: block;
 }
 
 .sheet-action__copy {

@@ -31,12 +31,15 @@ test("NA5 and screen Lucide glyphs cover the unarchived pencil icon set", () => 
   for (const name of ["scan_face", "layers", "clapperboard", "layout_template", "settings", "sparkles", "plus", "circle_check"] as const) {
     assert.equal(typeof playbookGlyphs[name], "object");
   }
+  assert.equal(na5IconCells[0]?.name, "sparkles");
+  assert.equal(na5IconCells[0]?.lucide, "wand-sparkles");
+  assert.equal(playbookGlyphs.sparkles, playbookGlyphs.wand_sparkles);
+  assert.match(read("playbook/icon-catalog.ts"), /sparkles: WandSparkles/);
   const iconSource = read("components/Icon.tsx");
   assert.match(iconSource, /from "\.\.\/playbook\/icon-catalog"/);
   assert.doesNotMatch(iconSource, /from "lucide-react"/);
   assert.doesNotMatch(iconSource, /strokeWidth="1\.8"/);
   assert.match(read("playbook/icon-catalog.ts"), /from "lucide-react"/);
-
 });
 
 test("real pages import playbook section glyphs instead of inventing a second icon language", () => {
