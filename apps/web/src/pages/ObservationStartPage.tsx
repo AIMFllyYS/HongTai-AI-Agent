@@ -5,14 +5,20 @@ import type { AppRuntime, DiagnosisSessionRecord, MediaReference, ObservationMod
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
+import { HomeProfileAction } from "../components/HomeProfileAction";
 import { Icon } from "../components/Icon";
-import { Sheet, SheetActionRow } from "../components/Sheet";
 import { IssueNotice } from "../components/IssueNotice";
-import { RuntimeMediaFrame } from "../components/RuntimeMediaFrame";
 import { EmptyState, LoadingState } from "../components/StatePanels";
+import { Tabs } from "../components/Tabs";
 import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
 import { diagnosisModuleDefinitions } from "../features/diagnosis/diagnosis-module-progress";
-import { observationModeLabel } from "../features/diagnosis/diagnosis-presenters";
+import { OBSERVATION_REPORT_DISCLAIMER_FALLBACK } from "../features/diagnosis/diagnosis-presenters";
+import {
+  ObservationCapturePanel,
+  ObservationHistoryCard,
+  ObservationPhotoConfirmSheet,
+  type ObservationImageSource,
+} from "../features/diagnosis/observation-start-panels";
 import { LiveListReadReconciler } from "../features/generation/live-list-read-reconciler";
 import { useAppResume } from "../hooks/useAppResume";
 import { observationReportPath, type Navigate } from "../router";
@@ -22,9 +28,9 @@ export interface ObservationStartPageProps {
   readonly navigate: Navigate;
 }
 
-const modes: readonly { readonly id: ObservationMode; readonly title: string; readonly description: string; readonly icon: "face" | "visibility" }[] = [
-  { id: "tongue", title: "舌象观察", description: "请在自然光下拍摄舌面，并只用于本次本地观察。", icon: "visibility" },
-  { id: "face", title: "面部观察", description: "请在自然光下正面拍摄面部，并只用于本次本地观察。", icon: "face" },
+const modes: readonly { readonly id: ObservationMode; readonly title: string }[] = [
+  { id: "face", title: "面部观察" },
+  { id: "tongue", title: "舌象观察" },
 ];
 
 /** Native capture is declared by AppRuntime and always imports into private storage first. */
@@ -32,20 +38,6 @@ export const OBSERVATION_CAPTURE_IMAGE_SLOT = {
   capability: "diagnosis.captureImage",
   render: true,
 } as const;
-
-function statusLabel(session: DiagnosisSessionRecord): string {
-  if (session.reportStatus === "pending") return "等待生成报告";
-  if (session.reportStatus === "running") return "正在生成报告";
-  if (session.reportStatus === "succeeded") return "报告已保存";
-  return "报告未完成";
-}
-
-function statusIcon(session: DiagnosisSessionRecord): "pending" | "sync" | "check_circle" | "error" {
-  if (session.reportStatus === "pending") return "pending";
-  if (session.reportStatus === "running") return "sync";
-  if (session.reportStatus === "succeeded") return "check_circle";
-  return "error";
-}
 
 export function upsertObservationSession(
   current: readonly DiagnosisSessionRecord[] | undefined,
@@ -60,14 +52,15 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
   const diagnosisAvailable = runtime.features.diagnosis === "available";
   const observationHistoryReads = useRef(new LiveListReadReconciler<DiagnosisSessionRecord>());
   const runningReportSubscriptions = useRef(new Map<string, () => void>());
-  const [mode, setMode] = useState<ObservationMode>("tongue");
+  const [mode, setMode] = useState<ObservationMode>("face");
   const [image, setImage] = useState<MediaReference>();
+  const [imageSource, setImageSource] = useState<ObservationImageSource>("album");
   const [sessions, setSessions] = useState<readonly DiagnosisSessionRecord[]>();
   const [issue, setIssue] = useState<TaskIssue>();
   const [historyIssue, setHistoryIssue] = useState<TaskIssue>();
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(true);
-  const [captureOpen, setCaptureOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [reportProgress, setReportProgress] = useState<StructuredGenerationProgressV1>();
 
   const applySessionChange = useCallback((session: DiagnosisSessionRecord) => {
@@ -156,7 +149,11 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
       try {
         const recovered = await runtime.diagnosis.consumeImageRecovery();
         if (!active) return;
-        if (recovered.status === "succeeded") setImage(recovered.image);
+        if (recovered.status === "succeeded") {
+          setImage(recovered.image);
+          setImageSource("recovery");
+          setConfirmOpen(true);
+        }
         if (recovered.status === "failed") setIssue(recovered.issue);
       } catch (error) {
         if (active) {
@@ -171,18 +168,22 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
   }, [runtime]);
 
   const chooseMode = (nextMode: ObservationMode) => {
+    if (loading || importing) return;
     setMode(nextMode);
     setImage(undefined);
     setIssue(undefined);
+    setConfirmOpen(false);
   };
 
   const pickImage = async () => {
     if (!diagnosisAvailable || loading || importing) return;
-    setCaptureOpen(false);
+    setConfirmOpen(false);
     setImporting(true);
     setIssue(undefined);
     try {
       setImage(await runtime.diagnosis.pickImage());
+      setImageSource("album");
+      setConfirmOpen(true);
     } catch (error) {
       setIssue(issueFromAppError(error, { code: "MEDIA_IMPORT_FAILED", message: "图片没有保存成功，请重新选择", action: "select_media" }));
     } finally {
@@ -192,11 +193,13 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
 
   const captureImage = async () => {
     if (!diagnosisAvailable || loading || importing) return;
-    setCaptureOpen(false);
+    setConfirmOpen(false);
     setImporting(true);
     setIssue(undefined);
     try {
       setImage(await runtime.diagnosis.captureImage());
+      setImageSource("camera");
+      setConfirmOpen(true);
     } catch (error) {
       setIssue(issueFromAppError(error, { code: "MEDIA_IMPORT_FAILED", message: "拍摄的图片没有保存成功，请重新拍摄", action: "select_media" }));
     } finally {
@@ -206,6 +209,7 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
 
   const createReport = async () => {
     if (!diagnosisAvailable || !image || loading || importing) return;
+    setConfirmOpen(false);
     setLoading(true);
     setIssue(undefined);
     setReportProgress(undefined);
@@ -229,9 +233,6 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
         });
         navigate(observationReportPath(session.sessionId));
       } catch (error) {
-        // Navigate only when native storage has a terminal projection. If a
-        // storage failure prevented the failed state from being committed, a
-        // report page must not present that stale running row as live work.
         const stored = await runtime.diagnosis.getReport(session.sessionId).catch(() => undefined);
         if (stored?.status === "succeeded" || stored?.status === "failed") {
           const storedSession = await runtime.diagnosis.getSession(session.sessionId).catch(() => undefined);
@@ -249,47 +250,58 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
   };
 
   return (
-    <AppShell activeNav="ai" navigate={navigate} subtitle="舌象或面部，结果仅供日常参考" title="观察" visualTheme="warm-soft-tech">
+    <AppShell activeNav="ai" headerAction={<HomeProfileAction navigate={navigate} runtime={runtime} />} navigate={navigate} subtitle="舌象或面部，结果仅供日常参考" title="AI 诊断" visualTheme="warm-soft-tech">
       <div className="page-stack page-observation-start">
-        <section className="observation-heading">
-          <h2>选择一种观察方式</h2>
-          <p>每个会话只能选择舌象或面部其中一种图片。结果只提供日常参考，不替代专业意见。</p>
-        </section>
-
+        <p className="observation-disclaimer">{OBSERVATION_REPORT_DISCLAIMER_FALLBACK}</p>
         {!diagnosisAvailable ? <GlassCard className="observation-capability-notice" data-feature-capability="planned" tone="soft"><Icon name="pending" size={22} /><div><span>尚未接入</span><strong>本地图片观察与报告正在准备中</strong><p>当前版本不会把示例图片或示例报告伪装为你的真实结果。</p></div></GlassCard> : null}
         {issue ? <IssueNotice actions={{ selectMedia: () => void pickImage() }} issue={issue} /> : null}
 
-        <section aria-label="选择观察方式" className="observation-mode-grid">
-          {modes.map((item) => (
-            <button aria-pressed={mode === item.id} className={`observation-mode-card ${mode === item.id ? "is-selected" : ""}`.trim()} disabled={loading || importing} key={item.id} onClick={() => chooseMode(item.id)} type="button">
-              <span><Icon name={item.icon} size={28} /></span>
-              <strong>{item.title}</strong>
-              <small>{item.description}</small>
-              {mode === item.id ? <i aria-label="已选择"><Icon name="check_circle" size={18} /></i> : null}
-            </button>
-          ))}
-        </section>
+        <Tabs
+          active={modes.find((item) => item.id === mode)?.title ?? "面部观察"}
+          ariaLabel="选择观察方式"
+          id="observation-mode"
+          onSelect={(tab) => {
+            const next = modes.find((item) => item.title === tab);
+            if (next) chooseMode(next.id);
+          }}
+          tabs={modes.map((item) => item.title)}
+          variant="segmented"
+        />
 
-        <GlassCard className="observation-capture-card">
-          <div className="observation-capture-card__copy"><h3>{observationModeLabel(mode)}图片</h3><p>{mode === "tongue" ? "尽量保持舌面清晰、避免滤镜和强色光。" : "尽量保持正面、自然光和无遮挡。"}</p></div>
-          {importing ? <div aria-live="polite" className="observation-capture-card__empty" role="status"><Icon name="sync" size={30} /><span>正在导入图片</span></div> : image ? <RuntimeMediaFrame className="observation-capture-card__image" label={`${observationModeLabel(mode)}图片`} media={image} /> : <div className="observation-capture-card__empty"><Icon name="camera" size={30} /><span>点击添加图片</span></div>}
-          <div className="observation-capture-card__actions mobile-action-group"><Button disabled={!diagnosisAvailable || loading || importing} icon={<Icon name="add" size={18} />} onClick={() => setCaptureOpen(true)} variant="secondary">添加图片</Button><Button className={loading ? "is-busy" : ""} disabled={!diagnosisAvailable || !image || loading || importing} icon={<Icon name="auto_awesome" size={18} />} onClick={() => void createReport()}>{loading ? "AI 正在分析图片" : "生成观察报告"}</Button></div>
-          {loading || reportProgress ? <ValidatedModuleProgress definitions={diagnosisModuleDefinitions} failedTitle="观察报告未完成" issue={issue} progress={reportProgress} title="正在生成真实观察报告" /> : null}
-          <small className="observation-privacy-note"><Icon name="folder_special" size={15} />图片只保存在本机，不会自动上传或公开发布。</small>
-        </GlassCard>
+        <ObservationCapturePanel
+          busy={loading}
+          diagnosisAvailable={diagnosisAvailable}
+          image={image}
+          importing={importing}
+          mode={mode}
+          onCapture={() => void captureImage()}
+          onPick={() => void pickImage()}
+          onScan={() => void pickImage()}
+        />
 
-        <Sheet labelledBy="observation-capture-title" onClose={() => setCaptureOpen(false)} open={captureOpen} title="添加图片">
-          <div className="sheet-action-list">
-            <SheetActionRow description="打开系统相机，拍一张本机保存的照片" icon={<Icon name="camera" size={20} />} onSelect={() => void captureImage()} title="拍摄照片" />
-            <SheetActionRow description="从系统相册选择一张已有图片" icon={<Icon name="upload_file" size={20} />} onSelect={() => void pickImage()} title="相册选择" />
-          </div>
-          <Button className="sheet-cancel" onClick={() => setCaptureOpen(false)} variant="quiet">取消</Button>
-        </Sheet>
+        {loading || reportProgress ? <ValidatedModuleProgress definitions={diagnosisModuleDefinitions} failedTitle="观察报告未完成" issue={issue} progress={reportProgress} title="正在生成真实观察报告" /> : null}
+        <small className="observation-privacy-note">图片只保存在本机，不会上传或公开</small>
+        <p className="observation-disclaimer observation-disclaimer--foot">{OBSERVATION_REPORT_DISCLAIMER_FALLBACK}</p>
+
+        <ObservationPhotoConfirmSheet
+          confirming={loading}
+          diagnosisAvailable={diagnosisAvailable}
+          image={image}
+          importing={importing}
+          onClose={() => setConfirmOpen(false)}
+          onConfirm={() => void createReport()}
+          onReselect={() => {
+            setConfirmOpen(false);
+            setImage(undefined);
+          }}
+          open={confirmOpen}
+          source={imageSource}
+        />
 
         <section className="page-section">
           <div className="section-heading"><div><h3>最近观察</h3></div>{historyIssue ? <Button onClick={() => void loadSessions()} variant="quiet">重新读取</Button> : null}</div>
           {historyIssue ? <IssueNotice issue={historyIssue} /> : null}
-          {sessions === undefined ? <LoadingState description="正在读取本地会话投影" title="读取观察历史" /> : sessions.length === 0 ? <EmptyState description="完成一次真实图片观察后，会话和正式报告会保存在本地这里。" icon="history" title="尚无本地观察" /> : <div className="observation-history-list">{sessions.map((session) => <button className="observation-history-item" key={session.sessionId} onClick={() => navigate(observationReportPath(session.sessionId))} type="button"><span className={`observation-history-item__icon is-${session.reportStatus}`}><Icon name={statusIcon(session)} size={20} /></span><span><strong>{observationModeLabel(session.mode)}</strong><small>{statusLabel(session)}</small></span><Icon name="chevron_right" size={18} /></button>)}</div>}
+          {sessions === undefined ? <LoadingState description="正在读取本地会话投影" title="读取观察历史" /> : sessions.length === 0 ? <EmptyState description="完成一次真实图片观察后，会话和正式报告会保存在本地这里。" icon="history" title="尚无本地观察" /> : <div className="observation-history-list">{sessions.map((session) => <ObservationHistoryCard key={session.sessionId} onOpen={() => navigate(observationReportPath(session.sessionId))} session={session} />)}</div>}
         </section>
       </div>
     </AppShell>

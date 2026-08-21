@@ -17,6 +17,7 @@ import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
 import { contentAnalysisModuleDefinitions } from "../features/tasks/content-analysis-module-progress";
 import { contentTypeLabel, formatTaskTime, mediaOrientationLabel, platformLabel } from "../features/tasks/task-presenters";
 import { aiSettingsPath, pathForRoute, replicaWizardPath, type Navigate } from "../router";
+import { formatStoredSize, totalMediaByteLength } from "../runtime/local-cache";
 import { TaskAnalysisPage } from "./TaskAnalysisPage";
 import {
   ANALYSIS_TAB_LABEL,
@@ -71,6 +72,18 @@ function uniqueMedia(media: readonly MediaReference[]): readonly MediaReference[
     seen.add(item.uri);
     return true;
   });
+}
+
+const ENGAGEMENT_FIELDS = [
+  { key: "likeCount", label: "点赞", icon: "heart" },
+  { key: "favoriteCount", label: "收藏", icon: "bookmark" },
+  { key: "commentCount", label: "评论", icon: "comment" },
+  { key: "shareCount", label: "分享", icon: "share" },
+  { key: "playCount", label: "播放", icon: "play" },
+] as const;
+
+function formatEngagementCount(value: number | undefined): string {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? String(value) : "未解析到";
 }
 
 export function TaskDetailPage({
@@ -272,9 +285,20 @@ export function TaskDetailPage({
           {detail.content.author ? <span><Icon name="face" size={15} />{detail.content.author}</span> : null}
           {formatTaskTime(task.updatedAt) ? <span><Icon name="history" size={15} />{formatTaskTime(task.updatedAt)}</span> : null}
           {validatedDocument ? <span><Icon name="check_circle" size={15} />本地保存 · 已校验 content-analysis.v1</span> : null}
+          <span><Icon name="folder" size={15} />本地占用 {formatStoredSize(totalMediaByteLength(detail.media))}</span>
         </div>
         {detail.content.description ? <div className="task-detail-summary__description">{detail.content.description}</div> : null}
       </GlassCard>
+
+      <section aria-label="互动数据" className="task-detail-engagement">
+        {ENGAGEMENT_FIELDS.map((field) => (
+          <div className="task-detail-engagement__item" key={field.key}>
+            <Icon name={field.icon} size={15} />
+            <span>{field.label}</span>
+            <strong>{formatEngagementCount(detail.content[field.key])}</strong>
+          </div>
+        ))}
+      </section>
 
       <section className="page-section task-result-tabs">
         <Tabs active={activeLabel} ariaLabel="原文与拆解" id={tabGroupId} onSelect={(tab) => onSelectTab(tab === ANALYSIS_TAB_LABEL ? "analysis" : "source")} tabs={tabs} variant="segmented" />

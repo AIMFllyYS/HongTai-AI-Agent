@@ -53,7 +53,9 @@ test("observation pages use the real diagnosis runtime rather than a visual diag
 
   const navigation = read("navigation/primary-nav.ts");
   assert.match(navigation, /id: "ai", label: "观察", icon: "scan_face", path: pathForRoute\("observation-new"\)/);
-  assert.doesNotMatch(start, /AI 诊断/);
+  assert.match(start, /title="AI 诊断"/);
+  assert.match(start, /OBSERVATION_REPORT_DISCLAIMER_FALLBACK/);
+  assert.match(start, /observation-disclaimer--foot/);
   assert.doesNotMatch(start, /LOCAL OBSERVATION/);
 });
 
@@ -65,6 +67,7 @@ test("observation session creation uses a storage fallback instead of runtime un
 
 test("observation photo selection and capture own an importing state with every terminal clearing busy", () => {
   const start = read("pages/ObservationStartPage.tsx");
+  const panels = read("features/diagnosis/observation-start-panels.tsx");
 
   assert.match(start, /const \[importing, setImporting\] = useState\(true\)/);
   assert.match(start, /runtime\.diagnosis\.consumeImageRecovery\(\)/);
@@ -79,9 +82,11 @@ test("observation photo selection and capture own an importing state with every 
     assert.match(operation, /loading \|\| importing/);
   }
 
-  assert.match(start, /正在导入图片/);
-  assert.match(start, /disabled=\{!diagnosisAvailable \|\| loading \|\| importing\}/);
-  assert.match(start, /disabled=\{!diagnosisAvailable \|\| !image \|\| loading \|\| importing\}/);
+  assert.match(panels, /正在导入图片/);
+  assert.match(start, /busy=\{loading\}/);
+  assert.match(start, /importing=\{importing\}/);
+  assert.match(panels, /const disabled = !diagnosisAvailable \|\| busy \|\| importing/);
+  assert.match(panels, /disabled=\{!diagnosisAvailable \|\| !image \|\| confirming \|\| importing\}/);
 });
 
 test("observation start page incrementally subscribes running reports by sessionId", () => {
@@ -137,12 +142,67 @@ test("observation presentation only recognizes diagnosis-report.v1 and never tur
   assert.equal(report.summary?.headline, "观察报告");
   assert.deepEqual(report.followUpQuestions, ["如何在相近光线下记录？"]);
   assert.equal("score" in report, false);
+  assert.equal(subject.observationReportHeroTitle(report), "颜色");
+  assert.equal(subject.imageQualityBadgeLabel("good"), "良好 · 可用");
+  assert.equal(subject.imageQualityBadgeLabel("limited"), "受限 · 部分可辨");
+  assert.equal(subject.imageQualityBadgeLabel("unusable"), "不可用");
+  assert.equal(subject.imageQualityDescription(report.imageQuality), undefined);
+  assert.equal(subject.observationBasisCaption(["o-1"], report.observations), "依据：观察 1");
+  assert.equal(subject.observationEvidenceText(report.observations[0]!), "图片中央区域清晰");
+  assert.equal(subject.observationReportDisclaimer(report), "此内容不构成医疗诊断。");
+  assert.match(subject.OBSERVATION_REPORT_DISCLAIMER_FALLBACK, /不是正式诊疗/);
   assert.equal(subject.readDiagnosisReport({
     sessionId: "observation-1",
     status: "succeeded",
     createdAt: "2026-08-07T00:00:00.000Z",
     updatedAt: "2026-08-07T00:01:00.000Z",
     report: { schemaVersion: "other.v1", document: {} },
+  }).available, false);
+
+  const document = {
+    mode: "tongue",
+    imageQuality: { usable: true, overallQuality: "good", limitations: ["舌面主体清晰"], retakeSuggestions: [] },
+    summary: { headline: "观察报告", keyPoints: ["舌面清晰"], narrative: "舌面整体偏红，中后部有薄白苔。其余仅作日常参考。" },
+    observations: [{ id: "o-1", category: "tongue_body", region: "舌体", label: "颜色", description: "可见颜色特征", visibility: "clear", evidenceDescription: "可见颜色特征" }],
+    wellnessReferences: [{ title: "日常参考", basisObservationIds: ["o-1"], statement: "请结合日常状态留意变化", certainty: "possible", notADiagnosis: true }],
+    recommendations: [{ category: "daily_care", priority: "low", title: "规律记录", action: "在相近光线下观察", rationale: "便于比较", relatedObservationIds: ["o-1"] }],
+    safetyGuidance: { level: "routine_attention", reasons: ["如有不适请咨询专业人员"], recommendedAction: "必要时咨询专业人员" },
+    followUpQuestions: ["如何在相近光线下记录？"],
+    limitations: ["单张图片存在局限"],
+    disclaimer: "此内容不构成医疗诊断。",
+  };
+  const withScore = subject.readDiagnosisReport({
+    sessionId: "observation-1",
+    status: "succeeded",
+    createdAt: "2026-08-07T00:00:00.000Z",
+    updatedAt: "2026-08-07T00:01:00.000Z",
+    report: { schemaVersion: "diagnosis-report.v1", document: { ...document, score: 88 } },
+  });
+  assert.equal(withScore.available, true);
+  assert.equal("score" in withScore, false);
+  assert.equal(subject.imageQualityDescription(withScore.imageQuality), "舌面主体清晰");
+  assert.equal(subject.observationEvidenceText(withScore.observations[0]!), undefined);
+  assert.equal(subject.observationReportHeroTitle({
+    ...withScore,
+    observations: [],
+  }), "舌面整体偏红，中后部有薄白苔。");
+  assert.equal(subject.observationReportHeroTitle({
+    ...withScore,
+    observations: [],
+    summary: { headline: "观察报告", keyPoints: ["舌面清晰"], narrative: "" },
+  }), "观察报告");
+  assert.equal(subject.readDiagnosisReport({
+    sessionId: "observation-1",
+    status: "succeeded",
+    createdAt: "2026-08-07T00:00:00.000Z",
+    updatedAt: "2026-08-07T00:01:00.000Z",
+    report: {
+      schemaVersion: "diagnosis-report.v1",
+      document: {
+        ...document,
+        wellnessReferences: [{ title: "日常参考", basisObservationIds: ["o-1"], statement: "请结合日常状态留意变化", certainty: "possible" }],
+      },
+    },
   }).available, false);
 });
 
@@ -158,17 +218,43 @@ test("the packaged source contains no diagnostic-treatment or health-score copy"
     const text = read(source);
     for (const phrase of forbidden) assert.doesNotMatch(text, new RegExp(phrase));
   }
+
+  const report = read("pages/ObservationReportPage.tsx");
+  const presenters = read("features/diagnosis/diagnosis-presenters.ts");
+  assert.match(report, /title="观察报告"/);
+  assert.match(report, /观察摘要/);
+  assert.match(report, /观察明细/);
+  assert.match(report, /日常参考/);
+  assert.match(report, /非诊断 · 不确定/);
+  assert.match(report, /日常建议/);
+  assert.match(report, /安全提醒/);
+  assert.match(report, /本次观察的局限/);
+  assert.match(report, /可以继续问/);
+  assert.match(report, /图像质量/);
+  assert.match(report, /日常参考，不构成正式诊疗/);
+  assert.match(report, /<Sheet[\s\S]*title="追问"/);
+  assert.doesNotMatch(report, /可见要点|图片可见观察|局限与免责声明/);
+  assert.match(report, /observationEvidenceText/);
+  assert.match(report, /imageQualityDescription/);
+  assert.match(presenters, /不是正式诊疗/);
+  assert.match(presenters, /notADiagnosis !== true/);
 });
 
 test("observation controls stay compact and clear above the fixed Android navigation", () => {
   const start = read("pages/ObservationStartPage.tsx");
+  const panels = read("features/diagnosis/observation-start-panels.tsx");
   const report = read("pages/ObservationReportPage.tsx");
   const css = read("styles/pages/observation-runtime.css");
 
-  assert.match(start, /observation-capture-card__actions mobile-action-group/);
+  assert.match(start, /ObservationCapturePanel/);
+  assert.match(panels, /observation-capture-card__actions/);
+  assert.match(panels, /拍摄照片/);
+  assert.match(panels, /相册选择/);
   assert.match(report, /observation-question-composer__actions/);
-  assert.match(css, /\.observation-capture-card__actions \.button--primary\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s);
+  assert.match(css, /\.observation-capture-card__actions\s*\{[^}]*grid-template-columns:\s*1fr\s+1fr/s);
+  assert.match(css, /\.observation-confirm-actions\s+\.button--primary\s*\{[^}]*color:\s*#000/s);
   assert.match(css, /\.observation-question-composer\s*\{[^}]*bottom:\s*calc\([^;]*--nav-height[^;]*--safe-bottom[^;]*--keyboard-inset/s);
   assert.match(css, /\.observation-message p\s*\{[^}]*overflow-wrap:\s*anywhere/s);
   assert.match(css, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.observation-question-composer__actions[^}]*grid-template-columns:\s*1fr/);
+  assert.match(css, /\.page-observation-report \.observation-quality-card/);
 });

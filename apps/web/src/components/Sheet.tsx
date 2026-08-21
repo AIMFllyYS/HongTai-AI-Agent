@@ -7,9 +7,10 @@ export interface SheetProps extends PropsWithChildren {
   readonly title: string;
   readonly onClose: () => void;
   readonly labelledBy?: string;
+  readonly className?: string;
 }
 
-export function Sheet({ open, title, onClose, labelledBy = "sheet-title", children }: SheetProps) {
+export function Sheet({ open, title, onClose, labelledBy = "sheet-title", className = "", children }: SheetProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
@@ -26,7 +27,7 @@ export function Sheet({ open, title, onClose, labelledBy = "sheet-title", childr
       <div
         aria-labelledby={labelledBy}
         aria-modal="true"
-        className="sheet"
+        className={`sheet ${className}`.trim()}
         data-no-swipe=""
         onClick={(event) => event.stopPropagation()}
         role="dialog"

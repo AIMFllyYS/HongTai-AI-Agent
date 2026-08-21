@@ -6,14 +6,14 @@ import test from "node:test";
 const root = process.cwd();
 const read = (relativePath: string) => readFileSync(join(root, relativePath), "utf8");
 
-test("observation image choice centers each placeholder item and keeps the report action black-on-green", () => {
+test("observation image choice centers each placeholder item and keeps the confirm action black-on-green", () => {
   const css = read("apps/web/src/styles/pages/observation-runtime.css");
 
   assert.match(css, /\.observation-capture-card__empty\s*\{[^}]*place-items:\s*center[^}]*justify-items:\s*center/s);
   assert.match(css, /\.observation-capture-card__empty\s+svg\s*\{[^}]*justify-self:\s*center/s);
-  assert.match(css, /\.observation-capture-card__actions\s+\.button--primary\s*\{[^}]*color:\s*#000/s);
-  assert.match(css, /\.observation-capture-card__actions\s+\.button--primary:disabled\s*\{[^}]*color:\s*#000/s);
-  assert.match(css, /\.observation-capture-card__actions\s+\.button--primary\.is-busy:disabled\s*\{[^}]*linear-gradient/s);
+  assert.match(css, /\.observation-confirm-actions\s+\.button--primary\s*\{[^}]*color:\s*#000/s);
+  assert.match(css, /\.observation-confirm-actions\s+\.button--primary:disabled\s*\{[^}]*color:\s*#000/s);
+  assert.match(css, /\.observation-confirm-actions\s+\.button--primary\.is-busy:disabled\s*\{[^}]*linear-gradient/s);
   assert.match(css, /\.observation-question-composer\s+\.button\.is-busy:disabled\s*\{[^}]*color:\s*#000[^}]*linear-gradient/s);
 });
 

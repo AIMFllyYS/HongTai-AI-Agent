@@ -50,8 +50,16 @@ test("templates and production use real runtimes while publishing remains planne
   assert.match(templates, /runtime\.analysis\.get/);
   assert.match(templates, /确认删除模板/);
   assert.match(templates, /\{readIssue \? <button className="text-action" onClick=\{\(\) => void load\(\)\} type="button">刷新<\/button> : null\}/);
+  assert.match(templates, /推荐模板/);
+  assert.match(templates, /本机精选/);
+  assert.match(templates, /使用次数未解析到/);
+  assert.match(templates, /未解析到这类模板/);
+  assert.match(templates, /HomeProfileAction/);
   assert.doesNotMatch(templates, /data\/fixtures|visualData|viewModel/);
   assert.doesNotMatch(templates, /官方模板|热度/);
+  assert.doesNotMatch(templates, /2\.4 万|万人用过/);
+  assert.doesNotMatch(templates, /unsplash|images\.unsplash/i);
+  assert.doesNotMatch(templates, /pathForRoute\("create"\)/);
 
   const publish = read("pages/PublishPage.tsx");
   assert.doesNotMatch(publish, /viewModel\.(media|platforms|primaryAction|secondaryActions)/);

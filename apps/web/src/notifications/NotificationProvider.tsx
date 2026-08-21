@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 import type { PropsWithChildren } from "react";
 
 import { TopNotification } from "../components/TopNotification";
+import { readAppearancePreferences } from "../runtime/appearance-preferences";
 import type { AppNotification, NotificationInput } from "./notification-model";
 
 interface NotificationContextValue {
@@ -16,7 +17,9 @@ export function NotificationProvider({ children }: PropsWithChildren) {
   const sequence = useRef(0);
   const show = useCallback((input: NotificationInput) => {
     const id = `notice-${++sequence.current}`;
-    setCurrent({ ...input, id });
+    if (readAppearancePreferences().alertsEnabled) {
+      setCurrent({ ...input, id });
+    }
     return id;
   }, []);
   const dismiss = useCallback((id?: string) => {

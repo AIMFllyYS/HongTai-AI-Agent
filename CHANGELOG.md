@@ -14,6 +14,27 @@
 
 暂无尚未归档的用户可见改动。
 
+## [0.1.19] - 2026-08-21
+
+### 新增
+
+- 页面层按未归档 `hongtai-mobile.pen` 落地：观察起始页标题为「AI 诊断」，面部/舌象分段采集，确认选图后才开始会话。
+- 观察报告按稿面分区展示，页面顶部和底部都显示免责声明；允许不确定的初步判断，并拦住确诊口吻、概率数字、处方和整体健康评分。
+- 设置页接通本机通知开关、深色/浅色/跟随系统、品牌主题色展示、Cache Storage 清缓存和隐私说明。
+- 拆解详情增加互动量五格和本地占用；解析到真实数就填，没有就写「未解析到」，不编造热度或缓存体积。
+
+### 优化
+
+- 模板页推荐区改为「本机精选 · 滑动查看」；底栏五项为观察、拆解、加号、模板、设置。
+- 抖音、小红书、B 站拆解会带出互动量字段；缺席时界面保持诚实空态。
+
+### 发布边界
+
+- Android 源码版本推进为 `0.1.19` / `versionCode=27`；只生成 Release 产品并按 `HongTai-AI-Agent-release-v0.1.19.apk` 独立归档。
+- 本地归档为 23,202,490 字节、SHA-256 `B47A95F68900804C43F15AB2472D598C1E78355BCE53F75A285DF68AA4AAEB1B`；证书锚点与既有 Release 身份一致。
+- 主机侧 `scripts/build-android-release.ps1` 已通过 Web production build、Capacitor sync、Release JVM、`lintRelease`、四 ABI `assembleRelease`、16 KiB zipalign、包身份与 v2/v3 签名后验。
+- 下载页现推荐 `v0.1.19`，链接按既有固定公网地址推断为 `https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.19.apk`。本次按维护者要求不做公网重新下载核对，因此只证明本地归档身份，不表示公开文件已回验，也不表示真实 Provider、物理真机或最终成片已经验收通过。
+
 ## [0.1.18] - 2026-08-20
 
 ### 修复
@@ -32,7 +53,7 @@
 - Android 源码版本推进为 `0.1.18` / `versionCode=26`；只生成 Release 产品并按 `HongTai-AI-Agent-release-v0.1.18.apk` 独立归档。
 - 本地归档为 21,932,925 字节、SHA-256 `A5D39C07C62A37AF42F70242D17EB3F73C47E05E4BBEEA51759E5A3C931072CF`；证书锚点与既有 Release 身份一致。
 - 主机侧 `scripts/build-android-release.ps1` 已通过 Web production build、Capacitor sync、Release JVM、`lintRelease`、四 ABI `assembleRelease`、16 KiB zipalign、包身份与 v2/v3 签名后验。API 35 模拟器上已用归档 `v0.1.17` 以 `adb install --no-streaming -r` 覆盖安装，再同样方式升到 `v0.1.18`，未使用 `-d` 或卸载，`firstInstallTime` 保持 `2026-08-19 17:53:58`。冷启动后首页中文正常。
-- 该版本已完成人工上传与公网文件回验；公网文件为 21,932,925 字节、SHA-256 `A5D39C07C62A37AF42F70242D17EB3F73C47E05E4BBEEA51759E5A3C931072CF`。下载页现推荐 `v0.1.18`；这表示安装包已公开分发并完成文件级回验，不表示真实 Provider、物理真机或最终成片已经验收通过。
+- 该版本已完成人工上传与公网文件回验；公网文件为 21,932,925 字节、SHA-256 `A5D39C07C62A37AF42F70242D17EB3F73C47E05E4BBEEA51759E5A3C931072CF`。下载页现已作为历史版本保留 `v0.1.18`；当前推荐为 `v0.1.19`。公开分发只证明文件身份和下载链路已回验，不表示真实 Provider、物理真机或最终成片已经验收通过。
 - API 35 模拟器上已有 v3 蒙太奇与数字人切片的 Media3 成片证据。物理真机、Agent 真实 `generatePlan` 与 B 站 APK 真网采集仍待用户端测。
 
 ## [0.1.17] - 2026-08-20

@@ -115,6 +115,12 @@ export interface PlatformContent {
   readonly author?: string;
   readonly coverUrl?: string;
   readonly durationSeconds?: number;
+  /** Absent means the public page did not yield a parseable non-negative integer. */
+  readonly likeCount?: number;
+  readonly favoriteCount?: number;
+  readonly commentCount?: number;
+  readonly shareCount?: number;
+  readonly playCount?: number;
   readonly videos: readonly MediaSource[];
   readonly audios: readonly MediaSource[];
   readonly images: readonly MediaSource[];

@@ -333,6 +333,12 @@ export interface TaskContentDetail {
   readonly canonicalUrl?: string;
   readonly durationSeconds?: number;
   readonly cover?: MediaReference;
+  /** Absent means ingest did not persist a parseable non-negative integer. */
+  readonly likeCount?: number;
+  readonly favoriteCount?: number;
+  readonly commentCount?: number;
+  readonly shareCount?: number;
+  readonly playCount?: number;
 }
 
 export interface TaskEvidenceUnit {

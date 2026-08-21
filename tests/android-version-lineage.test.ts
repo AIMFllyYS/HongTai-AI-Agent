@@ -11,22 +11,31 @@ function requireMatch(value: string, pattern: RegExp, label: string): string {
   return matched;
 }
 
-test("the published v0.1.18/code 26 download matches the Android source version", () => {
+test("the published v0.1.19/code 27 download matches the Android source version", () => {
   const gradle = readFileSync(join(root, "android", "app", "build.gradle.kts"), "utf8");
   const downloadPage = readFileSync(join(root, "download.html"), "utf8");
   const sourceCode = Number(requireMatch(gradle, /versionCode\s*=\s*(\d+)/u, "Android versionCode"));
   const sourceName = requireMatch(gradle, /versionName\s*=\s*"([^"]+)"/u, "Android versionName");
   const publishedName = requireMatch(downloadPage, /aria-label="当前推荐版本 v([0-9.]+)"/u, "published download version");
 
-  assert.equal(sourceCode, 26);
-  assert.equal(sourceName, "0.1.18");
+  assert.equal(sourceCode, 27);
+  assert.equal(sourceName, "0.1.19");
   assert.equal(publishedName, sourceName);
-  assert.equal(publishedName, "0.1.18");
+  assert.equal(publishedName, "0.1.19");
+  assert.match(downloadPage, /versionCode:\s*"27"/u);
+  assert.match(downloadPage, /23,202,490 bytes/u);
+  assert.match(downloadPage, /B47A95F68900804C43F15AB2472D598C1E78355BCE53F75A285DF68AA4AAEB1B/iu);
+  assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.19\.apk/u);
+  assert.match(downloadPage, /正式 Release · v0\.1\.19 \/ code27 · 本次未做公网哈希回验/u);
+});
+
+test("the superseded v0.1.18/code 26 release stays archived instead of being overwritten", () => {
+  const downloadPage = readFileSync(join(root, "download.html"), "utf8");
+
   assert.match(downloadPage, /versionCode:\s*"26"/u);
   assert.match(downloadPage, /21,932,925 bytes/u);
   assert.match(downloadPage, /A5D39C07C62A37AF42F70242D17EB3F73C47E05E4BBEEA51759E5A3C931072CF/iu);
   assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.18\.apk/u);
-  assert.match(downloadPage, /正式 Release · v0\.1\.18 \/ code26 · 公网哈希已回验/u);
 });
 
 test("the superseded v0.1.17/code 25 release stays archived instead of being overwritten", () => {
@@ -109,6 +118,7 @@ test("the repository maintains a changelog and a patch-only default version poli
   assert.match(changelog, /^## \[0\.1\.16\] - 2026-08-18/mu);
   assert.match(changelog, /^## \[0\.1\.17\] - 2026-08-20/mu);
   assert.match(changelog, /^## \[0\.1\.18\] - 2026-08-20/mu);
+  assert.match(changelog, /^## \[0\.1\.19\] - 2026-08-21/mu);
   assert.match(changelog, /^## \[0\.1\.7\] - 2026-08-14/mu);
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.12` \/ `versionCode=20`/u);
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.13` \/ `versionCode=21`/u);
@@ -117,6 +127,7 @@ test("the repository maintains a changelog and a patch-only default version poli
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.16` \/ `versionCode=24`/u);
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.17` \/ `versionCode=25`/u);
   assert.match(changelog, /Android 源码版本推进为 `0\.1\.18` \/ `versionCode=26`/u);
+  assert.match(changelog, /Android 源码版本推进为 `0\.1\.19` \/ `versionCode=27`/u);
   assert.match(changelog, /默认只递增第三位补丁版本/u);
   assert.match(changelog, /第一位或第二位版本号.*明确授权/u);
 });

@@ -73,6 +73,34 @@ function contentString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function contentCount(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || !Number.isSafeInteger(value)) {
+    return undefined;
+  }
+  return value;
+}
+
+function assignedEngagement(details: Readonly<Record<string, unknown>>): {
+  readonly likeCount?: number;
+  readonly favoriteCount?: number;
+  readonly commentCount?: number;
+  readonly shareCount?: number;
+  readonly playCount?: number;
+} {
+  const likeCount = contentCount(details.likeCount);
+  const favoriteCount = contentCount(details.favoriteCount);
+  const commentCount = contentCount(details.commentCount);
+  const shareCount = contentCount(details.shareCount);
+  const playCount = contentCount(details.playCount);
+  return {
+    ...(likeCount === undefined ? {} : { likeCount }),
+    ...(favoriteCount === undefined ? {} : { favoriteCount }),
+    ...(commentCount === undefined ? {} : { commentCount }),
+    ...(shareCount === undefined ? {} : { shareCount }),
+    ...(playCount === undefined ? {} : { playCount }),
+  };
+}
+
 export function projectTaskDetail(
   task: TaskRecord,
   media: readonly MediaReference[],
@@ -95,6 +123,7 @@ export function projectTaskDetail(
     ...(author ? { author } : {}),
     ...(canonicalUrl ? { canonicalUrl: safeUrlForDisplay(canonicalUrl) } : {}),
     ...(durationSeconds === undefined ? {} : { durationSeconds }),
+    ...assignedEngagement(details),
   };
 
   if (task.contentType === "image_text") {

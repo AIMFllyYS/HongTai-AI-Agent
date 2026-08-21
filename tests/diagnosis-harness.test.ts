@@ -69,7 +69,7 @@ test("本地测试入口只绑定回环地址并保存标准图片、报告且�
     });
     assert.equal(response.status, 201);
     const body = await response.json() as { sessionId: string; report: { summary: { headline: string } } };
-    assert.equal(body.report.summary.headline, "舌部可见状态摘要");
+    assert.equal(body.report.summary.headline, "舌色");
     assert.equal(provider.calls, 1);
     const root = join(directory, body.sessionId);
     const session = JSON.parse(await readFile(join(root, "session.json"), "utf8")) as { image?: unknown; imagePath?: unknown };

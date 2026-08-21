@@ -31,7 +31,19 @@ export const REPORT_MODULE_IDS = [
 
 export const REPORT_PROMPT_VERSIONS = [DIAGNOSIS_SINGLE_PROMPT_VERSION] as const;
 export const SINGLE_RESPONSE_KEYS = ["quality", "qualityNote", "observations", "summary", "wellnessReferences", "advice", "safety", "followUp"] as const;
-const FIXED_DISCLAIMER = "本报告仅提供图片中可见状态的日常观察参考，不是疾病诊断，不提供患病概率，也不能替代专业检查。";
+const FIXED_DISCLAIMER = "本报告给出基于图片的初步判断，仅供日常参考和到医院正规核实，不是正式诊疗结论，不提供患病概率或健康评分，也不能替代专业检查。";
+const HEADLINE_SUMMARY_MAX_CHARS = 24;
+
+function usableHeadline(observations: readonly { readonly label: string }[], summary: string, fallback: string): string {
+  const label = observations[0]?.label.trim();
+  if (label) return label;
+  return (summary.trim() || fallback).slice(0, HEADLINE_SUMMARY_MAX_CHARS);
+}
+
+function compactFollowUpQuestions(followUp: string): string[] {
+  if (!followUp.trim()) return [];
+  return followUp.split("；").map((item) => item.trim()).filter(Boolean).slice(0, 2);
+}
 
 interface DiagnosisSections {
   readonly visual: DiagnosisVisualObservations;
@@ -45,7 +57,7 @@ export function structuredIssue(message: string, cause?: unknown): TaskError {
   return new TaskError({ code: "AI_STRUCTURED_OUTPUT_INVALID", message, action: "retry", ...(cause === undefined ? {} : { cause }) });
 }
 
-export function diagnosisSections(value: DiagnosisSingleResponse, mode: ObservationMode): DiagnosisSections {
+export function diagnosisSections(value: DiagnosisSingleResponse): DiagnosisSections {
   const usable = value.quality !== "unusable";
   const qualityNote = value.qualityNote.trim();
   const advice = value.advice.trim();
@@ -71,7 +83,7 @@ export function diagnosisSections(value: DiagnosisSingleResponse, mode: Observat
   const fallbackSummary = usable ? "本次图片未形成更多可确认的可见信息。" : "当前图片质量不足，暂不形成可见状态结论。";
   const summary: DiagnosisObservationSummary = {
     summary: {
-      headline: usable ? `${mode === "tongue" ? "舌部" : "面部"}可见状态摘要` : "图片暂不适合观察",
+      headline: usable ? usableHeadline(observations, value.summary, fallbackSummary) : "图片暂不适合观察",
       keyPoints: observations.length > 0
         ? observations.slice(0, 5).map((item) => item.description)
         : [value.summary || fallbackSummary],
@@ -108,13 +120,13 @@ export function diagnosisSections(value: DiagnosisSingleResponse, mode: Observat
     disclaimer: FIXED_DISCLAIMER,
   };
   const followUp: DiagnosisFollowUpQuestions = {
-    followUpQuestions: value.followUp ? [value.followUp] : [],
+    followUpQuestions: compactFollowUpQuestions(value.followUp),
   };
   return { visual, summary, wellness, safety, followUp };
 }
 
 export function validatedReport(value: DiagnosisSingleResponse, mode: ObservationMode): DiagnosisReportV1 {
-  const sections = diagnosisSections(value, mode);
+  const sections = diagnosisSections(value);
   const result = diagnosisReportSchema.safeParse({
     schemaVersion: "diagnosis-report.v1",
     mode,
@@ -151,7 +163,7 @@ export function acceptDiagnosisField(
 
 export function diagnosisModuleResult(
   fields: Partial<DiagnosisSingleResponse>,
-  mode: ObservationMode,
+  _mode: ObservationMode,
   index: number,
 ): object | undefined {
   const has = (key: keyof DiagnosisSingleResponse): boolean => fields[key] !== undefined;
@@ -175,7 +187,7 @@ export function diagnosisModuleResult(
     advice: fields.advice ?? "",
     safety: fields.safety ?? "安全说明正在生成。",
     followUp: fields.followUp ?? "",
-  }, mode);
+  });
   const candidate = [sections.visual, sections.summary, sections.wellness, sections.safety, sections.followUp][index];
   const schema = [
     diagnosisVisualObservationsSchema,

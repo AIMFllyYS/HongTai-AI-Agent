@@ -14,10 +14,12 @@
   --palette-err: #c0392b;
   --palette-fill: #f5f6f5;
   --palette-hairline: #eeefed;
+  --palette-silk: #fbfdfa;
+  --palette-mint-whisper: #f2f7f2;
 
   /* Compatibility names kept so page CSS can migrate without a hard cut. */
   --palette-forest-950: var(--palette-brand-deep);
-  --palette-deep-emerald: var(--palette-brand-deep);
+  --palette-deep-emerald: #004d40;
   --palette-vitality-turquoise: var(--palette-brand);
   --palette-primary-soft: #7ebdac;
   --palette-mint: var(--palette-brand-tint);
@@ -159,6 +161,42 @@
   --content-max: 48.75rem;
   --header-height: 2.75rem;
   --nav-height: 3.25rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-color-scheme="light"]) {
+    color-scheme: dark;
+    --palette-ink-900: #f4f5f4;
+    --palette-ink-600: #c2c6c3;
+    --palette-ink-400: #8b908c;
+    --palette-fill: #1c1f1d;
+    --palette-hairline: #2e322f;
+    --surface-canvas: #121413;
+    --surface-paper: #121413;
+    --surface-card: #1c1f1d;
+    --surface-low: #1c1f1d;
+    --surface-container: #1c1f1d;
+    --surface-high: #2a2e2c;
+    --surface-pressed: #323734;
+    --glass-fill: #1c1f1d;
+  }
+}
+
+:root[data-color-scheme="dark"] {
+  color-scheme: dark;
+  --palette-ink-900: #f4f5f4;
+  --palette-ink-600: #c2c6c3;
+  --palette-ink-400: #8b908c;
+  --palette-fill: #1c1f1d;
+  --palette-hairline: #2e322f;
+  --surface-canvas: #121413;
+  --surface-paper: #121413;
+  --surface-card: #1c1f1d;
+  --surface-low: #1c1f1d;
+  --surface-container: #1c1f1d;
+  --surface-high: #2a2e2c;
+  --surface-pressed: #323734;
+  --glass-fill: #1c1f1d;
 }
 
 @media (min-width: 48rem) {

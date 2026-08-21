@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AppRuntime } from "@hongtai/core";
+import type { AppRuntime, LocalProfile } from "@hongtai/core";
 import { pathForRoute, type Navigate } from "../router";
 
 export interface HomeProfileActionProps {
@@ -8,25 +8,26 @@ export interface HomeProfileActionProps {
 }
 
 export function HomeProfileAction({ runtime, navigate }: HomeProfileActionProps) {
-  const [initial, setInitial] = useState("");
+  const [profile, setProfile] = useState<LocalProfile>();
 
   useEffect(() => {
     let cancelled = false;
-    void runtime.profile.get().then((profile) => {
-      if (cancelled) return;
-      const name = profile?.displayName?.trim();
-      setInitial(name ? Array.from(name)[0] ?? "" : "");
+    void runtime.profile.get().then((next) => {
+      if (!cancelled) setProfile(next);
     }).catch(() => {
-      if (!cancelled) setInitial("");
+      if (!cancelled) setProfile(undefined);
     });
     return () => {
       cancelled = true;
     };
   }, [runtime]);
 
+  const name = profile?.displayName?.trim();
+  const initial = name ? Array.from(name)[0] ?? "宏" : "宏";
+
   return (
     <button aria-label="打开设置" className="masthead-avatar" onClick={() => navigate(pathForRoute("settings"))} type="button">
-      {initial || "宏"}
+      {profile?.avatarUri ? <img alt="" src={profile.avatarUri} /> : initial}
     </button>
   );
 }

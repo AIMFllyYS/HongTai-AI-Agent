@@ -244,6 +244,7 @@ test("live generation renders runtime-only deep thinking and keeps busy primary 
   const home = read("pages/TaskHomePage.tsx");
   const detail = read("pages/TaskDetailPage.tsx");
   const observationStart = read("pages/ObservationStartPage.tsx");
+  const observationPanels = read("features/diagnosis/observation-start-panels.tsx");
   const observationReport = read("pages/ObservationReportPage.tsx");
 
   assert.match(component, /DeepThinkingPanel/);
@@ -259,11 +260,11 @@ test("live generation renders runtime-only deep thinking and keeps busy primary 
   assert.doesNotMatch(css, /\.deep-thinking-panel\s*\{[^}]*margin:\s*var\(--space-3\)\s+var\(--space-4\)\s+0/s);
   assert.doesNotMatch(css, /\.validated-module-progress\s*\{[^}]*gap:\s*0\s*;/s);
   assert.match(css, /\.button--primary\.is-busy:disabled[\s\S]*color:\s*#000[\s\S]*opacity:\s*1/);
-  assert.match(observationStart, /className=\{loading \? "is-busy" : ""\}/);
+  assert.match(observationPanels, /className=\{confirming \? "is-busy" : ""\}/);
   assert.match(detail, /className=\{pendingAction === "analysis" \? "is-busy" : ""\}/);
   assert.match(home, /className=\{videoImporting \? "is-busy" : ""\}/);
   assert.match(home, /<ValidatedModuleProgress/);
   assert.doesNotMatch(home, /taskAnalysisPath/);
   assert.match(observationReport, /className=\{chatPending \? "is-busy" : ""\}/);
-  assert.doesNotMatch([component, home, detail, observationStart].join("\n"), /正在生成五个板块|正在按顺序生成当前板块/);
+  assert.doesNotMatch([component, home, detail, observationStart, observationPanels].join("\n"), /正在生成五个板块|正在按顺序生成当前板块/);
 });

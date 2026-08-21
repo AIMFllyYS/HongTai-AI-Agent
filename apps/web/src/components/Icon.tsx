@@ -6,7 +6,7 @@ export type IconName =
   | "camera" | "check_circle" | "chevron_right" | "chevron_down" | "chevron_up" | "close" | "comment"
   | "content_paste" | "download" | "error" | "expand" | "face" | "file" | "filter" | "folder" | "folder_open"
   | "folder_special" | "forum" | "grid" | "health_cross" | "heart" | "history" | "info" | "key" | "keyboard_voice"
-  | "language" | "layers" | "layout_template" | "lightbulb" | "link" | "list" | "list_checks" | "memory" | "more_horiz" | "movie" | "movie_edit" | "notifications" | "pending"
+  | "language" | "layers" | "layout_template" | "lightbulb" | "link" | "list" | "list_checks" | "lock" | "memory" | "more_horiz" | "movie" | "movie_edit" | "notifications" | "pending" | "person"
   | "scan_face"
   | "play" | "publish" | "query_stats" | "record_voice_over" | "restaurant" | "rocket" | "search" | "self_improvement"
   | "settings" | "share" | "sparkle" | "sunny" | "sync" | "tune" | "update" | "upload" | "upload_file"
@@ -60,6 +60,8 @@ const paths: Record<IconName, readonly string[]> = {
   movie: ["M4 6h16v12H4z", "M4 9h16M8 6v3M12 6v3M16 6v3"],
   movie_edit: ["M4 6h13v12H4z", "M4 9h13M8 6v3M12 6v3", "m17 16 3-3 2 2-3 3-3 1Z"],
   notifications: ["M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9", "M10 21h4"],
+  person: ["M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z", "M4 20c1.4-4 3.8-6 8-6s6.6 2 8 6"],
+  lock: ["M8 11V8a4 4 0 0 1 8 0v3", "M6 11h12v10H6z"],
   pending: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", "M12 7v5l3 2"],
   play: ["m9 6 9 6-9 6V6Z"],
   publish: ["M5 5h14v14H5z", "M8 12h8M12 8v8"],

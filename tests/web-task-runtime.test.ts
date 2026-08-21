@@ -591,6 +591,27 @@ test("完成态用共享 Tabs 恢复 URL 分栏，并按阶段给出底部主操
   assert.match(detail, /variant="secondary"[^>]*>\{pendingAction === "delete"/);
 });
 
+test("completed task detail always renders engagement cells without fabricated counts", () => {
+  const detail = read("pages/TaskDetailPage.tsx");
+  const css = read("styles/pages/tasks-runtime.css");
+  assert.match(detail, /点赞/);
+  assert.match(detail, /收藏/);
+  assert.match(detail, /评论/);
+  assert.match(detail, /分享/);
+  assert.match(detail, /播放/);
+  assert.match(detail, /未解析到/);
+  assert.match(detail, /task-detail-engagement/);
+  assert.match(detail, /本地占用/);
+  assert.match(detail, /formatStoredSize/);
+  assert.doesNotMatch(detail, /\b42\b/);
+  assert.doesNotMatch(detail, /1\.2w/);
+  assert.doesNotMatch(detail, /2\.4\s*万/);
+  assert.match(css, /\.task-detail-engagement\s*\{[^}]*grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/s);
+  assert.match(css, /\.task-detail-engagement\s*\{[^}]*minmax\(0,\s*1fr\)/s);
+  assert.match(css, /\.task-detail-engagement__item\s*\{[^}]*min-width:\s*0/s);
+  assert.match(css, /\.task-detail-engagement__item\s*\{[^}]*overflow-wrap:\s*anywhere/s);
+});
+
 test("用它做视频先进入 /create 再写 sourceId，确认态底栏不再出现第二个主按钮", async () => {
   const model = await import("../apps/web/src/pages/task-page-model") as {
     createPagePathWithSource: (taskId: string) => string;

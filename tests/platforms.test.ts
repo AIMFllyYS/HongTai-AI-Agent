@@ -9,6 +9,7 @@ import {
   XiaohongshuAdapter,
   extractAssignedJson,
   platformRegistry,
+  readNonNegativeInt,
   replaceUndefined,
 } from "../packages/platforms/src/index";
 import { signWbiQuery } from "../packages/platforms/src/bilibili/wbi";
@@ -273,6 +274,11 @@ test("快手适配器优先使用photoUrl直链并输出脱敏原始结果", asy
   assert.equal(content.title, "快手测试视频");
   assert.equal(content.author, "快手作者");
   assert.equal(content.durationSeconds, 398);
+  assert.equal(content.likeCount, undefined);
+  assert.equal(content.favoriteCount, undefined);
+  assert.equal(content.commentCount, undefined);
+  assert.equal(content.shareCount, undefined);
+  assert.equal(content.playCount, undefined);
   assert.deepEqual(content.videos.map((source) => source.url), ["https://v23.kwaicdn.com/video.mp4?token=media-secret"]);
   assert.equal(content.videos[0]?.hasWatermark, undefined);
   assert.equal(postRequests.length, 1);
@@ -441,6 +447,8 @@ test("抖音适配器从公开页面状态提取无水印视频", async () => {
   assert.equal(content.platform, "douyin");
   assert.equal(content.contentType, "video");
   assert.equal(content.title, "测试抖音");
+  assert.equal(content.likeCount, undefined);
+  assert.equal(content.playCount, undefined);
   assert.equal(content.videos[0]?.hasWatermark, false);
   assert.match(content.videos[0]?.url ?? "", /aweme\.snssdk\.com/);
   assertWhitelistedRaw(content.raw);
@@ -494,6 +502,8 @@ test("小红书适配器提取H264视频流", async () => {
   assert.equal(content.contentType, "video");
   assert.equal(content.author, "作者乙");
   assert.equal(content.videos[0]?.codec, "H.264");
+  assert.equal(content.likeCount, undefined);
+  assert.equal(content.playCount, undefined);
   assertWhitelistedRaw(content.raw);
 });
 
@@ -559,6 +569,8 @@ test("B站适配器提取P1 DASH音视频", async () => {
   assert.equal(content.contentType, "video");
   assert.equal(content.videos.length, 1);
   assert.equal(content.audios.length, 1);
+  assert.equal(content.likeCount, undefined);
+  assert.equal(content.playCount, undefined);
   const playurl = requests.find((url) => url.includes("playurl"));
   assert.match(playurl ?? "", /[?&]qn=64(?:&|$)/);
   assert.doesNotMatch(playurl ?? "", /fourk=1/);
@@ -785,4 +797,82 @@ test("B站在拿到公开wbi口令后为playurl附加签名", async () => {
   assert.match(playurl ?? "", /[?&]wts=\d+(?:&|$)/);
   assert.match(playurl ?? "", /[?&]qn=64(?:&|$)/);
   assert.doesNotMatch(playurl ?? "", /fourk=1/);
+});
+
+test("readNonNegativeInt 只接受真实非负整数", () => {
+  assert.equal(readNonNegativeInt(0), 0);
+  assert.equal(readNonNegativeInt(128), 128);
+  assert.equal(readNonNegativeInt("256"), 256);
+  assert.equal(readNonNegativeInt(-1), undefined);
+  assert.equal(readNonNegativeInt(Number.NaN), undefined);
+  assert.equal(readNonNegativeInt(12.5), undefined);
+  assert.equal(readNonNegativeInt(true), undefined);
+  assert.equal(readNonNegativeInt("1.2w"), undefined);
+  assert.equal(readNonNegativeInt("2.4万"), undefined);
+  assert.equal(readNonNegativeInt("2.4 万"), undefined);
+  assert.equal(readNonNegativeInt("+128"), undefined);
+  assert.equal(readNonNegativeInt(""), undefined);
+});
+
+test("抖音从 item.statistics 提取非负互动量且不把 item 写入 raw", async () => {
+  const html = `<script>window._ROUTER_DATA={"loaderData":{"video":{"aweme_id":"7600000000000000000","desc":"测试抖音","author":{"nickname":"作者甲"},"statistics":{"digg_count":128,"collect_count":64,"comment_count":32,"share_count":16,"play_count":4096},"video":{"duration":45000,"cover":{"url_list":["https://img.example/cover.jpg"]},"play_addr":{"uri":"video-file-id","url_list":[]}}}}};</script>`;
+  const client = new FakeHttpClient(() => response("https://www.douyin.com/video/7600000000000000000", html));
+  const adapter = new DouyinAdapter();
+  const resolved = await adapter.resolve("https://www.douyin.com/video/7600000000000000000", client);
+  const content = await adapter.parse(resolved, client);
+  assert.equal(content.likeCount, 128);
+  assert.equal(content.favoriteCount, 64);
+  assert.equal(content.commentCount, 32);
+  assert.equal(content.shareCount, 16);
+  assert.equal(content.playCount, 4096);
+  assertWhitelistedRaw(content.raw);
+});
+
+test("抖音拒绝字符串假数、负数与非整数互动量", async () => {
+  const html = `<script>window._ROUTER_DATA={"loaderData":{"video":{"aweme_id":"7600000000000000000","desc":"测试抖音","author":{"nickname":"作者甲"},"statistics":{"digg_count":"1.2w","collect_count":"2.4万","comment_count":-3,"share_count":12.5,"play_count":true},"video":{"duration":45000,"play_addr":{"uri":"video-file-id","url_list":[]}}}}};</script>`;
+  const client = new FakeHttpClient(() => response("https://www.douyin.com/video/7600000000000000000", html));
+  const adapter = new DouyinAdapter();
+  const resolved = await adapter.resolve("https://www.douyin.com/video/7600000000000000000", client);
+  const content = await adapter.parse(resolved, client);
+  assert.equal(content.likeCount, undefined);
+  assert.equal(content.favoriteCount, undefined);
+  assert.equal(content.commentCount, undefined);
+  assert.equal(content.shareCount, undefined);
+  assert.equal(content.playCount, undefined);
+  assertWhitelistedRaw(content.raw);
+});
+
+test("小红书从 note.interactInfo 提取互动量且播放可缺席", async () => {
+  const html = `<script>window.__INITIAL_STATE__={"note":{"noteDetailMap":{"abc123":{"note":{"noteId":"abc123","title":"测试小红书","desc":"正文","user":{"nickname":"作者乙"},"interactInfo":{"likedCount":"128","collectedCount":64,"commentCount":32,"shareCount":16},"imageList":[{"urlDefault":"https://img.example/xhs.jpg"}]}}}}};</script>`;
+  const client = new FakeHttpClient(() => response("https://www.xiaohongshu.com/explore/abc123", html));
+  const adapter = new XiaohongshuAdapter();
+  const resolved = await adapter.resolve("https://www.xiaohongshu.com/explore/abc123", client);
+  const content = await adapter.parse(resolved, client);
+  assert.equal(content.likeCount, 128);
+  assert.equal(content.favoriteCount, 64);
+  assert.equal(content.commentCount, 32);
+  assert.equal(content.shareCount, 16);
+  assert.equal(content.playCount, undefined);
+  assertWhitelistedRaw(content.raw);
+});
+
+test("B站从 view.stat 提取互动量且不把 view 写入 raw", async () => {
+  const client = bilibiliClient({
+    view: {
+      ...BILIBILI_VIEW,
+      stat: { like: 128, favorite: 64, reply: 32, share: 16, view: 4096 },
+    },
+  });
+  const adapter = new BilibiliAdapter();
+  const content = await adapter.parse({
+    sourceUrl: "https://www.bilibili.com/video/BV1xx411c7mD",
+    finalUrl: "https://www.bilibili.com/video/BV1xx411c7mD",
+    status: 200,
+  }, client);
+  assert.equal(content.likeCount, 128);
+  assert.equal(content.favoriteCount, 64);
+  assert.equal(content.commentCount, 32);
+  assert.equal(content.shareCount, 16);
+  assert.equal(content.playCount, 4096);
+  assertWhitelistedRaw(content.raw);
 });
