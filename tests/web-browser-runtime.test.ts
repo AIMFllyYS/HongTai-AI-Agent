@@ -40,7 +40,7 @@ test("制作页在列表成功或明确未找到后才消费 sourceId", () => {
   assert.match(model, /export function peekCreateSourceIdFromSearch/);
   assert.match(page, /peekCreateSourceIdFromSearch\(\)/);
   assert.match(page, /consumeCreateSourceIdFromSearch\(\)/);
-  const load = page.slice(page.indexOf("const load = useCallback"), page.indexOf("}, [runtime]);"));
+  const load = page.slice(page.indexOf("const load = useCallback"), page.indexOf("}, [runtime, searchEpoch]);"));
   assert.ok(load.indexOf("peekCreateSourceIdFromSearch") < load.indexOf("try {"));
   assert.ok(load.indexOf("runtime.tasks.list") < load.indexOf("consumeCreateSourceIdFromSearch"));
   assert.ok(load.indexOf("consumeCreateSourceIdFromSearch") < load.indexOf("} catch (error)"));

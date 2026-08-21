@@ -7,6 +7,15 @@
   /* UI glyph subset; missing characters fall through the font stack. */
 }
 
+@font-face {
+  font-family: "Ma Shan Zheng";
+  src: url("/fonts/MaShanZheng-splash.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  /* Splash tagline subset only; do not use on product UI. */
+}
+
 * {
   box-sizing: border-box;
   scrollbar-width: none;
@@ -21,15 +30,15 @@ html {
   min-width: 320px;
   background: var(--color-background);
   scroll-behavior: smooth;
+  overscroll-behavior: none;
 }
 
 body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background:
-    radial-gradient(circle at 14% -8%, rgba(126, 189, 172, 0.08), transparent 35rem),
-    var(--color-background);
+  overscroll-behavior: none;
+  background: var(--color-background);
   color: var(--color-text);
   font-family: var(--font-body);
   font-size: var(--text-body);
@@ -66,7 +75,7 @@ a:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 3px solid rgba(38, 166, 154, 0.4);
+  outline: 3px solid var(--color-focus-ring);
   outline-offset: 3px;
 }
 

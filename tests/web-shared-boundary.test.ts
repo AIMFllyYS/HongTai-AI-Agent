@@ -27,6 +27,10 @@ test("shared button and tabs components keep reusable interaction contracts", ()
   for (const key of ["ArrowLeft", "ArrowRight", "Home", "End"]) {
     assert.match(tabs, new RegExp(key), `${key} should be supported`);
   }
+  assert.match(tabs, /tabs--segmented__thumb/);
+  assert.match(tabs, /slideKey/);
+  assert.match(tabs, /tabOffset/);
+  assert.doesNotMatch(tabs, /routeOffset/);
 });
 
 test("page blocks and visual fixtures are split by responsibility", () => {

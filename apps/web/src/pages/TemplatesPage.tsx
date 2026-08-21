@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type UIEvent } from "react";
 import { issueFromAppError } from "@hongtai/core";
 import type { AppRuntime, AppTaskRecord, ContentTemplateInput, ContentTemplateRecord, TaskIssue } from "@hongtai/core";
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
+import { HomeMastheadActions } from "../components/HomeMastheadActions";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
-import { EmptyState, LoadingState } from "../components/StatePanels";
+import { EmptyState } from "../components/StatePanels";
+import { PageSkeleton } from "../components/PageSkeleton";
+import { useSkeletonHold } from "../motion/skeleton-hold";
 import { formatTaskTime, platformLabel } from "../features/tasks/task-presenters";
 import { aiSettingsPath, type Navigate } from "../router";
 
@@ -31,6 +34,16 @@ interface AnalysisSource {
 
 const EMPTY_DRAFT: TemplateDraft = { name: "", summary: "", formula: "", steps: "", variableSlots: "" };
 
+const TEMPLATE_FILTERS = [
+  { id: "all", label: "全部", keyword: "" },
+  { id: "workplace", label: "职场", keyword: "职场" },
+  { id: "store", label: "到店", keyword: "到店" },
+  { id: "commerce", label: "带货", keyword: "带货" },
+  { id: "knowledge", label: "知识", keyword: "知识" },
+] as const;
+
+type TemplateFilterId = (typeof TEMPLATE_FILTERS)[number]["id"];
+
 function focusTemplateName(): void {
   if (typeof document !== "undefined") document.getElementById("template-name")?.focus();
 }
@@ -49,10 +62,33 @@ function sourceLabel(task: AppTaskRecord): string {
   return `${source} · ${formatTaskTime(task.updatedAt)}`;
 }
 
+function formulaPreview(record: ContentTemplateRecord): string {
+  return record.formula.trim() || record.summary.trim() || "尚未填写摘要或公式";
+}
+
+function templateMeta(record: ContentTemplateRecord): string {
+  return `${record.variableSlots.length} 个可替换位 · 使用次数未解析到`;
+}
+
+function matchesFilter(record: ContentTemplateRecord, keyword: string): boolean {
+  if (!keyword) return true;
+  return `${record.name}\n${record.summary}\n${record.formula}`.includes(keyword);
+}
+
+function coverTone(templateId: string): number {
+  let total = 0;
+  for (let index = 0; index < templateId.length; index += 1) total += templateId.charCodeAt(index);
+  return total % 4;
+}
+
 export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
   const [templates, setTemplates] = useState<readonly ContentTemplateRecord[]>();
   const [sources, setSources] = useState<readonly AnalysisSource[]>([]);
   const [sourceTaskId, setSourceTaskId] = useState("");
+  const [filterId, setFilterId] = useState<TemplateFilterId>("all");
+  const [query, setQuery] = useState("");
+  const [featuredIndex, setFeaturedIndex] = useState(0);
+  const [importOpen, setImportOpen] = useState(false);
   const [editingId, setEditingId] = useState<string>();
   const [draft, setDraft] = useState<TemplateDraft>(EMPTY_DRAFT);
   const [deletingId, setDeletingId] = useState<string>();
@@ -78,6 +114,21 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
 
   useEffect(() => { void load(); }, [load]);
 
+  const activeFilter = TEMPLATE_FILTERS.find((item) => item.id === filterId) ?? TEMPLATE_FILTERS[0];
+  const searchKeyword = query.trim();
+  const featured = useMemo(
+    () => (templates ?? []).filter((record) => matchesFilter(record, searchKeyword)),
+    [searchKeyword, templates],
+  );
+  const filtered = useMemo(
+    () => featured.filter((record) => matchesFilter(record, activeFilter.keyword)),
+    [activeFilter.keyword, featured],
+  );
+
+  useEffect(() => {
+    setFeaturedIndex(0);
+  }, [searchKeyword]);
+
   const edit = (record: ContentTemplateRecord) => {
     setEditingId(record.templateId);
     setDraft(draftFrom(record));
@@ -100,6 +151,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
       const record = await runtime.templates.createFromAnalysis(sourceTaskId);
       await load();
       edit(record);
+      setImportOpen(false);
     } catch (error) {
       setIssue(issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "拆解模板没有保存成功", action: "retry" }));
     } finally {
@@ -143,64 +195,144 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
   const updateDraft = (field: keyof TemplateDraft, value: string) => setDraft((current) => ({ ...current, [field]: value }));
   const editedTemplate = templates?.find((item) => item.templateId === editingId);
 
+  const onFeaturedScroll = (event: UIEvent<HTMLDivElement>) => {
+    const scroller = event.currentTarget;
+    const first = scroller.children.item(0) as HTMLElement | null;
+    const second = scroller.children.item(1) as HTMLElement | null;
+    if (!first) return;
+    const stride = second ? second.offsetLeft - first.offsetLeft : first.offsetWidth;
+    if (stride <= 0) return;
+    const next = Math.round(scroller.scrollLeft / stride);
+    setFeaturedIndex(Math.min(Math.max(next, 0), Math.max(featured.length - 1, 0)));
+  };
+
+  const templatesPending = useSkeletonHold(templates === undefined);
+
   return (
     <AppShell
       activeNav="templates"
-      headerAction={<Button className="header-action__button" disabled={busy} icon={<Icon name="sparkle" size={17} />} onClick={startCustom} variant="secondary">新建</Button>}
-      leadingAction={<span className="page-header-icon"><Icon name="content_paste" size={24} /></span>}
+      headerAction={<HomeMastheadActions navigate={navigate} runtime={runtime} />}
       navigate={navigate}
+      subtitle="套用验证过的结构，快速开拍同款"
       title="模板"
     >
-      <div className="page-stack page-templates template-workspace" data-feature-capability={runtime.features.templates}>
-        <section className="template-hero">
-          <span className="eyebrow">REUSABLE STRUCTURE</span>
-          <h2>把拆解方法变成自己的内容模版</h2>
-          <p>这里只保存公式、步骤与变量槽，不复制原视频、供应商响应或推理内容。保存后可独立编辑和删除。</p>
-        </section>
-
+      <div className="page-stack page-templates template-workspace templates-board" data-feature-capability={runtime.features.templates}>
         {readIssue ? <IssueNotice issue={readIssue} /> : null}
         {issue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), retry: () => void load(), editInput: focusTemplateName }} issue={issue} /> : null}
 
-        <GlassCard className="template-import-card">
-          <div className="production-section-title"><span>01</span><div><strong>从拆解结果保存</strong><small>把内容结构保存成以后可以继续使用的模板</small></div></div>
-          {sources.length > 0 ? (
-            <div className="template-import-card__controls">
-              <label className="field-label" htmlFor="template-source">拆解来源</label>
-              <select disabled={busy} id="template-source" onChange={(event) => setSourceTaskId(event.target.value)} value={sourceTaskId}>
-                {sources.map(({ task, label }) => <option key={task.id} value={task.id}>{label}</option>)}
-              </select>
-              <Button disabled={busy || !sourceTaskId} icon={<Icon name="bookmark" size={17} />} onClick={() => void importFromAnalysis()}>{busy ? "正在保存" : "保存为模板"}</Button>
-            </div>
-          ) : <EmptyState description="完成一次正式 AI 拆解后，可在这里复制其中的公式、步骤和变量。" icon="analytics" title="还没有可导入的拆解" />}
-        </GlassCard>
-
-        <section className="template-library-section">
-          <div className="section-heading"><div><span className="eyebrow">LOCAL TEMPLATES</span><h3>我的模板</h3></div>{readIssue ? <button className="text-action" onClick={() => void load()} type="button">刷新</button> : null}</div>
-          {templates === undefined ? <LoadingState description="正在读取本地模板文件" title="读取模板" /> : templates.length === 0 ? <EmptyState action={<Button onClick={startCustom} variant="secondary">创建空白模板</Button>} description="你可以从拆解保存，也可以从空白结构开始自定义。" icon="content_paste" title="还没有模板" /> : (
-            <div className="template-list">
-              {templates.map((record) => (
-                <GlassCard className={record.templateId === editingId ? "template-card is-active" : "template-card"} key={record.templateId}>
-                  <button className="template-card__open" onClick={() => edit(record)} type="button">
-                    <span><Icon name="content_paste" size={18} /></span>
-                    <div><strong>{record.name}</strong><p>{record.summary || record.formula || "尚未填写摘要或公式"}</p><small>{record.steps.length} 个步骤 · {record.variableSlots.length} 个变量</small></div>
-                    <Icon name="chevron_right" size={18} />
-                  </button>
-                  {deletingId === record.templateId ? (
-                    <div className="template-delete-confirm" role="alert">
-                      <strong>确认删除模板“{record.name}”？</strong>
-                      <p>只删除这份本地模板，不会级联删除来源任务。</p>
-                      <div className="mobile-action-group"><Button disabled={busy} onClick={() => void remove(record.templateId)}>确认删除模板</Button><Button disabled={busy} onClick={() => setDeletingId(undefined)} variant="quiet">取消</Button></div>
+        <section className="templates-recommend">
+          <div className="templates-section-head">
+            <label className="templates-search">
+              <Icon name="search" size={15} />
+              <input
+                aria-label="搜索本机模板"
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="搜索模板名称、摘要或公式"
+                value={query}
+              />
+              {query ? (
+                <button aria-label="清除搜索" className="templates-search__clear" onClick={() => setQuery("")} type="button">
+                  <Icon name="close" size={14} />
+                </button>
+              ) : null}
+            </label>
+            <span className="templates-section-hint">本机精选 · 滑动查看</span>
+          </div>
+          {templatesPending ? <PageSkeleton layout="templates-list" /> : templates?.length === 0 ? (
+            <EmptyState description="保存本机公式后，会在这里横向滑动查看。" icon="layout_template" title="还没有可滑动的本机模板" />
+          ) : featured.length === 0 ? (
+            <EmptyState description="搜索只匹配本机模板的名称、摘要或公式，不会编造结果。" icon="filter" title="未解析到这类模板" />
+          ) : (
+            <>
+              <div className="templates-carousel" onScroll={onFeaturedScroll}>
+                {featured.map((record) => (
+                  <button aria-label={`打开模板 ${record.name}`} className="templates-featured-card" key={record.templateId} onClick={() => edit(record)} type="button">
+                    <div className={`templates-cover templates-cover--${coverTone(record.templateId)}`}>
+                      <p>{formulaPreview(record)}</p>
                     </div>
-                  ) : <Button aria-label={`删除模板 ${record.name}`} disabled={busy} onClick={() => setDeletingId(record.templateId)} variant="quiet"><Icon name="close" size={16} />删除</Button>}
-                </GlassCard>
+                    <span className="templates-featured-card__badge">我的</span>
+                    <div className="templates-featured-card__scrim">
+                      <strong>{record.name}</strong>
+                      <p>{formulaPreview(record)}</p>
+                      <small>{templateMeta(record)}</small>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {featured.length > 1 ? (
+                <div aria-hidden="true" className="templates-dots">
+                  {featured.map((record, index) => <span className={index === featuredIndex ? "templates-dot is-active" : "templates-dot"} key={record.templateId} />)}
+                </div>
+              ) : null}
+            </>
+          )}
+        </section>
+
+        <div aria-label="按关键字筛选模板" className="templates-filters" role="radiogroup">
+          {TEMPLATE_FILTERS.map((item) => (
+            <button
+              aria-checked={item.id === filterId}
+              className={item.id === filterId ? "templates-filter is-active" : "templates-filter"}
+              key={item.id}
+              onClick={() => setFilterId(item.id)}
+              role="radio"
+              type="button"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        <section className="templates-catalog">
+          <div className="templates-section-head">
+            <h3>全部模板</h3>
+            {readIssue ? <button className="text-action" onClick={() => void load()} type="button">刷新</button> : null}
+            {!readIssue && templates ? <span className="templates-section-hint">{filtered.length} 个</span> : null}
+          </div>
+          {templatesPending ? <PageSkeleton layout="templates-list" /> : templates?.length === 0 ? (
+            <EmptyState action={<Button onClick={startCustom} variant="secondary">创建空白模板</Button>} className="templates-catalog-empty" description="你可以从拆解保存，也可以从空白结构开始自定义。" icon="content_paste" title="还没有模板" />
+          ) : filtered.length === 0 ? (
+            <EmptyState description="当前筛选只匹配名称、摘要或公式里的关键字。" icon="filter" title="未解析到这类模板" />
+          ) : (
+            <div className="templates-catalog-list">
+              {filtered.map((record) => (
+                <button aria-label={`使用模板 ${record.name}`} className={record.templateId === editingId ? "templates-catalog-row is-active" : "templates-catalog-row"} key={record.templateId} onClick={() => edit(record)} type="button">
+                  <span className={`templates-catalog-thumb templates-cover templates-cover--${coverTone(record.templateId)}`}><span>{formulaPreview(record)}</span></span>
+                  <span className="templates-catalog-body">
+                    <span className="templates-catalog-title"><strong>{record.name}</strong><span className="templates-mine-tag">我的</span></span>
+                    <span className="templates-catalog-formula">{formulaPreview(record)}</span>
+                    <span className="templates-catalog-meta">{templateMeta(record)}</span>
+                  </span>
+                  <span className="templates-use">使用</span>
+                </button>
               ))}
             </div>
           )}
+
+          <button className="templates-save-row" onClick={() => setImportOpen((current) => !current)} type="button">
+            <span className="templates-save-row__icon"><Icon name="add" size={14} /></span>
+            <span>从拆解结果保存新模板</span>
+            <Icon name="chevron_right" size={16} />
+          </button>
+          {importOpen ? (
+            <GlassCard className="template-import-card">
+              <div className="production-section-title"><div><strong>从拆解结果保存新模板</strong><small>把内容结构保存成以后可以继续使用的模板</small></div></div>
+              {sources.length > 0 ? (
+                <div className="template-import-card__controls">
+                  <label className="field-label" htmlFor="template-source">拆解来源</label>
+                  <select disabled={busy} id="template-source" onChange={(event) => setSourceTaskId(event.target.value)} value={sourceTaskId}>
+                    {sources.map(({ task, label }) => <option key={task.id} value={task.id}>{label}</option>)}
+                  </select>
+                  <Button disabled={busy || !sourceTaskId} icon={<Icon name="bookmark" size={17} />} onClick={() => void importFromAnalysis()}>{busy ? "正在保存" : "保存为模板"}</Button>
+                </div>
+              ) : <EmptyState description="完成一次正式 AI 拆解后，可在这里复制其中的公式、步骤和变量。" icon="analytics" title="还没有可导入的拆解" />}
+            </GlassCard>
+          ) : null}
         </section>
 
         {editingId ? (
           <GlassCard className="template-editor">
-            <div className="production-section-title"><span>02</span><div><strong>{editingId === "new" ? "自定义新模板" : `编辑 ${editedTemplate?.name ?? "模板"}`}</strong><small>每行一个步骤或变量；空行不会保存</small></div></div>
+            <div className="production-section-title"><div><strong>{editingId === "new" ? "自定义新模板" : `编辑 ${editedTemplate?.name ?? "模板"}`}</strong><small>每行一个步骤或变量；空行不会保存</small></div></div>
             <label className="field-label" htmlFor="template-name">模板名称</label>
             <input id="template-name" maxLength={80} onChange={(event) => updateDraft("name", event.target.value)} placeholder="例如：门店真实体验口播" value={draft.name} />
             <label className="field-label" htmlFor="template-summary">摘要</label>
@@ -212,6 +344,15 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
               <label><span className="field-label">变量槽位</span><textarea aria-label="模板变量槽位，每行一项" onChange={(event) => updateDraft("variableSlots", event.target.value)} placeholder="目标受众&#10;核心痛点&#10;产品名称" rows={6} value={draft.variableSlots} /></label>
             </div>
             <div className="template-editor__actions"><Button disabled={busy || !draft.name.trim()} icon={<Icon name="check_circle" size={17} />} onClick={() => void save()}>{busy ? "正在保存" : "保存修改"}</Button><Button disabled={busy} onClick={() => setEditingId(undefined)} variant="quiet">关闭编辑</Button></div>
+            {editingId !== "new" ? (
+              deletingId === editingId ? (
+                <div className="template-delete-confirm" role="alert">
+                  <strong>确认删除模板“{editedTemplate?.name ?? "当前模板"}”？</strong>
+                  <p>只删除这份本地模板，不会级联删除来源任务。</p>
+                  <div className="mobile-action-group"><Button disabled={busy} onClick={() => void remove(editingId)}>确认删除模板</Button><Button disabled={busy} onClick={() => setDeletingId(undefined)} variant="quiet">取消</Button></div>
+                </div>
+              ) : <Button aria-label={`删除模板 ${editedTemplate?.name ?? ""}`} disabled={busy} onClick={() => setDeletingId(editingId)} variant="quiet"><Icon name="close" size={16} />删除</Button>
+            ) : null}
           </GlassCard>
         ) : null}
       </div>

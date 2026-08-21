@@ -20,6 +20,9 @@ import {
 
 const webRoot = join(process.cwd(), "apps", "web", "src");
 const read = (relativePath: string) => readFileSync(join(webRoot, relativePath), "utf8");
+const page = read("pages/CreatePage.tsx");
+const forms = read("features/production/production-setup-forms.tsx");
+const createSurface = `${page}\n${forms}`;
 
 test("制作进度文案只按稳定 stage 白名单映射，未知 stage 不猜业务", () => {
   assert.equal(productionRenderStageCopy("validate_avatar_audio"), "正在校验数字人口播原声");
@@ -142,12 +145,14 @@ test("制作页用 contextualAction 单主按钮、三 Tab 与 9:16 预览，完
   const surface = `${page}\n${card}\n${css}\n${model}`;
 
   assert.match(page, /contextualAction=\{/);
-  assert.match(page, /contextual-action-stack/);
-  assert.match(page, /contextual-action-hint/);
-  assert.match(page, /productionPrimaryBlockedReason/);
+  assert.doesNotMatch(page, /contextual-action-hint/);
+  assert.doesNotMatch(page, /contextual-action-stack/);
+  assert.doesNotMatch(page, /productionPrimaryBlockedReason/);
+  assert.doesNotMatch(page, /productionComposerBlockedReason/);
   assert.match(read("styles/components.css"), /\.contextual-action \.button:not\(:disabled\)\s*\{[^}]*pointer-events:\s*auto/s);
   assert.match(read("styles/components.css"), /\.contextual-action\s*\{[^}]*pointer-events:\s*none/s);
   assert.doesNotMatch(read("styles/components.css"), /\.contextual-action > \*\s*\{[^}]*pointer-events:\s*auto/s);
+  assert.doesNotMatch(read("styles/components.css"), /\.contextual-action-hint/);
   assert.match(card, /productionPlanBlockedReason/);
   assert.match(page, /resolveProductionPrimaryAction/);
   assert.match(page, /setComposingNew\(true\)/);
@@ -156,8 +161,8 @@ test("制作页用 contextualAction 单主按钮、三 Tab 与 9:16 预览，完
   assert.match(page, /runtime\.production\.importAssets/);
   assert.match(page, /runtime\.production\.generatePlan/);
   assert.match(page, /runtime\.production\.render/);
-  assert.match(page, /参考哪条拆解/);
-  assert.match(page, /这次想讲什么/);
+  assert.match(createSurface, /参考哪条拆解/);
+  assert.match(createSurface, /这次想讲什么/);
   assert.doesNotMatch(page, /新建制作项目/);
   assert.doesNotMatch(page, />01</);
   assert.doesNotMatch(page, /发布/);
@@ -333,7 +338,7 @@ test("带 sourceId 首次进入会新建，同一地址再次 load 不再强制�
   assert.match(page, /peekCreateSourceIdFromSearch/);
   assert.match(page, /consumeCreateSourceIdFromSearch/);
   assert.doesNotMatch(page, /sourceIdFromSearch\(window\.location\.search\)/);
-  const load = page.slice(page.indexOf("const load = useCallback"), page.indexOf("}, [runtime]);"));
+  const load = page.slice(page.indexOf("const load = useCallback"), page.indexOf("}, [runtime, searchEpoch]);"));
   assert.match(load, /peekCreateSourceIdFromSearch\(\)/);
   assert.ok(load.indexOf("peekCreateSourceIdFromSearch") < load.indexOf("runtime.tasks.list"));
   assert.ok(load.indexOf("runtime.tasks.list") < load.indexOf("consumeCreateSourceIdFromSearch"));

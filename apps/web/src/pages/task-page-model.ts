@@ -1,12 +1,12 @@
 import type { AppTaskRecord, TaskChangeEventV1, TaskDetailRecord, TaskEventRecord, TaskIssue, TaskStatus } from "@hongtai/core";
 
 import { preferNewerByUpdatedAt } from "../features/tasks/latest-read-guard";
-import { matchRoute, pathForRoute, taskAnalysisPath, taskDetailPath, type Navigate } from "../router";
+import { matchRoute, taskAnalysisPath, taskDetailPath, type Navigate } from "../router";
 
 export type TaskResultTab = "source" | "analysis";
 export type TaskCompletedPrimaryAction = "none" | "start-analysis" | "next-steps";
 
-export const ANALYSIS_TAB_LABEL = "AI自动拆解";
+export const ANALYSIS_TAB_LABEL = "AI 拆解";
 
 export function sourceTabLabel(contentType?: string): string {
   return contentType === "image_text" ? "图文正文" : "原始文稿";
@@ -74,15 +74,15 @@ export function consumeCreateSourceIdFromSearch(): string {
 }
 
 export function navigateToCreateWithSource(navigate: Navigate, taskId: string): void {
-  navigate(pathForRoute("create"));
-  if (typeof window === "undefined") return;
-  const next = createPagePathWithSource(taskId);
-  if (`${window.location.pathname}${window.location.search}` === next) return;
-  window.history.replaceState(window.history.state ?? {}, "", next);
+  navigate(createPagePathWithSource(taskId));
 }
 
 export function showProcessingLeaveHint(status: TaskStatus): boolean {
   return status === "queued" || status === "running";
+}
+
+export function completedTaskShellTitle(analysisStatus?: string): string {
+  return analysisStatus === "succeeded" ? "拆解完成" : "拆解详情";
 }
 
 export function isEligibleCreateSourceTask(status: TaskStatus): boolean {

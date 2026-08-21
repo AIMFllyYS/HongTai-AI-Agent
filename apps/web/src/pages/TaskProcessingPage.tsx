@@ -3,7 +3,6 @@ import { issueFromAppError, safeUrlForDisplay } from "@hongtai/core";
 import type { AppRuntime, AppTaskRecord, TaskEventRecord, TaskIssue } from "@hongtai/core";
 
 import { Button } from "../components/Buttons";
-import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { EmptyState } from "../components/StatePanels";
@@ -42,6 +41,9 @@ export function TaskProcessingPage({
   const localVideo = task.sourceKind === "local_video";
   const source = localVideo ? "我上传的视频 · 已安全保存在本机" : safeUrlForDisplay(task.sourceUrl);
   const platform = localVideo ? "本地上传" : platformLabel(task.platform);
+  const doneCount = steps.filter((step) => step.status === "succeeded" || step.status === "degraded").length;
+  const activeStep = steps.find((step) => step.status === "running") ?? steps.find((step) => step.status === "pending");
+  const progressRatio = steps.length === 0 ? 0 : Math.min(1, doneCount / steps.length);
   const issueActions = {
     configureAi: () => navigate(aiSettingsPath()),
     ...(task.media.length > 0 || Boolean(task.speechStatus) || task.status === "degraded" || task.status === "succeeded"
@@ -66,19 +68,27 @@ export function TaskProcessingPage({
     <div className="page-stack page-task-processing">
       <TaskCapabilityNotice capability={runtime.features.ingest} feature="ingest" />
       <section className="task-processing-hero">
-        <span className={`task-processing-hero__orb ${task.status === "running" ? "is-running" : ""}`.trim()}><Icon name={task.status === "succeeded" || task.status === "degraded" ? "check_circle" : task.status === "failed" || task.status === "interrupted" ? "error" : "sync"} size={31} /></span>
         <div>
-          <div className="task-processing-hero__line"><h2>{localVideo ? "本地视频处理任务" : platform ? `${platform}采集任务` : "本地采集任务"}</h2><TaskStatusBadge status={task.status} /></div>
+          <div className="task-processing-hero__line">
+            <h2>{localVideo ? "本地视频处理任务" : platform ? `${platform}采集任务` : "本地采集任务"}</h2>
+            <TaskStatusBadge status={task.status} />
+          </div>
           <p className="technical-value">{source}</p>
         </div>
       </section>
 
       {issue ? <IssueNotice actions={issueActions} issue={issue} /> : null}
 
-      <GlassCard className="task-stage-card">
-        <div className="section-heading"><div><span className="eyebrow">处理进度</span><h3>正在处理内容</h3></div><span className="task-stage-card__count">{events.length} 条进度</span></div>
+      <section className="task-stage-card">
+        <div className="task-stage-card__status">
+          <strong>{activeStep?.detail || activeStep?.label || (task.status === "queued" ? "等待开始执行" : "正在处理内容")}</strong>
+          <span>{doneCount}/{steps.length}</span>
+        </div>
+        <div aria-hidden="true" className="task-stage-card__meter">
+          <span style={{ width: `${Math.round(progressRatio * 100)}%` }} />
+        </div>
         <TaskProgressSteps steps={steps} />
-      </GlassCard>
+      </section>
 
       {task.status === "queued" ? <EmptyState description="任务已经创建，但尚未开始。点击下方按钮才会启动本地执行。" icon="pending" title="等待开始" /> : null}
 
@@ -86,7 +96,7 @@ export function TaskProcessingPage({
         {task.status === "queued" ? <Button variant="secondary" disabled={!ingestAvailable || actionPending !== undefined} icon={<Icon name="bolt" size={18} />} onClick={() => void start()}>{actionPending === "start" ? "正在启动" : "开始执行"}</Button> : null}
         {task.status === "failed" || task.status === "interrupted" || task.status === "cancelled" ? <Button icon={<Icon name="sync" size={18} />} onClick={() => navigate(pathForRoute("home"))} variant="secondary">{localVideo ? "重新选择视频" : "重新提交链接"}</Button> : null}
       </div>
-      {showProcessingLeaveHint(task.status) ? <p className="task-processing-leave-hint">进程在后台运行，可以放心离开此页</p> : null}
+      {showProcessingLeaveHint(task.status) ? <p className="task-processing-leave-hint">任务在后台运行，可以放心离开此页</p> : null}
     </div>
   );
 }

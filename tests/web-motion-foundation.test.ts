@@ -9,6 +9,10 @@ const read = (relativePath: string) => readFileSync(join(root, relativePath), "u
 test("mobile motion foundation keeps each interaction responsibility isolated", () => {
   for (const relativePath of [
     "motion/tokens.ts",
+    "motion/sheet-dismiss.ts",
+    "motion/skeleton-hold.ts",
+    "components/Overlay.tsx",
+    "components/PageSkeleton.tsx",
     "components/RouteTransition.tsx",
     "components/SwipeRouteViewport.tsx",
     "hooks/useInteractionFeedback.ts",
@@ -21,6 +25,11 @@ test("mobile motion foundation keeps each interaction responsibility isolated", 
 
   assert.match(read("components/RouteTransition.tsx"), /AnimatePresence/);
   assert.match(read("components/RouteTransition.tsx"), /MotionConfig/);
+  assert.match(read("components/RouteTransition.tsx"), /mode="popLayout"/);
+  assert.doesNotMatch(read("components/RouteTransition.tsx"), /mode=["']wait["']/);
+  assert.match(read("components/Overlay.tsx"), /placement === "rise"/);
+  assert.match(read("components/Sheet.tsx"), /OverlayDragRegion/);
+  assert.match(read("motion/tokens.ts"), /primaryRouteOffset/);
   assert.match(read("hooks/useSwipeNavigation.ts"), /onPointerDown/);
   assert.match(read("hooks/useScrollMotion.ts"), /passive/);
 });
@@ -45,8 +54,13 @@ test("motion stylesheet exposes shared timing and keeps scrolling available", ()
     "--motion-duration-fast",
     "--motion-duration-standard",
     "--motion-duration-page",
+    "--motion-duration-primary",
+    "--motion-duration-overlay",
     "--motion-ease-standard",
     "--motion-scale-press",
+    "--motion-distance-primary",
+    "--motion-duration-skeleton",
+    "--overlay-scrim",
   ]) {
     assert.match(tokens, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `${token} should exist`);
   }
@@ -54,6 +68,8 @@ test("motion stylesheet exposes shared timing and keeps scrolling available", ()
   assert.match(foundation, /scrollbar-width:\s*none/);
   assert.match(foundation, /::-webkit-scrollbar/);
   assert.match(foundation, /prefers-reduced-motion/);
+  assert.match(foundation, /html\s*\{[^}]*overscroll-behavior:\s*none/s);
+  assert.match(foundation, /body\s*\{[^}]*overscroll-behavior:\s*none/s);
 });
 
 test("web app declares Motion as its only new animation runtime", () => {
@@ -94,14 +110,21 @@ test("bottom navigation stays outside route transforms and supports direct navig
 
   assert.match(navigation, /createPortal/);
   assert.match(navigation, /document\.body/);
-  assert.match(navigation, /transition:\s*["']instant["']/);
+  assert.match(navigation, /transition:\s*["']primary["']/);
+  assert.match(read("components/SwipeRouteViewport.tsx"), /transition:\s*["']instant["']/);
   assert.match(app, /AppShellNavigationProvider/);
-  assert.match(app, /<BottomNav active=/);
-  assert.match(shell, /visualTheme=\{visualTheme\}/);
+  assert.match(app, /showsPrimaryNav/);
+  assert.match(app, /showPrimaryNav \? <BottomNav active=/);
+  assert.match(shell, /data-visual-theme=\{visualTheme\}/);
   assert.match(shell, /externalNavigationContext/);
   assert.match(app, /transitionMode/);
+  assert.match(app, /searchEpoch/);
   assert.match(browserRoute, /transitionMode/);
+  assert.match(browserRoute, /searchEpoch/);
+  assert.match(browserRoute, /splitLocationHref/);
   assert.match(routeTransition, /transitionMode\s*===\s*["']instant["']/);
+  assert.match(read("router.ts"), /"primary" \| "push" \| "instant"/);
+  assert.match(read("hooks/useBrowserRoute.ts"), /transition \?\? "push"/);
 });
 
 test("horizontal navigation renders an adjacent route pane during movement", () => {
@@ -113,6 +136,9 @@ test("horizontal navigation renders an adjacent route pane during movement", () 
   assert.match(swipe, /pointerType\s*===\s*["']mouse["']/);
   assert.match(swipe, /onPointerMove/);
   assert.match(swipe, /setPointerCapture/);
+  assert.match(swipe, /start\.direction = "horizontal"[\s\S]*capturePointer\(event\)/);
+  assert.match(swipe, /start\.direction = "vertical"[\s\S]*releasePointer\(event\)/);
+  assert.doesNotMatch(swipe, /origin\.current = \{[\s\S]*?setPointerCapture/);
   assert.match(swipe, /onCommit/);
   assert.match(swipe, /isSettling/);
   assert.match(swipe, /window\.innerWidth/);

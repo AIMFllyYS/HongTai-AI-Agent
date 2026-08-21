@@ -18,6 +18,7 @@ type DynamicRouteBuilders = {
   readonly profileSettingsPath: () => string;
   readonly aiSettingsPath: () => string;
   readonly appInfoSettingsPath: () => string;
+  readonly updateLogSettingsPath: () => string;
   readonly observationNewPath: () => string;
   readonly observationReportPath: (sessionId: string) => string;
 };
@@ -38,8 +39,10 @@ test("web application routes expose canonical runtime paths", () => {
     "/settings/profile",
     "/settings/ai",
     "/settings/app-info",
+    "/settings/app-info/updates",
     "/observation/new",
     "/observation/:sessionId",
+    "/playbook",
   ];
 
   assert.deepEqual(
@@ -53,6 +56,11 @@ test("web application routes expose canonical runtime paths", () => {
   assert.equal(matchRoute("/assets").key, "templates");
   assert.equal(matchRoute("/unknown").key, "not-found");
   assert.equal(matchRoute("/publish").key, "not-found");
+  assert.equal(matchRoute("/create?entry=agent").key, "create");
+  assert.equal(matchRoute("/create?entry=replica").key, "create");
+  assert.equal(matchRoute("/?intent=paste").key, "home");
+  assert.equal(matchRoute("/create?sourceId=task-88").key, "create");
+  assert.equal(matchRoute("/create#preview").key, "create");
   assert.doesNotMatch(read("router.ts"), /path:\s*"\/publish"/);
   assert.doesNotMatch(read("router.ts"), /\|\s*"publish"/);
 });
@@ -91,6 +99,7 @@ test("route builders encode opaque task and observation identifiers", () => {
   assert.equal(dynamicRouteBuilders.profileSettingsPath(), "/settings/profile");
   assert.equal(dynamicRouteBuilders.aiSettingsPath(), "/settings/ai");
   assert.equal(dynamicRouteBuilders.appInfoSettingsPath(), "/settings/app-info");
+  assert.equal(dynamicRouteBuilders.updateLogSettingsPath(), "/settings/app-info/updates");
   assert.equal(dynamicRouteBuilders.observationNewPath(), "/observation/new");
   assert.equal(dynamicRouteBuilders.observationReportPath(sessionId), "/observation/face%2F%E4%BC%9A%E8%AF%9D%207");
 
@@ -121,17 +130,25 @@ test("route transition direction follows dynamic task route order", () => {
   assert.equal(routeTransitionDirection("/tasks/task-42/processing", "/tasks/task-42"), "forward");
   assert.equal(routeTransitionDirection("/tasks/task-42/analysis", "/tasks/task-42"), "backward");
   assert.equal(routeTransitionDirection("/observation/new", "/observation/session-42"), "forward");
+  assert.equal(routeTransitionDirection("/", "/create?entry=agent"), routeTransitionDirection("/", "/create"));
 });
 
-test("homepage source card drops numbered dual cards and reserves bottom action space", () => {
+test("splitLocationHref keeps query and hash out of the pathname", () => {
+  assert.deepEqual(router.splitLocationHref("/create?entry=agent"), { pathname: "/create", search: "?entry=agent", hash: "" });
+  assert.deepEqual(router.splitLocationHref("/?intent=paste#top"), { pathname: "/", search: "?intent=paste", hash: "#top" });
+  assert.deepEqual(router.splitLocationHref(""), { pathname: "/", search: "", hash: "" });
+});
+
+test("homepage source card drops numbered dual cards and keeps the primary action in the content flow", () => {
   const home = read("pages/TaskHomePage.tsx");
   const css = read("styles/pages/tasks-runtime.css");
 
   assert.match(home, /<Tabs\b/);
-  assert.match(home, /contextualAction=\{/);
+  assert.doesNotMatch(home, /contextualAction=\{/);
+  assert.match(home, /\{primaryAction\}/);
   assert.doesNotMatch(home, /task-source-index/);
   assert.doesNotMatch(css, /\.task-source-index/);
-  assert.match(css, /\.page-task-home[^{]*\{[^}]*padding-bottom:\s*calc\(/);
+  assert.match(css, /\.page-task-home[^{]*\{[^}]*padding-bottom:\s*var\(--space-4\)/);
 });
 
 test("static visual data is isolated behind the adapter boundary", () => {

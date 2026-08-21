@@ -3,6 +3,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
+import { showsPrimaryNav } from "../apps/web/src/router";
+
 const webRoot = join(process.cwd(), "apps", "web", "src");
 const read = (relativePath: string) => readFileSync(join(webRoot, relativePath), "utf8");
 
@@ -20,7 +22,10 @@ test("observation pages use the real diagnosis runtime rather than a visual diag
   assert.match(start, /runtime\.diagnosis\.pickImage/);
   assert.match(start, /runtime\.diagnosis\.captureImage/);
   assert.match(start, /runtime\.diagnosis\.createSession/);
-  assert.match(start, /runtime\.diagnosis\.runReport/);
+  assert.match(start, /navigate\(observationReportPath\(session\.sessionId\)\)/);
+  assert.doesNotMatch(start, /runtime\.diagnosis\.runReport/);
+  assert.doesNotMatch(start, /ValidatedModuleProgress/);
+  assert.doesNotMatch(start, /正在生成真实观察报告/);
   assert.match(start, /id:\s*"tongue"/);
   assert.match(start, /id:\s*"face"/);
 
@@ -28,19 +33,27 @@ test("observation pages use the real diagnosis runtime rather than a visual diag
   assert.match(report, /runtime\.diagnosis\.getReport/);
   assert.match(report, /runtime\.diagnosis\.listMessages/);
   assert.match(report, /runtime\.diagnosis\.followUp/);
+  assert.match(report, /runtime\.diagnosis\.runReport\(sessionId\)/);
+  assert.match(report, /ObservationObservingScreen/);
+  assert.match(report, /title="AI 正在观察"/);
+  assert.match(report, /showNav=\{false\}/);
+  assert.equal(showsPrimaryNav("observation-report"), false);
+  assert.equal(showsPrimaryNav("observation-new"), true);
   assert.match(report, /followUpQuestions/);
   assert.match(report, /content_delta/);
   assert.match(report, /reportRetryAllowed/);
   assert.match(report, /selectMedia:\s*\(\) => navigate\(observationNewPath\(\)\)/);
-  assert.match(report, /maxLength=\{20_000\}/);
+  assert.match(report, /ObservationFollowUpComposer/);
+  assert.match(read("features/diagnosis/observation-follow-up-composer.tsx"), /maxLength=\{20_000\}/);
+  assert.doesNotMatch(report, /复制回复|有用|FOLLOW-UP/);
 
   // A report page can only show an explicit retry when the persisted issue
   // itself authorizes it; storage/media/settings issues stay in IssueNotice.
   assert.match(report, /reportIssue\?\.action === "retry"/);
 
-  // The start page must not navigate to a stale `running` report when native
-  // storage failed before a terminal projection could be committed.
-  assert.match(start, /stored\?\.status === "succeeded" \|\| stored\?\.status === "failed"/);
+  // Confirming a photo navigates immediately; report generation starts on the session page.
+  assert.match(start, /const session = await runtime\.diagnosis\.createSession/);
+  assert.match(report, /record\?\.status === "succeeded" \|\| record\?\.status === "failed"/);
 
   const app = read("App.tsx");
   assert.match(app, /ObservationStartPage/);
@@ -51,7 +64,12 @@ test("observation pages use the real diagnosis runtime rather than a visual diag
   assert.match(app, /<ObservationReportPage key=\{sessionId\} navigate=\{navigate\} runtime=\{runtime\} sessionId=\{sessionId\} \/>/);
 
   const navigation = read("navigation/primary-nav.ts");
-  assert.match(navigation, /id: "ai", label: "AI", icon: "health_cross", path: pathForRoute\("observation-new"\)/);
+  assert.match(navigation, /id: "ai", label: "观察", icon: "scan_face", path: pathForRoute\("observation-new"\)/);
+  assert.match(start, /title="AI 智能诊断"/);
+  assert.equal((start.match(/\{OBSERVATION_REPORT_DISCLAIMER_FALLBACK\}/g) ?? []).length, 1);
+  assert.match(start, /observation-disclaimer--foot/);
+  assert.doesNotMatch(start, /<p className="observation-disclaimer">/);
+  assert.doesNotMatch(start, /LOCAL OBSERVATION/);
 });
 
 test("observation session creation uses a storage fallback instead of runtime unavailable", () => {
@@ -62,6 +80,7 @@ test("observation session creation uses a storage fallback instead of runtime un
 
 test("observation photo selection and capture own an importing state with every terminal clearing busy", () => {
   const start = read("pages/ObservationStartPage.tsx");
+  const panels = read("features/diagnosis/observation-start-panels.tsx");
 
   assert.match(start, /const \[importing, setImporting\] = useState\(true\)/);
   assert.match(start, /runtime\.diagnosis\.consumeImageRecovery\(\)/);
@@ -76,9 +95,11 @@ test("observation photo selection and capture own an importing state with every 
     assert.match(operation, /loading \|\| importing/);
   }
 
-  assert.match(start, /正在导入图片/);
-  assert.match(start, /disabled=\{!diagnosisAvailable \|\| loading \|\| importing\}/);
-  assert.match(start, /disabled=\{!diagnosisAvailable \|\| !image \|\| loading \|\| importing\}/);
+  assert.match(panels, /正在导入图片/);
+  assert.match(start, /busy=\{loading\}/);
+  assert.match(start, /importing=\{importing\}/);
+  assert.match(panels, /const disabled = !diagnosisAvailable \|\| busy \|\| importing/);
+  assert.match(panels, /disabled=\{!diagnosisAvailable \|\| !image \|\| confirming \|\| importing\}/);
 });
 
 test("observation start page incrementally subscribes running reports by sessionId", () => {
@@ -134,12 +155,67 @@ test("observation presentation only recognizes diagnosis-report.v1 and never tur
   assert.equal(report.summary?.headline, "观察报告");
   assert.deepEqual(report.followUpQuestions, ["如何在相近光线下记录？"]);
   assert.equal("score" in report, false);
+  assert.equal(subject.observationReportHeroTitle(report), "颜色");
+  assert.equal(subject.imageQualityBadgeLabel("good"), "良好 · 可用");
+  assert.equal(subject.imageQualityBadgeLabel("limited"), "受限 · 部分可辨");
+  assert.equal(subject.imageQualityBadgeLabel("unusable"), "不可用");
+  assert.equal(subject.imageQualityDescription(report.imageQuality), undefined);
+  assert.equal(subject.observationBasisCaption(["o-1"], report.observations), "依据：观察 1");
+  assert.equal(subject.observationEvidenceText(report.observations[0]!), "图片中央区域清晰");
+  assert.equal(subject.observationReportDisclaimer(report), "此内容不构成医疗诊断。");
+  assert.match(subject.OBSERVATION_REPORT_DISCLAIMER_FALLBACK, /不是正式诊疗/);
   assert.equal(subject.readDiagnosisReport({
     sessionId: "observation-1",
     status: "succeeded",
     createdAt: "2026-08-07T00:00:00.000Z",
     updatedAt: "2026-08-07T00:01:00.000Z",
     report: { schemaVersion: "other.v1", document: {} },
+  }).available, false);
+
+  const document = {
+    mode: "tongue",
+    imageQuality: { usable: true, overallQuality: "good", limitations: ["舌面主体清晰"], retakeSuggestions: [] },
+    summary: { headline: "观察报告", keyPoints: ["舌面清晰"], narrative: "舌面整体偏红，中后部有薄白苔。其余仅作日常参考。" },
+    observations: [{ id: "o-1", category: "tongue_body", region: "舌体", label: "颜色", description: "可见颜色特征", visibility: "clear", evidenceDescription: "可见颜色特征" }],
+    wellnessReferences: [{ title: "日常参考", basisObservationIds: ["o-1"], statement: "请结合日常状态留意变化", certainty: "possible", notADiagnosis: true }],
+    recommendations: [{ category: "daily_care", priority: "low", title: "规律记录", action: "在相近光线下观察", rationale: "便于比较", relatedObservationIds: ["o-1"] }],
+    safetyGuidance: { level: "routine_attention", reasons: ["如有不适请咨询专业人员"], recommendedAction: "必要时咨询专业人员" },
+    followUpQuestions: ["如何在相近光线下记录？"],
+    limitations: ["单张图片存在局限"],
+    disclaimer: "此内容不构成医疗诊断。",
+  };
+  const withScore = subject.readDiagnosisReport({
+    sessionId: "observation-1",
+    status: "succeeded",
+    createdAt: "2026-08-07T00:00:00.000Z",
+    updatedAt: "2026-08-07T00:01:00.000Z",
+    report: { schemaVersion: "diagnosis-report.v1", document: { ...document, score: 88 } },
+  });
+  assert.equal(withScore.available, true);
+  assert.equal("score" in withScore, false);
+  assert.equal(subject.imageQualityDescription(withScore.imageQuality), "舌面主体清晰");
+  assert.equal(subject.observationEvidenceText(withScore.observations[0]!), undefined);
+  assert.equal(subject.observationReportHeroTitle({
+    ...withScore,
+    observations: [],
+  }), "舌面整体偏红，中后部有薄白苔。");
+  assert.equal(subject.observationReportHeroTitle({
+    ...withScore,
+    observations: [],
+    summary: { headline: "观察报告", keyPoints: ["舌面清晰"], narrative: "" },
+  }), "观察报告");
+  assert.equal(subject.readDiagnosisReport({
+    sessionId: "observation-1",
+    status: "succeeded",
+    createdAt: "2026-08-07T00:00:00.000Z",
+    updatedAt: "2026-08-07T00:01:00.000Z",
+    report: {
+      schemaVersion: "diagnosis-report.v1",
+      document: {
+        ...document,
+        wellnessReferences: [{ title: "日常参考", basisObservationIds: ["o-1"], statement: "请结合日常状态留意变化", certainty: "possible" }],
+      },
+    },
   }).available, false);
 });
 
@@ -148,6 +224,7 @@ test("the packaged source contains no diagnostic-treatment or health-score copy"
   const sources = [
     "pages/ObservationStartPage.tsx",
     "pages/ObservationReportPage.tsx",
+    "features/diagnosis/observation-observing-screen.tsx",
     "data/fixtures/vitality.ts",
     "data/visual-types.ts",
   ];
@@ -155,17 +232,107 @@ test("the packaged source contains no diagnostic-treatment or health-score copy"
     const text = read(source);
     for (const phrase of forbidden) assert.doesNotMatch(text, new RegExp(phrase));
   }
+
+  const report = read("pages/ObservationReportPage.tsx");
+  const presenters = read("features/diagnosis/diagnosis-presenters.ts");
+  const reportSections = read("playbook/document-sections.ts");
+  assert.match(report, /title="观察报告"/);
+  assert.match(reportSections, /观察摘要/);
+  assert.match(reportSections, /观察明细/);
+  assert.match(reportSections, /日常参考/);
+  assert.match(report, /非诊断 · 不确定/);
+  assert.match(reportSections, /日常建议/);
+  assert.match(reportSections, /安全提醒/);
+  assert.match(report, /本次观察的局限/);
+  assert.match(report, /可以继续问/);
+  assert.match(report, /图像质量/);
+  assert.match(report, /日常参考，不构成诊断/);
+  assert.match(report, /ObservationFollowUpSheet/);
+  assert.match(read("features/diagnosis/observation-follow-up-sheet.tsx"), /AI 追问/);
+  assert.doesNotMatch(report, /可见要点|图片可见观察|局限与免责声明/);
+  assert.match(report, /observationEvidenceText/);
+  assert.match(report, /imageQualityDescription/);
+  assert.match(presenters, /不是正式诊疗/);
+  assert.match(presenters, /notADiagnosis !== true/);
 });
 
 test("observation controls stay compact and clear above the fixed Android navigation", () => {
   const start = read("pages/ObservationStartPage.tsx");
+  const panels = read("features/diagnosis/observation-start-panels.tsx");
   const report = read("pages/ObservationReportPage.tsx");
   const css = read("styles/pages/observation-runtime.css");
 
-  assert.match(start, /observation-capture-card__actions mobile-action-group/);
-  assert.match(report, /observation-question-composer__actions/);
-  assert.match(css, /\.observation-capture-card__actions \.button--primary\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s);
-  assert.match(css, /\.observation-question-composer\s*\{[^}]*bottom:\s*calc\([^;]*--nav-height[^;]*--safe-bottom[^;]*--keyboard-inset/s);
-  assert.match(css, /\.observation-message p\s*\{[^}]*overflow-wrap:\s*anywhere/s);
-  assert.match(css, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.observation-question-composer__actions[^}]*grid-template-columns:\s*1fr/);
+  assert.match(start, /ObservationCapturePanel/);
+  assert.match(panels, /observation-capture-card__actions/);
+  assert.match(panels, /observation-capture-card__laser/);
+  assert.match(panels, /拍摄照片/);
+  assert.match(panels, /相册选择/);
+  const composer = read("features/diagnosis/observation-follow-up-composer.tsx");
+  const sheet = read("features/diagnosis/observation-follow-up-sheet.tsx");
+  assert.match(report, /ObservationFollowUpComposer/);
+  assert.match(report, /ObservationFollowUpSheet/);
+  assert.match(report, /headerMode="detail"/);
+  assert.match(report, /showNav=\{false\}/);
+  assert.doesNotMatch(report, /继续追问/);
+  assert.doesNotMatch(report, /from "\.\.\/components\/Sheet"/);
+  assert.match(composer, /observation-follow-up-composer/);
+  assert.match(sheet, /navigator\.clipboard\.writeText/);
+  assert.match(sheet, /AI 追问/);
+  assert.match(sheet, /关闭追问/);
+  assert.match(css, /\.observation-capture-card__actions\s*\{[^}]*grid-template-columns:\s*1fr\s+1fr/s);
+  assert.match(css, /\.observation-confirm-actions\s+\.button--primary\s*\{[^}]*color:\s*var\(--color-text-on-primary\)/s);
+  assert.match(css, /\.observation-follow-up-dock\s*\{[^}]*--safe-bottom[^;]*--keyboard-inset/s);
+  assert.doesNotMatch(css, /\.observation-follow-up-dock\s*\{[^}]*--nav-height/);
+  assert.match(css, /\.observation-message__body\s*\{[^}]*overflow-wrap:\s*anywhere/s);
+  assert.match(css, /\.observation-follow-up-composer__send\s*\{[^}]*width:\s*2rem[^}]*height:\s*2rem/s);
+  assert.match(sheet, /MarkdownText/);
+  assert.match(css, /\.observation-follow-up-composer__send\.is-busy svg\s*\{[^}]*animation:\s*spin/s);
+  assert.match(css, /\.page-observation-report \.observation-quality-card/);
+  assert.match(report, /observation-recommendation-card__top/);
+  assert.doesNotMatch(report, /observation-recommendation-card__icon|observation-recommendation-card__body|observationRecommendationIcon/);
+  assert.match(css, /\.page-observation-report \.observation-recommendation-card\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s);
+  assert.match(css, /\.page-observation-report \.observation-recommendation-card__top\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto/s);
+  assert.doesNotMatch(css, /\.observation-report-item__title,\s*\.observation-recommendation-card > div\s*\{/);
+  assert.doesNotMatch(css, /\.observation-recommendation-card__top strong[^}]*overflow-wrap:\s*anywhere/);
+  assert.doesNotMatch(css, /@media\s*\(min-width:\s*38rem\)\s*\{[^}]*\.observation-recommendation-list\s*\{[^}]*repeat\(2/s);
+});
+
+test("observation in-progress page follows unarchived S9b without vitals HUD or old progress chrome", async () => {
+  const subject = await import("../apps/web/src/features/diagnosis/observation-observing-screen");
+  const observing = read("features/diagnosis/observation-observing-screen.tsx");
+  const report = read("pages/ObservationReportPage.tsx");
+  const thinking = read("components/DeepThinkingPanel.tsx");
+  const progress = read("components/ValidatedModuleProgress.tsx");
+  const css = read("styles/pages/observation-runtime.css");
+
+  assert.equal(subject.isObservationObservingView("pending", false), true);
+  assert.equal(subject.isObservationObservingView("running", false), true);
+  assert.equal(subject.isObservationObservingView("failed", false), true);
+  assert.equal(subject.isObservationObservingView("succeeded", true), false);
+  assert.equal(subject.isObservationObservingView("succeeded", false), false);
+  assert.equal(subject.observationScanningLabel("face"), "面部扫描中");
+  assert.equal(subject.observationScanningLabel("tongue"), "舌象扫描中");
+
+  assert.match(observing, /observation-capture-card__laser/);
+  assert.match(observing, /observation-observing-scan__brackets/);
+  assert.match(observing, /variant="observation"/);
+  assert.match(observing, /progress\?\.thinking/);
+  assert.match(observing, /\/5 模块/);
+  assert.match(observing, /取消本次观察/);
+  assert.match(observing, /图片与报告只保存在本机；结果仅供日常参考/);
+  assert.doesNotMatch(observing, /项已完成|正在生成真实观察报告|ValidatedModuleProgress/);
+  assert.doesNotMatch(observing, /row\.content|BPM|SpO2|Wellness|健康评分|已停止 AI|停止生成/);
+  assert.match(css, /observation-laser-scan/);
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.observation-capture-card__laser::after[\s\S]*animation:\s*none/);
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.observation-observing-module__skeleton span[\s\S]*animation:\s*none/);
+  assert.match(css, /\.observation-observing-scan__brackets i\s*\{[^}]*border:\s*0\.125rem solid var\(--palette-brand\)/s);
+  assert.match(css, /\.observation-observing-scan__live\s*\{[^}]*background:\s*var\(--palette-brand-tint\)/s);
+
+  assert.match(report, /autoStartedFor/);
+  assert.match(report, /onCancel=\{\(\) => navigate\(observationNewPath\(\)\)\}/);
+  assert.match(thinking, /variant = "analysis"/);
+  assert.match(thinking, /observation \? "sparkles" : "memory"/);
+  assert.match(thinking, /推理内容仅在本次生成期间显示，不会保存/);
+  assert.doesNotMatch(progress, /variant="observation"/);
+  assert.match(progress, /<DeepThinkingPanel thinking=\{progress\?\.thinking \?\? waitingThinking\} \/>/);
 });

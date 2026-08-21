@@ -235,7 +235,7 @@ test("runtime task pages are wired to AppRuntime and static fixtures remain outs
   assert.match(read("pages/TaskHomePage.tsx"), /runtime\.tasks\.inspectInput/);
   assert.match(read("pages/TaskHomePage.tsx"), /submitLocalTask\(runtime\.tasks/);
   assert.match(read("pages/TaskHomePage.tsx"), /runtime\.analysis\.importVideo\(/);
-  assert.match(read("pages/TaskHomePage.tsx"), /sourceKind === "local_video"/);
+  assert.match(read("features/tasks/TaskHistory.tsx"), /sourceKind === "local_video"/);
   assert.match(read("pages/TaskPage.tsx"), /runtime\.tasks\.subscribe/);
   assert.match(read("pages/TaskPage.tsx"), /runtime\.tasks\.listEvents/);
   assert.match(read("pages/TaskPage.tsx"), /runtime\.tasks\.getDetail/);
@@ -284,17 +284,17 @@ test("task pages keep real events but never offer stop or lineage-retry controls
 });
 
 test("real task pages constrain technical text and expose persisted stage percentages", () => {
-  const home = read("pages/TaskHomePage.tsx");
+  const home = `${read("pages/TaskHomePage.tsx")}\n${read("features/tasks/TaskHistory.tsx")}`;
   const processing = read("pages/TaskProcessingPage.tsx");
   const detail = read("pages/TaskDetailPage.tsx");
   const analysis = read("pages/TaskAnalysisPage.tsx");
   const progress = read("components/TaskProgressSteps.tsx");
   const css = read("styles/pages/tasks-runtime.css");
 
-  assert.match(home, /className="technical-value"/);
+  assert.match(home, /className=\{localVideo \? undefined : "technical-value"\}/);
   assert.match(processing, /className="technical-value"/);
   assert.match(detail, /className="technical-value"/);
-  assert.match(analysis, /className="technical-value"/);
+  assert.match(analysis, /可以离开此页|分析过程不会保留/);
   assert.match(processing, /task-page-actions mobile-action-group/);
   assert.match(detail, /analysis-confirm-card__actions mobile-action-group/);
   assert.match(progress, /role="progressbar"/);
@@ -370,7 +370,7 @@ test("three task URL aliases mount one TaskPage and stay mounted after ingest co
   assert.doesNotMatch([page, processing, read("pages/TaskDetailPage.tsx"), read("pages/TaskAnalysisPage.tsx")].join("\n"), /查看任务详情|查看拆解结果|查看当前状态|查看拆解状态/);
   const processingShell = page.slice(page.indexOf("if (surface === \"processing\")"), page.indexOf("if (surface === \"completed-missing\""));
   assert.doesNotMatch(processingShell, /contextualAction=/);
-  assert.match(processing, /进程在后台运行，可以放心离开此页/);
+  assert.match(processing, /任务在后台运行，可以放心离开此页/);
   assert.match(processing, /<Button variant="secondary"[\s\S]*?开始执行/);
   assert.doesNotMatch(processing, /<Button(?! variant="secondary")[\s\S]*?开始执行/);
 
@@ -474,7 +474,7 @@ test("处理页离开提示只在 queued/running 出现，失败态不伪造成�
   }
 
   const processing = read("pages/TaskProcessingPage.tsx");
-  assert.match(processing, /showProcessingLeaveHint\(task\.status\) \? <p className="task-processing-leave-hint">进程在后台运行，可以放心离开此页<\/p> : null/);
+  assert.match(processing, /showProcessingLeaveHint\(task\.status\) \? <p className="task-processing-leave-hint">任务在后台运行，可以放心离开此页<\/p> : null/);
   assert.match(processing, /TaskProgressSteps/);
   assert.match(processing, /IssueNotice/);
 });
@@ -499,6 +499,7 @@ test("完成态用共享 Tabs 恢复 URL 分栏，并按阶段给出底部主操
       readonly hasEvidence: boolean;
     }) => string;
     syncTaskResultTabPath?: (taskId: string, tab: string) => void;
+    completedTaskShellTitle?: (analysisStatus?: string) => string;
   };
 
   assert.equal(typeof model.sourceTabLabel, "function");
@@ -509,12 +510,15 @@ test("完成态用共享 Tabs 恢复 URL 分栏，并按阶段给出底部主操
   assert.equal(typeof model.sourceIdFromSearch, "function");
   assert.equal(typeof model.resolveCompletedPrimaryAction, "function");
   assert.equal(typeof model.syncTaskResultTabPath, "function");
+  assert.equal(model.completedTaskShellTitle?.("succeeded"), "拆解完成");
+  assert.equal(model.completedTaskShellTitle?.("running"), "拆解详情");
+  assert.equal(model.completedTaskShellTitle?.("not_started"), "拆解详情");
 
   assert.equal(model.sourceTabLabel?.("video"), "原始文稿");
   assert.equal(model.sourceTabLabel?.("image_text"), "图文正文");
   assert.equal(model.sourceTabLabel?.("unknown"), "原始文稿");
-  assert.deepEqual(model.taskResultTabs?.("video"), ["原始文稿", "AI自动拆解"]);
-  assert.deepEqual(model.taskResultTabs?.("image_text"), ["图文正文", "AI自动拆解"]);
+  assert.deepEqual(model.taskResultTabs?.("video"), ["原始文稿", "AI 拆解"]);
+  assert.deepEqual(model.taskResultTabs?.("image_text"), ["图文正文", "AI 拆解"]);
   assert.equal(model.taskResultTabFromPath?.("/tasks/task-1/analysis"), "analysis");
   assert.equal(model.taskResultTabFromPath?.("/tasks/task-1"), "source");
   assert.equal(model.taskResultTabFromPath?.("/tasks/task-1/processing"), "source");
@@ -543,7 +547,7 @@ test("完成态用共享 Tabs 恢复 URL 分栏，并按阶段给出底部主操
   assert.match(detail, /<Tabs\b/);
   assert.match(detail, /<TabPanel\b/);
   assert.doesNotMatch(detail, /role="tablist"/);
-  assert.match(completed, /AI自动拆解/);
+  assert.match(completed, /AI 拆解/);
   assert.match(detail, /原始文稿/);
   assert.match(detail, /图文正文/);
   assert.match(page, /taskResultTabFromPath/);
@@ -555,7 +559,12 @@ test("完成态用共享 Tabs 恢复 URL 分栏，并按阶段给出底部主操
   assert.match(completed, /用它做视频/);
   assert.match(completed, /createPagePathWithSource/);
   assert.match(completed, /重新拆解/);
-  assert.match(completed, /role="menuitem"/);
+  assert.match(detail, /TaskMoreActionsSheet/);
+  assert.match(completed, /更多操作/);
+  assert.match(completed, /Sheet/);
+  assert.match(completed, /按清单复刻/);
+  assert.doesNotMatch(completed, /分享结果/);
+  assert.doesNotMatch(detail, /role="menuitem"/);
   assert.match(completed, /确认删除这个任务/);
   assert.doesNotMatch(detail, /<Button[^>]*>删除任务</);
   assert.doesNotMatch(detail, /<Button[^>]*>重新拆解</);
@@ -582,7 +591,28 @@ test("完成态用共享 Tabs 恢复 URL 分栏，并按阶段给出底部主操
   assert.match(detail, /variant="secondary"[^>]*>\{pendingAction === "delete"/);
 });
 
-test("用它做视频先进入 /create 再写 sourceId，确认态底栏不再出现第二个主按钮", async () => {
+test("completed task detail always renders engagement cells without fabricated counts", () => {
+  const detail = read("pages/TaskDetailPage.tsx");
+  const css = read("styles/pages/tasks-runtime.css");
+  assert.match(detail, /点赞/);
+  assert.match(detail, /收藏/);
+  assert.match(detail, /评论/);
+  assert.match(detail, /分享/);
+  assert.match(detail, /播放/);
+  assert.match(detail, /未解析到/);
+  assert.match(detail, /task-detail-engagement/);
+  assert.match(detail, /本地占用/);
+  assert.match(detail, /formatStoredSize/);
+  assert.doesNotMatch(detail, /\b42\b/);
+  assert.doesNotMatch(detail, /1\.2w/);
+  assert.doesNotMatch(detail, /2\.4\s*万/);
+  assert.match(css, /\.task-detail-engagement\s*\{[^}]*grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/s);
+  assert.match(css, /\.task-detail-engagement\s*\{[^}]*minmax\(0,\s*1fr\)/s);
+  assert.match(css, /\.task-detail-engagement__item\s*\{[^}]*min-width:\s*0/s);
+  assert.match(css, /\.task-detail-engagement__item\s*\{[^}]*overflow-wrap:\s*anywhere/s);
+});
+
+test("用它做视频一次导航到带 sourceId 的 /create，确认态底栏不再出现第二个主按钮", async () => {
   const model = await import("../apps/web/src/pages/task-page-model") as {
     createPagePathWithSource: (taskId: string) => string;
     sourceIdFromSearch: (search: string) => string;
@@ -595,36 +625,17 @@ test("用它做视频先进入 /create 再写 sourceId，确认态底栏不再�
   };
   const { matchRoute, pathForRoute } = await import("../apps/web/src/router");
 
-  assert.equal(matchRoute(model.createPagePathWithSource("task-88")).key, "not-found");
+  assert.equal(matchRoute(model.createPagePathWithSource("task-88")).key, "create");
   assert.equal(matchRoute(pathForRoute("create")).key, "create");
 
-  const location = { pathname: "/tasks/task-88", search: "" };
-  const previousWindow = (globalThis as { window?: unknown }).window;
-  (globalThis as { window: unknown }).window = {
-    location,
-    history: {
-      state: {},
-      replaceState(_data: unknown, _title: string, url: string) {
-        const parsed = new URL(url, "https://hongtai.local");
-        location.pathname = parsed.pathname;
-        location.search = parsed.search;
-      },
-    },
-  };
-
-  try {
-    const navigated: string[] = [];
-    model.navigateToCreateWithSource((path) => {
-      navigated.push(path);
-    }, "task-88");
-    assert.equal(navigated.length, 1);
-    assert.equal(matchRoute(navigated[0] ?? "").key, "create");
-    assert.doesNotMatch(navigated[0] ?? "", /\?/);
-    assert.equal(model.sourceIdFromSearch(location.search), "task-88");
-  } finally {
-    if (previousWindow === undefined) delete (globalThis as { window?: unknown }).window;
-    else (globalThis as { window: unknown }).window = previousWindow;
-  }
+  const navigated: string[] = [];
+  model.navigateToCreateWithSource((path) => {
+    navigated.push(path);
+  }, "task-88");
+  assert.equal(navigated.length, 1);
+  assert.equal(navigated[0], "/create?sourceId=task-88");
+  assert.equal(matchRoute(navigated[0] ?? "").key, "create");
+  assert.equal(model.sourceIdFromSearch("?sourceId=task-88"), "task-88");
 
   assert.equal(model.resolveCompletedBarAction({ primary: "start-analysis", confirmationOpen: false, deleteConfirmationOpen: false }), "start-analysis");
   assert.equal(model.resolveCompletedBarAction({ primary: "next-steps", confirmationOpen: false, deleteConfirmationOpen: false }), "next-steps");
@@ -634,8 +645,9 @@ test("用它做视频先进入 /create 再写 sourceId，确认态底栏不再�
   assert.equal(model.resolveCompletedBarAction({ primary: "start-analysis", confirmationOpen: true, deleteConfirmationOpen: true }), "none");
 });
 
-test("首页来源用 Tabs，唯一主按钮在 contextualAction，成功后进入 /tasks/:id", () => {
+test("首页来源用 Tabs，唯一主按钮跟在输入区后，成功后进入 /tasks/:id", () => {
   const home = read("pages/TaskHomePage.tsx");
+  const history = read("features/tasks/TaskHistory.tsx");
   const css = read("styles/pages/tasks-runtime.css");
 
   assert.match(home, /from "\.\.\/components\/Tabs"/);
@@ -644,7 +656,8 @@ test("首页来源用 Tabs，唯一主按钮在 contextualAction，成功后进�
   assert.match(home, /tabs=\{SOURCE_TABS\}|tabs=\{\["粘贴链接", "上传视频"\]\}/);
   assert.match(home, /"粘贴链接"/);
   assert.match(home, /"上传视频"/);
-  assert.match(home, /contextualAction=\{/);
+  assert.doesNotMatch(home, /contextualAction=\{/);
+  assert.match(home, /\{primaryAction\}/);
   assert.match(home, /\{submitting \? "正在创建本地任务" : "开始拆解"\}/);
   assert.match(home, /\{videoImporting \? "正在识别视频内容" : "选择视频并拆解"\}/);
   assert.match(home, /disabled=\{!ingestAvailable \|\| !inspection\?\.ok \|\| submitting \|\| videoImporting\}/);
@@ -653,14 +666,26 @@ test("首页来源用 Tabs，唯一主按钮在 contextualAction，成功后进�
   assert.match(home, /aria-label="粘贴"/);
   assert.match(home, /navigator\.clipboard\.readText/);
   assert.match(home, /已识别 \{platformLabel/);
-  assert.match(home, /单个 MP4/);
+  assert.match(home, /选择一段 MP4 视频/);
+  assert.match(home, /task-source-card__upload-icon/);
+  assert.match(home, /name="video"/);
   assert.match(home, /250MB/);
   assert.match(home, /只保存在本机/);
+  assert.match(css, /\.task-source-card__upload\s*\{[^}]*background:\s*var\(--palette-fill\)/s);
+  assert.match(css, /\.task-source-card__upload\s*\{[^}]*border-radius:\s*var\(--radius-card\)/s);
+  assert.match(css, /\.task-source-card__upload\s*\{[^}]*justify-items:\s*center/s);
+  assert.match(css, /\.task-source-card__upload\s*\{[^}]*align-items:\s*center/s);
+  assert.match(css, /\.task-source-card__upload\s*\{[^}]*min-height:\s*12rem/s);
+  assert.match(css, /\.task-source-card__upload\s*\{[^}]*padding:\s*1\.5rem 1\.25rem/s);
+  assert.match(css, /\.task-source-card__upload-icon\s*\{[^}]*width:\s*3\.75rem[^}]*height:\s*3\.75rem/s);
+  assert.match(css, /\.task-source-card__upload-icon\s*\{[^}]*background:\s*var\(--surface-paper\)/s);
+  assert.match(css, /\.task-source-card__upload-icon\s*\{[^}]*border-radius:\s*50%/s);
+  assert.match(home, /<br \/>最大 250MB/);
   assert.match(home, /<ValidatedModuleProgress/);
   assert.match(home, /navigate\(taskDetailPath\(result\.task\.id\)\)/);
   assert.match(home, /navigate\(taskDetailPath\(record\.taskId\)\)/);
   assert.match(home, /navigate\(taskDetailPath\(recovered\.record\.taskId\)\)/);
-  assert.match(home, /navigate\(taskDetailPath\(task\.id\)\)/);
+  assert.match(history, /navigate\(taskDetailPath\(task\.id\)\)/);
   assert.doesNotMatch(home, /taskAnalysisPath/);
   assert.doesNotMatch(home, /taskProcessingPath/);
   assert.doesNotMatch(home, /task-source-index/);
@@ -670,5 +695,5 @@ test("首页来源用 Tabs，唯一主按钮在 contextualAction，成功后进�
   assert.doesNotMatch(home, /"选择本地视频"/);
   assert.doesNotMatch(home, /<GlassCard[\s\S]*<Button[\s\S]*<\/GlassCard>/);
   assert.doesNotMatch(css, /\.task-source-index/);
-  assert.match(css, /\.page-task-home[^{]*\{[^}]*padding-bottom:\s*calc\(/);
+  assert.match(css, /\.page-task-home[^{]*\{[^}]*padding-bottom:\s*var\(--space-4\)/);
 });

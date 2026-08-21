@@ -11,7 +11,9 @@ test("first-load keeps the home shell eager and splits the other product routes"
 
   assert.match(app, /import \{ TaskHomePage \} from "\.\/pages\/TaskHomePage"/);
   assert.match(app, /import \{ HomePage \} from "\.\/pages\/HomePage"/);
-  assert.match(app, /<Suspense fallback=\{<LoadingState title="正在打开页面" \/>\}>\{renderRoute\(pathname\)\}<\/Suspense>/);
+  assert.match(app, /<Suspense fallback=\{<PageSkeleton path=\{pathname\} \/>\}>\{renderRoute\(pathname\)\}<\/Suspense>/);
+  assert.match(app, /holdLazyModule/);
+  assert.doesNotMatch(app, /LoadingState/);
   assert.doesNotMatch(app, /Splash|假进度|splash-screen/i);
 
   for (const page of [
@@ -22,6 +24,7 @@ test("first-load keeps the home shell eager and splits the other product routes"
     "TaskPage",
     "AiSettingsPage",
     "ApplicationInfoPage",
+    "UpdateLogPage",
     "ProfileSettingsPage",
     "SettingsPage",
   ]) {

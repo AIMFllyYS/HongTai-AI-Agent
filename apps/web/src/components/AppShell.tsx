@@ -1,7 +1,6 @@
 import { createContext, useContext } from "react";
 import type { PropsWithChildren, ReactNode } from "react";
 import { BottomNav, type BottomNavProps } from "./BottomNav";
-import { BrandLogo } from "./BrandLogo";
 import { Icon } from "./Icon";
 import { useScrollMotion } from "../hooks/useScrollMotion";
 import type { Navigate, RouteKey } from "../router";
@@ -26,34 +25,64 @@ export interface AppShellProps extends PropsWithChildren {
   readonly activeNav?: BottomNavProps["active"];
   readonly showNav?: boolean;
   readonly visualTheme?: AppShellVisualTheme;
-  readonly headerMode?: "brand" | "detail";
+  readonly headerMode?: "large" | "detail" | "hidden";
   readonly leadingAction?: ReactNode;
   readonly headerAction?: ReactNode;
   readonly contextualAction?: ReactNode;
   readonly className?: string;
 }
 
-export function AppShell({ title, subtitle, navigate, backPath, activeNav, showNav = true, visualTheme = "workbench", headerMode, leadingAction, headerAction, contextualAction, className = "", children }: AppShellProps) {
+export function AppShell({
+  title,
+  subtitle,
+  navigate,
+  backPath,
+  activeNav,
+  showNav = true,
+  visualTheme = "workbench",
+  headerMode,
+  leadingAction,
+  headerAction,
+  contextualAction,
+  className = "",
+  children,
+}: AppShellProps) {
   const back = () => navigate(backPath ?? "/");
   const isDetailHeader = headerMode === "detail" || Boolean(backPath);
-  const hasBrandLeading = !leadingAction && !backPath;
-  const leading = leadingAction ?? (backPath ? <button aria-label="返回" className="icon-button" onClick={back} type="button"><Icon name="arrow_back" size={25} /></button> : <BrandLogo />);
+  const hideHeader = headerMode === "hidden";
+  const leading = leadingAction ?? (backPath
+    ? <button aria-label="返回" className="icon-button" onClick={back} type="button"><Icon name="chevron_left" size={24} /></button>
+    : null);
   const scrollState = useScrollMotion();
   const hasExternalNavigation = useContext(externalNavigationContext);
+  const shellMode = hideHeader ? "hidden" : isDetailHeader ? "detail" : "large";
 
   return (
-    <div className={`app-shell ${showNav ? "app-shell--with-nav" : ""} ${className}`.trim()} data-scroll-state={scrollState} data-visual-theme={visualTheme}>
-      <header className={`app-header ${isDetailHeader ? "app-header--detail" : ""} ${hasBrandLeading ? "app-header--brand" : ""}`.trim()}>
-        {leading}
-        <div className="app-header__title-wrap">
-          <h1>{title}</h1>
-          {subtitle ? <p>{subtitle}</p> : null}
-        </div>
-        <div className="app-header__action">{headerAction}</div>
-      </header>
-      <main className="app-content">{children}</main>
+    <div className={`app-shell ${showNav ? "app-shell--with-nav" : ""} app-shell--${shellMode} ${className}`.trim()} data-scroll-state={scrollState} data-visual-theme={visualTheme}>
+      {isDetailHeader && !hideHeader ? (
+        <header className="app-header app-header--detail">
+          {leading ?? <span className="app-header__slot" />}
+          <div className="app-header__title-wrap">
+            <h1>{title}</h1>
+            {subtitle ? <p>{subtitle}</p> : null}
+          </div>
+          <div className="app-header__action">{headerAction}</div>
+        </header>
+      ) : null}
+      <main className="app-content">
+        {!isDetailHeader && !hideHeader ? (
+          <header className="page-masthead">
+            <div className="page-masthead__titles">
+              <h1>{title}</h1>
+              {subtitle ? <p>{subtitle}</p> : null}
+            </div>
+            {(headerAction || leadingAction) ? <div className="page-masthead__action">{headerAction ?? leadingAction}</div> : null}
+          </header>
+        ) : null}
+        {children}
+      </main>
       {contextualAction ? <div className="contextual-action">{contextualAction}</div> : null}
-      {showNav && !hasExternalNavigation ? <BottomNav active={activeNav} navigate={navigate} visualTheme={visualTheme} /> : null}
+      {showNav && !hasExternalNavigation ? <BottomNav active={activeNav} navigate={navigate} /> : null}
     </div>
   );
 }

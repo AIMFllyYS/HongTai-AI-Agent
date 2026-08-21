@@ -13,29 +13,30 @@
 | 内容拆解 | 已接入 | 用户确认后基于真实转写或图文证据一次生成，五个板块分别校验后渐显，再保存 `content-analysis.v1` |
 | 舌象/面部观察 | 已接入 | 单张私有图片、五板块生成进度、结构化日常观察报告与追问；不是医疗诊断 |
 | 自动状态更新 | 已接入 | 任务、拆解和观察报告通过窄订阅更新；健康状态下无需手动刷新或固定轮询 |
-| 本地视频制作 | 已接入 | 基于正式内容拆解导入本机素材，生成计划并在设备合成竖屏 MP4 |
+| 本地视频制作 | 已接入 | Agent 或爆款复刻；新计划落盘为 `production-plan.v3`（模型仍出 v2 形状，TypeScript 组装时间轴）；可微调后在设备合成竖屏 MP4 |
 | 模板管理 | 已接入 | 从成功拆解复制结构，或新建、编辑、删除本地模板 |
-| 富迪素材库 | 已接入 | 底部导航可离线打开随包宣传图；不是可运行的素材管理能力 |
-| 发布 | 未接入 | 页面只展示明确的 `planned` 状态，不伪造上传或发布结果 |
+| 富迪素材库 | 已接入 | 观察、拆解、模板页头像左侧和制作页页头可离线打开随包宣传图；不是可运行的素材管理能力 |
+| 发布 | 未接入 | 无路由；`features.publish=planned`。不伪造上传或发布结果 |
 
 ## 架构一览
 
 ```text
 React UI（apps/web）
-        ↓ 仅使用 AppRuntime 与版本化 DTO
+        ↓ 仅使用 AppRuntime 与版本化 DTO（含 replica）
 Capacitor Runtime（packages/capacitor-runtime）
         ↓ 组合共享 Flow 与 Android I/O 端口
 core + ai + platforms（共享 TypeScript 应用逻辑）
         ↓
-Android 原生插件（android/app）
+Android 九个自定义插件 + @capacitor/app
         ↓
 Keystore、私有文件、Photo Picker、受控网络、Media3
 ```
 
 - `core`、`ai`、`platforms` 不导入 Node、浏览器、Capacitor 或 Android API。
 - Kotlin 只做系统 I/O；不复制 Prompt、Schema、平台解析、业务状态机或 UI 决策。
+- 制作计划：模型输出 v2 JSON，本地组装并校验 v3 后再交给 Media3。
 - CLI 是开发期回归入口，不是 APK 的服务端或运行依赖。
-- 详细规则见[架构与工程规范](docs/架构与工程规范.md)，AI/开发任务规则见[AGENTS.md](AGENTS.md)。
+- 详细规则见[架构与工程规范](docs/架构与工程规范.md)，源码树见[项目架构解析](docs/项目架构解析.md)，弹层与切页见[动效规范](docs/动效规范.md)，AI/开发任务规则见[AGENTS.md](AGENTS.md)。
 
 ## 环境与安装
 
@@ -96,6 +97,7 @@ pnpm --filter @hongtai/web build
 - [文档索引与职责](docs/文档索引.md)
 - [当前能力与发布状态](docs/当前能力与发布状态.md)
 - [架构与工程规范](docs/架构与工程规范.md)
+- [项目架构解析](docs/项目架构解析.md)
 - [应用界面层数据对接清单](docs/前端显示板块对接清单.md)
 - [错误码与应用界面通知约定](docs/错误码与前端通知约定.md)
 - [AI应用能力层架构](docs/AI应用能力层架构.md)

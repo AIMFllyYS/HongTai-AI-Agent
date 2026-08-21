@@ -78,6 +78,10 @@ test("UI copy describes local app storage and Keystore without promising an encr
   assert.doesNotMatch(main, /title="本地运行时|description="[^"]*运行时/u);
   assert.match(settings, /本机应用数据/);
   assert.match(settings, /Android Keystore/);
+  assert.match(settings, /深色模式/);
+  assert.match(settings, /通知提醒/);
+  assert.match(settings, /清理缓存/);
+  assert.doesNotMatch(settings, /检查更新|用户协议/);
 });
 
 test("AI capability probes cannot run against a saved connection while the visible form is unsaved", () => {
@@ -135,7 +139,14 @@ test("settings keep cloud TTS inside AI connection and expose app information th
   const router = read("router.ts");
 
   assert.match(settings, /appInfoSettingsPath/);
-  assert.match(settings, /应用信息/);
+  assert.match(settings, /关于/);
+  assert.match(settings, /深色模式/);
+  assert.match(settings, /清理缓存/);
+  assert.match(settings, /通知提醒/);
+  assert.match(settings, /主题色/);
+  assert.match(settings, /隐私说明/);
+  assert.doesNotMatch(settings, /检查更新/);
+  assert.doesNotMatch(settings, /128 MB/);
   assert.match(ai, /一键配置/);
   assert.match(ai, /视频配音模型/);
   assert.match(ai, /AI_PROVIDER_PRESETS/);
@@ -143,6 +154,20 @@ test("settings keep cloud TTS inside AI connection and expose app information th
   assert.doesNotMatch(settings, /TTS 语音合成/);
   assert.doesNotMatch(router, /settings-tts/);
   assert.match(router, /settings-app-info/);
+  assert.match(router, /settings-update-log/);
   assert.doesNotMatch(app, /TtsSettingsPage/);
   assert.match(app, /ApplicationInfoPage/);
+  assert.match(app, /UpdateLogPage/);
+  assert.match(read("pages/ApplicationInfoPage.tsx"), /title="关于"/);
+  assert.match(read("pages/ApplicationInfoPage.tsx"), /updateLogSettingsPath\(\)/);
+  assert.match(read("pages/ApplicationInfoPage.tsx"), /本版要点/);
+  assert.match(read("pages/ApplicationInfoPage.tsx"), /settings-list/);
+  assert.doesNotMatch(read("pages/ApplicationInfoPage.tsx"), /新版本改了什么/);
+  assert.match(read("pages/UpdateLogPage.tsx"), /OFFICIAL_UPDATE_LOG_URL/);
+  assert.match(read("pages/UpdateLogPage.tsx"), /PageSkeleton/);
+  assert.match(read("pages/UpdateLogPage.tsx"), /ErrorState/);
+  assert.match(read("pages/UpdateLogPage.tsx"), /useSkeletonHold/);
+  assert.doesNotMatch(read("pages/UpdateLogPage.tsx"), /正在打开官方更新页|loader_circle/);
+  assert.match(read("data/official-update-log.ts"), /https:\/\/husteread\.com\/HongTai\/download\.html/);
+  assert.doesNotMatch(read("pages/UpdateLogPage.tsx"), /检查更新/);
 });

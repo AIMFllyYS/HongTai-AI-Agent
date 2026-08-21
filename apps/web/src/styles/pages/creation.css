@@ -159,7 +159,7 @@
 
 .platform-card.is-selected {
   color: var(--color-primary-strong);
-  background: #f0faf6;
+  background: var(--palette-brand-tint);
   border-color: var(--color-primary-soft);
 }
 
@@ -301,7 +301,7 @@
   place-items: center;
   overflow: hidden;
   background:
-    radial-gradient(circle at 74% 24%, rgba(187, 233, 225, 0.76), transparent 22%),
+    radial-gradient(circle at 74% 24%, rgba(16, 185, 129, 0.28), transparent 22%),
     linear-gradient(135deg, #0e4138, #1d7668 55%, #aacdc3);
 }
 

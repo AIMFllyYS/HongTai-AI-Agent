@@ -197,6 +197,11 @@ test("舌象报告在首次JSON无效时只修复一次并保存标准结果", a
   assert.equal(result.report.wellnessReferences[0]?.certainty, "uncertain");
   assert.equal(result.report.wellnessReferences[0]?.notADiagnosis, true);
   assert.match(result.report.wellnessReferences[0]?.statement ?? "", /单张图片不能据此诊断/u);
+  assert.equal(result.report.summary.headline, "舌色");
+  assert.equal(
+    result.report.disclaimer,
+    "本报告给出基于图片的初步判断，仅供日常参考和到医院正规核实，不是正式诊疗结论，不提供患病概率或健康评分，也不能替代专业检查。",
+  );
   assert.equal(result.report.observations.length, 3);
   assert.equal(provider.calls.length, 2);
   assert.equal(provider.calls[0]?.jsonSchema?.name, "diagnosis_single_response_v2");

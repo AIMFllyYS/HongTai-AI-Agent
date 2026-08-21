@@ -165,6 +165,40 @@ export function contentTypeLabel(contentType: AppTaskRecord["contentType"]): str
   return undefined;
 }
 
+export function mediaOrientationLabel(media?: { readonly width?: number; readonly height?: number }): string | undefined {
+  if (typeof media?.width !== "number" || typeof media?.height !== "number" || media.width <= 0 || media.height <= 0) {
+    return undefined;
+  }
+  if (media.height > media.width) return "竖屏";
+  if (media.width > media.height) return "横屏";
+  return undefined;
+}
+
+const structureRoleLabels: Readonly<Record<string, string>> = {
+  opening: "开场",
+  development: "展开",
+  proof: "论证",
+  transition: "过渡",
+  closing: "收束",
+  other: "其他",
+};
+
+export function structureRoleLabel(role?: string): string | undefined {
+  if (!role) return undefined;
+  return structureRoleLabels[role] ?? role;
+}
+
+const riskLevelLabels: Readonly<Record<string, string>> = {
+  low: "低",
+  medium: "中",
+  high: "高",
+};
+
+export function riskLevelLabel(level?: string): string | undefined {
+  if (!level) return undefined;
+  return riskLevelLabels[level] ?? level;
+}
+
 export function formatTaskTime(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const date = new Date(value);

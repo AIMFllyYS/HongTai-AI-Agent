@@ -3,9 +3,10 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { resolve } from "node:path";
 
-import { diagnosisSinglePrompt, diagnosisSingleRepairPrompt } from "../packages/ai/src/prompts/diagnosis-report-single";
-import { diagnosisConversationPrompt } from "../packages/ai/src/prompts/diagnosis-conversation";
+import { diagnosisSections, validatedReport } from "../packages/ai/src/flows/diagnosis/diagnosis-report-sections";
 import { FIVE_ORGANS_OBSERVATION_KNOWLEDGE } from "../packages/ai/src/knowledge/five-organs-observation.generated";
+import { diagnosisConversationPrompt } from "../packages/ai/src/prompts/diagnosis-conversation";
+import { diagnosisSinglePrompt, diagnosisSingleRepairPrompt } from "../packages/ai/src/prompts/diagnosis-report-single";
 import { diagnosisFollowUpReplySchema } from "../packages/ai/src/schemas/diagnosis-follow-up";
 import {
   diagnosisReportSchema,
@@ -35,6 +36,11 @@ test("五脏六腑观察知识库以独立 Markdown 为唯一权威并完整注�
   assert.ok(facePrompt.includes(markdown));
   assert.equal(tonguePrompt.split(markdown).length, 2, "知识库只注入一次");
   assert.match(tonguePrompt, /单一齿痕、白苔或舌红直接等同于湿气重、胃寒或心火旺/u);
+  assert.match(tonguePrompt, /需医院核实的不确定初步判断/u);
+  assert.match(tonguePrompt, /禁止确诊口吻、概率数字、处方、健康评分/u);
+  assert.match(tonguePrompt, /可能提示某某倾向，需医院核实/u);
+  assert.match(tonguePrompt, /最多两个追问/u);
+  assert.doesNotMatch(tonguePrompt, /最多一个必要追问/u);
   assert.match(tonguePrompt, /wellnessReferences/u);
   assert.match(tonguePrompt, /舌诊专属观察重点/u);
   assert.doesNotMatch(tonguePrompt, /面诊专属观察重点/u);
@@ -136,6 +142,12 @@ test("紧凑响应与组装板块拦截确诊、概率、处方和健康评分�
   });
   assert.equal(traditional.success, true);
 
+  const hospitalCheck = diagnosisSingleResponseSchema.safeParse({
+    ...compactBase,
+    wellnessReferences: [{ title: "初步判断", statement: "可能提示脾气不足倾向，需医院核实。" }],
+  });
+  assert.equal(hospitalCheck.success, true);
+
   const knowledgeDisclaimer = diagnosisSingleResponseSchema.safeParse({
     ...compactBase,
     wellnessReferences: [{
@@ -153,6 +165,12 @@ test("紧凑响应与组装板块拦截确诊、概率、处方和健康评分�
     wellnessReferences: [{ title: "错误结论", statement: "可能确诊为糖尿病，患病概率80%。" }],
   });
   assert.equal(diagnosisClaim.success, false);
+
+  const definiteDisease = diagnosisSingleResponseSchema.safeParse({
+    ...compactBase,
+    wellnessReferences: [{ title: "错误结论", statement: "确诊为糖尿病，患病概率80%。" }],
+  });
+  assert.equal(definiteDisease.success, false);
 
   const prescriptionAdvice = diagnosisSingleResponseSchema.safeParse({
     ...compactBase,
@@ -192,10 +210,35 @@ test("紧凑响应与组装板块拦截确诊、概率、处方和健康评分�
     }],
     safetyGuidance: { level: "none", reasons: [], recommendedAction: "如有持续不适请咨询专业人员。" },
     limitations: ["单张图片不能替代专业检查。"],
-    disclaimer: "本报告仅提供图片中可见状态的日常观察参考，不是疾病诊断，不提供患病概率，也不能替代专业检查。",
+    disclaimer: "本报告给出基于图片的初步判断，仅供日常参考和到医院正规核实，不是正式诊疗结论，不提供患病概率或健康评分，也不能替代专业检查。",
     followUpQuestions: [],
   });
   assert.equal(reportOverreach.success, false);
+});
+
+test("组装报告用第一条观察标签作标题，否则截取摘要，并按中文分号拆最多两个追问", () => {
+  const assembled = validatedReport({
+    ...compactBase,
+    wellnessReferences: [{ title: "传统观察方向", statement: "传统观察中，这组特征可能与脾气不足、津液运化失常一类状态同时出现。" }],
+    followUp: "近期是否同时有食欲变化？；最近大便是否偏溏？",
+  }, "tongue");
+  assert.equal(assembled.summary.headline, "浅齿痕");
+  assert.equal(
+    assembled.disclaimer,
+    "本报告给出基于图片的初步判断，仅供日常参考和到医院正规核实，不是正式诊疗结论，不提供患病概率或健康评分，也不能替代专业检查。",
+  );
+  assert.deepEqual(assembled.followUpQuestions, ["近期是否同时有食欲变化？", "最近大便是否偏溏？"]);
+  assert.equal(assembled.wellnessReferences[0]?.notADiagnosis, true);
+  assert.match(assembled.wellnessReferences[0]?.statement ?? "", /可能与脾气不足/u);
+
+  const fromSummary = diagnosisSections({
+    ...compactBase,
+    observations: [],
+    wellnessReferences: [],
+    summary: "这是一段没有观察标签时需要截到二十四字的可见状态摘要内容",
+    followUp: "",
+  });
+  assert.equal(fromSummary.summary.summary.headline, "这是一段没有观察标签时需要截到二十四字的可见状态");
 });
 
 test("清晰、有限和不可用图片遵守各自的观察数量边界", () => {
@@ -234,6 +277,7 @@ test("后续对话只继承安全边界而不继承JSON输出约束", () => {
     disclaimer: "本报告不是疾病诊断。",
     followUpQuestions: [],
   });
-  assert.match(prompt, /回复自然中文文本，不输出JSON/u);
+  assert.match(prompt, /回复自然中文文本，可用简单 Markdown/u);
+  assert.match(prompt, /需医院核实的不确定初步判断/u);
   assert.doesNotMatch(prompt, /八个顶层字段|最终结果只输出一个JSON对象/u);
 });

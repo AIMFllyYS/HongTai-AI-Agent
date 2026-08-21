@@ -40,6 +40,8 @@ class MainActivity : BridgeActivity() {
       isAppearanceLightStatusBars = true
       isAppearanceLightNavigationBars = true
     }
-    bridge.webView.overScrollMode = View.OVER_SCROLL_ALWAYS
+    // No pull-to-refresh contract. Keep document scrolling, but never stretch
+    // the WebView contents at the top or bottom edge.
+    bridge.webView.overScrollMode = View.OVER_SCROLL_NEVER
   }
 }

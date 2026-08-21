@@ -1,4 +1,3 @@
-import { safeUrlForDisplay } from "@hongtai/core";
 import type { ContentAnalysisRecord, FeatureCapability, StructuredGenerationProgressV1, TaskDetailRecord, TaskIssue } from "@hongtai/core";
 
 import { Button } from "../components/Buttons";
@@ -11,7 +10,6 @@ import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
 import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
 import { contentAnalysisModuleDefinitions } from "../features/tasks/content-analysis-module-progress";
 import { readContentAnalysis } from "../features/tasks/content-analysis-presenters";
-import { platformLabel } from "../features/tasks/task-presenters";
 import { aiSettingsPath, type Navigate } from "../router";
 
 export interface TaskAnalysisPageProps {
@@ -43,15 +41,13 @@ export function TaskAnalysisPage({
       ? { partialResult: () => document.getElementById("task-detail-summary")?.scrollIntoView({ block: "start" }) }
       : {}),
   };
-  const localVideo = detail.task.sourceKind === "local_video";
-  const sourceUrl = localVideo ? "本地上传 · 仅使用已保存文稿证据" : safeUrlForDisplay(detail.content.canonicalUrl ?? detail.task.sourceUrl);
-  const platform = localVideo ? "本地上传" : platformLabel(detail.task.platform);
+  const thinking = Boolean(record?.status === "running" || progress);
+  const footer = thinking
+    ? "可以离开此页。思考过程不会保存，完成后的结果会留在本机。"
+    : "分析过程不会保留；本页只保存最终结果和对应原始内容。";
 
   return (
     <div className="page-stack page-task-analysis">
-      <p className="technical-value">{sourceUrl}</p>
-      {platform ? <span><Icon name="language" size={15} />{platform}</span> : null}
-
       {recordIssue ? <IssueNotice actions={issueActions} issue={recordIssue} /> : null}
       {contentAnalysisCapability !== "available" && record?.status !== "succeeded" ? <TaskCapabilityNotice capability={contentAnalysisCapability} feature="contentAnalysis" /> : null}
 
@@ -64,7 +60,7 @@ export function TaskAnalysisPage({
       {record?.status === "succeeded" && analysis?.available ? <ContentAnalysisDocument analysis={analysis} evidenceUnits={detail.evidenceUnits} /> : null}
 
       <GlassCard className="task-analysis-footer">
-        <span><Icon name="info" size={18} />分析过程不会保留；页面只保存最终结果和对应的原始内容。</span>
+        <span><Icon name="info" size={18} />{footer}</span>
         {readIssue ? <Button onClick={() => void onReload()} variant="quiet">重新读取本地结果</Button> : null}
       </GlassCard>
     </div>

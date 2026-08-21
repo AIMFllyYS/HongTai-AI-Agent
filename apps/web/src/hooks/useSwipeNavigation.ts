@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent, PointerEventHandler } from "react";
 import type { BottomNavProps } from "../components/BottomNav";
 import { adjacentPrimaryNavPath } from "../navigation/primary-nav";
-import type { Navigate } from "../router";
 
 const SWIPE_DISTANCE = 56;
 const SWIPE_DIRECTION_RATIO = 1.25;
@@ -17,7 +16,7 @@ export interface SwipeCommit {
 }
 
 export interface SwipeNavigationOptions {
-  readonly onCommit?: (commit: SwipeCommit) => void;
+  readonly onCommit: (commit: SwipeCommit) => void;
 }
 
 interface PointerOrigin {
@@ -55,11 +54,19 @@ function getViewportWidth(target: HTMLElement): number {
   return target.ownerDocument.documentElement.clientWidth || target.clientWidth;
 }
 
-export function useSwipeNavigation(active: BottomNavProps["active"], navigate: Navigate, { onCommit }: SwipeNavigationOptions = {}): SwipeNavigationHandlers {
+export function useSwipeNavigation(active: BottomNavProps["active"], { onCommit }: SwipeNavigationOptions): SwipeNavigationHandlers {
   const origin = useRef<PointerOrigin | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
+
+  const capturePointer = useCallback((event: PointerEvent<HTMLElement>) => {
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Synthetic audit events do not have an active pointer; real browser events still capture normally.
+    }
+  }, []);
 
   const releasePointer = useCallback((event?: PointerEvent<HTMLElement>) => {
     if (event?.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -84,7 +91,7 @@ export function useSwipeNavigation(active: BottomNavProps["active"], navigate: N
 
   const onPointerDown = useCallback<PointerEventHandler<HTMLElement>>((event) => {
     if (isSettling) return;
-    if (!active || !isSupportedPointer(event.pointerType) || (event.pointerType === "mouse" && event.button !== 0) || isSwipeTarget(event.target)) {
+    if (!active || active === "create" || !isSupportedPointer(event.pointerType) || (event.pointerType === "mouse" && event.button !== 0) || isSwipeTarget(event.target)) {
       clearGesture();
       return;
     }
@@ -96,11 +103,6 @@ export function useSwipeNavigation(active: BottomNavProps["active"], navigate: N
       y: event.clientY,
       direction: null,
     };
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      // Synthetic audit events do not have an active pointer; real browser events still capture normally.
-    }
   }, [active, clearGesture, isSettling]);
 
   const onPointerMove = useCallback<PointerEventHandler<HTMLElement>>((event) => {
@@ -113,8 +115,10 @@ export function useSwipeNavigation(active: BottomNavProps["active"], navigate: N
       if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < SWIPE_LOCK_DISTANCE) return;
       if (Math.abs(deltaX) > Math.abs(deltaY) * SWIPE_DIRECTION_RATIO) {
         start.direction = "horizontal";
+        capturePointer(event);
       } else if (Math.abs(deltaY) > Math.abs(deltaX) * SWIPE_DIRECTION_RATIO) {
         start.direction = "vertical";
+        releasePointer(event);
         return;
       } else {
         return;
@@ -123,7 +127,7 @@ export function useSwipeNavigation(active: BottomNavProps["active"], navigate: N
 
     setIsDragging(true);
     setSwipeOffset(clampDragOffset(deltaX));
-  }, [isSettling]);
+  }, [capturePointer, isSettling, releasePointer]);
 
   const onPointerUp = useCallback<PointerEventHandler<HTMLElement>>((event) => {
     const start = origin.current;
@@ -146,16 +150,10 @@ export function useSwipeNavigation(active: BottomNavProps["active"], navigate: N
     releasePointer(event);
     origin.current = null;
     setIsDragging(false);
-    if (onCommit) {
-      setIsSettling(true);
-      setSwipeOffset(direction === "next" ? -getViewportWidth(event.currentTarget) : getViewportWidth(event.currentTarget));
-      onCommit({ direction: direction === "next" ? "forward" : "backward", path: nextPath });
-      return;
-    }
-
-    clearGesture();
-    navigate(nextPath);
-  }, [active, clearGesture, navigate, onCommit, releasePointer]);
+    setIsSettling(true);
+    setSwipeOffset(direction === "next" ? -getViewportWidth(event.currentTarget) : getViewportWidth(event.currentTarget));
+    onCommit({ direction: direction === "next" ? "forward" : "backward", path: nextPath });
+  }, [active, clearGesture, onCommit, releasePointer]);
 
   const onPointerCancel = useCallback<PointerEventHandler<HTMLElement>>((event) => {
     clearGesture(event);

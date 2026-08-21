@@ -14,6 +14,7 @@ import { NotificationProvider } from "./notifications/NotificationProvider";
 import { installAppLifecycleCoordinator } from "./runtime/app-lifecycle";
 import { useBrandSplashReady } from "./runtime/brand-splash";
 import { installVisualViewportInset } from "./runtime/visual-viewport-inset";
+import { applyStoredAppearancePreferences } from "./runtime/appearance-preferences";
 import "./styles/tokens.css";
 import "./styles/global.css";
 
@@ -28,6 +29,7 @@ if (!root) {
 // scoped baseline for the fixed header and bottom chrome; devices that
 // expose a larger inset still win through CSS max().
 document.documentElement.dataset.platform = Capacitor.getPlatform();
+applyStoredAppearancePreferences();
 installVisualViewportInset();
 
 let runtimePromise: Promise<AppRuntime> | undefined;

@@ -1,6 +1,8 @@
 # Android 原生边缘效果与固定导航壳层设计
 
-日期：2026-08-07
+> 状态：**部分过期**。固定顶栏、底栏和「WebView 作为纵向滚动主体」仍有效。`OVER_SCROLL_ALWAYS` 与「拉伸或边缘光效可接受」已否决：当前源码使用 `OVER_SCROLL_NEVER`，`html`/`body` 使用 `overscroll-behavior: none`。横向滑动视口只许 `overscroll-behavior-x: contain`，禁止对 Y 轴设 `none`。不做下拉刷新。活口径见 [动效规范](../../动效规范.md) 第 5 节。
+>
+> 日期：2026-08-07
 
 ## 目标
 

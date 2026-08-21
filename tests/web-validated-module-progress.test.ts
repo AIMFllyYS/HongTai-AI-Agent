@@ -217,10 +217,12 @@ test("live generation pages use narrow subscriptions with no healthy-state manua
   assert.match(observationStart, /LiveListReadReconciler<DiagnosisSessionRecord>/);
   assert.match(observationStart, /observationHistoryReads\.current\.record\(/);
   assert.match(observationStart, /if \(reconciled === undefined\) return;/);
-  assert.match(observationStart, /event\.type === "failed"[\s\S]*runtime\.diagnosis\.getSession\(session\.sessionId\)/);
+  assert.match(observationStart, /event\.type === "failed"[\s\S]*runtime\.diagnosis\.getSession\(sessionId\)/);
   assert.match(observationReport, /runtime\.diagnosis\.subscribeReport\(sessionId/);
-  assert.match(observationReport, /reportWaitingForStart[\s\S]*开始生成报告/);
-  assert.match(observationReport, /reportIsActive \? <ValidatedModuleProgress/);
+  assert.match(observationReport, /ObservationObservingScreen/);
+  assert.match(observationReport, /record\?\.status === "succeeded" \|\| record\?\.status === "failed"/);
+  assert.doesNotMatch(observationReport, /开始生成报告/);
+  assert.doesNotMatch(observationReport, /ValidatedModuleProgress/);
 
   for (const source of [home, taskPage, observationStart, observationReport]) {
     assert.doesNotMatch(source, /setInterval|setTimeout|WebSocket/);
@@ -244,24 +246,27 @@ test("live generation renders runtime-only deep thinking and keeps busy primary 
   const home = read("pages/TaskHomePage.tsx");
   const detail = read("pages/TaskDetailPage.tsx");
   const observationStart = read("pages/ObservationStartPage.tsx");
-  const observationReport = read("pages/ObservationReportPage.tsx");
+  const observationPanels = read("features/diagnosis/observation-start-panels.tsx");
+  const followUpComposer = read("features/diagnosis/observation-follow-up-composer.tsx");
 
   assert.match(component, /DeepThinkingPanel/);
   assert.match(component, /progress\?\.thinking/);
   assert.match(thinking, /<details[\s\S]*深度思考[\s\S]*<pre/);
   assert.match(thinking, /thinking\.status === "streaming"[\s\S]*setOpen\(true\)/);
   assert.match(thinking, /thinking\.status === "completed"[\s\S]*setOpen\(false\)/);
-  assert.match(thinking, /本次生成期间[\s\S]*不会保存/);
+  assert.match(thinking, /本次生成期间[\s\S]*不会保存|推理内容仅在本次生成期间显示/);
   assert.doesNotMatch(thinking, /dangerouslySetInnerHTML|localStorage|sessionStorage/);
   assert.match(css, /\.deep-thinking-panel/);
-  assert.match(css, /\.deep-thinking-panel\s*\{[^}]*margin:\s*var\(--space-3\)\s+var\(--space-4\)\s*;/);
-  assert.doesNotMatch(css, /\.deep-thinking-panel\s*\{[^}]*margin:\s*var\(--space-3\)\s+var\(--space-4\)\s+0\s*;/);
-  assert.match(css, /\.button--primary\.is-busy:disabled[\s\S]*color:\s*#000[\s\S]*opacity:\s*1/);
-  assert.match(observationStart, /className=\{loading \? "is-busy" : ""\}/);
+  assert.match(css, /\.validated-module-progress\s*\{[^}]*gap:\s*var\(--space-3\)/s);
+  assert.match(css, /\.deep-thinking-panel\s*\{[^}]*overflow:\s*visible/s);
+  assert.doesNotMatch(css, /\.deep-thinking-panel\s*\{[^}]*margin:\s*var\(--space-3\)\s+var\(--space-4\)\s+0/s);
+  assert.doesNotMatch(css, /\.validated-module-progress\s*\{[^}]*gap:\s*0\s*;/s);
+  assert.match(css, /\.button--primary\.is-busy:disabled[\s\S]*color:\s*var\(--color-text-on-primary\)[\s\S]*opacity:\s*1/);
+  assert.match(observationPanels, /className=\{confirming \? "is-busy" : ""\}/);
   assert.match(detail, /className=\{pendingAction === "analysis" \? "is-busy" : ""\}/);
   assert.match(home, /className=\{videoImporting \? "is-busy" : ""\}/);
   assert.match(home, /<ValidatedModuleProgress/);
   assert.doesNotMatch(home, /taskAnalysisPath/);
-  assert.match(observationReport, /className=\{chatPending \? "is-busy" : ""\}/);
-  assert.doesNotMatch([component, home, detail, observationStart].join("\n"), /正在生成五个板块|正在按顺序生成当前板块/);
+  assert.match(followUpComposer, /pending \? "observation-follow-up-composer__send is-busy"/);
+  assert.doesNotMatch([component, home, detail, observationStart, observationPanels].join("\n"), /正在生成五个板块|正在按顺序生成当前板块/);
 });

@@ -88,6 +88,8 @@ function dependencies(withVideo: boolean, withAudio = false): { dependencies: In
       audios: withAudio ? [{ kind: "audio", url: "https://media.example/audio.m4s" }] : [],
       images: [],
       subtitles: [],
+      likeCount: 128,
+      favoriteCount: 64,
       raw: {
         item: {
           play_addr: "https://cdn.example/play.mp4?signature=fake-sign",
@@ -138,6 +140,12 @@ test("完整流水线覆盖七个阶段、保留两种文稿并清理日志URL",
   assert.doesNotMatch(setup.store.values.get(paths.task) ?? "", /复制打开抖音|后续还有|b23\.tv/);
   assert.doesNotMatch(setup.store.values.get(paths.metadata) ?? "", /private-token|xsec_token|media-secret|signature|Cookie|session=secret|synthetic-cookie|Bearer SYNTHETIC|fake-sign/);
   assert.doesNotMatch(setup.store.values.get(paths.metadata) ?? "", /"raw"/, "metadata is the safe presentation projection, not a raw platform response");
+  const storedMetadata = JSON.parse(setup.store.values.get(paths.metadata) ?? "{}") as {
+    readonly likeCount?: number;
+    readonly favoriteCount?: number;
+  };
+  assert.equal(storedMetadata.likeCount, 128);
+  assert.equal(storedMetadata.favoriteCount, 64);
   assert.equal(setup.store.values.has(paths.rawPage), false, "rawPage HTML is not a product artifact");
   const rawResponse = setup.store.values.get(paths.rawResponse) ?? "";
   assert.doesNotMatch(rawResponse, /Cookie|Authorization|signature=|fake-sign|synthetic-cookie|Bearer SYNTHETIC|media-secret|private-token/i);
@@ -291,6 +299,11 @@ test("本地上传视频复用七阶段和ASR证据且不伪造平台或下载",
   const metadata = JSON.parse(setup.store.values.get(paths.metadata) ?? "{}") as {
     readonly title?: string;
     readonly sourceKind?: string;
+    readonly likeCount?: number;
+    readonly favoriteCount?: number;
+    readonly commentCount?: number;
+    readonly shareCount?: number;
+    readonly playCount?: number;
   };
 
   assert.equal(result.status, "succeeded");
@@ -301,6 +314,11 @@ test("本地上传视频复用七阶段和ASR证据且不伪造平台或下载",
   assert.equal(task.platform, undefined);
   assert.equal(metadata.title, "口播原片.mp4");
   assert.equal(metadata.sourceKind, "local_video");
+  assert.equal(metadata.likeCount, undefined);
+  assert.equal(metadata.favoriteCount, undefined);
+  assert.equal(metadata.commentCount, undefined);
+  assert.equal(metadata.shareCount, undefined);
+  assert.equal(metadata.playCount, undefined);
   assert.equal(adapterCalled, false);
   assert.equal(downloaderCalled, false);
   assert.match(setup.store.values.get(paths.transcript) ?? "", /原始文稿/u);

@@ -204,7 +204,8 @@ test("task, observation, and settings pages use the one IssueNotice action bound
   assert.match(home, /editInput:\s*focusTaskShareInput/);
   assert.match(create, /editInput:\s*focusProductionInput/);
   assert.match(templates, /editInput:\s*focusTemplateName/);
-  assert.match(observation, /editInput:\s*focusQuestion/);
+  assert.match(observation, /editInput:/);
+  assert.match(observation, /setFollowUpOpen\(true\)/);
   assert.doesNotMatch(processing, /editInput:/);
   assert.doesNotMatch(detail, /editInput:/);
   assert.doesNotMatch(processing, />回首页</);

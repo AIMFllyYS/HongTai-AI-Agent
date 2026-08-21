@@ -25,18 +25,18 @@ test("visual styles expose an explicit responsibility-based cascade", () => {
   }
 });
 
-test("visual tokens provide semantic workbench and warm-soft-tech roles", () => {
+test("visual tokens provide the mobile redesign palette", () => {
   const tokens = read("styles/tokens.css");
 
   for (const token of [
-    "--palette-deep-emerald",
-    "--palette-vitality-turquoise",
+    "--palette-brand",
+    "--palette-ink-900",
     "--color-surface-canvas",
     "--color-action-primary",
     "--color-text-primary",
     "--color-focus-ring",
     "--color-status-success",
-    "[data-visual-theme=\"warm-soft-tech\"]",
+    "--palette-deep-emerald",
   ]) {
     assert.match(tokens, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `${token} should be defined`);
   }
@@ -44,6 +44,42 @@ test("visual tokens provide semantic workbench and warm-soft-tech roles", () => 
   for (const legacyTone of ["#b07150", "#f2dfd2", "#4a3328"]) {
     assert.doesNotMatch(tokens, new RegExp(legacyTone, "i"), `${legacyTone} should not be a token`);
   }
+});
+
+test("shared tabs stay in the components layer so segmented pills survive Android WebView", () => {
+  const components = read("styles/components.css");
+  const pageSheets = [
+    "styles/pages/analysis.css",
+    "styles/pages/home.css",
+    "styles/pages/tasks-runtime.css",
+    "styles/pages/creation.css",
+    "styles/pages/production-runtime.css",
+    "styles/pages/production-edit.css",
+    "styles/pages/replica-wizard.css",
+    "styles/pages/library.css",
+    "styles/pages/settings.css",
+    "styles/pages/observation-runtime.css",
+    "styles/pages/vitality.css",
+  ];
+
+  for (const relativePath of pageSheets) {
+    assert.doesNotMatch(
+      read(relativePath),
+      /(?:^|[^a-z-])\.tabs(?:\s|\{|,|:|\.|--)/m,
+      `${relativePath} must not restyle shared .tabs; layer(pages) would clip segmented labels`,
+    );
+  }
+
+  assert.match(components, /\.tabs--segmented\s*\{[^}]*display:\s*grid/s);
+  assert.match(components, /\.tabs--segmented\s*\{[^}]*grid-auto-columns:\s*minmax\(0,\s*1fr\)/s);
+  assert.match(components, /\.tabs button\s*\{[^}]*appearance:\s*none/s);
+  assert.match(components, /\.tabs--segmented button\s*\{[^}]*appearance:\s*none/s);
+  assert.match(components, /\.tabs--segmented button\s*\{[^}]*min-height:\s*0/s);
+  assert.match(components, /\.tabs--segmented button\s*\{[^}]*height:\s*1\.75rem/s);
+  assert.match(components, /\.tabs--segmented button\s*\{[^}]*background:\s*transparent/s);
+  assert.match(components, /\.tabs--segmented__thumb\s*\{[^}]*background:\s*var\(--color-surface-card\)/s);
+  assert.match(components, /\.tabs--segmented button\.is-active\s*\{[^}]*background:\s*transparent/s);
+  assert.match(components, /\.tabs--segmented button\.is-active::after\s*\{[^}]*display:\s*none/s);
 });
 
 test("legacy vitality brown overrides are removed from the stylesheet graph", () => {

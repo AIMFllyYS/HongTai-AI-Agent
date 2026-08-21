@@ -87,7 +87,7 @@ export function ProductionProjectCard({ project, progress, progressMessage, busy
       <p className="production-mode-note"><Icon name={avatarMode ? "record_voice_over" : "voice"} size={16} />{avatarMode ? "保留上传数字人视频的原始口播声音；口播稿只用于生成同步字幕，不再叠加 TTS。" : "本地渲染会为制作计划中的每个镜头生成 AI 连接页已配置的中文 TTS 旁白和字幕；旧连接未配置云端 TTS 时才使用 Android 系统语音。"}</p>
 
       <Tabs active={activeTab} ariaLabel="制作项目视角" id={TAB_GROUP_ID} onSelect={setActiveTab} tabs={PRODUCTION_WORKBENCH_TABS} />
-      <TabPanel className="production-workbench-panel" id={tabPanelId(TAB_GROUP_ID)} labelledBy={tabId(TAB_GROUP_ID, activeIndex)}>
+      <TabPanel className="production-workbench-panel" id={tabPanelId(TAB_GROUP_ID)} labelledBy={tabId(TAB_GROUP_ID, activeIndex)} slideKey={activeTab} tabs={PRODUCTION_WORKBENCH_TABS}>
         {activeTab === "预览" ? (
           <div className="production-preview-tab">
             {shots.length > 0 ? <div className="production-shot-list"><h3>制作计划</h3>{shots.map((shot) => <article key={shot.order}><em>{String(shot.order).padStart(2, "0")}</em><div><strong>{shot.caption}</strong><p>{shot.narration}</p></div><small>{shot.durationSeconds} 秒</small></article>)}</div> : <p className="production-hint"><Icon name="info" size={16} />还没有制作计划。添加素材后，用底部主按钮生成。</p>}

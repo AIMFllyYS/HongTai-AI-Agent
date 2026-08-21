@@ -30,7 +30,11 @@ test("approved gesture shell and compact navigation remain mounted", () => {
   const swipe = read("components/SwipeRouteViewport.tsx");
 
   assert.match(shell, /--swipe-offset/);
-  assert.match(shell, /overscroll-behavior-x:\s*contain/);
+  assert.match(shell, /\.route-swipe-viewport\s*\{[^}]*overflow-x:\s*hidden/s);
+  assert.match(shell, /\.route-swipe-viewport\s*\{[^}]*overscroll-behavior-x:\s*contain/s);
+  assert.match(shell, /\.app-content\s*\{[^}]*overscroll-behavior-x:\s*contain/s);
+  assert.doesNotMatch(shell, /\.route-swipe-viewport\s*\{[^}]*overscroll-behavior(?:-y)?:\s*none/s);
+  assert.doesNotMatch(shell, /\.app-content\s*\{[^}]*overscroll-behavior(?:-y)?:\s*none/s);
   assert.match(shell, /\.route-swipe-track\s*\{[^}]*left:\s*calc\(-100% \+ var\(--swipe-offset/s);
   assert.doesNotMatch(shell, /\.route-swipe-track(?:--dragging|--settling)?\s*\{[^}]*transform:/s);
   assert.match(swipe, /event\.propertyName !== "left"/);
@@ -38,11 +42,11 @@ test("approved gesture shell and compact navigation remain mounted", () => {
   assert.doesNotMatch(shell, /\.route-transition\s*\{[^}]*will-change:[^;}]*transform/s);
   assert.match(read("components/RouteTransition.tsx"), /transitionEnd:\s*\{\s*transform:\s*"none"\s*\}/);
   assert.match(swipe, /useSwipeNavigation/);
-  assert.match(tokens, /--header-height:\s*3\.5rem/);
-  assert.match(tokens, /--nav-height:\s*4rem/);
+  assert.match(tokens, /--header-height:\s*2\.75rem/);
+  assert.match(tokens, /--nav-height:\s*3rem/);
   assert.match(shell, /\.app-header\s*\{[^}]*position:\s*fixed/s);
-  assert.match(shell, /\.app-header\s*\{[^}]*padding-top:\s*calc\([^;]*safe-area-inset-top/s);
-  assert.match(shell, /\.app-content\s*\{[^}]*padding-top:\s*calc\([^;]*--header-height[^;]*safe-area-inset-top/s);
+  assert.match(shell, /\.app-header\s*\{[^}]*padding-top:\s*max\(env\(safe-area-inset-top\),\s*var\(--native-status-bar-inset\)\)/s);
+  assert.match(shell, /\.app-shell--detail \.app-content\s*\{[^}]*padding-top:\s*calc\([^;]*--header-height[^;]*safe-area-inset-top/s);
   assert.match(read("styles/components.css"), /\.bottom-nav/);
 });
 
@@ -53,7 +57,7 @@ test("Android WebView has one safe-area owner and never double-pads the page", (
   assert.match(mainActivity, /window\.statusBarColor\s*=\s*Color\.TRANSPARENT/);
   assert.match(mainActivity, /Web document[\s\S]*owns its safe-area spacing/);
   assert.doesNotMatch(mainActivity, /setOnApplyWindowInsetsListener|setPadding\(safeInsets|requestApplyInsets/);
-  assert.match(mainActivity, /bridge\.webView\.overScrollMode\s*=\s*View\.OVER_SCROLL_ALWAYS/);
+  assert.match(mainActivity, /bridge\.webView\.overScrollMode\s*=\s*View\.OVER_SCROLL_NEVER/);
   assert.match(mainActivity, /isAppearanceLightStatusBars\s*=\s*true/);
   assert.match(mainActivity, /isAppearanceLightNavigationBars\s*=\s*true/);
 });
@@ -73,7 +77,7 @@ test("keyboard and bottom chrome use Android nav fallback without dvh", () => {
   assert.match(components, /\.bottom-nav\s*\{[^}]*padding:[^;]*var\(--safe-bottom\)/s);
   assert.doesNotMatch(components, /\.bottom-nav\s*\{[^}]*--keyboard-inset/s);
   assert.match(components, /\.contextual-action\s*\{[^}]*var\(--safe-bottom\)[^;]*var\(--keyboard-inset/s);
-  assert.match(observation, /\.observation-question-composer\s*\{[^}]*--safe-bottom[^;]*--keyboard-inset/s);
+  assert.match(observation, /\.observation-follow-up-dock\s*\{[^}]*--safe-bottom[^;]*--keyboard-inset/s);
   assert.match(main, /installVisualViewportInset\(\)/);
   assert.match(inset, /visualViewport/);
   assert.match(inset, /removeProperty\("--keyboard-inset"\)/);

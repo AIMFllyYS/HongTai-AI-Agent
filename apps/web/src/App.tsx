@@ -1,29 +1,33 @@
 import { lazy, Suspense } from "react";
 import type { AppRuntime } from "@hongtai/core";
 
-import { EmptyState, LoadingState } from "./components/StatePanels";
+import { EmptyState } from "./components/StatePanels";
+import { PageSkeleton } from "./components/PageSkeleton";
 import { activeNavForRoute, BottomNav } from "./components/BottomNav";
-import { AppShell, AppShellNavigationProvider, visualThemeForRoute } from "./components/AppShell";
+import { AppShell, AppShellNavigationProvider } from "./components/AppShell";
 import { RouteTransition } from "./components/RouteTransition";
 import { SwipeRouteViewport } from "./components/SwipeRouteViewport";
 import type { VisualDataAdapter } from "./data/visual-adapter";
 import { useInteractionFeedback } from "./hooks/useInteractionFeedback";
 import { useBrowserRoute } from "./hooks/useBrowserRoute";
-import { isTaskPageAlias, matchRoute } from "./router";
+import { holdLazyModule } from "./motion/skeleton-hold";
+import { isTaskPageAlias, matchRoute, showsPrimaryNav } from "./router";
 import { HomePage } from "./pages/HomePage";
 import { TaskHomePage } from "./pages/TaskHomePage";
 
-const TemplatesPage = lazy(async () => ({ default: (await import("./pages/TemplatesPage")).TemplatesPage }));
-const CreatePage = lazy(async () => ({ default: (await import("./pages/CreatePage")).CreatePage }));
-const ProductionEditPage = lazy(async () => ({ default: (await import("./pages/ProductionEditPage")).ProductionEditPage }));
-const ReplicaWizardPage = lazy(async () => ({ default: (await import("./pages/ReplicaWizardPage")).ReplicaWizardPage }));
-const ObservationReportPage = lazy(async () => ({ default: (await import("./pages/ObservationReportPage")).ObservationReportPage }));
-const ObservationStartPage = lazy(async () => ({ default: (await import("./pages/ObservationStartPage")).ObservationStartPage }));
-const TaskPage = lazy(async () => ({ default: (await import("./pages/TaskPage")).TaskPage }));
-const AiSettingsPage = lazy(async () => ({ default: (await import("./pages/AiSettingsPage")).AiSettingsPage }));
-const ApplicationInfoPage = lazy(async () => ({ default: (await import("./pages/ApplicationInfoPage")).ApplicationInfoPage }));
-const ProfileSettingsPage = lazy(async () => ({ default: (await import("./pages/ProfileSettingsPage")).ProfileSettingsPage }));
-const SettingsPage = lazy(async () => ({ default: (await import("./pages/SettingsPage")).SettingsPage }));
+const TemplatesPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/TemplatesPage"))).TemplatesPage }));
+const CreatePage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/CreatePage"))).CreatePage }));
+const ProductionEditPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ProductionEditPage"))).ProductionEditPage }));
+const ReplicaWizardPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ReplicaWizardPage"))).ReplicaWizardPage }));
+const ObservationReportPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ObservationReportPage"))).ObservationReportPage }));
+const ObservationStartPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ObservationStartPage"))).ObservationStartPage }));
+const TaskPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/TaskPage"))).TaskPage }));
+const AiSettingsPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/AiSettingsPage"))).AiSettingsPage }));
+const ApplicationInfoPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ApplicationInfoPage"))).ApplicationInfoPage }));
+const UpdateLogPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/UpdateLogPage"))).UpdateLogPage }));
+const ProfileSettingsPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ProfileSettingsPage"))).ProfileSettingsPage }));
+const SettingsPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/SettingsPage"))).SettingsPage }));
+const PlaybookPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./playbook/PlaybookPage"))).PlaybookPage }));
 
 export interface AppProps {
   /** Real application runtime supplied only by the application composition root. */
@@ -41,7 +45,7 @@ function RuntimePendingPage({ navigate, title, description }: { readonly navigat
 }
 
 export function App({ runtime, visualData }: AppProps = {}) {
-  const { pathname, direction, transitionMode, navigate } = useBrowserRoute();
+  const { pathname, direction, transitionMode, navigate, searchEpoch } = useBrowserRoute();
   useInteractionFeedback();
 
   const renderRoute = (path: string) => {
@@ -66,7 +70,10 @@ export function App({ runtime, visualData }: AppProps = {}) {
         ? <ApplicationInfoPage navigate={navigate} runtime={runtime} />
         : <RuntimePendingPage description="版本信息暂时无法读取，请重新打开应用。" navigate={navigate} title="应用信息暂时不可用" />;
     }
-    if (runtime && renderedRoute.key === "home") return <TaskHomePage navigate={navigate} runtime={runtime} />;
+    if (renderedRoute.key === "settings-update-log") {
+      return <UpdateLogPage navigate={navigate} />;
+    }
+    if (runtime && renderedRoute.key === "home") return <TaskHomePage navigate={navigate} runtime={runtime} searchEpoch={searchEpoch} />;
     if (runtime && isTaskPageAlias(renderedRoute.key)) {
       const taskId = renderedRoute.params.taskId;
       return taskId
@@ -83,7 +90,7 @@ export function App({ runtime, visualData }: AppProps = {}) {
         : <RuntimePendingPage description="这个报告链接不完整，请返回观察记录重新进入。" navigate={navigate} title="无法打开观察报告" />;
     }
     if (runtime && renderedRoute.key === "create") {
-      return <CreatePage navigate={navigate} runtime={runtime} />;
+      return <CreatePage navigate={navigate} runtime={runtime} searchEpoch={searchEpoch} />;
     }
     if (runtime && renderedRoute.key === "production-edit") {
       const projectId = renderedRoute.params.projectId;
@@ -101,6 +108,10 @@ export function App({ runtime, visualData }: AppProps = {}) {
       return <TemplatesPage navigate={navigate} runtime={runtime} />;
     }
 
+    if (renderedRoute.key === "playbook") {
+      return <PlaybookPage navigate={navigate} sectionId={renderedRoute.params.sectionId} />;
+    }
+
     // Visual fixtures remain available only to explicit design/test callers.
     if (visualData) {
       if (renderedRoute.key === "home") return <HomePage navigate={navigate} viewModel={visualData.getHome()} />;
@@ -115,16 +126,16 @@ export function App({ runtime, visualData }: AppProps = {}) {
 
   const route = matchRoute(pathname);
   const activeNav = activeNavForRoute(route.key);
-  const visualTheme = visualThemeForRoute(route.key);
+  const showPrimaryNav = showsPrimaryNav(route.key);
 
   return (
     <AppShellNavigationProvider>
-      <SwipeRouteViewport active={activeNav} currentPath={pathname} navigate={navigate}>
+      <SwipeRouteViewport active={showPrimaryNav ? activeNav : undefined} currentPath={pathname} navigate={navigate}>
         <RouteTransition direction={direction} pathname={pathname} transitionMode={transitionMode}>
-          <Suspense fallback={<LoadingState title="正在打开页面" />}>{renderRoute(pathname)}</Suspense>
+          <Suspense fallback={<PageSkeleton path={pathname} />}>{renderRoute(pathname)}</Suspense>
         </RouteTransition>
       </SwipeRouteViewport>
-      <BottomNav active={activeNav} navigate={navigate} visualTheme={visualTheme} />
+      {showPrimaryNav ? <BottomNav active={activeNav} navigate={navigate} /> : null}
     </AppShellNavigationProvider>
   );
 }

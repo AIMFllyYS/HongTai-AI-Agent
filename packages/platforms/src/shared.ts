@@ -29,6 +29,54 @@ export function asNumber(value: unknown): number | undefined {
   return Number.isFinite(number) ? number : undefined;
 }
 
+/**
+ * Engagement scalars only. Rejects NaN, Infinity, negatives, non-integers,
+ * and formatted fake strings such as "1.2w" or "2.4万". Digit-only strings
+ * that already are a safe integer (Xiaohongshu `likedCount: "128"`) are kept.
+ */
+export function readNonNegativeInt(value: unknown): number | undefined {
+  if (typeof value === "number") {
+    if (!Number.isInteger(value) || value < 0 || !Number.isSafeInteger(value)) return undefined;
+    return value;
+  }
+  if (typeof value === "string" && /^(?:0|[1-9]\d*)$/.test(value)) {
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+export function engagementCounts(
+  source: Record<string, unknown> | undefined,
+  keys: {
+    readonly likeCount: string;
+    readonly favoriteCount: string;
+    readonly commentCount: string;
+    readonly shareCount: string;
+    readonly playCount?: string;
+  },
+): {
+  readonly likeCount?: number;
+  readonly favoriteCount?: number;
+  readonly commentCount?: number;
+  readonly shareCount?: number;
+  readonly playCount?: number;
+} {
+  if (!source) return {};
+  const likeCount = readNonNegativeInt(source[keys.likeCount]);
+  const favoriteCount = readNonNegativeInt(source[keys.favoriteCount]);
+  const commentCount = readNonNegativeInt(source[keys.commentCount]);
+  const shareCount = readNonNegativeInt(source[keys.shareCount]);
+  const playCount = keys.playCount === undefined ? undefined : readNonNegativeInt(source[keys.playCount]);
+  return {
+    ...(likeCount === undefined ? {} : { likeCount }),
+    ...(favoriteCount === undefined ? {} : { favoriteCount }),
+    ...(commentCount === undefined ? {} : { commentCount }),
+    ...(shareCount === undefined ? {} : { shareCount }),
+    ...(playCount === undefined ? {} : { playCount }),
+  };
+}
+
 export function firstString(value: unknown): string | undefined {
   if (typeof value === "string") return asString(value);
   for (const item of asArray(value)) {

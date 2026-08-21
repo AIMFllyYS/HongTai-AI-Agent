@@ -8,7 +8,9 @@ import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
 import { IssueNotice, isInlineIssueAction, issueTitle } from "../components/IssueNotice";
 import { ProductionShotEditCard } from "../components/ProductionShotEditCard";
-import { EmptyState, LoadingState } from "../components/StatePanels";
+import { EmptyState } from "../components/StatePanels";
+import { PageSkeleton } from "../components/PageSkeleton";
+import { useSkeletonHold } from "../motion/skeleton-hold";
 import { StepperField } from "../components/StepperField";
 import { SubtitleTemplatePicker } from "../components/SubtitleTemplatePicker";
 import {
@@ -148,10 +150,11 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
 
   const back = () => navigate(pathForRoute("create"));
 
-  if (loading) {
+  const showSkeleton = useSkeletonHold(loading);
+  if (showSkeleton) {
     return (
       <AppShell activeNav="create" backPath={pathForRoute("create")} headerMode="detail" navigate={navigate} title="微调导出">
-        <LoadingState title="正在打开微调" />
+        <PageSkeleton layout="create" />
       </AppShell>
     );
   }
