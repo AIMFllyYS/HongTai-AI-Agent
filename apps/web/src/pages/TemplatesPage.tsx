@@ -286,7 +286,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
             {readIssue ? <button className="text-action" onClick={() => void load()} type="button">刷新</button> : null}
             {!readIssue && templates ? <span className="templates-section-hint">{filtered.length} 个</span> : null}
           </div>
-          {templates === undefined ? null : templates.length === 0 ? (
+          {templates === undefined ? <PageSkeleton layout="templates-list" /> : templates.length === 0 ? (
             <EmptyState action={<Button onClick={startCustom} variant="secondary">创建空白模板</Button>} className="templates-catalog-empty" description="你可以从拆解保存，也可以从空白结构开始自定义。" icon="content_paste" title="还没有模板" />
           ) : filtered.length === 0 ? (
             <EmptyState description="当前筛选只匹配名称、摘要或公式里的关键字。" icon="filter" title="未解析到这类模板" />

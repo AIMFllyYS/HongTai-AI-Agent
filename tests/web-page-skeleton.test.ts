@@ -45,6 +45,8 @@ test("product pages no longer render the fullscreen spinner loading panel", () =
     assert.doesNotMatch(read(file), /LoadingState/, `${file} must not use LoadingState`);
   }
   assert.match(read("pages/TaskHomePage.tsx"), /layout="home-list"/);
+  assert.equal((read("pages/TemplatesPage.tsx").match(/layout="templates-list"/g) ?? []).length, 2);
+  assert.doesNotMatch(read("pages/TemplatesPage.tsx"), /\bLoadingState\b/);
   assert.match(read("styles/components.css"), /page-skeleton-shimmer/);
   assert.match(read("styles/components.css"), /prefers-reduced-motion:\s*reduce[\s\S]*\.page-skeleton__block[\s\S]*animation:\s*none/);
 });
