@@ -50,8 +50,8 @@ test("templates and production use real runtimes while publishing remains planne
   assert.match(templates, /runtime\.analysis\.get/);
   assert.match(templates, /确认删除模板/);
   assert.match(templates, /\{readIssue \? <button className="text-action" onClick=\{\(\) => void load\(\)\} type="button">刷新<\/button> : null\}/);
-  assert.match(templates, /推荐模板/);
-  assert.match(templates, /本机精选/);
+  assert.match(templates, /templates-section-head[\s\S]*templates-search[\s\S]*本机精选 · 滑动查看/s);
+  assert.match(templates, /templates-catalog-empty/);
   assert.match(templates, /使用次数未解析到/);
   assert.match(templates, /未解析到这类模板/);
   assert.match(templates, /HomeMastheadActions/);

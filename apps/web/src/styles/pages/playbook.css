@@ -153,11 +153,12 @@
 
 .playbook-avatar {
   display: grid;
-  width: 2rem;
-  height: 2rem;
+  width: 2.25rem;
+  height: 2.25rem;
   place-items: center;
   color: var(--palette-brand-deep);
   background: var(--palette-brand-tint);
+  border: 0.09375rem solid var(--palette-on-ink);
   border-radius: var(--radius-pill);
   font-size: var(--text-caption);
 }

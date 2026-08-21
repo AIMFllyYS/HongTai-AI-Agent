@@ -84,6 +84,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
   const [sources, setSources] = useState<readonly AnalysisSource[]>([]);
   const [sourceTaskId, setSourceTaskId] = useState("");
   const [filterId, setFilterId] = useState<TemplateFilterId>("all");
+  const [query, setQuery] = useState("");
   const [featuredIndex, setFeaturedIndex] = useState(0);
   const [importOpen, setImportOpen] = useState(false);
   const [editingId, setEditingId] = useState<string>();
@@ -112,10 +113,19 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
   useEffect(() => { void load(); }, [load]);
 
   const activeFilter = TEMPLATE_FILTERS.find((item) => item.id === filterId) ?? TEMPLATE_FILTERS[0];
-  const filtered = useMemo(
-    () => (templates ?? []).filter((record) => matchesFilter(record, activeFilter.keyword)),
-    [activeFilter.keyword, templates],
+  const searchKeyword = query.trim();
+  const featured = useMemo(
+    () => (templates ?? []).filter((record) => matchesFilter(record, searchKeyword)),
+    [searchKeyword, templates],
   );
+  const filtered = useMemo(
+    () => featured.filter((record) => matchesFilter(record, activeFilter.keyword)),
+    [activeFilter.keyword, featured],
+  );
+
+  useEffect(() => {
+    setFeaturedIndex(0);
+  }, [searchKeyword]);
 
   const edit = (record: ContentTemplateRecord) => {
     setEditingId(record.templateId);
@@ -191,7 +201,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
     const stride = second ? second.offsetLeft - first.offsetLeft : first.offsetWidth;
     if (stride <= 0) return;
     const next = Math.round(scroller.scrollLeft / stride);
-    setFeaturedIndex(Math.min(Math.max(next, 0), Math.max((templates?.length ?? 1) - 1, 0)));
+    setFeaturedIndex(Math.min(Math.max(next, 0), Math.max(featured.length - 1, 0)));
   };
 
   return (
@@ -208,15 +218,30 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
 
         <section className="templates-recommend">
           <div className="templates-section-head">
-            <h3>推荐模板</h3>
+            <label className="templates-search">
+              <Icon name="search" size={15} />
+              <input
+                aria-label="搜索本机模板"
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="搜索模板名称、摘要或公式"
+                value={query}
+              />
+              {query ? (
+                <button aria-label="清除搜索" className="templates-search__clear" onClick={() => setQuery("")} type="button">
+                  <Icon name="close" size={14} />
+                </button>
+              ) : null}
+            </label>
             <span className="templates-section-hint">本机精选 · 滑动查看</span>
           </div>
           {templates === undefined ? <LoadingState description="正在读取本地模板文件" title="读取模板" /> : templates.length === 0 ? (
             <EmptyState description="保存本机公式后，会在这里横向滑动查看。" icon="layout_template" title="还没有可滑动的本机模板" />
+          ) : featured.length === 0 ? (
+            <EmptyState description="搜索只匹配本机模板的名称、摘要或公式，不会编造结果。" icon="filter" title="未解析到这类模板" />
           ) : (
             <>
               <div className="templates-carousel" onScroll={onFeaturedScroll}>
-                {templates.map((record) => (
+                {featured.map((record) => (
                   <button aria-label={`打开模板 ${record.name}`} className="templates-featured-card" key={record.templateId} onClick={() => edit(record)} type="button">
                     <div className={`templates-cover templates-cover--${coverTone(record.templateId)}`}>
                       <p>{formulaPreview(record)}</p>
@@ -230,9 +255,9 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
                   </button>
                 ))}
               </div>
-              {templates.length > 1 ? (
+              {featured.length > 1 ? (
                 <div aria-hidden="true" className="templates-dots">
-                  {templates.map((record, index) => <span className={index === featuredIndex ? "templates-dot is-active" : "templates-dot"} key={record.templateId} />)}
+                  {featured.map((record, index) => <span className={index === featuredIndex ? "templates-dot is-active" : "templates-dot"} key={record.templateId} />)}
                 </div>
               ) : null}
             </>
@@ -261,7 +286,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
             {!readIssue && templates ? <span className="templates-section-hint">{filtered.length} 个</span> : null}
           </div>
           {templates === undefined ? null : templates.length === 0 ? (
-            <EmptyState action={<Button onClick={startCustom} variant="secondary">创建空白模板</Button>} description="你可以从拆解保存，也可以从空白结构开始自定义。" icon="content_paste" title="还没有模板" />
+            <EmptyState action={<Button onClick={startCustom} variant="secondary">创建空白模板</Button>} className="templates-catalog-empty" description="你可以从拆解保存，也可以从空白结构开始自定义。" icon="content_paste" title="还没有模板" />
           ) : filtered.length === 0 ? (
             <EmptyState description="当前筛选只匹配名称、摘要或公式里的关键字。" icon="filter" title="未解析到这类模板" />
           ) : (

@@ -32,6 +32,7 @@ test("the design logo remains a shared asset while primary navigation uses the r
   assert.match(shell, /page-masthead/);
   assert.doesNotMatch(shell, /<BrandLogo/);
   assert.doesNotMatch(bottomNavigation, /BrandLogo/);
+  assert.match(read("styles/shell.css"), /\.masthead-avatar\s*\{[^}]*width:\s*2\.25rem[^}]*height:\s*2\.25rem[^}]*border:\s*0\.09375rem solid var\(--palette-on-ink\)/s);
   assert.match(navigation, /id:\s*"ai"[\s\S]*icon:\s*"scan_face"/);
   assert.match(bottomNavigation, /bottom-nav__item--\$\{item\.id\}/);
   assert.doesNotMatch(bottomNavigation, /brandLogo/);
