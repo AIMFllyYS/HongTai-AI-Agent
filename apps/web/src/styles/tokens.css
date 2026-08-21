@@ -98,12 +98,14 @@
   --motion-duration-instant: 80ms;
   --motion-duration-fast: 140ms;
   --motion-duration-standard: 220ms;
-  --motion-duration-page: 260ms;
+  --motion-duration-primary: 480ms;
+  --motion-duration-overlay: 520ms;
+  --motion-duration-page: 720ms;
   --motion-duration-skeleton: 400ms;
   --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --motion-ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
   --motion-scale-press: 0.98;
-  --motion-distance-page: 1.5rem;
+  --motion-distance-page: 40px;
   --motion-distance-primary: 28vw;
   --overlay-scrim: rgba(27, 29, 31, 0.4);
 

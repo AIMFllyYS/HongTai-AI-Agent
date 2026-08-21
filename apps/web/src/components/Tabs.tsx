@@ -1,7 +1,7 @@
 import { useEffect, useRef, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 
-import { motionDurations, motionEasing, routeOffset, type RouteTransitionDirection } from "../motion/tokens";
+import { motionDurations, motionEasing, tabOffset, type RouteTransitionDirection } from "../motion/tokens";
 
 export interface TabsProps {
   readonly tabs: readonly string[];
@@ -101,7 +101,7 @@ export function TabPanel({ id, labelledBy, children, className = "", slideKey, t
     );
   }
 
-  const offset = routeOffset;
+  const offset = tabOffset;
   return (
     <div aria-labelledby={labelledBy} className={`tabs__panel tabs__panel--slide ${className}`.trim()} id={id} role="tabpanel" tabIndex={0}>
       <MotionConfig reducedMotion="user">

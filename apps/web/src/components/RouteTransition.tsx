@@ -18,7 +18,7 @@ function offsetFor(mode: NavigationTransition): number {
 }
 
 function durationFor(mode: NavigationTransition): number {
-  if (mode === "primary") return motionDurations.standard / 1000;
+  if (mode === "primary") return motionDurations.primary / 1000;
   return motionDurations.page / 1000;
 }
 

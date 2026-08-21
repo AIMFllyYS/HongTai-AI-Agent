@@ -26,7 +26,7 @@ export function HomeProfileAction({ runtime, navigate }: HomeProfileActionProps)
   const initial = name ? Array.from(name)[0] ?? "宏" : "宏";
 
   return (
-    <button aria-label="打开设置" className="masthead-avatar" onClick={() => navigate(pathForRoute("settings"))} type="button">
+    <button aria-label="打开设置" className="masthead-avatar" onClick={() => navigate(pathForRoute("settings"), { scroll: "auto", transition: "primary" })} type="button">
       {profile?.avatarUri ? <img alt="" src={profile.avatarUri} /> : initial}
     </button>
   );

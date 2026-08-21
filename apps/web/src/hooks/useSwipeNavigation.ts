@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent, PointerEventHandler } from "react";
 import type { BottomNavProps } from "../components/BottomNav";
 import { adjacentPrimaryNavPath } from "../navigation/primary-nav";
-import type { Navigate } from "../router";
 
 const SWIPE_DISTANCE = 56;
 const SWIPE_DIRECTION_RATIO = 1.25;
@@ -17,7 +16,7 @@ export interface SwipeCommit {
 }
 
 export interface SwipeNavigationOptions {
-  readonly onCommit?: (commit: SwipeCommit) => void;
+  readonly onCommit: (commit: SwipeCommit) => void;
 }
 
 interface PointerOrigin {
@@ -55,7 +54,7 @@ function getViewportWidth(target: HTMLElement): number {
   return target.ownerDocument.documentElement.clientWidth || target.clientWidth;
 }
 
-export function useSwipeNavigation(active: BottomNavProps["active"], navigate: Navigate, { onCommit }: SwipeNavigationOptions = {}): SwipeNavigationHandlers {
+export function useSwipeNavigation(active: BottomNavProps["active"], { onCommit }: SwipeNavigationOptions): SwipeNavigationHandlers {
   const origin = useRef<PointerOrigin | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -146,16 +145,10 @@ export function useSwipeNavigation(active: BottomNavProps["active"], navigate: N
     releasePointer(event);
     origin.current = null;
     setIsDragging(false);
-    if (onCommit) {
-      setIsSettling(true);
-      setSwipeOffset(direction === "next" ? -getViewportWidth(event.currentTarget) : getViewportWidth(event.currentTarget));
-      onCommit({ direction: direction === "next" ? "forward" : "backward", path: nextPath });
-      return;
-    }
-
-    clearGesture();
-    navigate(nextPath);
-  }, [active, clearGesture, navigate, onCommit, releasePointer]);
+    setIsSettling(true);
+    setSwipeOffset(direction === "next" ? -getViewportWidth(event.currentTarget) : getViewportWidth(event.currentTarget));
+    onCommit({ direction: direction === "next" ? "forward" : "backward", path: nextPath });
+  }, [active, clearGesture, onCommit, releasePointer]);
 
   const onPointerCancel = useCallback<PointerEventHandler<HTMLElement>>((event) => {
     clearGesture(event);

@@ -34,7 +34,7 @@ export function SwipeRouteViewport({ active, currentPath, navigate, children }: 
     setPendingSourcePath(currentPath);
     setPendingSwipe(commit);
   }, [currentPath]);
-  const { isDragging, isSettling, onPointerCancel, onPointerDown, onPointerMove, onPointerUp, swipeOffset } = useSwipeNavigation(active, navigate, { onCommit: commitSwipe });
+  const { isDragging, isSettling, onPointerCancel, onPointerDown, onPointerMove, onPointerUp, swipeOffset } = useSwipeNavigation(active, { onCommit: commitSwipe });
 
   const pendingPath = pendingSwipe?.path;
   const isPendingRoute = pendingPath === currentPath;

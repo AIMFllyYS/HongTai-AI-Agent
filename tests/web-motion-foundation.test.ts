@@ -54,6 +54,8 @@ test("motion stylesheet exposes shared timing and keeps scrolling available", ()
     "--motion-duration-fast",
     "--motion-duration-standard",
     "--motion-duration-page",
+    "--motion-duration-primary",
+    "--motion-duration-overlay",
     "--motion-ease-standard",
     "--motion-scale-press",
     "--motion-distance-primary",

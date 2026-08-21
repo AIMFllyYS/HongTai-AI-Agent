@@ -87,7 +87,7 @@ export function Overlay({
 
   if (typeof document === "undefined") return null;
 
-  const duration = (placement === "rise" ? motionDurations.standard : motionDurations.fast) / 1000;
+  const duration = (placement === "rise" ? motionDurations.overlay : motionDurations.standard) / 1000;
   const panelMotion = placement === "rise"
     ? reducedMotion
       ? { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } }
