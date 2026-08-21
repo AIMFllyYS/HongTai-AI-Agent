@@ -36,7 +36,7 @@ import {
 } from "../features/diagnosis/observation-observing-screen";
 import { useAppResume } from "../hooks/useAppResume";
 import { observationNewPath, type Navigate } from "../router";
-import { observationRecommendationIcon, observationReportSections } from "../playbook/document-sections";
+import { observationReportSections } from "../playbook/document-sections";
 
 export interface ObservationReportPageProps {
   readonly runtime: AppRuntime;
@@ -410,16 +410,11 @@ function SucceededReport({
               const priority = recommendationPriorityLabel(item.priority);
               return (
                 <article className="observation-recommendation-card" key={item.title}>
-                  <span className="observation-recommendation-card__icon" aria-hidden="true">
-                    <Icon name={observationRecommendationIcon(item.category)} size={18} />
-                  </span>
-                  <div className="observation-recommendation-card__body">
-                    <div className="observation-recommendation-card__top">
-                      <strong>{item.title}</strong>
-                      {priority ? <span className={`observation-recommendation-card__priority is-${item.priority}`}>{priority}</span> : null}
-                    </div>
-                    <p>{item.action}</p>
+                  <div className="observation-recommendation-card__top">
+                    <strong>{item.title}</strong>
+                    {priority ? <span className={`observation-recommendation-card__priority is-${item.priority}`}>{priority}</span> : null}
                   </div>
+                  <p>{item.action}</p>
                 </article>
               );
             })}
