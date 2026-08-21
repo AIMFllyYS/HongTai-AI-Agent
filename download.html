@@ -145,45 +145,59 @@
 
     .hero {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 0.62fr);
-      gap: clamp(42px, 6vw, 82px);
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+      gap: clamp(36px, 5vw, 64px);
       align-items: center;
-      min-height: 680px;
-      padding: 70px 0 78px;
+      min-height: 580px;
+      padding: clamp(40px, 5vw, 68px) 0 clamp(44px, 5vw, 72px);
     }
 
-    .hero__copy { max-width: 720px; }
+    .hero__copy {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      max-width: 640px;
+    }
 
-    .eyebrow {
+    .hero__badge {
       display: inline-flex;
-      flex-wrap: wrap;
       align-items: center;
-      gap: 10px;
-      margin: 0 0 20px;
+      gap: 8px;
+      padding: 6px 14px 6px 10px;
+      margin-bottom: 22px;
+      border: 1px solid rgba(16, 185, 129, 0.22);
+      border-radius: 999px;
+      background: var(--surface);
       color: var(--green-deep);
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
     }
 
-    .eyebrow::before {
-      width: 34px;
-      height: 1px;
-      background: currentColor;
-      content: "";
+    .hero__badge-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.18);
+      animation: pulse-dot 2.4s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(0.85); opacity: 0.65; }
     }
 
     h1, h2, h3, p { margin-top: 0; }
 
     h1 {
-      max-width: 760px;
-      margin-bottom: 24px;
+      max-width: 640px;
+      margin-bottom: 20px;
       font-family: var(--display);
-      font-size: clamp(38px, 4vw, 54px);
+      font-size: clamp(34px, 3.8vw, 50px);
       font-weight: 800;
-      letter-spacing: -0.045em;
-      line-height: 1.03;
+      letter-spacing: -0.04em;
+      line-height: 1.15;
     }
 
     .hero__accent {
@@ -194,226 +208,299 @@
 
     .hero__accent::after {
       position: absolute;
-      right: 0.05em;
-      bottom: -0.09em;
-      left: 0.08em;
-      height: 0.1em;
-      border-radius: 100%;
-      background: var(--lime);
+      right: 0.02em;
+      bottom: -0.06em;
+      left: 0.04em;
+      height: 0.12em;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.22);
       content: "";
-      transform: rotate(-1.5deg);
       z-index: -1;
     }
 
     .hero__lead {
-      max-width: 590px;
-      margin-bottom: 32px;
+      max-width: 560px;
+      margin-bottom: 28px;
       color: var(--muted);
-      font-size: clamp(15px, 1.25vw, 16px);
+      font-size: clamp(15px, 1.2vw, 16px);
       line-height: 1.75;
     }
 
     .hero__actions {
       display: flex;
-      flex-wrap: wrap;
-      align-items: center;
+      flex-direction: column;
+      align-items: flex-start;
       gap: 16px;
+      width: 100%;
     }
 
     .button {
       display: inline-flex;
       align-items: center;
-      justify-content: center;
-      gap: 13px;
-      min-height: 44px;
-      padding: 0 20px;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 52px;
+      padding: 0 24px;
       border: 1px solid transparent;
-      border-radius: 12px;
+      border-radius: 14px;
       font-weight: 700;
-      letter-spacing: 0.01em;
       text-decoration: none;
-      transition: transform 220ms var(--ease), background-color 220ms var(--ease);
+      transition: transform 220ms var(--ease), background-color 220ms var(--ease), box-shadow 220ms var(--ease);
     }
 
-    .button:hover { transform: scale(0.98); }
+    .button:hover {
+      transform: translateY(-2px);
+    }
 
     .button--primary {
       color: var(--white);
       background: var(--green);
-      box-shadow: var(--shadow);
+      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.28);
     }
 
     .button--primary:hover {
       background: var(--green-deep);
+      box-shadow: 0 12px 30px rgba(12, 138, 102, 0.35);
+    }
+
+    .button__label-group {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      text-align: left;
+      line-height: 1.2;
+    }
+
+    .button__label {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
+
+    .button__meta {
+      margin-top: 3px;
+      color: rgba(255, 255, 255, 0.82);
+      font-size: 12px;
+      font-weight: 600;
     }
 
     .button__arrow {
       display: grid;
-      width: 28px;
-      height: 28px;
+      width: 30px;
+      height: 30px;
       place-items: center;
       border-radius: 50%;
       color: var(--white);
       background: rgba(255, 255, 255, 0.22);
-      font-size: 17px;
+      font-size: 16px;
       line-height: 1;
+      transition: transform 180ms ease;
     }
 
-    .version-note {
-      display: inline-flex;
+    .button:hover .button__arrow {
+      transform: translateY(2px);
+    }
+
+    .hero__trust-list {
+      display: flex;
+      flex-wrap: wrap;
       align-items: center;
-      gap: 9px;
-      min-height: 44px;
+      gap: 14px 20px;
+      padding: 0;
+      margin: 18px 0 0;
+      list-style: none;
       color: var(--muted);
       font-size: 13px;
-      font-weight: 700;
+      font-weight: 600;
     }
 
-    .version-note::before {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--mint);
-      box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.16);
-      content: "";
-    }
-
-    .release-object {
-      position: relative;
-      min-width: 0;
-      max-width: 100%;
-      min-height: 0;
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      background: var(--paper-deep);
-      box-shadow: none;
-      isolation: isolate;
-      overflow: hidden;
-    }
-
-    .release-object::before {
-      position: absolute;
-      width: 330px;
-      height: 330px;
-      top: -115px;
-      right: -95px;
-      border-radius: 50%;
-      background: radial-gradient(circle at 38% 38%, rgba(230,247,241,0.95), rgba(16,185,129,0.12) 46%, transparent 72%);
-      content: "";
-      filter: blur(2px);
-      z-index: -1;
-    }
-
-    .release-object::after {
-      position: absolute;
-      right: -84px;
-      bottom: -120px;
-      width: 330px;
-      height: 330px;
-      border: 1px solid rgba(16, 185, 129, 0.12);
-      border-radius: 50%;
-      content: "";
-      box-shadow: 0 0 0 28px rgba(16,185,129,0.04);
-    }
-
-    .release-object__top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 21px 25px;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .release-object__status {
+    .hero__trust-list li {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      color: var(--green-deep);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
+      gap: 6px;
     }
 
-    .release-object__status::before {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--mint);
-      content: "";
-      box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.16);
+    .trust-icon {
+      color: var(--green);
+      font-weight: 800;
     }
 
-    .release-object__stamp {
-      color: var(--muted);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-    }
-
-    .release-object__body {
+    .spec-card {
       position: relative;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
-      min-height: 0;
-      padding: 32px 29px 29px;
-      z-index: 1;
+      min-width: 0;
+      max-width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--white);
+      box-shadow: 0 12px 36px rgba(27, 29, 31, 0.04);
+      overflow: hidden;
     }
 
-    .release-logo {
-      width: 64px;
-      aspect-ratio: 1;
-      overflow: hidden;
+    .spec-card__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--line);
+      background: var(--paper-deep);
+    }
+
+    .spec-card__brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .spec-card__logo {
+      width: 44px;
+      height: 44px;
       border: 1px solid var(--line);
       border-radius: 12px;
       background: var(--white) var(--brand-mark-image) center / cover no-repeat;
-      box-shadow: var(--shadow);
-      transform: none;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+      flex-shrink: 0;
     }
 
-    .release-number {
-      margin: auto 0 0;
-      max-width: 100%;
-      color: var(--green-deep);
-      font-family: var(--display);
-      font-size: clamp(48px, 14vw, 88px);
-      font-weight: 800;
-      letter-spacing: -0.08em;
-      line-height: 0.9;
-      overflow-wrap: anywhere;
-    }
-
-    .release-object__meta {
+    .spec-card__title-group {
       display: flex;
-      flex-wrap: wrap;
-      align-items: end;
-      justify-content: space-between;
-      gap: 12px 20px;
+      flex-direction: column;
+      line-height: 1.25;
       min-width: 0;
-      margin-top: 23px;
     }
 
-    .release-object__meta strong {
-      display: block;
-      font-size: 14px;
+    .spec-card__title {
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 800;
     }
 
-    .release-object__meta span {
+    .spec-card__version-code {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .spec-card__tag {
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--green-deep);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+    }
+
+    .spec-card__body {
+      padding: 22px 24px;
+    }
+
+    .spec-card__section-label {
+      margin-bottom: 14px;
+      color: var(--green-deep);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .spec-card__feature-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+
+    .spec-card__feature-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .feature-icon {
+      display: grid;
+      place-items: center;
+      width: 20px;
+      height: 20px;
+      margin-top: 1px;
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .feature-content {
+      min-width: 0;
+    }
+
+    .feature-content strong {
       display: block;
-      margin-top: 4px;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .feature-content p {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .spec-card__footer {
+      padding: 16px 24px 20px;
+      border-top: 1px solid var(--line);
+      background: var(--paper-deep);
+    }
+
+    .spec-card__meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
       color: var(--muted);
       font-size: 12px;
     }
 
-    .platform-pill {
-      flex: 0 0 auto;
-      padding: 8px 13px;
+    .spec-card__meta-row strong {
+      color: var(--ink);
+    }
+
+    .spec-card__hash-box {
+      padding: 10px 12px;
       border: 1px solid var(--line);
-      border-radius: 999px;
-      background: rgba(255,255,255,0.66);
+      border-radius: 10px;
+      background: var(--white);
+    }
+
+    .hash-label {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    .hash-code {
+      display: block;
+      color: var(--green-deep);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.06em;
+      font-weight: 600;
+      word-break: break-all;
+      line-height: 1.4;
     }
 
     .section {
@@ -884,18 +971,20 @@
       transform: translateY(0);
     }
 
-    .hero .eyebrow,
+    .hero .hero__badge,
     .hero h1,
     .hero__lead,
     .hero__actions,
-    .release-object {
+    .hero__trust-list,
+    .spec-card {
       animation: enter 480ms both var(--ease);
     }
 
-    .hero h1 { animation-delay: 80ms; }
-    .hero__lead { animation-delay: 150ms; }
-    .hero__actions { animation-delay: 220ms; }
-    .release-object { animation-delay: 190ms; }
+    .hero h1 { animation-delay: 60ms; }
+    .hero__lead { animation-delay: 120ms; }
+    .hero__actions { animation-delay: 180ms; }
+    .hero__trust-list { animation-delay: 220ms; }
+    .spec-card { animation-delay: 160ms; }
 
     @keyframes enter {
       from { opacity: 0; transform: translateY(24px); }
@@ -910,7 +999,7 @@
       }
 
       .hero__copy { max-width: 760px; }
-      .release-object { width: min(520px, 100%); }
+      .spec-card { width: 100%; max-width: 580px; }
       .section-head { grid-template-columns: minmax(0, 1fr); gap: 20px; }
       .section-intro { max-width: 590px; }
       .release-grid { grid-template-columns: minmax(0, 1fr); }
@@ -982,34 +1071,75 @@
   <main id="top">
     <section class="shell hero" aria-labelledby="hero-title">
       <div class="hero__copy">
-        <p class="eyebrow">当前推荐安装包</p>
+        <div class="hero__badge">
+          <span class="hero__badge-dot" aria-hidden="true"></span>
+          <span>v0.1.21 最新版本发布 · Android 本地优先</span>
+        </div>
         <h1 id="hero-title">让 AI 帮你把内容<span class="hero__accent">做好。</span></h1>
-        <p class="hero__lead">把公开内容采集、AI 拆解、图片观察和本地做视频，收进一台安卓手机。这里提供安装包下载，以及每个版本真正改了什么。</p>
+        <p class="hero__lead">公开链接拆解、AI 智能诊断、爆款复刻与本地 9:16 成片，全流程在你的 Android 设备本地流畅运行。无需云端中转与注册登录，数据自主可控。</p>
         <div class="hero__actions">
-          <a class="button button--primary" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.20.apk" aria-label="下载宏泰 AI 智能体 v0.1.20 Android 安装包">
-            下载 v0.1.20
+          <a class="button button--primary" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.21.apk" aria-label="下载宏泰 AI 智能体 v0.1.21 Android 安装包">
+            <div class="button__label-group">
+              <span class="button__label">下载 Android 安装包</span>
+              <span class="button__meta">v0.1.21 · 23.3 MB · 正式构建</span>
+            </div>
             <span class="button__arrow" aria-hidden="true">↓</span>
           </a>
-          <span class="version-note">Android 安装包</span>
         </div>
+        <ul class="hero__trust-list" aria-label="运行保障">
+          <li><span class="trust-icon" aria-hidden="true">✓</span> 纯本地隐私优先</li>
+          <li><span class="trust-icon" aria-hidden="true">✓</span> 无需账号与云同步</li>
+          <li><span class="trust-icon" aria-hidden="true">✓</span> 支持 Android 7.0+</li>
+        </ul>
       </div>
 
-      <aside class="release-object" aria-label="当前推荐版本 v0.1.20">
-        <div class="release-object__top">
-          <span class="release-object__status">当前版本</span>
-          <span class="release-object__stamp">2026.08.21</span>
-        </div>
-        <div class="release-object__body">
-          <div class="release-logo" aria-hidden="true"></div>
-          <div>
-            <div class="release-number" aria-label="版本 0.1.20">0.1.20</div>
-            <div class="release-object__meta">
-              <div>
-                <strong>加号能进制作</strong>
-                <span>拆解上传也恢复成卡片</span>
-              </div>
-              <span class="platform-pill">安卓</span>
+      <aside class="spec-card" aria-label="当前推荐版本 v0.1.21">
+        <div class="spec-card__header">
+          <div class="spec-card__brand">
+            <div class="spec-card__logo" aria-hidden="true"></div>
+            <div class="spec-card__title-group">
+              <strong class="spec-card__title">宏泰 AI 智能体</strong>
+              <span class="spec-card__version-code">v0.1.21 (内部版本 29)</span>
             </div>
+          </div>
+          <span class="spec-card__tag">当前推荐</span>
+        </div>
+
+        <div class="spec-card__body">
+          <div class="spec-card__section-label">本版核心亮点</div>
+          <ul class="spec-card__feature-list">
+            <li>
+              <span class="feature-icon" aria-hidden="true">✦</span>
+              <div class="feature-content">
+                <strong>统一动效体系</strong>
+                <p>弹层、骨架、底栏切页与二级页滑入共用同一套节奏，操作更连贯</p>
+              </div>
+            </li>
+            <li>
+              <span class="feature-icon" aria-hidden="true">✦</span>
+              <div class="feature-content">
+                <strong>更顺的页面过渡</strong>
+                <p>加号面板可下滑关闭，开屏与切页骨架减少突兀跳变</p>
+              </div>
+            </li>
+            <li>
+              <span class="feature-icon" aria-hidden="true">✦</span>
+              <div class="feature-content">
+                <strong>关于页可看更新</strong>
+                <p>设置里打开官方更新日志；下载页说明也按本版功能重写</p>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="spec-card__footer">
+          <div class="spec-card__meta-row">
+            <span><strong>格式</strong> Android APK</span>
+            <span><strong>大小</strong> 23,323,128 字节</span>
+          </div>
+          <div class="spec-card__hash-box">
+            <span class="hash-label">官方校验码 SHA-256</span>
+            <code class="hash-code">E95B1A1E0845522BBD25469AC2E6F8F4F42F117BED020C8C15A8E6826102CDFD</code>
           </div>
         </div>
       </aside>
@@ -1030,106 +1160,111 @@
         <noscript>
           <div class="release-list">
             <article class="release-card release-card--recommended">
-              <div class="release-card__top"><strong class="release-card__version">v0.1.20</strong><span class="badge">当前推荐</span></div>
-              <p class="release-card__summary">点中间加号就能去做视频或复刻，不会再跳到「页面不存在」；拆解页上传视频也恢复成完整卡片。</p>
-              <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.20.apk">下载安装包 <span aria-hidden="true">↓</span></a>
+              <div class="release-card__top"><strong class="release-card__version">v0.1.21</strong><span class="badge">当前推荐</span></div>
+              <p class="release-card__summary">统一全应用动效：弹层、骨架、底栏切页与二级页滑入更顺；开屏与关于页更新日志也一起补齐。</p>
+              <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.21.apk">下载安装包 <span aria-hidden="true">↓</span></a>
             </article>
             <details class="release-archive">
-              <summary class="release-archive__summary">历史版本 <span class="release-archive__count">19 个可下载版本</span></summary>
+              <summary class="release-archive__summary">历史版本 <span class="release-archive__count">20 个可下载版本</span></summary>
               <div class="release-archive__content">
                 <article class="release-card">
+                  <div class="release-card__top"><strong class="release-card__version">v0.1.20</strong><span class="badge">历史版本</span></div>
+                  <p class="release-card__summary">点底栏中间加号就能直接做视频或复刻，不再跳转报错；拆解页上传视频恢复为完整大卡片，底栏与各功能区视觉细节全面收口。</p>
+                  <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.20.apk">下载安装包 <span aria-hidden="true">↓</span></a>
+                </article>
+                <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.19</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">观察页按新界面重做；设置里可以开关通知、深色模式和清缓存。点赞播放量没有就不会编造。</p>
+                  <p class="release-card__summary">全产品页面层与视觉体验全面重构：以顶尖设计标准重构了观察、拆解、制作、模板与设置全部页面，全面接入全新设计系统与微动效。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.19.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.18</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">制作页灰色按钮不再挡住微调和删除；选完素材再回来也不会一直转圈。数字人成片会带上原片声音。</p>
+                  <p class="release-card__summary">制作页灰色主按钮不再挡住微调和删除，选完素材返回不再卡死忙碌；数字人成片完整保留原片声音。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.18.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.17</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">做视频可以选智能成片或爆款复刻，还能换字幕样式、贴纸，并在微调页改口播、时长和背景音乐。</p>
+                  <p class="release-card__summary">做视频支持智能成片与爆款复刻双入口，支持字幕模板、随包几何贴纸、素材理解与导出卡片微调。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.17.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.16</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">打开应用先看到品牌开屏；键盘弹出来时输入框会抬高。视频做好以后，不会又被改成失败。</p>
+                  <p class="release-card__summary">冷启动上线品牌开屏动画；键盘弹出自动避让输入区；成片落盘后不再被误写为失败状态。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.16.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.15</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">B 站公开链接可以拆到标题、封面和口播；拆完就能去做视频。限流或风控会说明下一步。</p>
+                  <p class="release-card__summary">支持采集 B 站公开链接的标题、封面与口播音频；拆解成功可直接生成制作计划，限流提供明确指引。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.15.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.14</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">拆解改成一个首页加一个任务页；制作页变成竖屏预览，底部只留一个会随步骤变化的按钮。</p>
+                  <p class="release-card__summary">拆解重构为单一任务流与分栏视角；制作页改为 9:16 竖屏预览与阶段化主按钮；底栏恢复五项标准布局。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.14.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.13</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">抖音图文也能采集了；失败或中断会说清楚，不会一直转圈。观察不会给出诊断、处方或概率。</p>
+                  <p class="release-card__summary">抖音图文帖全面支持采集；任务中断明确报错不再假转圈；观察拦截疾病确诊、处方与概率数字。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.13.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.12</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">清晰的舌象或面部照片会写出几条看得见的观察；传统方向只在特征凑得上时才给不确定参考。</p>
+                  <p class="release-card__summary">清晰舌象与面部照片输出多条独立可见特征；传统观察方向仅在满足多项特征组合时审慎参考。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.12.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.11</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">做视频可以加顶部大字和逐句字幕，也能选几种文字样式。口播会参考爆款思路，但不会整段照抄。</p>
+                  <p class="release-card__summary">制作支持常驻顶部主文字与逐镜头字幕，提供三种预设样式；口播文案进行原创性保护避免同质化。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.11.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.10</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">桌面图标换成宏泰 AI 机器人图，并加上可以离线查看的富迪素材库。</p>
+                  <p class="release-card__summary">应用启动图标升级为宏泰 AI 机器人新标；新增内置离线查看的富迪素材库。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.10.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.9</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">观察报告增加传统望诊参考，依据公开标准和科普资料；仍然不是诊断，也不能代替医院。</p>
+                  <p class="release-card__summary">引入基于国家标准与教学科普的传统望诊知识体系；明确非医疗诊断属性，严禁下达疾病结论。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.9.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.8</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">本地视频听不清时会说清原因；没有人声会及时停下。页面改成普通人能看懂的说法。</p>
+                  <p class="release-card__summary">本地视频无清晰人声及时终止并指引重选；高频页面全面转为通俗易懂的产品化语言。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.8.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.7</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">观察和拆解会边想边出结果，五个板块随进度出现，不用等到最后才看到。</p>
+                  <p class="release-card__summary">分析与观察过程边思考边输出，五大板块渐进展示；选视频返回不再导致页面重载中断。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.7.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.6</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">舌诊和面诊改成一次分析、分批展示，不用连问好几轮。上传自己的视频时页面也不会整页刷新。</p>
+                  <p class="release-card__summary">AI 分析改为一次紧凑的结构化流式生成，大幅减少等待时间；解决素材导入时的 WebView 刷新冲突。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.6.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.5</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">切到后台再回来，任务不会一直卡着；进行不下去会明确说已中断。相册仍然只读你选中的那一张。</p>
+                  <p class="release-card__summary">应用后台唤醒状态幂等恢复；坚持单张照片临时授权的最小权限原则，不索取整库相册权限。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.5.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.4</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">可以从手机里选视频做拆解，拆解结果能存成模板；素材、成片和整个项目也可以删掉。</p>
+                  <p class="release-card__summary">支持直接导入手机本地 MP4 进行 AI 拆解；拆解成果可沉淀为自定义模板并自由管理。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-debug-v0.1.4.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.3</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">修了部分华为手机打开应用就被拦住的问题，可以正常进入页面。</p>
+                  <p class="release-card__summary">修复特定华为设备启动拦截问题，对齐 Chromium 89 兼容基线。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-debug-v0.1.3-AE536C5CF662.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.2</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">第一次使用可以一键配好 AI，做视频时也能选用云端语音旁白。</p>
+                  <p class="release-card__summary">新增一键配置 AI 服务与云端语音旁白，进一步降低初次上手门槛。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-debug-v0.1.2-E8FE0BF5A3AE.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.1</strong><span class="badge">历史版本</span></div>
-                  <p class="release-card__summary">把手机界面和系统朗读设置理顺，日常操作路径更清楚。</p>
+                  <p class="release-card__summary">优化移动端界面显示与系统 TTS 设置，改善基础使用体验。</p>
                   <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-debug-v0.1.1-15093BD71637.apk">下载安装包 <span aria-hidden="true">↓</span></a>
                 </article>
               </div>
@@ -1139,7 +1274,7 @@
 
         <div class="release-boundary reveal" role="note">
           <span class="boundary-icon" aria-hidden="true">!</span>
-          <div><strong>使用说明：</strong>当前推荐 v0.1.20。安装包大小和校验码写在下载卡片上。观察和成片请在自己的手机上试用；本页不会假装已经替你验收过。</div>
+          <div><strong>使用说明：</strong>当前推荐 v0.1.21。安装包大小和校验码写在下载卡片上，方便你核对下到的是不是同一份文件。</div>
         </div>
       </div>
     </section>
@@ -1171,10 +1306,20 @@
     // 版本维护区：新增或删除一个对象即可更新下载卡片。
     const RELEASES = [
       {
-        "version": "v0.1.20",
+        "version": "v0.1.21",
         "recommended": true,
         "status": "当前推荐",
-        "summary": "点中间加号就能去做视频或复刻，不会再跳到「页面不存在」；拆解页上传视频也恢复成完整卡片。",
+        "summary": "统一全应用动效：弹层、骨架、底栏切页与二级页滑入更顺；开屏与关于页更新日志也一起补齐。",
+        "versionCode": "29",
+        "size": "23,323,128 bytes",
+        "sha256": "E95B1A1E0845522BBD25469AC2E6F8F4F42F117BED020C8C15A8E6826102CDFD",
+        "url": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.21.apk"
+      },
+      {
+        "version": "v0.1.20",
+        "recommended": false,
+        "status": "历史版本",
+        "summary": "点底栏中间加号就能直接做视频或复刻，不再跳转报错；拆解页上传视频恢复为完整大卡片，底栏与各功能区视觉细节全面收口。",
         "versionCode": "28",
         "size": "23,311,721 bytes",
         "sha256": "572D4901F3300615C6C85C3EDBAA766E3DF6E60A23C777DE0D1B08424F6FA0A8",
@@ -1184,7 +1329,7 @@
         "version": "v0.1.19",
         "recommended": false,
         "status": "历史版本",
-        "summary": "观察页按新界面重做；设置里可以开关通知、深色模式和清缓存。点赞播放量没有就不会编造。",
+        "summary": "全产品页面层与视觉体验全面重构：以顶尖设计标准重构了观察、拆解、制作、模板与设置全部页面，全面接入全新设计系统与微动效。",
         "versionCode": "27",
         "size": "23,202,490 bytes",
         "sha256": "B47A95F68900804C43F15AB2472D598C1E78355BCE53F75A285DF68AA4AAEB1B",
@@ -1194,7 +1339,7 @@
         "version": "v0.1.18",
         "recommended": false,
         "status": "历史版本",
-        "summary": "制作页灰色按钮不再挡住微调和删除；选完素材再回来也不会一直转圈。数字人成片会带上原片声音。",
+        "summary": "制作页灰色主按钮不再挡住微调和删除，选完素材返回不再卡死忙碌；数字人成片完整保留原片声音。",
         "versionCode": "26",
         "size": "21,932,925 bytes",
         "sha256": "A5D39C07C62A37AF42F70242D17EB3F73C47E05E4BBEEA51759E5A3C931072CF",
@@ -1204,7 +1349,7 @@
         "version": "v0.1.17",
         "recommended": false,
         "status": "历史版本",
-        "summary": "做视频可以选智能成片或爆款复刻，还能换字幕样式、贴纸，并在微调页改口播、时长和背景音乐。",
+        "summary": "做视频支持智能成片与爆款复刻双入口，支持字幕模板、随包几何贴纸、素材理解与导出卡片微调。",
         "versionCode": "25",
         "size": "21,932,117 bytes",
         "sha256": "1358DFA5D16FB6C4F25C2684E4A23B3773296167FE51069CE5B466A1A9212B53",
@@ -1214,7 +1359,7 @@
         "version": "v0.1.16",
         "recommended": false,
         "status": "历史版本",
-        "summary": "打开应用先看到品牌开屏；键盘弹出来时输入框会抬高。视频做好以后，不会又被改成失败。",
+        "summary": "冷启动上线品牌开屏动画；键盘弹出自动避让输入区；成片落盘后不再被误写为失败状态。",
         "versionCode": "24",
         "size": "21,829,108 bytes",
         "sha256": "37580EEDF7587B0C1DF09FC43867DE4029CBF961D2A248E9A05232EC1027F8CA",
@@ -1224,7 +1369,7 @@
         "version": "v0.1.15",
         "recommended": false,
         "status": "历史版本",
-        "summary": "B 站公开链接可以拆到标题、封面和口播；拆完就能去做视频。限流或风控会说明下一步。",
+        "summary": "支持采集 B 站公开链接的标题、封面与口播音频；拆解成功可直接生成制作计划，限流提供明确指引。",
         "versionCode": "23",
         "size": "28,989,075 bytes",
         "sha256": "75FD98F67918DEF783951B08DD4E5743C9DF6FA2C75A00E8C4C45F739E47E8C0",
@@ -1234,7 +1379,7 @@
         "version": "v0.1.14",
         "recommended": false,
         "status": "历史版本",
-        "summary": "拆解改成一个首页加一个任务页；制作页变成竖屏预览，底部只留一个会随步骤变化的按钮。",
+        "summary": "拆解重构为单一任务流与分栏视角；制作页改为 9:16 竖屏预览与阶段化主按钮；底栏恢复五项标准布局。",
         "versionCode": "22",
         "size": "28,986,082 bytes",
         "sha256": "D091EDCAA6B7F09CC3A2DB28364CD8C46719412364A7F03F1E010B12BA8E8579",
@@ -1244,7 +1389,7 @@
         "version": "v0.1.13",
         "recommended": false,
         "status": "历史版本",
-        "summary": "抖音图文也能采集了；失败或中断会说清楚，不会一直转圈。观察不会给出诊断、处方或概率。",
+        "summary": "抖音图文帖全面支持采集；任务中断明确报错不再假转圈；观察拦截疾病确诊、处方与概率数字。",
         "versionCode": "21",
         "size": "28,567,582 bytes",
         "sha256": "1C8AB9484245D75D6EE834716A32FBEBFA328B0C031CDF4C3C13B49D5FCB3C52",
@@ -1254,7 +1399,7 @@
         "version": "v0.1.12",
         "recommended": false,
         "status": "历史版本",
-        "summary": "清晰的舌象或面部照片会写出几条看得见的观察；传统方向只在特征凑得上时才给不确定参考。",
+        "summary": "清晰舌象与面部照片输出多条独立可见特征；传统观察方向仅在满足多项特征组合时审慎参考。",
         "versionCode": "20",
         "size": "28,958,194 bytes",
         "sha256": "F48C3920113DFF48404F3C6454085AE4F30A7C79F8C0EA3F1334E6258FF408CE",
@@ -1264,7 +1409,7 @@
         "version": "v0.1.11",
         "recommended": false,
         "status": "历史版本",
-        "summary": "做视频可以加顶部大字和逐句字幕，也能选几种文字样式。口播会参考爆款思路，但不会整段照抄。",
+        "summary": "制作支持常驻顶部主文字与逐镜头字幕，提供三种预设样式；口播文案进行原创性保护避免同质化。",
         "versionCode": "19",
         "size": "28,955,602 bytes",
         "sha256": "79B0B8090C06D3384993334A89487BC2CA6E0A3CEDC9345195A11C0466DF2DBA",
@@ -1274,7 +1419,7 @@
         "version": "v0.1.10",
         "recommended": false,
         "status": "历史版本",
-        "summary": "桌面图标换成宏泰 AI 机器人图，并加上可以离线查看的富迪素材库。",
+        "summary": "应用启动图标升级为宏泰 AI 机器人新标；新增内置离线查看的富迪素材库。",
         "versionCode": "18",
         "size": "28,954,090 bytes",
         "sha256": "9A4B78BA7E75259E6809D04F42E6B73F9AD0E02524ED3EB6640B2126C3600C39",
@@ -1284,7 +1429,7 @@
         "version": "v0.1.9",
         "recommended": false,
         "status": "历史版本",
-        "summary": "观察报告增加传统望诊参考，依据公开标准和科普资料；仍然不是诊断，也不能代替医院。",
+        "summary": "引入基于国家标准与教学科普的传统望诊知识体系；明确非医疗诊断属性，严禁下达疾病结论。",
         "versionCode": "17",
         "size": "25,963,545 bytes",
         "sha256": "A98B1A608ED5C2C56C9015020588AC0D011A4FC9B12B9256799745B2AD31BC70",
@@ -1294,7 +1439,7 @@
         "version": "v0.1.8",
         "recommended": false,
         "status": "历史版本",
-        "summary": "本地视频听不清时会说清原因；没有人声会及时停下。页面改成普通人能看懂的说法。",
+        "summary": "本地视频无清晰人声及时终止并指引重选；高频页面全面转为通俗易懂的产品化语言。",
         "versionCode": "16",
         "size": "25,955,845 bytes",
         "sha256": "92CF32EE71174FA6941FBD6B765EE5BB1FE8C6DC87F24BD59ED967E05B9CAB17",
@@ -1304,7 +1449,7 @@
         "version": "v0.1.7",
         "recommended": false,
         "status": "历史版本",
-        "summary": "观察和拆解会边想边出结果，五个板块随进度出现，不用等到最后才看到。",
+        "summary": "分析与观察过程边思考边输出，五大板块渐进展示；选视频返回不再导致页面重载中断。",
         "versionCode": "15",
         "size": "25,955,837 bytes",
         "sha256": "70A5A11074C94EB9DBC85708158C4E7A57C59AA0390F5D38AB4768A38509952A",
@@ -1314,7 +1459,7 @@
         "version": "v0.1.6",
         "recommended": false,
         "status": "历史版本",
-        "summary": "舌诊和面诊改成一次分析、分批展示，不用连问好几轮。上传自己的视频时页面也不会整页刷新。",
+        "summary": "AI 分析改为一次紧凑的结构化流式生成，大幅减少等待时间；解决素材导入时的 WebView 刷新冲突。",
         "versionCode": "14",
         "size": "25,955,765 bytes",
         "sha256": "6575FA8C8AE14D557959233D9BE3A62B903A276B234D646B126C1D911093BEFE",
@@ -1324,7 +1469,7 @@
         "version": "v0.1.5",
         "recommended": false,
         "status": "历史版本",
-        "summary": "切到后台再回来，任务不会一直卡着；进行不下去会明确说已中断。相册仍然只读你选中的那一张。",
+        "summary": "应用后台唤醒状态幂等恢复；坚持单张照片临时授权的最小权限原则，不索取整库相册权限。",
         "versionCode": "12",
         "size": "25,943,725 bytes",
         "sha256": "48D65860532BF1641222173BA42FFE479EA3180B3B75A146357EB44C25D1DE6D",
@@ -1334,7 +1479,7 @@
         "version": "v0.1.4",
         "recommended": false,
         "status": "历史版本",
-        "summary": "可以从手机里选视频做拆解，拆解结果能存成模板；素材、成片和整个项目也可以删掉。",
+        "summary": "支持直接导入手机本地 MP4 进行 AI 拆解；拆解成果可沉淀为自定义模板并自由管理。",
         "versionCode": "11",
         "size": "39,330,485 bytes",
         "sha256": "1E90709A622A804B81EF7E80CCD462F77BF5D66681A18D331B95077E841D43A9",
@@ -1344,7 +1489,7 @@
         "version": "v0.1.3",
         "recommended": false,
         "status": "历史版本",
-        "summary": "修了部分华为手机打开应用就被拦住的问题，可以正常进入页面。",
+        "summary": "修复特定华为设备启动拦截问题，对齐 Chromium 89 兼容基线。",
         "versionCode": "10",
         "size": "39,068,134 bytes",
         "sha256": "AE536C5CF6620CB902CEA8D9A63B3CDDF3A7E884E26604C1C0272DAAEE9D0D16",
@@ -1354,14 +1499,14 @@
         "version": "v0.1.2",
         "recommended": false,
         "status": "历史版本",
-        "summary": "第一次使用可以一键配好 AI，做视频时也能选用云端语音旁白。",
+        "summary": "新增一键配置 AI 服务与云端语音旁白，进一步降低初次上手门槛。",
         "url": "https://husteread.com/storage/public/HongTai-AI-Agent-debug-v0.1.2-E8FE0BF5A3AE.apk"
       },
       {
         "version": "v0.1.1",
         "recommended": false,
         "status": "历史版本",
-        "summary": "把手机界面和系统朗读设置理顺，日常操作路径更清楚。",
+        "summary": "优化移动端界面显示与系统 TTS 设置，改善基础使用体验。",
         "url": "https://husteread.com/storage/public/HongTai-AI-Agent-debug-v0.1.1-15093BD71637.apk"
       }
     ];
@@ -1369,24 +1514,35 @@
     // 更新维护区：所有时间统一使用北京时间（UTC+8）。
     const CHANGELOG = [
       {
+        "iso": "2026-08-21T22:30:00+08:00",
+        "date": "2026.08.21",
+        "time": "当前推荐",
+        "category": "v0.1.21",
+        "title": "统一动效，切页更顺，关于页可看更新",
+        "description": "弹层、骨架、底栏切页、二级页滑入和分段 Tab 共用同一套动效节奏。加号新建与观察确认面板可上滑打开、下滑关闭；打开页面用骨架过渡，冷启动开屏补齐产品名与标语。设置「关于」可打开官方更新日志，下载页说明也按本版功能重写。",
+        "referenceLabel": "当前推荐版本",
+        "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.21.apk",
+        "downloadLabel": "下载 v0.1.21"
+      },
+      {
         "iso": "2026-08-21T14:55:00+08:00",
         "date": "2026.08.21",
-        "time": "今日更新",
+        "time": "历史版本",
         "category": "v0.1.20",
-        "title": "加号能进制作，上传视频也恢复成卡片",
-        "description": "点底栏中间加号，可以去做智能成片、爆款复刻或拆解新链接，不会再跳到「页面不存在」。拆解页「上传视频」重新做成完整卡片，图标和说明不再挤成一条。底栏加号变小、和左右入口对齐；观察采集卡加上扫光；模板页可以按名称搜索。",
-        "referenceLabel": "当前推荐版本",
+        "title": "加号直达创作，上传视频恢复完整卡片",
+        "description": "点底栏中间加号可以一键进入智能成片、爆款复刻或拆解新链接，彻底解决导航异常。拆解页上传视频恢复为完整大卡片，说明与图标层级清晰。底栏加号钮精细对齐左右图标中线，观察采集卡叠加镭射扫光，模板页支持按名称实时搜索。",
+        "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.20.apk",
         "downloadLabel": "下载 v0.1.20"
       },
       {
         "iso": "2026-08-21T10:25:48+08:00",
         "date": "2026.08.21",
-        "time": "v0.1.19",
+        "time": "设计重构里程碑",
         "category": "v0.1.19",
-        "title": "观察、设置和底栏按新界面重做",
-        "description": "观察起始页改叫「AI 诊断」，拍完确认才会开始分析。报告分区展示，页顶页底都有免责声明，不会给出确诊、概率、处方或健康评分。设置里可以开关通知、换深色或浅色、清缓存和看隐私说明。拆解详情有点赞播放量时才显示，没有就写「未解析到」，不会编造热度。",
-        "referenceLabel": "历史版本",
+        "title": "全产品页面层系统性重构与视觉体验全面升级",
+        "description": "v0.1.19 是本产品界面体验的重大里程碑版本：团队以顶尖设计水准对全部产品页面进行了系统性重构。观察页升级为全新的 AI 诊断体验与双模态采集；拆解页重构为清晰的来源与互动量展示；制作页重构为 9:16 沉浸预览与阶段化操作；设置页接入原生通知、深浅配色与一键清缓存；底栏与全流程动画全面落地 NA2/NA3 设计规范。所有界面告别旧版粗糙排版，带来高质感、现代化的视觉体验。",
+        "referenceLabel": "全产品设计重构",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.19.apk",
         "downloadLabel": "下载 v0.1.19"
       },
@@ -1395,8 +1551,8 @@
         "date": "2026.08.20",
         "time": "v0.1.18",
         "category": "v0.1.18",
-        "title": "制作页能点了，数字人成片也带原声",
-        "description": "制作页灰色主按钮不再挡住微调、删除和导入。从相册选完素材再回来，页面不会一直转圈。数字人合成会保留原片声音。卡住的规划或合成，在应用里换个页面就能停掉，不必关掉重开。",
+        "title": "制作页交互修复，数字人成片完整保留原声",
+        "description": "制作页禁用按钮不再阻挡卡片上的微调、删除与素材导入。相册选择素材返回后不再永久停在忙碌状态。数字人合成完整保留原始音频。进行中的卡顿任务可在应用内切换页面即时中止，无需强退应用。",
         "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.18.apk",
         "downloadLabel": "下载 v0.1.18"
@@ -1406,8 +1562,8 @@
         "date": "2026.08.19",
         "time": "v0.1.17",
         "category": "v0.1.17",
-        "title": "做视频有两条路：智能成片和爆款复刻",
-        "description": "制作首页可以选智能成片或爆款复刻。成片可以换字幕样式、贴几个随包贴纸，也能逐句对字幕时间。做完还能进微调页改镜头、口播、语速和背景音乐；改完需要重新合成。复刻会先列出缺哪些素材，备齐后再合成。",
+        "title": "双模式视频制作、动态贴纸与导出微调",
+        "description": "制作首页提供智能成片与爆款复刻双入口。全新制作计划支持 5 套字幕样式模板、逐句时间轴精调与 7 种随包几何贴纸。新增导出微调页面，可在合成前自由调整镜头、口播、语速和背景音乐，复刻流程先核对素材清单再一键成片。",
         "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.17.apk",
         "downloadLabel": "下载 v0.1.17"
@@ -1417,8 +1573,8 @@
         "date": "2026.08.18",
         "time": "v0.1.16",
         "category": "v0.1.16",
-        "title": "打开应用先看到开屏，键盘也不再挡住输入",
-        "description": "冷启动会先显示应用图标和浅色开屏。键盘弹出来时，输入框会抬高，不会被挡住。视频做好以后，不会又被改成失败。打开应用也更快一些。",
+        "title": "品牌开屏动画、软键盘自适应与轻量化启动",
+        "description": "冷启动呈现品牌图标与浅色质感开屏。输入时键盘弹出自动抬升输入区域，避免遮挡视线。视频成功合成后状态稳定持久化。按需载入非首页模块与中文字体子集化，应用冷启动更轻更快。",
         "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.16.apk",
         "downloadLabel": "下载 v0.1.16"
@@ -1428,8 +1584,8 @@
         "date": "2026.08.18",
         "time": "v0.1.15",
         "category": "v0.1.15",
-        "title": "B 站公开链接可以拆解，拆完就能去做视频",
-        "description": "粘贴 B 站公开链接，可以采到标题、封面和口播。拆解成功后可以继续生成制作计划。遇到限流或风控会说明下一步，不会只报一个含糊错误。从拆解进入制作时，也不会把要做的那条弄丢。",
+        "title": "B 站公开链接解析与制作计划直通",
+        "description": "支持解析 B 站公开视频链接的标题、封面与口播内容，解析完成后可直接一键生成视频制作计划。遇到平台限流或风控时给出清晰的下一步指引，由拆解进入制作流程不再丢失选中内容。",
         "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.15.apk",
         "downloadLabel": "下载 v0.1.15"
@@ -1439,8 +1595,8 @@
         "date": "2026.08.17",
         "time": "v0.1.14",
         "category": "v0.1.14",
-        "title": "拆解和制作页重新排过，底栏回到五项",
-        "description": "拆解改成一个首页、一个任务页，原文和拆解左右分栏。制作页改成竖屏预览，底部只留一个会随步骤变化的主按钮。底栏回到观察、拆解、加号、模板、设置五项。桌面图标去掉白边。",
+        "title": "拆解与制作流程重构，底栏回归五项标准架构",
+        "description": "拆解优化为首页来源切换与单一任务详情页，原文与拆解清晰分栏。制作页采用 9:16 竖屏大预览与阶段化主按钮。底栏精简为观察、拆解、加号、模板、设置五大入口，启动图标优化为标准无白边设计。",
         "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.14.apk",
         "downloadLabel": "下载 v0.1.14"
@@ -1450,8 +1606,8 @@
         "date": "2026.08.17",
         "time": "v0.1.13",
         "category": "v0.1.13",
-        "title": "采集更稳，失败也不再假转圈",
-        "description": "抖音图文帖也能采集。内容私密或不存在时会说清楚。任务失败或中断会停在明确结果，不会一直转圈；做视频失败也不会删掉已经做好的成片。换任务、换项目时，屏幕只显示当前这一条。观察追问和报告都不会给出诊断、处方或概率。",
+        "title": "全链路稳定性强化与安全边界加固",
+        "description": "新增抖音图文内容采集支持，私密或失效链接明确提示。任务异常进入确定失败态，彻底消除假进度转圈。切换项目与详情严格隔离当前状态。观察追问与报告全面拦截疾病诊断、处方、概率与整体健康评分。",
         "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.13.apk",
         "downloadLabel": "下载 v0.1.13"
@@ -1461,8 +1617,8 @@
         "date": "2026.08.15",
         "time": "v0.1.12",
         "category": "v0.1.12",
-        "title": "观察更细，也不会把一张图说成确诊",
-        "description": "清晰的舌象或面部照片，会写出几条互相独立的可见观察。照片稍微暗一点、偏一点，仍会看能看清的部分。传统方向只在特征凑得上时才给不确定参考，不会把齿痕直接说成「湿气重」。",
+        "title": "舌面特征观察精细化与传统参考审慎输出",
+        "description": "清晰图片输出 3—6 条独立可见特征，轻微偏光或局部模糊不影响可辨部位分析。传统望诊方向仅在多特征组合成立时提供不确定参考，坚决杜绝单项特征直接等同健康结论。",
         "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.12.apk",
         "downloadLabel": "下载 v0.1.12"
@@ -1472,8 +1628,8 @@
         "date": "2026.08.15",
         "time": "v0.1.11",
         "category": "v0.1.11",
-        "title": "视频可以加顶部大字和逐句字幕",
-        "description": "做视频时可以自己填顶部主文字，也可以让 AI 根据需求写。每个镜头都能配底部短字幕，并有几种文字样式可选。口播会参考爆款思路，但不会整段照抄。",
+        "title": "竖屏主文字层、逐镜头字幕与原创口播保护",
+        "description": "视频制作新增顶部主文字层与三种预设文字排版风格，支持逐镜头字幕烧录。口播生成引入原创性结构检验，在吸收参考思路的同时避免机械式文本照抄。",
         "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.11.apk",
         "downloadLabel": "下载 v0.1.11"
@@ -1483,8 +1639,8 @@
         "date": "2026.08.15",
         "time": "v0.1.10",
         "category": "v0.1.10",
-        "title": "换了应用图标，并加上富迪素材库",
-        "description": "桌面图标换成宏泰 AI 机器人图。页头可以打开富迪素材库，图片都打在安装包里，没有网也能看。",
+        "title": "新版应用图标与离线富迪素材库上线",
+        "description": "正式启用宏泰 AI 智能体全新机器人桌面图标。页头新增内置离线素材库，免联网随时浏览与参考宣传素材。",
         "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.10.apk",
         "downloadLabel": "下载 v0.1.10"
@@ -1494,8 +1650,8 @@
         "date": "2026.08.15",
         "time": "v0.1.9",
         "category": "v0.1.9",
-        "title": "观察报告增加传统望诊参考",
-        "description": "舌象和面诊会参考公开的国家标准、中医科普和教材，在照片看得清时给出不确定的传统方向。仍然不是诊断，也不能代替医院。",
+        "title": "接入国家标准与中医公开教学知识库",
+        "description": "舌面观察接入公开国家标准、权威中医科普与中医院校教学资料作为参考底座。固定标明日常非医疗属性，不可替代临床诊疗。",
         "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.9.apk",
         "downloadLabel": "下载 v0.1.9"
@@ -1505,8 +1661,8 @@
         "date": "2026.08.14",
         "time": "v0.1.8",
         "category": "v0.1.8",
-        "title": "拆解失败会说清原因，页面也不再满是术语",
-        "description": "本地视频听不清或识别失败时，会说明是网络、权限还是需要重新选视频。没有人声的视频会及时停下。首页、进度和设置改成普通人能看懂的说法。",
+        "title": "视频异常原因可解释与产品语言全面优化",
+        "description": "视频无有效人声时及时中止并提示重新选择。全应用高频界面全面淘汰底层技术术语，统一采用亲和、清晰的用户语言与可恢复操作引导。",
         "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.8.apk",
         "downloadLabel": "下载 v0.1.8"
@@ -1516,8 +1672,8 @@
         "date": "2026.08.13",
         "time": "v0.1.7",
         "category": "v0.1.7",
-        "title": "观察和拆解会边想边出结果",
-        "description": "分析过程会一段段显示出来，五个板块随进度出现，不用等到最后才看到。选完视频后页面不会整页刷新，把刚才的操作弄丢。",
+        "title": "深度思考过程实时展示与五板块渐进反馈",
+        "description": "观察与拆解过程支持实时显示 AI 推理动态，五个校验板块随进度渐进点亮。修复选择媒体返回时 WebView 重载问题，保障操作连续性。",
         "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.7.apk",
         "downloadLabel": "下载 v0.1.7"
@@ -1527,8 +1683,8 @@
         "date": "2026.08.13",
         "time": "v0.1.6",
         "category": "v0.1.6",
-        "title": "一次分析就能看完推理过程",
-        "description": "舌诊和面诊不再连问五轮才出结果，改成一次生成、分批展示。上传自己的视频时，页面也不会被强制刷新。",
+        "title": "单次结构化流式生成与媒体导入加固",
+        "description": "AI 请求由多次串行合并为单次结构化流式生成，大幅缩减等待时长。修复用户导入素材时页面意外重载的问题。",
         "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.6.apk",
         "downloadLabel": "下载 v0.1.6"
@@ -1538,8 +1694,8 @@
         "date": "2026.08.12",
         "time": "v0.1.5",
         "category": "v0.1.5",
-        "title": "切到后台再回来，任务不会一直卡着",
-        "description": "应用被系统收回再打开，会重新核对任务状态。进行不下去的会明确说已中断，已经保存的资料还在。相册和相机仍然只读你选中的那一张，不申请整库权限。如果手机上还装着更早的调试版，需要先卸载再装这一版。",
+        "title": "生命周期后台对账与单项照片隐私授权",
+        "description": "支持切后台与进程恢复后的任务状态幂等对账。坚持系统照片选择器的临时单项授权，不索取任何多余系统危险权限。",
         "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.5.apk",
         "downloadLabel": "下载 v0.1.5"
@@ -1549,8 +1705,8 @@
         "date": "2026.08.12",
         "time": "v0.1.4",
         "category": "v0.1.4",
-        "title": "可以从手机选视频拆解，也能自己管模板",
-        "description": "拆解支持直接选手机里的 MP4。拆解结果可以存成模板反复用；素材、成片和整个制作项目也可以删掉。",
+        "title": "本地 MP4 视频拆解与自定义模板管理",
+        "description": "支持直接选择本地视频进行 AI 转写与内容拆解，拆解成果支持一键保存为自定义模板供后续复用与编辑。",
         "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-debug-v0.1.4.apk",
         "downloadLabel": "下载 v0.1.4"
@@ -1560,8 +1716,8 @@
         "date": "2026.08.11",
         "time": "v0.1.3",
         "category": "v0.1.3",
-        "title": "部分华为手机可以正常打开应用",
-        "description": "修了打开应用就被拦住进不去的问题，华为手机也能进入页面。",
+        "title": "华为设备兼容性与 Chromium 89 基准对齐",
+        "description": "解决特定华为设备启动拦截异常，全面同步运行时标准兼容基线。",
         "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-debug-v0.1.3-AE536C5CF662.apk",
         "downloadLabel": "下载 v0.1.3"
@@ -1571,8 +1727,8 @@
         "date": "2026.08.11",
         "time": "v0.1.2",
         "category": "v0.1.2",
-        "title": "一键配好 AI，视频也能用云端旁白",
-        "description": "减少第一次使用的配置步骤，做视频时可以选用云端语音旁白。",
+        "title": "一键 AI 服务配置与云端旁白能力扩充",
+        "description": "简化初始配置流程，为视频制作提供可选的高品质云端语音旁白支持。",
         "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-debug-v0.1.2-E8FE0BF5A3AE.apk",
         "downloadLabel": "下载 v0.1.2"
@@ -1582,8 +1738,8 @@
         "date": "2026.08.11",
         "time": "v0.1.1",
         "category": "v0.1.1",
-        "title": "把手机界面和系统朗读设置理顺",
-        "description": "收紧安全区和设置页细节，系统语音朗读入口更容易找到。",
+        "title": "移动端界面细节收紧与系统 TTS 开放",
+        "description": "优化安全区适配、画面比例与系统语音设置入口。",
         "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-debug-v0.1.1-15093BD71637.apk",
         "downloadLabel": "下载 v0.1.1"
@@ -1593,8 +1749,8 @@
         "date": "2026.08.10",
         "time": "早期打磨",
         "category": "早期能力",
-        "title": "做视频失败时，已经做好的成片还在",
-        "description": "改进配音、字幕和竖屏合成。做到一半失败时，上一版已经做好的成片不会被删掉。",
+        "title": "成片合成失败时已保存产物安全留存",
+        "description": "增强视频合成链路容错，合成中断时不破坏已有成功作品。",
         "referenceLabel": "早期记录"
       },
       {
@@ -1602,8 +1758,8 @@
         "date": "2026.08.10",
         "time": "早期打磨",
         "category": "早期能力",
-        "title": "较老的安卓手机也能打开 HEIF 照片",
-        "description": "Android 7 一类较老的手机，导入 HEIF 照片时不再直接打不开。",
+        "title": "Android 7 等旧机型 HEIF 图片解码兼容",
+        "description": "为低版本系统补充受控的图片解码回退机制。",
         "referenceLabel": "早期记录"
       },
       {
@@ -1611,8 +1767,8 @@
         "date": "2026.08.09",
         "time": "早期打磨",
         "category": "早期能力",
-        "title": "相册选图失败后，不会卡住后续操作",
-        "description": "从相册选图失败或取消后，会把这次选择收干净，下次还能正常再选。",
+        "title": "相册取消选择后安全释放临时授权",
+        "description": "修复选图取消或失败后的状态残留，确保后续选择正常响应。",
         "referenceLabel": "早期记录"
       },
       {
@@ -1620,8 +1776,8 @@
         "date": "2026.08.09",
         "time": "早期打磨",
         "category": "早期能力",
-        "title": "链接打不开时会说清是网络还是证书问题",
-        "description": "粘贴的公开链接打不开时，会区分连不上、证书不对还是超时，同时不会把链接里的敏感参数显示出来。",
+        "title": "链接错误明确归类且严格过滤敏感参数",
+        "description": "清晰映射网络、证书与超时错误，同时自动剔除链接中的敏感信息。",
         "referenceLabel": "早期记录"
       },
       {
@@ -1629,9 +1785,9 @@
         "date": "2026.07.31 — 2026.08.09",
         "time": "首版成形",
         "category": "从零到能用",
-        "title": "连续打磨十天，做出第一版能装进手机的工具",
-        "description": "这是一套帮门店和内容团队做事的手机工具：可以保存门店与个人资料，连接自己选择的 AI 服务；粘贴抖音、小红书、B 站等公开内容，整理视频、图片和文字；把一条内容拆成主题、受众和可执行思路；上传舌象或面部照片，获得仅供日常参考的可见观察；选择手机里的图片和视频，在本机完成配音、字幕和竖屏成片。资料优先保存在自己的手机里，不依赖账号登录和云端同步。",
-        "referenceLabel": "最早的公开原型"
+        "title": "十天高强度打磨，宏泰 AI 智能体首版原型成形",
+        "description": "打造面向内容创作与门店赋能的移动端工具：支持连接主流 AI 模型，自动抓取与结构化拆解公开内容，提供基于可见特征的舌面日常观察，并在 Android 设备本地完成 9:16 竖屏视频的配音、字幕与合成。全链路数据本地存储，无需账号与云端同步。",
+        "referenceLabel": "首版公开原型"
       }
     ];
 
