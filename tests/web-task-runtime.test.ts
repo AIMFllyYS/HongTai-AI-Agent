@@ -671,13 +671,14 @@ test("首页来源用 Tabs，唯一主按钮跟在输入区后，成功后进入
   assert.match(home, /name="video"/);
   assert.match(home, /250MB/);
   assert.match(home, /只保存在本机/);
-  assert.match(css, /\.task-source-card__upload\s*\{[^}]*background:\s*var\(--color-surface-low\)/s);
+  assert.match(css, /\.task-source-card__upload\s*\{[^}]*background:\s*var\(--palette-fill\)/s);
   assert.match(css, /\.task-source-card__upload\s*\{[^}]*border-radius:\s*var\(--radius-card\)/s);
   assert.match(css, /\.task-source-card__upload\s*\{[^}]*justify-items:\s*center/s);
   assert.match(css, /\.task-source-card__upload\s*\{[^}]*align-items:\s*center/s);
-  assert.match(css, /\.task-source-card__upload\s*\{[^}]*min-height:\s*12\.125rem/s);
+  assert.match(css, /\.task-source-card__upload\s*\{[^}]*min-height:\s*12rem/s);
   assert.match(css, /\.task-source-card__upload\s*\{[^}]*padding:\s*1\.5rem 1\.25rem/s);
   assert.match(css, /\.task-source-card__upload-icon\s*\{[^}]*width:\s*3\.75rem[^}]*height:\s*3\.75rem/s);
+  assert.match(css, /\.task-source-card__upload-icon\s*\{[^}]*background:\s*#ffffff/s);
   assert.match(css, /\.task-source-card__upload-icon\s*\{[^}]*border-radius:\s*50%/s);
   assert.match(home, /<br \/>最大 250MB/);
   assert.match(home, /<ValidatedModuleProgress/);
