@@ -297,11 +297,7 @@ export function TaskHomePage({ runtime, navigate, searchEpoch = 0 }: TaskHomePag
                     <Icon name="video" size={26} />
                   </span>
                   <strong>选择一段 MP4 视频</strong>
-                  <p>
-                    先识别口播，再生成拆解
-                    {"\n"}
-                    最大 250MB · 视频只保存在本机
-                  </p>
+                  <p>先识别口播，再生成拆解<br />最大 250MB · 视频只保存在本机</p>
                 </div>
                 {videoImporting || videoProgress ? <ValidatedModuleProgress definitions={contentAnalysisModuleDefinitions} failedTitle="这次拆解没有完成" issue={submitIssue} progress={videoProgress} title="正在整理视频内容" /> : null}
               </>
