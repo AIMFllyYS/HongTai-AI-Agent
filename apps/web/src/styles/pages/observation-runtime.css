@@ -516,8 +516,14 @@
 }
 
 /* Content column under the leading icon: title row then body, never side-by-side. */
+.observation-recommendation-card__icon {
+  display: grid;
+  place-items: start center;
+  color: var(--observation-accent);
+}
 .observation-recommendation-card__body {
   display: grid;
+  width: 100%;
   min-width: 0;
   gap: 0.35rem;
 }
@@ -553,21 +559,27 @@
 .observation-reference-card > div { display: grid; gap: 0.25rem; }
 .observation-reference-card small { color: var(--color-text-muted); font-size: var(--text-meta); }
 
-.observation-recommendation-card { border-left: 3px solid var(--observation-accent); }
+.observation-recommendation-card {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  border-left: 3px solid var(--observation-accent);
+}
 .observation-recommendation-card__top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
 }
 .observation-recommendation-card__top strong {
-  flex: 1 1 auto;
   min-width: 0;
   line-height: 1.4;
+  overflow-wrap: break-word;
 }
 .observation-recommendation-card small { color: var(--color-text-muted); font-size: var(--text-meta); line-height: var(--text-meta-line); }
 .observation-recommendation-card__priority {
-  flex: 0 0 auto;
+  justify-self: end;
   padding: 0.2rem 0.48rem;
   color: var(--observation-accent);
   background: var(--observation-accent-soft);
@@ -630,8 +642,7 @@
 }
 
 @media (min-width: 38rem) {
-  .observation-report-list,
-  .observation-recommendation-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .observation-report-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 26.875rem) {
@@ -996,7 +1007,8 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
-  gap: 0.65rem;
+  gap: 0.625rem;
+  width: 100%;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -1004,32 +1016,34 @@
   box-shadow: none;
 }
 
-.page-observation-report .observation-recommendation-card__body {
-  display: grid;
-  min-width: 0;
-  gap: 0.35rem;
-}
-
-.page-observation-report .observation-recommendation-card svg {
-  flex: 0 0 auto;
+.page-observation-report .observation-recommendation-card__icon {
   color: var(--palette-brand);
 }
 
+.page-observation-report .observation-recommendation-card__body {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
 .page-observation-report .observation-recommendation-card__top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
 }
 
 .page-observation-report .observation-recommendation-card__top strong {
-  flex: 1 1 auto;
   min-width: 0;
-  line-height: 1.4;
+  line-height: 1.35;
+  overflow-wrap: break-word;
 }
 
 .page-observation-report .observation-recommendation-card__priority {
-  flex: 0 0 auto;
+  justify-self: end;
   padding: 0.12rem 0.5rem;
   color: var(--palette-progress);
   background: var(--surface-progress);
@@ -1107,7 +1121,10 @@
 }
 
 @media (min-width: 38rem) {
-  .page-observation-report .observation-report-list,
+  .page-observation-report .observation-report-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .page-observation-report .observation-recommendation-list {
     grid-template-columns: minmax(0, 1fr);
   }

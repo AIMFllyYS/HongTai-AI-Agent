@@ -269,11 +269,15 @@ test("observation controls stay compact and clear above the fixed Android naviga
   assert.match(css, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.observation-question-composer__actions[^}]*grid-template-columns:\s*1fr/);
   assert.match(css, /\.page-observation-report \.observation-quality-card/);
   assert.match(report, /observation-recommendation-card__body/);
+  assert.match(report, /observation-recommendation-card__icon/);
   assert.match(css, /\.observation-recommendation-card__body\s*\{[^}]*display:\s*grid/s);
+  assert.match(css, /\.page-observation-report \.observation-recommendation-card\s*\{[^}]*grid-template-columns:\s*auto\s+minmax\(0,\s*1fr\)/s);
+  assert.match(css, /\.page-observation-report \.observation-recommendation-card__top\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto/s);
   assert.match(css, /\.page-observation-report \.observation-recommendation-card__body\s*\{[^}]*display:\s*grid/s);
   assert.match(css, /\.page-observation-report \.observation-recommendation-card__top strong\s*\{[^}]*min-width:\s*0/s);
   assert.doesNotMatch(css, /\.observation-report-item__title,\s*\.observation-recommendation-card > div\s*\{/);
   assert.doesNotMatch(css, /\.observation-recommendation-card__top strong[^}]*overflow-wrap:\s*anywhere/);
+  assert.doesNotMatch(css, /@media\s*\(min-width:\s*38rem\)\s*\{[^}]*\.observation-recommendation-list\s*\{[^}]*repeat\(2/s);
 });
 
 test("observation in-progress page follows unarchived S9b without vitals HUD or old progress chrome", async () => {

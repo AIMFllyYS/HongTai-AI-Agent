@@ -410,7 +410,9 @@ function SucceededReport({
               const priority = recommendationPriorityLabel(item.priority);
               return (
                 <article className="observation-recommendation-card" key={item.title}>
-                  <Icon name={observationRecommendationIcon(item.category)} size={18} />
+                  <span className="observation-recommendation-card__icon" aria-hidden="true">
+                    <Icon name={observationRecommendationIcon(item.category)} size={18} />
+                  </span>
                   <div className="observation-recommendation-card__body">
                     <div className="observation-recommendation-card__top">
                       <strong>{item.title}</strong>
