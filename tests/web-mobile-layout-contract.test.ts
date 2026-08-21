@@ -39,7 +39,7 @@ test("approved gesture shell and compact navigation remain mounted", () => {
   assert.match(read("components/RouteTransition.tsx"), /transitionEnd:\s*\{\s*transform:\s*"none"\s*\}/);
   assert.match(swipe, /useSwipeNavigation/);
   assert.match(tokens, /--header-height:\s*2\.75rem/);
-  assert.match(tokens, /--nav-height:\s*3\.25rem/);
+  assert.match(tokens, /--nav-height:\s*3rem/);
   assert.match(shell, /\.app-header\s*\{[^}]*position:\s*fixed/s);
   assert.match(shell, /\.app-header\s*\{[^}]*padding-top:\s*max\(env\(safe-area-inset-top\),\s*var\(--native-status-bar-inset\)\)/s);
   assert.match(shell, /\.app-shell--detail \.app-content\s*\{[^}]*padding-top:\s*calc\([^;]*--header-height[^;]*safe-area-inset-top/s);

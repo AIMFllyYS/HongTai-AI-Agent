@@ -25,7 +25,7 @@ export const playbookSections: readonly PlaybookSection[] = [
   { id: "color", title: "NA2 色系", group: "规范", summary: "白为主，绿为点", Render: PlaybookColorScale },
   { id: "type", title: "NA3 字体", group: "规范", summary: "24 / 16 / 15 / 14 / 12 / 11 / 10", Render: PlaybookTypeScale },
   { id: "icons", title: "NA5 图标", group: "规范", summary: "Lucide 描边 22px", Render: PlaybookIconGrid },
-  { id: "tabbar", title: "M/Tab Bar", group: "组件", summary: "观察 / 拆解 / 加号 / 模板 / 设置", Render: PlaybookTabBarSpecimen },
+  { id: "tabbar", title: "M/Tab Bar", group: "组件", summary: "48px 栏，32px 圆加号与左右项居中对齐", Render: PlaybookTabBarSpecimen },
   { id: "navbar", title: "M/Nav Bar", group: "组件", summary: "返回 24px Lucide chevron-left", Render: PlaybookNavBarSpecimen },
   { id: "chrome", title: "按钮与控件", group: "组件", summary: "主按钮、分段、输入、开关、头像", Render: PlaybookChromePrimitives },
   { id: "paste", title: "S1 粘贴链接", group: "主路径", summary: "链接图标、识别行、开始拆解", Render: PlaybookPasteSpecimen },

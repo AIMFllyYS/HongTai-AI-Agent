@@ -160,7 +160,7 @@
   --page-gutter: 1.25rem;
   --content-max: 48.75rem;
   --header-height: 2.75rem;
-  --nav-height: 3.25rem;
+  --nav-height: 3rem;
 }
 
 @media (prefers-color-scheme: dark) {

@@ -13,7 +13,7 @@ export function PlaybookTabBarSpecimen() {
         </span>
       ))}
       <span className="playbook-tabbar__item playbook-tabbar__item--plus">
-        <span className="playbook-fab"><Icon name="plus" size={22} /></span>
+        <span className="playbook-fab"><Icon name="plus" size={18} /></span>
       </span>
       {primaryNavItems.slice(2).map((item) => (
         <span className="playbook-tabbar__item" key={item.id}>

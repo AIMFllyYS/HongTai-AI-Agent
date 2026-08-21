@@ -105,7 +105,7 @@ export function PlaybookChromePrimitives() {
       </div>
       <div className="playbook-chrome__row">
         <span className="playbook-avatar">林</span>
-        <span className="playbook-fab" aria-hidden="true"><Icon name="plus" size={22} /></span>
+        <span className="playbook-fab" aria-hidden="true"><Icon name="plus" size={18} /></span>
       </div>
     </div>
   );

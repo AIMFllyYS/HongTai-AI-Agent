@@ -164,30 +164,32 @@
 
 .playbook-fab {
   display: grid;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2rem;
+  height: 2rem;
   place-items: center;
   color: var(--palette-on-ink);
   background: var(--palette-brand);
-  border-radius: var(--radius-plus);
-  box-shadow: var(--shadow-floating);
+  border-radius: 50%;
+  box-shadow: none;
 }
 
 .playbook-tabbar {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  align-items: start;
-  min-height: 3.25rem;
-  padding: 0.75rem 0.5rem 0;
+  align-items: center;
+  min-height: 3rem;
+  padding: 0 0.5rem;
   border-top: 1px solid var(--palette-hairline);
 }
 
 .playbook-tabbar__item {
   display: grid;
   justify-items: center;
-  gap: 0.25rem;
+  align-content: center;
+  gap: 0.125rem;
   color: var(--palette-ink-400);
   font-size: var(--text-nav);
+  line-height: 1;
 }
 
 .playbook-tabbar__item--plus {

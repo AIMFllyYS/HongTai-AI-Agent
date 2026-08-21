@@ -47,7 +47,7 @@ export function BottomNav({ active, navigate }: BottomNavProps) {
             onClick={() => setComposeOpen(true)}
             type="button"
           >
-            <Icon name="plus" size={22} />
+            <Icon name="plus" size={18} />
           </button>
         </div>
         {primaryNavItems.slice(2).map((item) => {
