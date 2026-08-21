@@ -217,10 +217,12 @@ test("live generation pages use narrow subscriptions with no healthy-state manua
   assert.match(observationStart, /LiveListReadReconciler<DiagnosisSessionRecord>/);
   assert.match(observationStart, /observationHistoryReads\.current\.record\(/);
   assert.match(observationStart, /if \(reconciled === undefined\) return;/);
-  assert.match(observationStart, /event\.type === "failed"[\s\S]*runtime\.diagnosis\.getSession\(session\.sessionId\)/);
+  assert.match(observationStart, /event\.type === "failed"[\s\S]*runtime\.diagnosis\.getSession\(sessionId\)/);
   assert.match(observationReport, /runtime\.diagnosis\.subscribeReport\(sessionId/);
-  assert.match(observationReport, /reportWaitingForStart[\s\S]*开始生成报告/);
-  assert.match(observationReport, /reportIsActive \? <ValidatedModuleProgress/);
+  assert.match(observationReport, /ObservationObservingScreen/);
+  assert.match(observationReport, /record\?\.status === "succeeded" \|\| record\?\.status === "failed"/);
+  assert.doesNotMatch(observationReport, /开始生成报告/);
+  assert.doesNotMatch(observationReport, /ValidatedModuleProgress/);
 
   for (const source of [home, taskPage, observationStart, observationReport]) {
     assert.doesNotMatch(source, /setInterval|setTimeout|WebSocket/);

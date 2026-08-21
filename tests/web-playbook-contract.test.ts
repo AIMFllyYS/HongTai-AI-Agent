@@ -19,9 +19,15 @@ test("playbook route is a catalog, not a product tab, and does not call AppRunti
   assert.equal(matchRoute("/playbook").navKey, undefined);
 
   const page = read("playbook/PlaybookPage.tsx");
+  const specimens = read("playbook/flow-specimens.tsx");
   assert.doesNotMatch(page, /AppRuntime/);
+  assert.doesNotMatch(specimens, /AppRuntime/);
   assert.match(page, /设计稿对照/);
   assert.doesNotMatch(read("navigation/primary-nav.ts"), /playbook/);
+  assert.match(specimens, /PlaybookObservingSpecimen/);
+  assert.match(specimens, /设计稿标本 · 不是真实观察会话/);
+  assert.match(specimens, /标本推理文案，仅用于对照设计稿，不是真实观察/);
+  assert.equal(playbookSections.find((section) => section.id === "observing")?.title, "S9b 观察中");
 });
 
 test("NA5 and screen Lucide glyphs cover the unarchived pencil icon set", () => {
@@ -61,7 +67,7 @@ test("real pages import playbook section glyphs instead of inventing a second ic
 
 test("playbook catalog lists every registered section id", () => {
   const ids = playbookSections.map((section) => section.id);
-  assert.deepEqual(ids, ["color", "type", "icons", "tabbar", "navbar", "chrome", "overlay", "skeleton", "paste", "compose", "analysis", "settings", "observation"]);
+  assert.deepEqual(ids, ["color", "type", "icons", "tabbar", "navbar", "chrome", "overlay", "skeleton", "paste", "compose", "analysis", "settings", "observing", "observation"]);
   assert.equal(playbookSections.find((section) => section.id === "type")?.summary, "20 / 16 / 15 / 14 / 12 / 11 / 10");
   assert.match(read("styles/shell.css"), /\.page-masthead__titles h1\s*\{[^}]*font-size:\s*var\(--text-display\)[^}]*line-height:\s*var\(--text-display-line\)/s);
   assert.match(read("styles/tokens.css"), /--text-display:\s*1\.25rem/);

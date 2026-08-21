@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { issueFromAppError } from "@hongtai/core";
-import type { AppRuntime, DiagnosisSessionRecord, MediaReference, ObservationMode, StructuredGenerationProgressV1, TaskIssue } from "@hongtai/core";
+import type { AppRuntime, DiagnosisSessionRecord, MediaReference, ObservationMode, TaskIssue } from "@hongtai/core";
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
@@ -12,8 +12,6 @@ import { EmptyState } from "../components/StatePanels";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { TabPanel, Tabs, tabId, tabPanelId } from "../components/Tabs";
 import { useSkeletonHold } from "../motion/skeleton-hold";
-import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
-import { diagnosisModuleDefinitions } from "../features/diagnosis/diagnosis-module-progress";
 import { OBSERVATION_REPORT_DISCLAIMER_FALLBACK } from "../features/diagnosis/diagnosis-presenters";
 import {
   ObservationCapturePanel,
@@ -63,7 +61,6 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [reportProgress, setReportProgress] = useState<StructuredGenerationProgressV1>();
 
   const applySessionChange = useCallback((session: DiagnosisSessionRecord) => {
     observationHistoryReads.current.record(session);
@@ -214,36 +211,10 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
     setConfirmOpen(false);
     setLoading(true);
     setIssue(undefined);
-    setReportProgress(undefined);
     try {
       const session = await runtime.diagnosis.createSession({ mode, image });
       applySessionChange(session);
-      applySessionChange({ ...session, reportStatus: "running" });
-      try {
-        await runtime.diagnosis.runReport(session.sessionId, (event) => {
-          if (event.type === "progress") setReportProgress(event.progress);
-          if (event.type === "failed") {
-            setReportProgress(event.progress);
-            setIssue(event.issue);
-            void runtime.diagnosis.getSession(session.sessionId).then((stored) => {
-              if (stored) applySessionChange(stored);
-            }).catch(() => undefined);
-          }
-          if (event.type === "completed") {
-            applySessionTerminal(session.sessionId, { reportStatus: "succeeded", updatedAt: event.record.updatedAt });
-          }
-        });
-        navigate(observationReportPath(session.sessionId));
-      } catch (error) {
-        const stored = await runtime.diagnosis.getReport(session.sessionId).catch(() => undefined);
-        if (stored?.status === "succeeded" || stored?.status === "failed") {
-          const storedSession = await runtime.diagnosis.getSession(session.sessionId).catch(() => undefined);
-          if (storedSession) applySessionChange(storedSession);
-          navigate(observationReportPath(session.sessionId));
-        } else {
-          setIssue(issueFromAppError(error, { code: "STORAGE_WRITE_FAILED", message: "观察报告状态无法安全保存，请释放空间后重试。", action: "free_storage" }));
-        }
-      }
+      navigate(observationReportPath(session.sessionId));
     } catch (error) {
       setIssue(issueFromAppError(error, { code: "STORAGE_WRITE_FAILED", message: "无法创建本地观察会话", action: "free_storage" }));
     } finally {
@@ -292,7 +263,6 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
           />
         </TabPanel>
 
-        {loading || reportProgress ? <ValidatedModuleProgress definitions={diagnosisModuleDefinitions} failedTitle="观察报告未完成" issue={issue} progress={reportProgress} title="正在生成真实观察报告" /> : null}
         <small className="observation-privacy-note">图片只保存在本机，不会上传或公开</small>
         <p className="observation-disclaimer observation-disclaimer--foot">{OBSERVATION_REPORT_DISCLAIMER_FALLBACK}</p>
 

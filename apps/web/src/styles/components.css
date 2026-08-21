@@ -872,6 +872,52 @@
   margin-top: 0.08rem;
 }
 
+.deep-thinking-panel--observation {
+  margin: 0;
+  background: #f2f7f2;
+  border: 0;
+  border-radius: 1rem;
+}
+
+.deep-thinking-panel--observation summary {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  padding: 0.75rem 0.9rem;
+}
+
+.deep-thinking-panel--observation .deep-thinking-panel__signal {
+  width: auto;
+  height: auto;
+  color: #26a69a;
+  background: transparent;
+  border: 0;
+}
+
+.deep-thinking-panel--observation .deep-thinking-panel__title {
+  color: var(--palette-ink-900);
+  font-size: var(--text-label);
+  font-weight: 600;
+}
+
+.deep-thinking-panel--observation .deep-thinking-panel__status {
+  color: var(--palette-ink-400);
+  font-size: var(--text-caption);
+  line-height: var(--text-caption-line);
+}
+
+.deep-thinking-panel--observation.is-streaming .deep-thinking-panel__status {
+  color: #26a69a;
+  font-weight: 600;
+}
+
+.deep-thinking-panel--observation .deep-thinking-panel__content {
+  border-top-color: rgba(38, 166, 154, 0.12);
+}
+
+.deep-thinking-panel--observation .deep-thinking-panel__content pre {
+  margin-top: 0.5rem;
+  background: rgba(255, 255, 255, 0.72);
+}
+
 .validated-module-progress__list {
   display: grid;
   padding: var(--space-2) 0 0;

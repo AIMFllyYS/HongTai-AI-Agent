@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { issueFromAppError } from "@hongtai/core";
 import type { AppRuntime, DiagnosisMessage, DiagnosisReportRecord, DiagnosisSessionRecord, StructuredGenerationProgressV1, TaskIssue } from "@hongtai/core";
 
@@ -12,7 +12,6 @@ import { Sheet } from "../components/Sheet";
 import { EmptyState, ErrorState } from "../components/StatePanels";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { useSkeletonHold } from "../motion/skeleton-hold";
-import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
 import {
   imageQualityBadgeLabel,
   imageQualityDescription,
@@ -31,7 +30,10 @@ import {
   visibilityLabel,
   type DiagnosisReportView,
 } from "../features/diagnosis/diagnosis-presenters";
-import { diagnosisModuleDefinitions } from "../features/diagnosis/diagnosis-module-progress";
+import {
+  isObservationObservingView,
+  ObservationObservingScreen,
+} from "../features/diagnosis/observation-observing-screen";
 import { useAppResume } from "../hooks/useAppResume";
 import { observationNewPath, type Navigate } from "../router";
 import { observationRecommendationIcon, observationReportSections } from "../playbook/document-sections";
@@ -86,7 +88,6 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
   const [loading, setLoading] = useState(true);
   const [issue, setIssue] = useState<TaskIssue>();
   const [readIssue, setReadIssue] = useState<TaskIssue>();
-  const [reportPending, setReportPending] = useState(false);
   const [reportProgress, setReportProgress] = useState<StructuredGenerationProgressV1>();
   const [question, setQuestion] = useState("");
   const [pendingQuestion, setPendingQuestion] = useState<string>();
@@ -124,13 +125,11 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
         if (event.type === "failed") {
           setReportProgress(event.progress);
           setIssue(event.issue);
-          setReportPending(false);
           void load();
         }
         if (event.type === "completed") {
           setRecord(event.record);
           setReportProgress(undefined);
-          setReportPending(false);
           setIssue(undefined);
           void load();
         }
@@ -142,12 +141,13 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
   }, [load, runtime, sessionId]);
 
   const report = useMemo(() => record ? readDiagnosisReport(record) : undefined, [record]);
+  const reportRunLock = useRef(false);
+  const autoStartedFor = useRef<string | undefined>(undefined);
 
-  const runReport = async () => {
-    if (!diagnosisAvailable || reportPending) return;
-    setReportPending(true);
+  const runReport = useCallback(async () => {
+    if (!diagnosisAvailable || reportRunLock.current) return;
+    reportRunLock.current = true;
     setIssue(undefined);
-    setReportProgress(undefined);
     try {
       const next = await runtime.diagnosis.runReport(sessionId);
       setRecord(next);
@@ -156,9 +156,21 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
       setIssue(issueFromAppError(error, { code: "AI_CAPABILITY_PROBE_FAILED", message: "观察报告未能完成", action: "configure_ai" }));
       await load();
     } finally {
-      setReportPending(false);
+      reportRunLock.current = false;
     }
-  };
+  }, [diagnosisAvailable, load, runtime, sessionId]);
+
+  useEffect(() => {
+    autoStartedFor.current = undefined;
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (loading || !session || !diagnosisAvailable) return;
+    if (record?.status === "succeeded" || record?.status === "failed") return;
+    if (autoStartedFor.current === sessionId) return;
+    autoStartedFor.current = sessionId;
+    void runReport();
+  }, [diagnosisAvailable, loading, record?.status, runReport, session, sessionId]);
 
   const askQuestion = async (value: string) => {
     const trimmed = value.trim();
@@ -213,8 +225,6 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
   const canShowReport = report?.available === true;
   const reportIssue = readIssue ?? issue ?? record?.issue;
   const reportRetryAllowed = record?.status === "failed" && reportIssue?.action === "retry" && diagnosisAvailable;
-  const reportIsActive = record?.status === "running" || reportPending || Boolean(reportProgress);
-  const reportWaitingForStart = !canShowReport && record?.status !== "failed" && !reportIsActive;
   const disclaimer = observationReportDisclaimer(report);
   const issueActions = {
     configureAi: () => navigate("/settings/ai"),
@@ -224,6 +234,29 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
       : reportRetryAllowed ? () => void runReport() : undefined,
     editInput: () => setFollowUpOpen(true),
   };
+
+  if (isObservationObservingView(record?.status, canShowReport)) {
+    return (
+      <AppShell
+        activeNav="ai"
+        backPath={observationNewPath()}
+        headerMode="detail"
+        navigate={navigate}
+        showNav={false}
+        title="AI 正在观察"
+        visualTheme="warm-soft-tech"
+      >
+        <ObservationObservingScreen
+          diagnosisAvailable={diagnosisAvailable}
+          issue={reportIssue}
+          issueActions={issueActions}
+          onCancel={() => navigate(observationNewPath())}
+          progress={reportProgress}
+          session={session}
+        />
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell activeNav="ai" backPath={observationNewPath()} navigate={navigate} title="观察报告" visualTheme="warm-soft-tech">
@@ -240,17 +273,6 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
 
         {reportIssue ? <IssueNotice actions={issueActions} issue={reportIssue} /> : null}
 
-        {!canShowReport ? (
-          <GlassCard className="observation-source-card">
-            <RuntimeMediaFrame className="observation-source-card__image" label={`${observationModeLabel(session.mode)}原图`} media={session.image} />
-            <div><strong>{observationModeLabel(session.mode)}图片</strong><p>图片只保存在本机，仅用于生成本次报告和回答后续问题。</p></div>
-          </GlassCard>
-        ) : null}
-
-        {!diagnosisAvailable && record?.status !== "succeeded" ? <GlassCard className="observation-capability-notice" data-feature-capability="planned" tone="soft"><Icon name="pending" size={22} /><div><span>尚未接入</span><strong>本地 AI 报告能力尚未可用</strong><p>应用不会用示例结论替代真实报告。</p></div></GlassCard> : null}
-        {reportWaitingForStart ? <EmptyState action={<Button disabled={!diagnosisAvailable} icon={<Icon name="auto_awesome" size={17} />} onClick={() => void runReport()}>开始生成报告</Button>} description="图片已经安全保存。报告内容会逐步显示，不需要手动刷新。" icon="pending" title="报告尚未开始生成" /> : null}
-        {reportIsActive ? <ValidatedModuleProgress definitions={diagnosisModuleDefinitions} failedTitle="观察报告未完成" issue={issue ?? record?.issue} progress={reportProgress} title={reportPending && record?.status === "failed" ? "正在重新生成观察报告" : "正在生成观察报告"} /> : null}
-        {record?.status === "failed" ? <ErrorState action={reportRetryAllowed ? <Button disabled={reportPending} icon={<Icon name="sync" size={17} />} onClick={() => void runReport()} variant="secondary">{reportPending ? "正在重试" : "重新生成报告"}</Button> : undefined} description="上一次报告没有生成完整内容。请根据上方提示检查后重试。" title="观察报告未完成" /> : null}
         {record?.status === "succeeded" && !canShowReport ? <ErrorState description="这份报告内容不完整，应用不会自行猜测或补写。请重新生成报告。" title="报告暂时无法展示" /> : null}
 
         {canShowReport && report ? <SucceededReport

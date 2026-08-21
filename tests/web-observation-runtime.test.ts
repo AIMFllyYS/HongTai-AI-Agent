@@ -20,7 +20,10 @@ test("observation pages use the real diagnosis runtime rather than a visual diag
   assert.match(start, /runtime\.diagnosis\.pickImage/);
   assert.match(start, /runtime\.diagnosis\.captureImage/);
   assert.match(start, /runtime\.diagnosis\.createSession/);
-  assert.match(start, /runtime\.diagnosis\.runReport/);
+  assert.match(start, /navigate\(observationReportPath\(session\.sessionId\)\)/);
+  assert.doesNotMatch(start, /runtime\.diagnosis\.runReport/);
+  assert.doesNotMatch(start, /ValidatedModuleProgress/);
+  assert.doesNotMatch(start, /正在生成真实观察报告/);
   assert.match(start, /id:\s*"tongue"/);
   assert.match(start, /id:\s*"face"/);
 
@@ -28,6 +31,10 @@ test("observation pages use the real diagnosis runtime rather than a visual diag
   assert.match(report, /runtime\.diagnosis\.getReport/);
   assert.match(report, /runtime\.diagnosis\.listMessages/);
   assert.match(report, /runtime\.diagnosis\.followUp/);
+  assert.match(report, /runtime\.diagnosis\.runReport\(sessionId\)/);
+  assert.match(report, /ObservationObservingScreen/);
+  assert.match(report, /title="AI 正在观察"/);
+  assert.match(report, /showNav=\{false\}/);
   assert.match(report, /followUpQuestions/);
   assert.match(report, /content_delta/);
   assert.match(report, /reportRetryAllowed/);
@@ -39,9 +46,9 @@ test("observation pages use the real diagnosis runtime rather than a visual diag
   // itself authorizes it; storage/media/settings issues stay in IssueNotice.
   assert.match(report, /reportIssue\?\.action === "retry"/);
 
-  // The start page must not navigate to a stale `running` report when native
-  // storage failed before a terminal projection could be committed.
-  assert.match(start, /stored\?\.status === "succeeded" \|\| stored\?\.status === "failed"/);
+  // Confirming a photo navigates immediately; report generation starts on the session page.
+  assert.match(start, /const session = await runtime\.diagnosis\.createSession/);
+  assert.match(report, /record\?\.status === "succeeded" \|\| record\?\.status === "failed"/);
 
   const app = read("App.tsx");
   assert.match(app, /ObservationStartPage/);
@@ -212,6 +219,7 @@ test("the packaged source contains no diagnostic-treatment or health-score copy"
   const sources = [
     "pages/ObservationStartPage.tsx",
     "pages/ObservationReportPage.tsx",
+    "features/diagnosis/observation-observing-screen.tsx",
     "data/fixtures/vitality.ts",
     "data/visual-types.ts",
   ];
@@ -260,4 +268,43 @@ test("observation controls stay compact and clear above the fixed Android naviga
   assert.match(css, /\.observation-message p\s*\{[^}]*overflow-wrap:\s*anywhere/s);
   assert.match(css, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.observation-question-composer__actions[^}]*grid-template-columns:\s*1fr/);
   assert.match(css, /\.page-observation-report \.observation-quality-card/);
+});
+
+test("observation in-progress page follows unarchived S9b without vitals HUD or old progress chrome", async () => {
+  const subject = await import("../apps/web/src/features/diagnosis/observation-observing-screen");
+  const observing = read("features/diagnosis/observation-observing-screen.tsx");
+  const report = read("pages/ObservationReportPage.tsx");
+  const thinking = read("components/DeepThinkingPanel.tsx");
+  const progress = read("components/ValidatedModuleProgress.tsx");
+  const css = read("styles/pages/observation-runtime.css");
+
+  assert.equal(subject.isObservationObservingView("pending", false), true);
+  assert.equal(subject.isObservationObservingView("running", false), true);
+  assert.equal(subject.isObservationObservingView("failed", false), true);
+  assert.equal(subject.isObservationObservingView("succeeded", true), false);
+  assert.equal(subject.isObservationObservingView("succeeded", false), false);
+  assert.equal(subject.observationScanningLabel("face"), "面部扫描中");
+  assert.equal(subject.observationScanningLabel("tongue"), "舌象扫描中");
+
+  assert.match(observing, /observation-capture-card__laser/);
+  assert.match(observing, /observation-observing-scan__brackets/);
+  assert.match(observing, /variant="observation"/);
+  assert.match(observing, /progress\?\.thinking/);
+  assert.match(observing, /\/5 模块/);
+  assert.match(observing, /取消本次观察/);
+  assert.match(observing, /图片与报告只保存在本机；结果仅供日常参考/);
+  assert.doesNotMatch(observing, /项已完成|正在生成真实观察报告|ValidatedModuleProgress/);
+  assert.doesNotMatch(observing, /row\.content|BPM|SpO2|Wellness|健康评分|已停止 AI|停止生成/);
+  assert.match(css, /observation-laser-scan/);
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.observation-capture-card__laser::after[\s\S]*animation:\s*none/);
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.observation-observing-module__skeleton span[\s\S]*animation:\s*none/);
+  assert.match(css, /#26a69a/);
+
+  assert.match(report, /autoStartedFor/);
+  assert.match(report, /onCancel=\{\(\) => navigate\(observationNewPath\(\)\)\}/);
+  assert.match(thinking, /variant = "analysis"/);
+  assert.match(thinking, /observation \? "sparkles" : "memory"/);
+  assert.match(thinking, /推理内容仅在本次生成期间显示，不会保存/);
+  assert.doesNotMatch(progress, /variant="observation"/);
+  assert.match(progress, /<DeepThinkingPanel thinking=\{progress\?\.thinking \?\? waitingThinking\} \/>/);
 });

@@ -1,5 +1,9 @@
+import type { DiagnosisSessionRecord, StructuredGenerationProgressV1 } from "@hongtai/core";
+
 import { Icon } from "../components/Icon";
 import { PageSkeleton } from "../components/PageSkeleton";
+import { ObservationObservingScreen } from "../features/diagnosis/observation-observing-screen";
+import { OBSERVATION_FACE_SCAN_SRC } from "../features/diagnosis/observation-start-panels";
 import { composeActions } from "../navigation/compose-actions";
 import { primaryNavItems } from "../navigation/primary-nav";
 import { analysisDocumentSections, observationReportSections, settingsRowGlyphs } from "./document-sections";
@@ -110,6 +114,51 @@ export function PlaybookObservationSpecimen() {
           <span>{section.title}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+const PLAYBOOK_OBSERVING_SESSION: DiagnosisSessionRecord = {
+  sessionId: "playbook-observing",
+  mode: "face",
+  reportStatus: "running",
+  createdAt: "2026-08-21T00:00:00.000Z",
+  updatedAt: "2026-08-21T00:00:00.000Z",
+  image: {
+    uri: OBSERVATION_FACE_SCAN_SRC,
+    kind: "image",
+    origin: "imported",
+    displayName: "设计稿标本，不是用户图片",
+  },
+};
+
+const PLAYBOOK_OBSERVING_PROGRESS: StructuredGenerationProgressV1 = {
+  schemaVersion: "structured-generation-progress.v1",
+  flow: "diagnosis-report",
+  phase: "generating",
+  thinking: {
+    status: "streaming",
+    text: "标本推理文案，仅用于对照设计稿，不是真实观察。",
+  },
+  modules: [
+    { moduleId: "visual-observations", status: "succeeded" },
+    { moduleId: "observation-summary", status: "running" },
+    { moduleId: "wellness-recommendations", status: "pending" },
+    { moduleId: "safety-limitations", status: "pending" },
+    { moduleId: "follow-up-questions", status: "pending" },
+  ],
+};
+
+export function PlaybookObservingSpecimen() {
+  return (
+    <div className="playbook-observing">
+      <p className="playbook-kicker">设计稿标本 · 不是真实观察会话</p>
+      <ObservationObservingScreen
+        diagnosisAvailable
+        onCancel={() => undefined}
+        progress={PLAYBOOK_OBSERVING_PROGRESS}
+        session={PLAYBOOK_OBSERVING_SESSION}
+      />
     </div>
   );
 }
