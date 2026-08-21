@@ -7,7 +7,7 @@
 ## 开始任务前
 
 - 先读本文件、当前能力状态，以及受影响目录的测试和相邻文档。
-- 先判定任务归属：UI、共享应用逻辑、平台解析、AI Flow、Capacitor 组合层或 Android I/O。
+- 先判定任务归属：UI、共享应用逻辑、平台解析、AI Flow、复刻/制作计划微调、Capacitor 组合层或 Android I/O。
 - 纯分析、审查或状态查询保持只读；发现超出范围的问题，建立独立 Issue，不顺手扩写。
 - 文档、代码和测试冲突时，不得猜测。说明冲突、选择最小安全路径，并在同一任务中更新活文档或登记 Issue。
 
@@ -15,11 +15,11 @@
 
 这是本地优先的 Android APK，不是传统远程前后端系统：
 
-- `apps/web` 是 React 应用界面层；页面只使用 `AppRuntime` 和版本化 DTO。
-- `packages/core` 是领域模型、任务契约和业务规则。
-- `packages/ai` 是 AI Provider、Prompt、Schema、Flow 与安全规则。
+- `apps/web` 是 React 应用界面层；页面只使用 `AppRuntime` 和版本化 DTO。`/playbook` 只对照设计标本，不是用户能力。
+- `packages/core` 是领域模型、任务契约、字幕/贴纸合同和业务规则。
+- `packages/ai` 是 AI Provider、Prompt、Schema、Flow 与安全规则（含复刻清单与素材 insight）。
 - `packages/platforms` 只做公开链接识别、规范化与解析。
-- `packages/capacitor-runtime` 只组合共享 Flow 与 Android I/O 端口。
+- `packages/capacitor-runtime` 只组合共享 Flow 与 Android I/O 端口，对外仍是单一 `AppRuntime`（含 `replica`）。
 - `android/app` 只做 Keystore、私有文件、系统媒体选择、受控网络与必要媒体 I/O。
 - `apps/cli` 与 `packages/node-runtime` 仅用于开发回归，不能成为 APK 的隐式运行依赖。
 
@@ -69,7 +69,7 @@
 
 ## 文档与任务契约
 
-- README 是入口，不复制实现细节；活文档、历史证据与计划的职责见 [`docs/文档索引.md`](docs/文档索引.md)。
+- README 是入口，不复制实现细节；源码树见 [`docs/项目架构解析.md`](docs/项目架构解析.md)；活文档、历史证据与计划的职责见 [`docs/文档索引.md`](docs/文档索引.md)。
 - 文档过长或面对不同读者时，按“规则、状态、操作指南、历史证据”拆分；使用链接，不复制大段内容。
 - 每个实现任务使用 [`docs/任务执行模板.md`](docs/任务执行模板.md) 说明范围、非目标、状态权威来源和验收证据。
 

@@ -5,7 +5,6 @@
 CLI 要求 Node.js `>=22.0.0` 与 pnpm 10，推荐使用仓库当前验证的 Node.js 24。Node 22 是最低运行契约，不代表本轮已在 Node 22 做过端测。
 
 ```powershell
-cd D:\projects\Dev-Tools\HongTai-AI-Agent
 pnpm install
 Copy-Item .env.example .env
 ```
@@ -67,7 +66,7 @@ pnpm cli diagnosis serve --port 5001
 pnpm cli analyze-content "任务ID"
 ```
 
-视频使用原始转写和时间段，图文使用`content.txt`段落。结果为`content-analysis.v1` JSON，关键结论必须引用真实segment或paragraph证据；标题和作者不作为内容证据。证据不足时返回明确的不足说明和空分析数组，不虚构结构。该命令不会自动跟随`ingest`调用，也不使用AI整理稿替代原始事实来源。
+视频使用原始转写和时间段，图文使用`content.txt`段落。结果为`content-analysis.v1` JSON，关键结论必须引用真实segment或paragraph证据；标题和作者不作为内容证据。证据不足时返回明确的不足说明和空分析数组，不虚构结构。该命令不会自动跟随`ingest`调用，也不使用AI整理稿替代原始事实来源。CLI 没有 replica、制作计划或 Media3 合成；那些路径只存在于 APK 的 `AppRuntime`。
 
 ## 3. 状态含义
 
