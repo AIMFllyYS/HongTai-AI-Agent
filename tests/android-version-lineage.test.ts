@@ -11,7 +11,7 @@ function requireMatch(value: string, pattern: RegExp, label: string): string {
   return matched;
 }
 
-test("the published v0.1.19/code 27 download stays public while source advances to 0.1.20", () => {
+test("the published v0.1.20/code 28 download matches the Android source version", () => {
   const gradle = readFileSync(join(root, "android", "app", "build.gradle.kts"), "utf8");
   const downloadPage = readFileSync(join(root, "download.html"), "utf8");
   const sourceCode = Number(requireMatch(gradle, /versionCode\s*=\s*(\d+)/u, "Android versionCode"));
@@ -20,13 +20,22 @@ test("the published v0.1.19/code 27 download stays public while source advances 
 
   assert.equal(sourceCode, 28);
   assert.equal(sourceName, "0.1.20");
-  assert.equal(publishedName, "0.1.19");
-  assert.notEqual(publishedName, sourceName);
+  assert.equal(publishedName, sourceName);
+  assert.equal(publishedName, "0.1.20");
+  assert.match(downloadPage, /versionCode:\s*"28"/u);
+  assert.match(downloadPage, /23,311,721 bytes/u);
+  assert.match(downloadPage, /572D4901F3300615C6C85C3EDBAA766E3DF6E60A23C777DE0D1B08424F6FA0A8/iu);
+  assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.20\.apk/u);
+  assert.match(downloadPage, /正式 Release · v0\.1\.20 \/ code28 · 公网哈希已回验/u);
+});
+
+test("the superseded v0.1.19/code 27 release stays archived instead of being overwritten", () => {
+  const downloadPage = readFileSync(join(root, "download.html"), "utf8");
+
   assert.match(downloadPage, /versionCode:\s*"27"/u);
   assert.match(downloadPage, /23,202,490 bytes/u);
   assert.match(downloadPage, /B47A95F68900804C43F15AB2472D598C1E78355BCE53F75A285DF68AA4AAEB1B/iu);
   assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.19\.apk/u);
-  assert.match(downloadPage, /正式 Release · v0\.1\.19 \/ code27 · 公网哈希已回验/u);
 });
 
 test("the superseded v0.1.18/code 26 release stays archived instead of being overwritten", () => {

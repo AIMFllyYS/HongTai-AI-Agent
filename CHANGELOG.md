@@ -40,7 +40,7 @@
 - Android 源码版本推进为 `0.1.20` / `versionCode=28`；只生成 Release 产品并按 `HongTai-AI-Agent-release-v0.1.20.apk` 独立归档。
 - 本地归档为 23,311,721 字节、SHA-256 `572D4901F3300615C6C85C3EDBAA766E3DF6E60A23C777DE0D1B08424F6FA0A8`；证书锚点与既有 Release 身份一致。
 - 主机侧 `scripts/build-android-release.ps1` 已通过 Web production build、Capacitor sync、Release JVM、`lintRelease`、四 ABI `assembleRelease`、16 KiB zipalign、包身份与 v2/v3 签名后验。
-- 该版本尚未公网上传；下载页仍推荐已回验的 `v0.1.19`。不得把本机归档表述为公开分发、物理真机或制作主链已经验收通过。
+- 该版本已完成人工上传与公网文件回验；公网文件为 23,311,721 字节、SHA-256 `572D4901F3300615C6C85C3EDBAA766E3DF6E60A23C777DE0D1B08424F6FA0A8`。下载页现推荐公开的 `v0.1.20`。公开分发只证明文件身份和下载链路已回验，不表示真实 Provider、物理真机或最终成片已经验收通过。
 
 ## [0.1.19] - 2026-08-21
 
@@ -61,7 +61,7 @@
 - Android 源码版本推进为 `0.1.19` / `versionCode=27`；只生成 Release 产品并按 `HongTai-AI-Agent-release-v0.1.19.apk` 独立归档。
 - 本地归档为 23,202,490 字节、SHA-256 `B47A95F68900804C43F15AB2472D598C1E78355BCE53F75A285DF68AA4AAEB1B`；证书锚点与既有 Release 身份一致。
 - 主机侧 `scripts/build-android-release.ps1` 已通过 Web production build、Capacitor sync、Release JVM、`lintRelease`、四 ABI `assembleRelease`、16 KiB zipalign、包身份与 v2/v3 签名后验。
-- 该版本已完成人工上传与公网文件回验；公网文件为 23,202,490 字节、SHA-256 `B47A95F68900804C43F15AB2472D598C1E78355BCE53F75A285DF68AA4AAEB1B`。下载页现推荐公开的 `v0.1.19`。公开分发只证明文件身份和下载链路已回验，不表示真实 Provider、物理真机或最终成片已经验收通过。
+- 该版本已完成人工上传与公网文件回验；公网文件为 23,202,490 字节、SHA-256 `B47A95F68900804C43F15AB2472D598C1E78355BCE53F75A285DF68AA4AAEB1B`。下载页现已作为历史版本保留 `v0.1.19`；当前推荐为 `v0.1.20`。公开分发只证明文件身份和下载链路已回验，不表示真实 Provider、物理真机或最终成片已经验收通过。
 
 ## [0.1.18] - 2026-08-20
 
