@@ -24,6 +24,7 @@ test("first-load keeps the home shell eager and splits the other product routes"
     "TaskPage",
     "AiSettingsPage",
     "ApplicationInfoPage",
+    "UpdateLogPage",
     "ProfileSettingsPage",
     "SettingsPage",
   ]) {

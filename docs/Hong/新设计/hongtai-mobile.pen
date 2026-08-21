@@ -46578,10 +46578,13 @@
           "id": "qu0g5",
           "name": "M/Avatar",
           "reusable": true,
-          "width": 32,
-          "height": 32,
+          "width": 36,
+          "height": 36,
           "fill": "$brand-tint",
-          "cornerRadius": 16,
+          "cornerRadius": 18,
+          "stroke": "#FFFFFF",
+          "strokeWidth": 1.5,
+          "strokeAlignment": "inner",
           "justifyContent": "center",
           "alignItems": "center",
           "children": [
@@ -46592,7 +46595,7 @@
               "fill": "$brand-deep",
               "content": "林",
               "fontFamily": "$font-ui",
-              "fontSize": 13,
+              "fontSize": 14,
               "fontWeight": "500"
             }
           ]
@@ -46732,6 +46735,17 @@
                               "type": "frame",
                               "id": "Ei2nW",
                               "name": "Title Col",
+                              "fill": {
+                                "type": "color",
+                                "color": "#FFFFFF",
+                                "enabled": false
+                              },
+                              "effect": {
+                                "type": "shadow",
+                                "shadowType": "outer",
+                                "enabled": false,
+                                "color": "#00000000"
+                              },
                               "layout": "vertical",
                               "gap": 5,
                               "children": [
@@ -46742,7 +46756,7 @@
                                   "fill": "$ink-900",
                                   "content": "拆解",
                                   "fontFamily": "$font-ui",
-                                  "fontSize": 24,
+                                  "fontSize": 20,
                                   "fontWeight": "600"
                                 },
                                 {
@@ -47235,6 +47249,17 @@
                               "type": "frame",
                               "id": "a5CdKo",
                               "name": "Title Col",
+                              "fill": {
+                                "type": "color",
+                                "color": "#FFFFFF",
+                                "enabled": false
+                              },
+                              "effect": {
+                                "type": "shadow",
+                                "shadowType": "outer",
+                                "enabled": false,
+                                "color": "#00000000"
+                              },
                               "layout": "vertical",
                               "gap": 5,
                               "children": [
@@ -47245,7 +47270,7 @@
                                   "fill": "$ink-900",
                                   "content": "拆解",
                                   "fontFamily": "$font-ui",
-                                  "fontSize": 24,
+                                  "fontSize": 20,
                                   "fontWeight": "600"
                                 },
                                 {
@@ -56659,6 +56684,17 @@
                               "type": "frame",
                               "id": "oqvXF",
                               "name": "Title Col",
+                              "fill": {
+                                "type": "color",
+                                "color": "#FFFFFF",
+                                "enabled": false
+                              },
+                              "effect": {
+                                "type": "shadow",
+                                "shadowType": "outer",
+                                "enabled": false,
+                                "color": "#00000000"
+                              },
                               "layout": "vertical",
                               "gap": 5,
                               "children": [
@@ -56669,7 +56705,7 @@
                                   "fill": "$ink-900",
                                   "content": "模板",
                                   "fontFamily": "$font-ui",
-                                  "fontSize": 24,
+                                  "fontSize": 20,
                                   "fontWeight": "600"
                                 },
                                 {
@@ -56688,6 +56724,17 @@
                               "type": "frame",
                               "id": "h048Xn",
                               "name": "Header Actions",
+                              "fill": {
+                                "type": "color",
+                                "color": "#FFFFFF",
+                                "enabled": false
+                              },
+                              "effect": {
+                                "type": "shadow",
+                                "shadowType": "outer",
+                                "enabled": false,
+                                "color": "#00000000"
+                              },
                               "gap": 10,
                               "alignItems": "center",
                               "children": [
@@ -56737,25 +56784,58 @@
                               "id": "a436Pk",
                               "name": "Section Header",
                               "width": "fill_container",
+                              "fill": {
+                                "type": "color",
+                                "color": "#FFFFFF",
+                                "enabled": false
+                              },
+                              "gap": 12,
                               "justifyContent": "space_between",
                               "alignItems": "center",
                               "children": [
                                 {
-                                  "type": "text",
-                                  "id": "xHZeO",
-                                  "name": "Section Title",
-                                  "fill": "$ink-900",
-                                  "content": "推荐模板",
-                                  "fontFamily": "$font-ui",
-                                  "fontSize": 15,
-                                  "fontWeight": "600"
+                                  "type": "frame",
+                                  "id": "GG4xh",
+                                  "name": "Template Search",
+                                  "width": "fill_container",
+                                  "height": 22,
+                                  "fill": "$bg-fill",
+                                  "cornerRadius": 12,
+                                  "gap": 6,
+                                  "padding": [
+                                    0,
+                                    8
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon",
+                                      "id": "yToIA",
+                                      "name": "Search Icon",
+                                      "width": 14,
+                                      "height": 14,
+                                      "icon": "search",
+                                      "library": "lucide",
+                                      "fill": "$ink-400"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "xHZeO",
+                                      "name": "Search Placeholder",
+                                      "fill": "$ink-400",
+                                      "content": "搜索模板名称、摘要或公式",
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 13,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
                                 },
                                 {
                                   "type": "text",
-                                  "id": "Ybly2",
+                                  "id": "aCPzg",
                                   "name": "Section Hint",
                                   "fill": "$ink-400",
-                                  "content": "官方精选 · 滑动查看",
+                                  "content": "本机精选 · 滑动查看",
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11,
                                   "fontWeight": "normal"
@@ -58381,7 +58461,7 @@
                           "fill": "$ink-900",
                           "content": "设置",
                           "fontFamily": "$font-ui",
-                          "fontSize": 24,
+                          "fontSize": 20,
                           "fontWeight": "600"
                         },
                         {
@@ -59126,6 +59206,17 @@
                               "type": "frame",
                               "id": "z91q5z",
                               "name": "Title Col",
+                              "fill": {
+                                "type": "color",
+                                "color": "#FFFFFF",
+                                "enabled": false
+                              },
+                              "effect": {
+                                "type": "shadow",
+                                "shadowType": "outer",
+                                "enabled": false,
+                                "color": "#00000000"
+                              },
                               "layout": "vertical",
                               "gap": 5,
                               "children": [
@@ -59136,7 +59227,7 @@
                                   "fill": "$ink-900",
                                   "content": "拆解",
                                   "fontFamily": "$font-ui",
-                                  "fontSize": 24,
+                                  "fontSize": 20,
                                   "fontWeight": "600"
                                 },
                                 {
@@ -61778,7 +61869,7 @@
             {
               "type": "frame",
               "id": "Y9hHg",
-              "name": "Type 24",
+              "name": "Type 20",
               "width": "fill_container",
               "gap": 14,
               "alignItems": "center",
@@ -61796,7 +61887,7 @@
                       "fill": "$ink-900",
                       "content": "大标题",
                       "fontFamily": "$font-ui",
-                      "fontSize": 24,
+                      "fontSize": 20,
                       "fontWeight": "600"
                     }
                   ]
@@ -61814,7 +61905,7 @@
                       "id": "FMBUB",
                       "name": "Spec",
                       "fill": "$ink-400",
-                      "content": "24px · 半粗",
+                      "content": "20px · 半粗",
                       "fontFamily": "$font-num",
                       "fontSize": 12,
                       "fontWeight": "normal"
@@ -63203,6 +63294,17 @@
                               "type": "frame",
                               "id": "h096s",
                               "name": "Title Col",
+                              "fill": {
+                                "type": "color",
+                                "color": "#FFFFFF",
+                                "enabled": false
+                              },
+                              "effect": {
+                                "type": "shadow",
+                                "shadowType": "outer",
+                                "enabled": false,
+                                "color": "#00000000"
+                              },
                               "layout": "vertical",
                               "gap": 5,
                               "children": [
@@ -63213,7 +63315,7 @@
                                   "fill": "$ink-900",
                                   "content": "AI 诊断",
                                   "fontFamily": "$font-ui",
-                                  "fontSize": 24,
+                                  "fontSize": 20,
                                   "fontWeight": "600"
                                 },
                                 {
@@ -63299,11 +63401,11 @@
                                     "mode": "fill"
                                   },
                                   "layout": "vertical",
-                                  "gap": 6,
+                                  "gap": 2,
                                   "padding": [
                                     0,
                                     16,
-                                    20,
+                                    28,
                                     16
                                   ],
                                   "justifyContent": "end",
@@ -63345,7 +63447,7 @@
                                             "position": 0
                                           },
                                           {
-                                            "color": "#F0FDF4E6",
+                                            "color": "#001C18B8",
                                             "position": 1
                                           }
                                         ]
@@ -63368,7 +63470,7 @@
                                       "name": "Bracket",
                                       "width": 28,
                                       "height": 28,
-                                      "stroke": "#26A69AB3",
+                                      "stroke": "$on-ink",
                                       "strokeWidth": {
                                         "top": 2,
                                         "left": 2
@@ -63389,7 +63491,7 @@
                                       "name": "Bracket",
                                       "width": 28,
                                       "height": 28,
-                                      "stroke": "#26A69AB3",
+                                      "stroke": "$on-ink",
                                       "strokeWidth": {
                                         "top": 2,
                                         "right": 2
@@ -63410,7 +63512,7 @@
                                       "name": "Bracket",
                                       "width": 28,
                                       "height": 28,
-                                      "stroke": "#26A69AB3",
+                                      "stroke": "$on-ink",
                                       "strokeWidth": {
                                         "bottom": 2,
                                         "left": 2
@@ -63431,7 +63533,7 @@
                                       "name": "Bracket",
                                       "width": 28,
                                       "height": 28,
-                                      "stroke": "#26A69AB3",
+                                      "stroke": "$on-ink",
                                       "strokeWidth": {
                                         "right": 2,
                                         "bottom": 2
@@ -63439,23 +63541,14 @@
                                     },
                                     {
                                       "type": "text",
-                                      "id": "G2X6qF",
-                                      "name": "Zone Title",
-                                      "fill": "$ink-900",
-                                      "content": "点击添加图片进行诊断",
-                                      "fontFamily": "$font-ui",
-                                      "fontSize": 15,
-                                      "fontWeight": "600"
-                                    },
-                                    {
-                                      "type": "text",
                                       "id": "Z8u5Q",
                                       "name": "Zone Caption",
-                                      "fill": "$ink-600",
+                                      "fill": "#FFFFFFC7",
                                       "content": "自然光下正面拍摄，避免滤镜和强色光",
                                       "fontFamily": "$font-ui",
-                                      "fontSize": 11,
-                                      "fontWeight": "normal"
+                                      "fontSize": 13,
+                                      "fontWeight": "500",
+                                      "letterSpacing": 0.8
                                     }
                                   ]
                                 },
@@ -63818,6 +63911,17 @@
                               "type": "frame",
                               "id": "EgeED",
                               "name": "Title Col",
+                              "fill": {
+                                "type": "color",
+                                "color": "#FFFFFF",
+                                "enabled": false
+                              },
+                              "effect": {
+                                "type": "shadow",
+                                "shadowType": "outer",
+                                "enabled": false,
+                                "color": "#00000000"
+                              },
                               "layout": "vertical",
                               "gap": 5,
                               "children": [
@@ -63828,7 +63932,7 @@
                                   "fill": "$ink-900",
                                   "content": "AI 诊断",
                                   "fontFamily": "$font-ui",
-                                  "fontSize": 24,
+                                  "fontSize": 20,
                                   "fontWeight": "600"
                                 },
                                 {
@@ -63914,11 +64018,11 @@
                                     "mode": "fill"
                                   },
                                   "layout": "vertical",
-                                  "gap": 6,
+                                  "gap": 2,
                                   "padding": [
                                     0,
                                     16,
-                                    20,
+                                    28,
                                     16
                                   ],
                                   "justifyContent": "end",
@@ -63960,7 +64064,7 @@
                                             "position": 0
                                           },
                                           {
-                                            "color": "#F0FDF4E6",
+                                            "color": "#001C18B8",
                                             "position": 1
                                           }
                                         ]
@@ -63983,7 +64087,7 @@
                                       "name": "Bracket",
                                       "width": 28,
                                       "height": 28,
-                                      "stroke": "#26A69AB3",
+                                      "stroke": "$on-ink",
                                       "strokeWidth": {
                                         "top": 2,
                                         "left": 2
@@ -64004,7 +64108,7 @@
                                       "name": "Bracket",
                                       "width": 28,
                                       "height": 28,
-                                      "stroke": "#26A69AB3",
+                                      "stroke": "$on-ink",
                                       "strokeWidth": {
                                         "top": 2,
                                         "right": 2
@@ -64025,7 +64129,7 @@
                                       "name": "Bracket",
                                       "width": 28,
                                       "height": 28,
-                                      "stroke": "#26A69AB3",
+                                      "stroke": "$on-ink",
                                       "strokeWidth": {
                                         "bottom": 2,
                                         "left": 2
@@ -64046,7 +64150,7 @@
                                       "name": "Bracket",
                                       "width": 28,
                                       "height": 28,
-                                      "stroke": "#26A69AB3",
+                                      "stroke": "$on-ink",
                                       "strokeWidth": {
                                         "right": 2,
                                         "bottom": 2
@@ -64054,23 +64158,14 @@
                                     },
                                     {
                                       "type": "text",
-                                      "id": "vNKrk",
-                                      "name": "Zone Title",
-                                      "fill": "$ink-900",
-                                      "content": "点击添加图片进行诊断",
-                                      "fontFamily": "$font-ui",
-                                      "fontSize": 15,
-                                      "fontWeight": "600"
-                                    },
-                                    {
-                                      "type": "text",
                                       "id": "qfXJh",
                                       "name": "Zone Caption",
-                                      "fill": "$ink-600",
+                                      "fill": "#FFFFFFC7",
                                       "content": "自然光下拍摄舌面，避免滤镜和强色光",
                                       "fontFamily": "$font-ui",
-                                      "fontSize": 11,
-                                      "fontWeight": "normal"
+                                      "fontSize": 13,
+                                      "fontWeight": "500",
+                                      "letterSpacing": 0.8
                                     }
                                   ]
                                 },
@@ -64434,6 +64529,17 @@
                               "type": "frame",
                               "id": "X6DaD",
                               "name": "Title Col",
+                              "fill": {
+                                "type": "color",
+                                "color": "#FFFFFF",
+                                "enabled": false
+                              },
+                              "effect": {
+                                "type": "shadow",
+                                "shadowType": "outer",
+                                "enabled": false,
+                                "color": "#00000000"
+                              },
                               "layout": "vertical",
                               "gap": 5,
                               "children": [
@@ -64444,7 +64550,7 @@
                                   "fill": "$ink-900",
                                   "content": "AI 诊断",
                                   "fontFamily": "$font-ui",
-                                  "fontSize": 24,
+                                  "fontSize": 20,
                                   "fontWeight": "600"
                                 },
                                 {
@@ -65024,6 +65130,17 @@
                               "type": "frame",
                               "id": "brnjj",
                               "name": "Title Col",
+                              "fill": {
+                                "type": "color",
+                                "color": "#FFFFFF",
+                                "enabled": false
+                              },
+                              "effect": {
+                                "type": "shadow",
+                                "shadowType": "outer",
+                                "enabled": false,
+                                "color": "#00000000"
+                              },
                               "layout": "vertical",
                               "gap": 5,
                               "children": [
@@ -65034,7 +65151,7 @@
                                   "fill": "$ink-900",
                                   "content": "AI 诊断",
                                   "fontFamily": "$font-ui",
-                                  "fontSize": 24,
+                                  "fontSize": 20,
                                   "fontWeight": "600"
                                 },
                                 {
@@ -70499,6 +70616,17 @@
                       "type": "frame",
                       "id": "Y7SKKT",
                       "name": "Library Link",
+                      "fill": {
+                        "type": "color",
+                        "color": "#FFFFFF",
+                        "enabled": false
+                      },
+                      "effect": {
+                        "type": "shadow",
+                        "shadowType": "outer",
+                        "enabled": false,
+                        "color": "#00000000"
+                      },
                       "gap": 5,
                       "alignItems": "center",
                       "children": [

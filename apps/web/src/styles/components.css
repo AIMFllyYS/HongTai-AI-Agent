@@ -568,24 +568,6 @@
   pointer-events: auto;
 }
 
-.contextual-action-stack {
-  display: grid;
-  gap: var(--space-2);
-  justify-items: stretch;
-}
-
-.contextual-action-hint {
-  margin: 0;
-  padding: 0.5rem 0.75rem;
-  color: var(--color-text-subtle);
-  font-size: var(--text-caption);
-  line-height: 1.45;
-  text-align: center;
-  background: var(--color-surface-paper);
-  border: 1px solid var(--color-outline-soft);
-  border-radius: var(--radius-control);
-}
-
 .top-notification-viewport {
   position: fixed;
   top: calc(var(--header-height) + max(env(safe-area-inset-top), var(--native-status-bar-inset, 0px)) + var(--space-2));
@@ -1245,10 +1227,38 @@
 }
 
 .brand-splash {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: grid;
   min-height: 100vh;
   place-items: center;
   background: var(--color-surface-canvas);
+  --brand-splash-glow: rgba(16, 185, 129, 0.22);
+  --brand-splash-glow-soft: rgba(16, 185, 129, 0.12);
+}
+
+.brand-splash__glow {
+  position: absolute;
+  inset: -18%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 68% 46% at 50% 36%, var(--brand-splash-glow) 0%, transparent 64%),
+    radial-gradient(ellipse 48% 36% at 78% 78%, var(--brand-splash-glow-soft) 0%, transparent 70%);
+  opacity: 0;
+  animation:
+    brand-splash-glow-in var(--motion-duration-overlay) var(--motion-ease-standard) forwards,
+    brand-splash-glow-drift 2.5s var(--motion-ease-standard) forwards;
+}
+
+.brand-splash__brand {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 1.125rem;
+  text-align: center;
 }
 
 .brand-splash__plate {
@@ -1258,6 +1268,9 @@
   border-radius: 1.85rem;
   background: var(--palette-brand-tint);
   box-shadow: var(--shadow-floating);
+  opacity: 0;
+  transform: translateY(2rem) scale(0.92);
+  animation: brand-splash-plate-in var(--motion-duration-page) var(--motion-ease-emphasized) var(--motion-duration-fast) both;
 }
 
 .brand-splash__plate img {
@@ -1266,6 +1279,97 @@
   height: 100%;
   object-fit: cover;
   border-radius: 1.45rem;
+}
+
+.brand-splash__name {
+  margin: 0;
+  color: var(--palette-ink-900);
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 600;
+  line-height: 1.35;
+  opacity: 0;
+  transform: translateY(0.75rem);
+  animation: brand-splash-copy-in var(--motion-duration-overlay) var(--motion-ease-emphasized) var(--motion-duration-primary) both;
+}
+
+.brand-splash__tagline {
+  margin: 0;
+  color: var(--palette-brand-deep);
+  font-family: var(--font-splash-tagline);
+  font-size: 1.25rem;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  opacity: 0;
+  clip-path: inset(0 100% 0 0);
+  animation: brand-splash-tagline-reveal var(--motion-duration-page) var(--motion-ease-emphasized) var(--motion-duration-page) both;
+}
+
+@keyframes brand-splash-glow-in {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes brand-splash-glow-drift {
+  from {
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    transform: translateY(-2%) scale(1.06);
+  }
+}
+
+@keyframes brand-splash-plate-in {
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes brand-splash-copy-in {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes brand-splash-tagline-reveal {
+  from {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-color-scheme="light"]) .brand-splash {
+    --brand-splash-glow: rgba(16, 185, 129, 0.14);
+    --brand-splash-glow-soft: rgba(16, 185, 129, 0.08);
+  }
+}
+
+:root[data-color-scheme="dark"] .brand-splash {
+  --brand-splash-glow: rgba(16, 185, 129, 0.14);
+  --brand-splash-glow-soft: rgba(16, 185, 129, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-splash__glow,
+  .brand-splash__plate,
+  .brand-splash__name,
+  .brand-splash__tagline {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+    clip-path: none;
+  }
 }
 
 .overlay-scrim {

@@ -56,6 +56,7 @@ test("real pages import playbook section glyphs instead of inventing a second ic
   assert.match(read("pages/ObservationReportPage.tsx"), /observationReportSections/);
   assert.match(read("navigation/compose-actions.ts"), /icon: "sparkles"/);
   assert.match(read("pages/ApplicationInfoPage.tsx"), /playbookPath\(\)/);
+  assert.match(read("pages/ApplicationInfoPage.tsx"), /updateLogSettingsPath\(\)/);
 });
 
 test("playbook catalog lists every registered section id", () => {

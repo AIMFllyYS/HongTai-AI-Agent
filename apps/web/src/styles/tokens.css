@@ -50,6 +50,7 @@
   --font-display: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-data: "Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-splash-tagline: "Ma Shan Zheng", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", serif;
 
   /* NA3 type scale: 20 / 16 / 15 / 14 / 12 / 11 / 10. Tab masthead uses 20. */
   --text-display: 1.25rem;

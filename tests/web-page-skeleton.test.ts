@@ -49,6 +49,7 @@ test("product pages no longer render the fullscreen spinner loading panel", () =
     "pages/ProfileSettingsPage.tsx",
     "pages/AiSettingsPage.tsx",
     "pages/ApplicationInfoPage.tsx",
+    "pages/UpdateLogPage.tsx",
   ];
   for (const file of files) {
     assert.doesNotMatch(read(file), /LoadingState/, `${file} must not use LoadingState`);

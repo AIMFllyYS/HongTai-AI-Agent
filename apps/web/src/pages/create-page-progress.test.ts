@@ -145,12 +145,14 @@ test("制作页用 contextualAction 单主按钮、三 Tab 与 9:16 预览，完
   const surface = `${page}\n${card}\n${css}\n${model}`;
 
   assert.match(page, /contextualAction=\{/);
-  assert.match(page, /contextual-action-stack/);
-  assert.match(page, /contextual-action-hint/);
-  assert.match(page, /productionPrimaryBlockedReason/);
+  assert.doesNotMatch(page, /contextual-action-hint/);
+  assert.doesNotMatch(page, /contextual-action-stack/);
+  assert.doesNotMatch(page, /productionPrimaryBlockedReason/);
+  assert.doesNotMatch(page, /productionComposerBlockedReason/);
   assert.match(read("styles/components.css"), /\.contextual-action \.button:not\(:disabled\)\s*\{[^}]*pointer-events:\s*auto/s);
   assert.match(read("styles/components.css"), /\.contextual-action\s*\{[^}]*pointer-events:\s*none/s);
   assert.doesNotMatch(read("styles/components.css"), /\.contextual-action > \*\s*\{[^}]*pointer-events:\s*auto/s);
+  assert.doesNotMatch(read("styles/components.css"), /\.contextual-action-hint/);
   assert.match(card, /productionPlanBlockedReason/);
   assert.match(page, /resolveProductionPrimaryAction/);
   assert.match(page, /setComposingNew\(true\)/);

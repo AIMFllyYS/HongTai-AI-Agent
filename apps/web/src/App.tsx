@@ -24,6 +24,7 @@ const ObservationStartPage = lazy(async () => ({ default: (await holdLazyModule(
 const TaskPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/TaskPage"))).TaskPage }));
 const AiSettingsPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/AiSettingsPage"))).AiSettingsPage }));
 const ApplicationInfoPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ApplicationInfoPage"))).ApplicationInfoPage }));
+const UpdateLogPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/UpdateLogPage"))).UpdateLogPage }));
 const ProfileSettingsPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ProfileSettingsPage"))).ProfileSettingsPage }));
 const SettingsPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/SettingsPage"))).SettingsPage }));
 const PlaybookPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./playbook/PlaybookPage"))).PlaybookPage }));
@@ -68,6 +69,9 @@ export function App({ runtime, visualData }: AppProps = {}) {
       return runtime
         ? <ApplicationInfoPage navigate={navigate} runtime={runtime} />
         : <RuntimePendingPage description="版本信息暂时无法读取，请重新打开应用。" navigate={navigate} title="应用信息暂时不可用" />;
+    }
+    if (renderedRoute.key === "settings-update-log") {
+      return <UpdateLogPage navigate={navigate} />;
     }
     if (runtime && renderedRoute.key === "home") return <TaskHomePage navigate={navigate} runtime={runtime} searchEpoch={searchEpoch} />;
     if (runtime && isTaskPageAlias(renderedRoute.key)) {

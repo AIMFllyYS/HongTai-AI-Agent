@@ -87,7 +87,9 @@ test("AppShell keeps an empty header-action slot and never renders a inert notif
 
 test("settings app-info keeps the settings tab active and /publish is not a live route", () => {
   assert.equal(activeNavForRoute("settings-app-info"), "settings");
+  assert.equal(activeNavForRoute("settings-update-log"), "settings");
   assert.equal(activeNavForRoute("settings"), "settings");
   assert.equal(activeNavForRoute("playbook"), "settings");
   assert.equal(matchRoute("/publish").key, "not-found");
+  assert.equal(matchRoute("/settings/app-info/updates").key, "settings-update-log");
 });

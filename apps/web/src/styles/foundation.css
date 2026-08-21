@@ -7,6 +7,15 @@
   /* UI glyph subset; missing characters fall through the font stack. */
 }
 
+@font-face {
+  font-family: "Ma Shan Zheng";
+  src: url("/fonts/MaShanZheng-splash.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  /* Splash tagline subset only; do not use on product UI. */
+}
+
 * {
   box-sizing: border-box;
   scrollbar-width: none;

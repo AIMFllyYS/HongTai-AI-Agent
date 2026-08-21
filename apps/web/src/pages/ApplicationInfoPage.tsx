@@ -9,7 +9,7 @@ import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { useSkeletonHold } from "../motion/skeleton-hold";
-import { playbookPath } from "../router";
+import { playbookPath, updateLogSettingsPath } from "../router";
 
 export interface ApplicationInfoPageProps {
   readonly runtime: AppRuntime;
@@ -61,17 +61,27 @@ export function ApplicationInfoPage({ runtime, navigate }: ApplicationInfoPagePr
             </div>
           </GlassCard>
 
-          <section className="settings-update-list">
-            <div className="section-heading"><div><h2>新版本改了什么</h2></div><span className="analysis-count">v{info.versionName}</span></div>
-            {latestUpdates.map((item, index) => <GlassCard className="settings-update-item" key={item}><span>{String(index + 1).padStart(2, "0")}</span><p>{item}</p></GlassCard>)}
+          <section className="settings-section">
+            <div className="settings-list">
+              <button className="settings-row" onClick={() => navigate(updateLogSettingsPath())} type="button">
+                <Icon className="settings-row__glyph" name="history" size={19} />
+                <span className="settings-row__title">更新日志</span>
+                <span className="settings-row__value">官方站点</span>
+                <Icon className="settings-row__chevron" name="chevron_right" size={16} />
+              </button>
+              <button className="settings-row" onClick={() => navigate(playbookPath())} type="button">
+                <Icon className="settings-row__glyph" name="layout_template" size={19} />
+                <span className="settings-row__title">设计稿对照</span>
+                <span className="settings-row__value">页面层板块</span>
+                <Icon className="settings-row__chevron" name="chevron_right" size={16} />
+              </button>
+            </div>
           </section>
 
-          <button className="settings-row" onClick={() => navigate(playbookPath())} type="button">
-            <Icon className="settings-row__glyph" name="layout_template" size={19} />
-            <span className="settings-row__title">设计稿对照</span>
-            <span className="settings-row__value">页面层板块</span>
-            <Icon className="settings-row__chevron" name="chevron_right" size={16} />
-          </button>
+          <section className="settings-update-list">
+            <div className="section-heading"><div><h2>本版要点</h2></div><span className="analysis-count">v{info.versionName}</span></div>
+            {latestUpdates.map((item, index) => <GlassCard className="settings-update-item" key={item}><span>{String(index + 1).padStart(2, "0")}</span><p>{item}</p></GlassCard>)}
+          </section>
         </> : null}
       </div>
     </AppShell>

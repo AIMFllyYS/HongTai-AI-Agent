@@ -21,10 +21,7 @@ import { useAppResume } from "../hooks/useAppResume";
 import { composeEntryFromSearch, consumeComposeEntryFromSearch } from "../navigation/compose-actions";
 import { aiSettingsPath, pathForRoute, productionEditPath, replicaWizardPath } from "../router";
 import {
-  productionComposerBlockedReason,
-  productionPlanBlockedReason,
   productionPlanReady,
-  productionPrimaryBlockedReason,
   productionRenderStageCopy,
   resolveProductionPrimaryAction,
   resolveProductionRetryKind,
@@ -294,16 +291,6 @@ function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { readonly 
   const primaryDisabled = replicaComposer
     ? busy || !sourceId
     : primary.stage === "no-project" ? createBlocked : primary.disabled;
-  const planBlockedReason = activeProject ? productionPlanBlockedReason(activeProject) : "";
-  const primaryBlockedReason = replicaComposer || primary.stage === "no-project"
-    ? productionComposerBlockedReason({ replica: replicaComposer, sourceId, brief, avatarMode: mode === "avatar", avatarScript })
-    : productionPrimaryBlockedReason({
-      stage: primary.stage,
-      busy,
-      planReady,
-      importBlocked,
-      planBlockedReason,
-    });
   const composerPrimaryVisible = (agentComposer || replicaComposer) && sources.length > 0;
   const showHistory = projects.length > 1 || composingNew && projects.length > 0;
   const shellTitle = shellTitleFor(composerFlow, showComposer);
@@ -414,12 +401,9 @@ function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { readonly 
 
   const contextualAction = !showComposer || composerPrimaryVisible
     ? (
-      <div className="contextual-action-stack">
-        {primaryBlockedReason ? <p className="contextual-action-hint" id="production-primary-blocked-reason">{primaryBlockedReason}</p> : null}
-        <Button aria-describedby={primaryBlockedReason ? "production-primary-blocked-reason" : undefined} className={busy || primary.stage === "rendering" ? "is-busy" : ""} disabled={primaryDisabled} icon={<Icon name={primaryIcon} size={19} />} onClick={runPrimary} size="lg">
-          {primaryLabel}
-        </Button>
-      </div>
+      <Button className={busy || primary.stage === "rendering" ? "is-busy" : ""} disabled={primaryDisabled} icon={<Icon name={primaryIcon} size={19} />} onClick={runPrimary} size="lg">
+        {primaryLabel}
+      </Button>
     )
     : undefined;
 

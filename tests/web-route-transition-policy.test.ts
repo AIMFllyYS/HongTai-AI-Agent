@@ -34,6 +34,7 @@ test("only the tab bar and avatar use primary; only swipe commit uses instant", 
   const replica = read("pages/ReplicaWizardPage.tsx");
   const edit = read("pages/ProductionEditPage.tsx");
   const info = read("pages/ApplicationInfoPage.tsx");
+  const updates = read("pages/UpdateLogPage.tsx");
   const profile = read("pages/ProfileSettingsPage.tsx");
 
   assert.match(nav, /transition:\s*["']primary["']/);
@@ -54,6 +55,7 @@ test("only the tab bar and avatar use primary; only swipe commit uses instant", 
     ["ReplicaWizardPage", replica],
     ["ProductionEditPage", edit],
     ["ApplicationInfoPage", info],
+    ["UpdateLogPage", updates],
     ["ProfileSettingsPage", profile],
   ] as const) {
     assert.doesNotMatch(source, /transition:\s*["']instant["']/, `${name} must not skip the secondary push`);

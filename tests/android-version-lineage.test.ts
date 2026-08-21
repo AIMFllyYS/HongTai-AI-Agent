@@ -152,3 +152,17 @@ test("the repository exposes Release as its only APK delivery path", () => {
   assert.doesNotMatch(readme, /^## 构建 Debug APK$/mu);
   assert.match(agents, /不构建、不交付、不归档 Debug APK/u);
 });
+
+test("the public download page embeds the current app icon and keeps narrow cards from overflowing", () => {
+  const downloadPage = readFileSync(join(root, "download.html"), "utf8");
+  const mark = downloadPage.match(/--brand-mark-image:\s*url\("data:image\/png;base64,([^"]+)"\)/u);
+
+  assert.ok(mark?.[1], "missing embedded launcher mark");
+  assert.ok(mark[1].length > 100);
+  assert.ok(mark[1].length < 50_000, "icon data URI should stay a 128px derivative, not the full source PNG");
+  assert.doesNotMatch(downloadPage, /src="download-brand\.png"/u);
+  assert.doesNotMatch(downloadPage, /white-space:\s*nowrap/u);
+  assert.match(downloadPage, /\.release-card\s*\{[^}]*min-width:\s*0/s);
+  assert.match(downloadPage, /\.release-card__hash\s*\{[^}]*word-break:\s*break-all/s);
+  assert.match(downloadPage, /\.release-grid\s*\{[^}]*minmax\(0,\s*1fr\)/s);
+});

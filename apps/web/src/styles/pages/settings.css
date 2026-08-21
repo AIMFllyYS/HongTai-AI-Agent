@@ -700,3 +700,65 @@
   display: grid;
   gap: 0.5rem;
 }
+
+.app-shell--update-log.app-shell--detail .app-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding-right: 0;
+  padding-bottom: 0;
+  padding-left: 0;
+}
+
+.app-shell--update-log.app-shell--with-nav .app-content {
+  min-height: calc(100vh - var(--nav-height) - var(--safe-bottom) - var(--keyboard-inset));
+  padding-bottom: 0;
+}
+
+.page-update-log {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: calc(
+    100vh
+    - var(--header-height)
+    - max(env(safe-area-inset-top), var(--native-status-bar-inset))
+    - var(--space-4)
+    - var(--nav-height)
+    - var(--safe-bottom)
+    - var(--keyboard-inset)
+  );
+  overflow: hidden;
+  background: var(--palette-fill);
+}
+
+.page-update-log--failed {
+  justify-content: center;
+  padding: 0 var(--page-gutter) var(--space-6);
+  overflow: auto;
+}
+
+.page-update-log > .page-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 0 var(--page-gutter);
+  overflow: auto;
+  background: var(--palette-fill);
+}
+
+.update-log-frame {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 100%;
+  border: 0;
+  opacity: 0;
+  background: var(--surface-canvas);
+  transition: opacity var(--motion-duration-page) var(--motion-ease-emphasized);
+}
+
+.update-log-frame.is-ready {
+  opacity: 1;
+}
+
