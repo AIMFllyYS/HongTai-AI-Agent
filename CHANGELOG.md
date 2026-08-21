@@ -12,7 +12,9 @@
 
 ## [未发布]
 
-暂无尚未归档的用户可见改动。
+### 优化
+
+- 页面层 SVG 改为与未归档稿一致的 Lucide 描边图标；`/playbook` 汇总设计稿板块，供真实页面引用，不读取运行时数据。
 
 ## [0.1.19] - 2026-08-21
 
@@ -33,7 +35,7 @@
 - Android 源码版本推进为 `0.1.19` / `versionCode=27`；只生成 Release 产品并按 `HongTai-AI-Agent-release-v0.1.19.apk` 独立归档。
 - 本地归档为 23,202,490 字节、SHA-256 `B47A95F68900804C43F15AB2472D598C1E78355BCE53F75A285DF68AA4AAEB1B`；证书锚点与既有 Release 身份一致。
 - 主机侧 `scripts/build-android-release.ps1` 已通过 Web production build、Capacitor sync、Release JVM、`lintRelease`、四 ABI `assembleRelease`、16 KiB zipalign、包身份与 v2/v3 签名后验。
-- 下载页现推荐 `v0.1.19`，链接按既有固定公网地址推断为 `https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.19.apk`。本次按维护者要求不做公网重新下载核对，因此只证明本地归档身份，不表示公开文件已回验，也不表示真实 Provider、物理真机或最终成片已经验收通过。
+- 该版本已完成人工上传与公网文件回验；公网文件为 23,202,490 字节、SHA-256 `B47A95F68900804C43F15AB2472D598C1E78355BCE53F75A285DF68AA4AAEB1B`。下载页现推荐公开的 `v0.1.19`。公开分发只证明文件身份和下载链路已回验，不表示真实 Provider、物理真机或最终成片已经验收通过。
 
 ## [0.1.18] - 2026-08-20
 
