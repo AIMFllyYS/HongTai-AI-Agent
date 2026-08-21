@@ -26,7 +26,7 @@ test("the published v0.1.19/code 27 download matches the Android source version"
   assert.match(downloadPage, /23,202,490 bytes/u);
   assert.match(downloadPage, /B47A95F68900804C43F15AB2472D598C1E78355BCE53F75A285DF68AA4AAEB1B/iu);
   assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.19\.apk/u);
-  assert.match(downloadPage, /正式 Release · v0\.1\.19 \/ code27 · 本次未做公网哈希回验/u);
+  assert.match(downloadPage, /正式 Release · v0\.1\.19 \/ code27 · 公网哈希已回验/u);
 });
 
 test("the superseded v0.1.18/code 26 release stays archived instead of being overwritten", () => {
