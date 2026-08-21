@@ -48296,7 +48296,7 @@
                                       "name": "Spark",
                                       "width": 15,
                                       "height": 15,
-                                      "icon": "sparkles",
+                                      "icon": "wand-sparkles",
                                       "library": "lucide",
                                       "fill": "$accent"
                                     },
@@ -49167,7 +49167,7 @@
                                       "name": "Spark",
                                       "width": 15,
                                       "height": 15,
-                                      "icon": "sparkles",
+                                      "icon": "wand-sparkles",
                                       "library": "lucide",
                                       "fill": "$accent"
                                     },
@@ -51829,7 +51829,7 @@
                                   "name": "Template Icon",
                                   "width": 16,
                                   "height": 16,
-                                  "icon": "sparkles",
+                                  "icon": "wand-sparkles",
                                   "library": "lucide",
                                   "fill": "$accent"
                                 },
@@ -54906,7 +54906,7 @@
                                   "name": "Template Icon",
                                   "width": 16,
                                   "height": 16,
-                                  "icon": "sparkles",
+                                  "icon": "wand-sparkles",
                                   "library": "lucide",
                                   "fill": "$accent"
                                 },
@@ -58575,7 +58575,7 @@
                               "name": "Icon",
                               "width": 19,
                               "height": 19,
-                              "icon": "sparkles",
+                              "icon": "wand-sparkles",
                               "library": "lucide",
                               "fill": "$ink-600"
                             },
@@ -59656,7 +59656,7 @@
                                   "name": "Icon",
                                   "width": 16,
                                   "height": 16,
-                                  "icon": "sparkles",
+                                  "icon": "wand-sparkles",
                                   "library": "lucide",
                                   "fill": "$brand-deep"
                                 }
@@ -62263,7 +62263,7 @@
                           "name": "智能",
                           "width": 22,
                           "height": 22,
-                          "icon": "sparkles",
+                          "icon": "wand-sparkles",
                           "library": "lucide",
                           "fill": "$ink-900"
                         },
@@ -65933,7 +65933,7 @@
                                       "name": "Spark",
                                       "width": 15,
                                       "height": 15,
-                                      "icon": "sparkles",
+                                      "icon": "wand-sparkles",
                                       "library": "lucide",
                                       "fill": "$accent"
                                     },

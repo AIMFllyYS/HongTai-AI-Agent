@@ -69,6 +69,6 @@ test("compose sheet, home paste intent, and create swipe lock stay wired", () =>
   assert.match(styles, /\.sheet-action__icon\s*\{[^}]*width:\s*2\.125rem[^}]*height:\s*2\.125rem[^}]*border-radius:\s*50%/s);
   assert.match(styles, /\.sheet-action__icon\s*\{[^}]*color:\s*var\(--palette-brand-deep\)/s);
   assert.match(styles, /\.bottom-nav__item\s*\{[^}]*justify-content:\s*center[^}]*padding:\s*0/s);
-  assert.match(styles, /\.bottom-nav__plus\s*\{[^}]*width:\s*2rem[^}]*height:\s*2rem[^}]*border-radius:\s*50%/s);
+  assert.match(styles, /\.bottom-nav__plus\s*\{[^}]*width:\s*2rem[^}]*height:\s*2rem[^}]*border-radius:\s*var\(--radius-plus\)/s);
   assert.doesNotMatch(styles, /\.bottom-nav__item\s*\{[^}]*padding:\s*0\.75rem 0 0/s);
 });

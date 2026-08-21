@@ -169,7 +169,7 @@
   place-items: center;
   color: var(--palette-on-ink);
   background: var(--palette-brand);
-  border-radius: 50%;
+  border-radius: var(--radius-plus);
   box-shadow: none;
 }
 
