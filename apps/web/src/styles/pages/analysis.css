@@ -155,38 +155,6 @@
   font-weight: 600;
 }
 
-.tabs {
-  display: flex;
-  gap: var(--space-5);
-  overflow-x: auto;
-  border-bottom: 1px solid var(--color-outline-soft);
-}
-
-.tabs button {
-  position: relative;
-  flex: 0 0 auto;
-  padding: 0.55rem 0.1rem 0.7rem;
-  color: var(--color-text-muted);
-  background: transparent;
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.tabs button.is-active {
-  color: var(--color-primary-strong);
-}
-
-.tabs button.is-active::after {
-  position: absolute;
-  right: 0;
-  bottom: -1px;
-  left: 0;
-  height: 2px;
-  content: "";
-  background: var(--color-accent);
-  border-radius: var(--radius-pill);
-}
-
 .analysis-count,
 .asset-count {
   color: var(--color-text-muted);

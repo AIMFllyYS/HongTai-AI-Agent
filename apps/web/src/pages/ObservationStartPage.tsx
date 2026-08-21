@@ -5,7 +5,7 @@ import type { AppRuntime, DiagnosisSessionRecord, MediaReference, ObservationMod
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
-import { HomeProfileAction } from "../components/HomeProfileAction";
+import { HomeMastheadActions } from "../components/HomeMastheadActions";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { EmptyState, LoadingState } from "../components/StatePanels";
@@ -250,9 +250,8 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
   };
 
   return (
-    <AppShell activeNav="ai" headerAction={<HomeProfileAction navigate={navigate} runtime={runtime} />} navigate={navigate} subtitle="舌象或面部，结果仅供日常参考" title="AI 诊断" visualTheme="warm-soft-tech">
+    <AppShell activeNav="ai" headerAction={<HomeMastheadActions navigate={navigate} runtime={runtime} />} navigate={navigate} subtitle="舌象或面部，结果仅供日常参考" title="AI 智能诊断" visualTheme="warm-soft-tech">
       <div className="page-stack page-observation-start">
-        <p className="observation-disclaimer">{OBSERVATION_REPORT_DISCLAIMER_FALLBACK}</p>
         {!diagnosisAvailable ? <GlassCard className="observation-capability-notice" data-feature-capability="planned" tone="soft"><Icon name="pending" size={22} /><div><span>尚未接入</span><strong>本地图片观察与报告正在准备中</strong><p>当前版本不会把示例图片或示例报告伪装为你的真实结果。</p></div></GlassCard> : null}
         {issue ? <IssueNotice actions={{ selectMedia: () => void pickImage() }} issue={issue} /> : null}
 

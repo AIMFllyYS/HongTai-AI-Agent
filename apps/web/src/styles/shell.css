@@ -127,6 +127,7 @@
   height: 2.75rem;
   justify-content: flex-end;
   align-items: center;
+  overflow: visible;
 }
 
 .app-header__slot {
@@ -267,6 +268,13 @@
 
 .page-masthead__action {
   flex: 0 0 auto;
+  overflow: visible;
+}
+
+.masthead-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .masthead-avatar {

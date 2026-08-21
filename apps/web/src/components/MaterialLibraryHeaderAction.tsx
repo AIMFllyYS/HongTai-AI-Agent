@@ -35,8 +35,10 @@ export function MaterialLibraryHeaderAction() {
         ref={triggerRef}
         type="button"
       >
-        <Icon name="video_library" size={18} />
-        素材库
+        <span className="material-library-entry__mark">
+          <img alt="" draggable={false} src="/materials/fudi-library-promo.png" />
+        </span>
+        <span className="material-library-entry__caption">素材库</span>
       </button>
       {open && typeof document !== "undefined"
         ? createPortal(

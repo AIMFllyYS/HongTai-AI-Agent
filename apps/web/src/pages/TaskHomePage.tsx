@@ -4,6 +4,7 @@ import type { AppRuntime, AppTaskRecord, InputInspection, StructuredGenerationPr
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
+import { HomeMastheadActions } from "../components/HomeMastheadActions";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { ErrorState, LoadingState } from "../components/StatePanels";
@@ -15,7 +16,6 @@ import { contentAnalysisModuleDefinitions } from "../features/tasks/content-anal
 import { TaskHistory } from "../features/tasks/TaskHistory";
 import { platformLabel } from "../features/tasks/task-presenters";
 import { useAppResume } from "../hooks/useAppResume";
-import { HomeProfileAction } from "../components/HomeProfileAction";
 import { consumePasteIntentFromSearch } from "../navigation/compose-actions";
 import { aiSettingsPath, taskDetailPath, type Navigate } from "../router";
 
@@ -244,7 +244,7 @@ export function TaskHomePage({ runtime, navigate }: TaskHomePageProps) {
     );
 
   return (
-    <AppShell activeNav="home" headerAction={<HomeProfileAction navigate={navigate} runtime={runtime} />} navigate={navigate} subtitle="让 AI 帮你看懂爆款逻辑" title="拆解">
+    <AppShell activeNav="home" headerAction={<HomeMastheadActions navigate={navigate} runtime={runtime} />} navigate={navigate} subtitle="让 AI 帮你看懂爆款逻辑" title="拆解">
       <div className="page-stack page-task-home">
         <TaskCapabilityNotice capability={runtime.features.ingest} feature="ingest" />
 

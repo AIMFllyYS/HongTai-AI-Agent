@@ -1025,20 +1025,15 @@
   gap: 0.75rem;
 }
 
-.page-observation-start .observation-disclaimer,
 .page-observation-start .observation-disclaimer--foot {
   margin: 0;
   padding: 0.65rem 0.75rem;
   color: var(--palette-ink-600);
-  background: var(--palette-mint-whisper);
+  background: var(--palette-silk);
   border: 1px solid var(--palette-hairline);
   border-radius: 0.75rem;
   font-size: var(--text-meta);
   line-height: var(--text-meta-line);
-}
-
-.page-observation-start .observation-disclaimer--foot {
-  background: var(--palette-silk);
 }
 
 .page-observation-start .observation-privacy-note {

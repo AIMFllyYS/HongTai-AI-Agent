@@ -5,7 +5,7 @@ import type { AppRuntime, AppTaskRecord, ContentTemplateInput, ContentTemplateRe
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
 import { GlassCard } from "../components/GlassCard";
-import { HomeProfileAction } from "../components/HomeProfileAction";
+import { HomeMastheadActions } from "../components/HomeMastheadActions";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
 import { EmptyState, LoadingState } from "../components/StatePanels";
@@ -197,12 +197,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
   return (
     <AppShell
       activeNav="templates"
-      headerAction={(
-        <div className="templates-masthead-actions">
-          <Button className="header-action__button" disabled={busy} icon={<Icon name="sparkle" size={17} />} onClick={startCustom} variant="secondary">新建</Button>
-          <HomeProfileAction navigate={navigate} runtime={runtime} />
-        </div>
-      )}
+      headerAction={<HomeMastheadActions navigate={navigate} runtime={runtime} />}
       navigate={navigate}
       subtitle="套用验证过的结构，快速开拍同款"
       title="模板"
