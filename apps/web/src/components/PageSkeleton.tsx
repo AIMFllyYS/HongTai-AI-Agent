@@ -18,7 +18,7 @@ export function pageSkeletonLayoutForRoute(key: RouteKey): PageSkeletonLayout {
   if (key === "home") return "home";
   if (key === "observation-new") return "observation";
   if (key === "templates") return "templates";
-  if (key === "settings" || key === "settings-profile" || key === "settings-ai" || key === "settings-app-info" || key === "settings-update-log") return "settings";
+  if (key === "settings" || key === "settings-profile" || key === "settings-ai" || key === "settings-storage" || key === "settings-app-info" || key === "settings-update-log") return "settings";
   if (key === "task-processing" || key === "task-detail" || key === "task-analysis") return "task";
   if (key === "observation-report") return "report";
   if (key === "create" || key === "production-edit" || key === "replica-wizard") return "create";

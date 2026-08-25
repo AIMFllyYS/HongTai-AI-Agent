@@ -12,7 +12,7 @@ import type {
 } from "./models";
 
 /** Versioned boundary between the presentation layer and local application services. */
-export const APP_RUNTIME_CONTRACT_VERSION = "app-runtime.v2";
+export const APP_RUNTIME_CONTRACT_VERSION = "app-runtime.v3";
 
 export const RUNTIME_WORK_KIND_VALUES = [
   "ingest",
@@ -129,6 +129,48 @@ export interface AppBuildInfo {
 /** Explicit, narrow access to Android's own application metadata. */
 export interface DeviceSettingsService {
   getAppInfo(): Promise<AppBuildInfo>;
+}
+
+export type StorageArea = "tasks" | "observations" | "productions" | "templates" | "cache" | "app-data";
+export type StorageItemKind = "video" | "image" | "audio" | "document" | "temporary" | "other";
+
+/**
+ * A safe projection of one app-private file.  The opaque id is valid only for
+ * the current inspection snapshot; filesystem paths and native URIs never
+ * cross this boundary.
+ */
+export interface StorageItem {
+  readonly id: string;
+  readonly area: StorageArea;
+  readonly kind: StorageItemKind;
+  readonly label: string;
+  readonly byteLength: number;
+  readonly deletable: boolean;
+  readonly protectionReason?: string;
+}
+
+export interface StorageAreaSummary {
+  readonly area: StorageArea;
+  readonly byteLength: number;
+  readonly itemCount: number;
+  readonly deletableByteLength: number;
+  readonly protectedByteLength: number;
+}
+
+export interface StorageAnalysisRecord {
+  readonly schemaVersion: "storage-analysis.v1";
+  readonly generatedAt: string;
+  readonly totalByteLength: number;
+  readonly deletableByteLength: number;
+  readonly protectedByteLength: number;
+  readonly areas: readonly StorageAreaSummary[];
+  readonly items: readonly StorageItem[];
+}
+
+export interface StorageService {
+  inspect(): Promise<StorageAnalysisRecord>;
+  /** Deletes one explicitly deletable item, then returns a fresh snapshot. */
+  deleteItem(itemId: string): Promise<StorageAnalysisRecord>;
 }
 
 export type AiCapability = "text" | "vision" | "asr" | "tts";
@@ -732,6 +774,7 @@ export type FeatureCapabilityRegistry = Readonly<Record<AppFeature, FeatureCapab
 export interface AppRuntime {
   readonly profile: ProfileService;
   readonly deviceSettings: DeviceSettingsService;
+  readonly storage: StorageService;
   readonly aiSettings: AiSettingsService;
   readonly tasks: TaskService;
   readonly analysis: AnalysisService;

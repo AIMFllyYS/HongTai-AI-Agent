@@ -10,6 +10,7 @@ import com.hongtai.aiagent.bridge.FileMediaPlugin
 import com.hongtai.aiagent.bridge.DeviceSettingsPlugin
 import com.hongtai.aiagent.bridge.LocalDataPlugin
 import com.hongtai.aiagent.bridge.LocalFilesPlugin
+import com.hongtai.aiagent.bridge.LocalStoragePlugin
 import com.hongtai.aiagent.bridge.MediaRuntimePlugin
 import com.hongtai.aiagent.bridge.NativeNetworkPlugin
 import com.hongtai.aiagent.bridge.ProductionRuntimePlugin
@@ -22,6 +23,7 @@ class MainActivity : BridgeActivity() {
     registerPlugin(DeviceSettingsPlugin::class.java)
     registerPlugin(LocalDataPlugin::class.java)
     registerPlugin(LocalFilesPlugin::class.java)
+    registerPlugin(LocalStoragePlugin::class.java)
     registerPlugin(NativeNetworkPlugin::class.java)
     registerPlugin(FileMediaPlugin::class.java)
     registerPlugin(MediaRuntimePlugin::class.java)

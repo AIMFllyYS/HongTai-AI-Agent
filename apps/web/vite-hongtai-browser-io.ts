@@ -23,6 +23,7 @@ const PRIVATE_PREFIX = "file:///hongtai-browser-io/";
 const token = randomBytes(24).toString("hex");
 const rootDir = join(fileURLToPath(new URL(".", import.meta.url)), ".tmp", "hongtai-browser-io");
 let volatileSecrets: Record<string, string> = {};
+const storageEntries = new Map<string, { readonly file: string; readonly deletable: boolean; readonly guardFile?: string }>();
 
 type Json = Record<string, unknown>;
 
@@ -221,6 +222,11 @@ async function dispatch(op: string, payload: unknown): Promise<Json> {
       await copyUri(stringValue(input.sourceUri), diskPath("profile", id, relativePath));
       return fileInfo("profile", id, relativePath);
     }
+    case "storage.inspect":
+      return await inspectBrowserStorage();
+    case "storage.deleteItem":
+      await deleteBrowserStorageItem(stringValue(input.itemId));
+      return {};
     case "http.fetchText":
       return await fetchText(input);
     case "http.probeTts":
@@ -350,6 +356,137 @@ async function download(input: Json, emit: (event: Json) => void): Promise<void>
   } finally {
     await rm(temporary, { force: true }).catch(() => undefined);
   }
+}
+
+async function inspectBrowserStorage(): Promise<Json> {
+  storageEntries.clear();
+  const files = await collectFiles(rootDir);
+  const items: Json[] = [];
+  for (const file of files) {
+    const relativePath = relative(rootDir, file).replaceAll("\\", "/");
+    const classification = await classifyBrowserStorageFile(relativePath);
+    const id = `browser-storage-${randomBytes(12).toString("hex")}`;
+    storageEntries.set(id, { file, deletable: classification.deletable, ...(classification.guardFile ? { guardFile: classification.guardFile } : {}) });
+    items.push({
+      id,
+      area: classification.area,
+      kind: classification.kind,
+      role: classification.role,
+      byteLength: (await stat(file)).size,
+      deletable: classification.deletable,
+      ...(classification.protectionCode ? { protectionCode: classification.protectionCode } : {}),
+    });
+  }
+  return { schemaVersion: "native-storage.v1", generatedAtEpochMs: Date.now(), items };
+}
+
+async function deleteBrowserStorageItem(itemId: string): Promise<void> {
+  const entry = storageEntries.get(itemId);
+  if (!entry) throw codedError("ERR_STORAGE_ITEM_EXPIRED", "存储清单已更新，请先重新读取");
+  if (!entry.deletable) throw codedError("ERR_STORAGE_ITEM_PROTECTED", "数据文件不能从这里删除");
+  if (entry.guardFile && await exists(entry.guardFile)) {
+    const status = stringValue(asRecord(JSON.parse(await readFile(entry.guardFile, "utf8"))).status);
+    if (["queued", "running", "planning", "rendering"].includes(status)) {
+      throw codedError("ERR_STORAGE_ITEM_PROTECTED", "进行中的任务文件不能删除");
+    }
+  }
+  await rm(entry.file, { force: true });
+  storageEntries.delete(itemId);
+}
+
+async function collectFiles(directory: string): Promise<string[]> {
+  const files: string[] = [];
+  let children;
+  try {
+    children = await readdir(directory, { withFileTypes: true });
+  } catch {
+    return files;
+  }
+  for (const child of children) {
+    const path = join(directory, child.name);
+    if (child.isDirectory()) files.push(...await collectFiles(path));
+    else if (child.isFile()) files.push(path);
+  }
+  return files.sort((left, right) => left.localeCompare(right));
+}
+
+async function classifyBrowserStorageFile(relativePath: string): Promise<{
+  readonly area: "tasks" | "observations" | "productions" | "templates" | "cache" | "app-data";
+  readonly kind: "video" | "image" | "audio" | "document" | "temporary" | "other";
+  readonly role: "user-video" | "parsed-video" | "parsed-audio" | "parsed-image" | "observation-image" | "production-asset" | "production-output" | "derived-frame" | "template-media" | "cache" | "app-data" | "protected-other";
+  readonly deletable: boolean;
+  readonly protectionCode?: "data" | "active" | "unknown";
+  readonly guardFile?: string;
+}> {
+  const normalized = relativePath.replaceAll("\\", "/");
+  const parts = normalized.split("/");
+  const first = parts[0] ?? "";
+  const lower = normalized.toLowerCase();
+  const extension = lower.includes(".") ? lower.slice(lower.lastIndexOf(".") + 1) : "";
+  const kind = storageKindForExtension(extension, lower);
+  if (first === "cache" || lower.includes("/cache/") || lower.includes("app_webview")) {
+    return { area: "cache", kind: kind === "other" ? "temporary" : kind, role: "cache", deletable: true };
+  }
+  if (extension === "part" || extension === "tmp") {
+    return { area: "cache", kind: "temporary", role: "cache", deletable: true };
+  }
+  if (first === "tasks" || first === "observations" || first === "productions" || first === "templates") {
+    const area = first;
+    const dataFile = ["json", "jsonl", "txt"].includes(extension);
+    const identifier = parts[1] ?? "";
+    const guardFile = area === "tasks" ? join(rootDir, area, identifier, "task.json") : area === "productions" ? join(rootDir, area, identifier, "project.json") : undefined;
+    if (dataFile) {
+      return { area, kind: "document", role: "app-data", deletable: false, protectionCode: "data" };
+    }
+    const sourceKind = area === "tasks" && guardFile ? await browserTaskSourceKind(guardFile) : "";
+    const role = storageMediaRole(area, lower, sourceKind);
+    const active = Boolean(guardFile && await isBrowserStorageBusy(guardFile));
+    return { area, kind, role, deletable: !active && kind !== "other", ...(active ? { protectionCode: "active" as const } : kind === "other" ? { protectionCode: "unknown" as const } : {}), ...(guardFile ? { guardFile } : {}) };
+  }
+  return { area: "app-data", kind: dataFileKind(extension), role: "app-data", deletable: false, protectionCode: "unknown" };
+}
+
+async function isBrowserStorageBusy(statusFile: string): Promise<boolean> {
+  if (!await exists(statusFile)) return false;
+  try {
+    const status = stringValue(asRecord(JSON.parse(await readFile(statusFile, "utf8"))).status);
+    return ["queued", "running", "planning", "rendering"].includes(status);
+  } catch {
+    return false;
+  }
+}
+
+async function browserTaskSourceKind(statusFile: string): Promise<string> {
+  try {
+    return stringValue(asRecord(JSON.parse(await readFile(statusFile, "utf8"))).sourceKind);
+  } catch {
+    return "";
+  }
+}
+
+function storageKindForExtension(extension: string, path: string): "video" | "image" | "audio" | "document" | "temporary" | "other" {
+  if (["mp4", "mov", "m4v", "webm"].includes(extension)) return "video";
+  if (["jpg", "jpeg", "png", "webp", "heic", "heif", "bin"].includes(extension) && (path.includes("image") || path.includes("cover") || extension !== "bin")) return "image";
+  if (["wav", "mp3", "m4a", "aac", "ogg"].includes(extension)) return "audio";
+  if (["json", "jsonl", "txt", "md", "html"].includes(extension)) return "document";
+  if (["part", "tmp"].includes(extension)) return "temporary";
+  return "other";
+}
+
+function dataFileKind(extension: string): "document" | "other" {
+  return ["json", "jsonl", "txt", "xml", "db", "sqlite"].includes(extension) ? "document" : "other";
+}
+
+function storageMediaRole(area: "tasks" | "observations" | "productions" | "templates", path: string, sourceKind = ""): "user-video" | "parsed-video" | "parsed-audio" | "parsed-image" | "observation-image" | "production-asset" | "production-output" | "derived-frame" | "template-media" | "protected-other" {
+  if (area === "tasks" && path.includes("/media/video")) return sourceKind === "local_video" ? "user-video" : "parsed-video";
+  if (area === "tasks" && path.includes("/media/audio")) return "parsed-audio";
+  if (area === "tasks" && path.includes("/media/image")) return "parsed-image";
+  if (area === "observations") return "observation-image";
+  if (area === "productions" && path.includes("/inputs/")) return "production-asset";
+  if (area === "productions" && path.includes("output")) return "production-output";
+  if (area === "productions" && path.includes("insight")) return "derived-frame";
+  if (area === "templates") return "template-media";
+  return "protected-other";
 }
 
 async function aiRequest(input: Json, emit: (event: Json) => void): Promise<void> {

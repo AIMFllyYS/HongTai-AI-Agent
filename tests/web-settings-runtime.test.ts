@@ -31,12 +31,15 @@ test("settings routes are rendered from the shared runtime and do not expose dir
   const settings = read("pages/SettingsPage.tsx");
   const profile = "pages/ProfileSettingsPage.tsx";
   const ai = "pages/AiSettingsPage.tsx";
+  const storage = "pages/StorageAnalysisPage.tsx";
 
   assert.match(app, /settings-profile/);
   assert.match(app, /settings-ai/);
+  assert.match(app, /settings-storage/);
   assert.equal(existsSync(join(root, profile)), true);
   assert.equal(existsSync(join(root, ai)), true);
-  for (const page of [settings, read(profile), read(ai)]) {
+  assert.equal(existsSync(join(root, storage)), true);
+  for (const page of [settings, read(profile), read(ai), read(storage)]) {
     assert.match(page, /AppRuntime/);
     assert.doesNotMatch(page, /@capacitor\/core/);
     assert.doesNotMatch(page, /registerPlugin/);
@@ -81,6 +84,12 @@ test("UI copy describes local app storage and Keystore without promising an encr
   assert.match(settings, /深色模式/);
   assert.match(settings, /通知提醒/);
   assert.match(settings, /清理缓存/);
+  assert.match(settings, /storageAnalysisPath/);
+  const storage = read("pages/StorageAnalysisPage.tsx");
+  assert.match(storage, /runtime\.storage\.inspect/);
+  assert.match(storage, /runtime\.storage\.deleteItem/);
+  assert.match(storage, /数据文件无法删除/);
+  assert.match(storage, /确认删除/);
   assert.doesNotMatch(settings, /检查更新|用户协议/);
 });
 

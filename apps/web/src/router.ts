@@ -13,6 +13,7 @@ export type ActiveRouteKey =
   | "settings"
   | "settings-profile"
   | "settings-ai"
+  | "settings-storage"
   | "settings-app-info"
   | "settings-update-log"
   | "observation-new"
@@ -82,6 +83,7 @@ export const appRoutes: readonly AppRoute[] = [
   { path: "/settings", key: "settings", navKey: "settings" },
   { path: "/settings/profile", key: "settings-profile", navKey: "settings" },
   { path: "/settings/ai", key: "settings-ai", navKey: "settings" },
+  { path: "/settings/storage", key: "settings-storage", navKey: "settings", showNav: false },
   { path: "/settings/app-info", key: "settings-app-info", navKey: "settings" },
   { path: "/settings/app-info/updates", key: "settings-update-log", navKey: "settings" },
   { path: "/observation/new", key: "observation-new", navKey: "ai" },
@@ -278,6 +280,10 @@ export function aiSettingsPath(): string {
 
 export function appInfoSettingsPath(): string {
   return "/settings/app-info";
+}
+
+export function storageAnalysisPath(): string {
+  return "/settings/storage";
 }
 
 export function updateLogSettingsPath(): string {

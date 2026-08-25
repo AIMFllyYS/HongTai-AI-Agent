@@ -11,10 +11,8 @@ import { IssueNotice } from "../components/IssueNotice";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { Sheet } from "../components/Sheet";
 import { Switch } from "../components/Switch";
-import { useNotification } from "../notifications/NotificationProvider";
 import { type ColorSchemePreference, applyStoredAppearancePreferences, colorSchemeLabel, readAppearancePreferences, writeAppearancePreferences } from "../runtime/appearance-preferences";
-import { clearAppCaches, estimateCacheUsageBytes, formatByteSize } from "../runtime/local-cache";
-import { aiSettingsPath, appInfoSettingsPath, profileSettingsPath } from "../router";
+import { aiSettingsPath, appInfoSettingsPath, profileSettingsPath, storageAnalysisPath } from "../router";
 import { settingsRowGlyphs } from "../playbook/document-sections";
 
 export interface SettingsPageProps {
@@ -28,7 +26,7 @@ interface SettingsSnapshot {
   readonly versionName: string | undefined;
 }
 
-type SettingsSheet = "scheme" | "theme" | "cache" | "privacy" | undefined;
+type SettingsSheet = "scheme" | "theme" | "privacy" | undefined;
 
 function profileDetail(profile: LocalProfile | undefined): string {
   if (!profile) return "尚未建立本地档案";
@@ -77,12 +75,9 @@ function SettingsRow({
 }
 
 export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
-  const { show } = useNotification();
   const [snapshot, setSnapshot] = useState<SettingsSnapshot>();
   const [issue, setIssue] = useState<TaskIssue>();
   const [prefs, setPrefs] = useState(readAppearancePreferences);
-  const [cacheLabel, setCacheLabel] = useState("可清理");
-  const [cacheBusy, setCacheBusy] = useState(false);
   const [sheet, setSheet] = useState<SettingsSheet>();
 
   const load = useCallback(async () => {
@@ -109,11 +104,6 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
 
   useEffect(() => {
     applyStoredAppearancePreferences();
-    let active = true;
-    void estimateCacheUsageBytes().then((bytes) => {
-      if (active) setCacheLabel(formatByteSize(bytes));
-    });
-    return () => { active = false; };
   }, []);
 
   const setAlertsEnabled = (alertsEnabled: boolean) => {
@@ -123,20 +113,6 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
   const setColorScheme = (colorScheme: ColorSchemePreference) => {
     setPrefs(writeAppearancePreferences({ ...prefs, colorScheme }));
     setSheet(undefined);
-  };
-
-  const clearCache = async () => {
-    if (cacheBusy) return;
-    setCacheBusy(true);
-    try {
-      await clearAppCaches();
-      const bytes = await estimateCacheUsageBytes();
-      setCacheLabel(formatByteSize(bytes));
-      setSheet(undefined);
-      show({ level: "success", title: "已清理网页缓存", message: "任务、档案和密钥没有删除。" });
-    } finally {
-      setCacheBusy(false);
-    }
   };
 
   const showSkeleton = useSkeletonHold(!snapshot && !issue);
@@ -196,7 +172,7 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
         <section className="settings-section">
           <p className="settings-group-label">数据</p>
           <div className="settings-list">
-            <SettingsRow icon={settingsRowGlyphs.cache} onClick={() => setSheet("cache")} title="清理缓存" value={cacheLabel} />
+            <SettingsRow icon={settingsRowGlyphs.cache} onClick={() => navigate(storageAnalysisPath())} title="清理缓存" value="查看全部占用" />
           </div>
         </section>
 
@@ -225,11 +201,6 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
         <Sheet onClose={() => setSheet(undefined)} open={sheet === "theme"} title="主题色">
           <p className="settings-sheet-copy">当前产品使用品牌绿，没有第二套主题色。</p>
           <span className="settings-color-swatch" />
-        </Sheet>
-
-        <Sheet onClose={() => setSheet(undefined)} open={sheet === "cache"} title="清理缓存">
-          <p className="settings-sheet-copy">只清理网页缓存，不会删除任务、本地档案或访问密钥。当前约 {cacheLabel}。</p>
-          <Button disabled={cacheBusy} onClick={() => void clearCache()}>{cacheBusy ? "正在清理" : "确认清理"}</Button>
         </Sheet>
 
         <Sheet onClose={() => setSheet(undefined)} open={sheet === "privacy"} title="隐私说明">

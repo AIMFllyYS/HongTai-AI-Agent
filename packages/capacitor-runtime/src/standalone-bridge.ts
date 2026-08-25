@@ -177,6 +177,47 @@ export interface StandaloneLocalFilesPlugin extends LocalTaskFilesPlugin, Native
   deleteTemplate(options: { readonly templateId: string }): Promise<void>;
 }
 
+export type NativeStorageArea = "tasks" | "observations" | "productions" | "templates" | "cache" | "app-data";
+export type NativeStorageItemKind = "video" | "image" | "audio" | "document" | "temporary" | "other";
+export type NativeStorageRole =
+  | "user-video"
+  | "parsed-video"
+  | "parsed-audio"
+  | "parsed-image"
+  | "observation-image"
+  | "production-asset"
+  | "production-output"
+  | "derived-frame"
+  | "template-media"
+  | "cache"
+  | "app-data"
+  | "protected-other";
+export type NativeStorageProtectionCode = "data" | "active" | "unknown";
+
+/**
+ * Native storage inspection deliberately returns opaque delete handles rather
+ * than paths.  The Android implementation keeps the handle-to-file mapping
+ * in memory for one inspection snapshot and rejects protected documents.
+ */
+export interface NativeStorageItem {
+  readonly id: string;
+  readonly area: NativeStorageArea;
+  readonly kind: NativeStorageItemKind;
+  readonly role: NativeStorageRole;
+  readonly byteLength: number;
+  readonly deletable: boolean;
+  readonly protectionCode?: NativeStorageProtectionCode;
+}
+
+export interface StandaloneLocalStoragePlugin {
+  inspect(): Promise<{
+    readonly schemaVersion: "native-storage.v1";
+    readonly generatedAtEpochMs: number;
+    readonly items: readonly NativeStorageItem[];
+  }>;
+  deleteItem(options: { readonly itemId: string }): Promise<void>;
+}
+
 export interface NativeProductionAsset {
   readonly id: string;
   readonly uri: NativeUri;
@@ -302,6 +343,7 @@ export interface StandaloneNativePlugins {
   readonly deviceSettings?: StandaloneDeviceSettingsPlugin;
   readonly localData: StandaloneLocalDataPlugin;
   readonly localFiles: StandaloneLocalFilesPlugin;
+  readonly localStorage?: StandaloneLocalStoragePlugin;
   readonly nativeNetwork: StandaloneNativeNetworkPlugin;
   readonly fileMedia: StandaloneFileMediaPlugin;
   readonly mediaRuntime: StandaloneMediaRuntimePlugin;
@@ -314,6 +356,7 @@ export function registerStandaloneNativePlugins(registerPlugin: NativePluginRegi
     deviceSettings: registerPlugin<StandaloneDeviceSettingsPlugin>("DeviceSettings"),
     localData: registerPlugin<StandaloneLocalDataPlugin>("LocalData"),
     localFiles: registerPlugin<StandaloneLocalFilesPlugin>("LocalFiles"),
+    localStorage: registerPlugin<StandaloneLocalStoragePlugin>("LocalStorage"),
     nativeNetwork: registerPlugin<StandaloneNativeNetworkPlugin>("NativeNetwork"),
     fileMedia: registerPlugin<StandaloneFileMediaPlugin>("FileMedia"),
     mediaRuntime: registerPlugin<StandaloneMediaRuntimePlugin>("MediaRuntime"),

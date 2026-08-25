@@ -2,7 +2,9 @@ import type {
   NativeAiRequestEvent,
   NativeDownloadProgressEvent,
   NativeProductionAsset,
+  NativeStorageItem,
   StandaloneNativePlugins,
+  StandaloneLocalStoragePlugin,
 } from "@hongtai/capacitor-runtime";
 
 import { browserIoRpc, browserIoStream, browserIoWriteBinary, displayFileSrc, nativeFileUri } from "./io-client";
@@ -41,6 +43,14 @@ function extensionFor(file: File): string | undefined {
 export function createBrowserStandalonePlugins(): StandaloneNativePlugins {
   const aiEvents = createEmitter<NativeAiRequestEvent>();
   const downloadEvents = createEmitter<NativeDownloadProgressEvent>();
+  const localStorage: StandaloneLocalStoragePlugin = {
+    inspect: async () => browserIoRpc<{
+      readonly schemaVersion: "native-storage.v1";
+      readonly generatedAtEpochMs: number;
+      readonly items: readonly NativeStorageItem[];
+    }>("storage.inspect"),
+    deleteItem: async ({ itemId }) => { await browserIoRpc("storage.deleteItem", { itemId }); },
+  };
 
   return {
     secureSettings: {
@@ -106,6 +116,7 @@ export function createBrowserStandalonePlugins(): StandaloneNativePlugins {
       },
       deleteTemplate: async ({ templateId }) => { await browserIoRpc("files.delete", { area: "templates", id: templateId }); },
     },
+    localStorage,
     nativeNetwork: {
       fetchText: async (options) => browserIoRpc("http.fetchText", options),
       download: async (options) => {

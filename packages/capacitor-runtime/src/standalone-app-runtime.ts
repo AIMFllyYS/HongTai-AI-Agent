@@ -29,6 +29,7 @@ import { StandaloneRuntimeRecovery } from "./standalone-runtime-recovery.js";
 import { NativeIngestPorts } from "./thin-ingest-ports.js";
 import { StandaloneTaskService } from "./standalone-task-service.js";
 import { StandaloneTemplateService } from "./standalone-template-service.js";
+import { StandaloneStorageService } from "./standalone-storage-service.js";
 import type { StandaloneAiConnection, StandaloneLocalProfile, StandaloneNativePlugins } from "./standalone-bridge.js";
 
 const LOCAL_PROFILE_ID = "local";
@@ -350,6 +351,11 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
   });
   const recovery = new StandaloneRuntimeRecovery({ operations, sources: [tasks, analysis, diagnosis, production] });
   const templates = new StandaloneTemplateService({ files: options.plugins.localFiles, analysis, now });
+  const unavailableStorage = {
+    inspect: async () => ({ schemaVersion: "native-storage.v1" as const, generatedAtEpochMs: now().getTime(), items: [] }),
+    deleteItem: async () => { throw taskError("APP_RUNTIME_UNAVAILABLE", "本地存储插件尚未加载", "retry"); },
+  };
+  const storage = new StandaloneStorageService({ native: options.plugins.localStorage ?? unavailableStorage, now });
 
   return {
     profile: {
@@ -405,6 +411,7 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
         }
       },
     },
+    storage,
     aiSettings: {
       getPublic: getConnection,
       save: async (input: AiConnectionPublicInput) => {
