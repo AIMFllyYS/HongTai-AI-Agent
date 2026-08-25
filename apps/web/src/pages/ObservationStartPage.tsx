@@ -8,6 +8,7 @@ import { GlassCard } from "../components/GlassCard";
 import { HomeMastheadActions } from "../components/HomeMastheadActions";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
+import { RecentRecordActionsSheet } from "../components/RecentRecordActionsSheet";
 import { EmptyState } from "../components/StatePanels";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { TabPanel, Tabs, tabId, tabPanelId } from "../components/Tabs";
@@ -17,6 +18,8 @@ import {
   ObservationCapturePanel,
   ObservationHistoryCard,
   ObservationPhotoConfirmSheet,
+  observationHistoryTitle,
+  observationSessionCanBeDeleted,
   type ObservationImageSource,
 } from "../features/diagnosis/observation-start-panels";
 import { LiveListReadReconciler } from "../features/generation/live-list-read-reconciler";
@@ -61,6 +64,9 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<DiagnosisSessionRecord>();
+  const [deletingSession, setDeletingSession] = useState(false);
+  const [deleteIssue, setDeleteIssue] = useState<TaskIssue>();
 
   const applySessionChange = useCallback((session: DiagnosisSessionRecord) => {
     observationHistoryReads.current.record(session);
@@ -226,6 +232,26 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
   const activeModeTitle = modes.find((item) => item.id === mode)?.title ?? "面部观察";
   const historyPending = useSkeletonHold(sessions === undefined && !historyIssue);
 
+  const closeRecordActions = () => {
+    setSelectedSession(undefined);
+    setDeleteIssue(undefined);
+  };
+
+  const deleteSelectedSession = async () => {
+    if (!selectedSession || !observationSessionCanBeDeleted(selectedSession) || deletingSession) return;
+    setDeletingSession(true);
+    setDeleteIssue(undefined);
+    try {
+      await runtime.diagnosis.deleteSession(selectedSession.sessionId);
+      setSessions((current) => (current ?? []).filter((session) => session.sessionId !== selectedSession.sessionId));
+      closeRecordActions();
+    } catch (error) {
+      setDeleteIssue(issueFromAppError(error, { code: "STORAGE_WRITE_FAILED", message: "无法删除本地观察记录", action: "free_storage" }));
+    } finally {
+      setDeletingSession(false);
+    }
+  };
+
   return (
     <AppShell activeNav="ai" headerAction={<HomeMastheadActions navigate={navigate} runtime={runtime} />} navigate={navigate} subtitle="舌象或面部，结果仅供日常参考" title="AI 智能诊断" visualTheme="warm-soft-tech">
       <div className="page-stack page-observation-start">
@@ -284,8 +310,22 @@ export function ObservationStartPage({ runtime, navigate }: ObservationStartPage
         <section className="page-section">
           <div className="section-heading"><div><h3>最近观察</h3></div>{historyIssue ? <Button onClick={() => void loadSessions()} variant="quiet">重新读取</Button> : null}</div>
           {historyIssue ? <IssueNotice issue={historyIssue} /> : null}
-          {historyPending ? <PageSkeleton layout="observation-list" /> : sessions && sessions.length > 0 ? <div className="observation-history-list">{sessions.map((session) => <ObservationHistoryCard key={session.sessionId} onOpen={() => navigate(observationReportPath(session.sessionId))} session={session} />)}</div> : <EmptyState description="完成一次真实图片观察后，会话和正式报告会保存在本地这里。" icon="history" title="尚无本地观察" />}
+          {historyPending ? <PageSkeleton layout="observation-list" /> : sessions && sessions.length > 0 ? <div className="observation-history-list">{sessions.map((session) => <ObservationHistoryCard key={session.sessionId} onLongPress={() => { setDeleteIssue(undefined); setSelectedSession(session); }} onOpen={() => navigate(observationReportPath(session.sessionId))} session={session} />)}</div> : <EmptyState description="完成一次真实图片观察后，会话和正式报告会保存在本地这里。" icon="history" title="尚无本地观察" />}
         </section>
+
+        {selectedSession ? (
+          <RecentRecordActionsSheet
+            canDelete={observationSessionCanBeDeleted(selectedSession)}
+            deleting={deletingSession}
+            deleteDisabledReason="进行中的观察不能删除，等待它进入明确终态后再试。"
+            issue={deleteIssue}
+            kind="observation"
+            onClose={closeRecordActions}
+            onDelete={() => void deleteSelectedSession()}
+            open
+            recordLabel={observationHistoryTitle(selectedSession.mode)}
+          />
+        ) : null}
       </div>
     </AppShell>
   );

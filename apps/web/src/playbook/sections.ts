@@ -11,6 +11,7 @@ import {
   PlaybookOverlaySpecimen,
   PlaybookPasteSpecimen,
   PlaybookSettingsSpecimen,
+  PlaybookRecentRecordActionsSpecimen,
   PlaybookSkeletonSpecimen,
   PlaybookTabBarSpecimen,
 } from "./flow-specimens";
@@ -38,6 +39,7 @@ export const playbookSections: readonly PlaybookSection[] = [
   { id: "compose", title: "S14 新建", group: "主路径", summary: "智能成片 / 爆款复刻 / 拆解新链接", Render: PlaybookComposeSpecimen },
   { id: "analysis", title: "S4 拆解板块", group: "主路径", summary: "九个展示板块图标", Render: PlaybookAnalysisSpecimen },
   { id: "settings", title: "S8 设置", group: "主路径", summary: "资料、AI、通知、外观、缓存、关于", Render: PlaybookSettingsSpecimen },
+  { id: "recent-record-actions", title: "M/最近记录操作", group: "组件", summary: "长按、取消、二次确认与终态删除边界", Render: PlaybookRecentRecordActionsSpecimen },
   { id: "observing", title: "S9b 观察中", group: "观察与账户", summary: "扫光、深度思考、五模块", Render: PlaybookObservingSpecimen },
   { id: "observation", title: "S10 观察报告", group: "观察与账户", summary: "摘要、明细、参考、建议、安全", Render: PlaybookObservationSpecimen },
   { id: "follow-up", title: "S10b AI 追问", group: "观察与账户", summary: "页底输入与上滑对话窗", Render: PlaybookFollowUpSpecimen },

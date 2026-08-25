@@ -4,6 +4,7 @@ import { Button } from "../../components/Buttons";
 import { Icon } from "../../components/Icon";
 import { RuntimeMediaFrame } from "../../components/RuntimeMediaFrame";
 import { Sheet } from "../../components/Sheet";
+import { useLongPress } from "../../hooks/useLongPress";
 import { formatTaskTime } from "../tasks/task-presenters";
 
 export const OBSERVATION_FACE_SCAN_SRC = "/design/observation-face-scan.png";
@@ -32,6 +33,10 @@ export function observationHistoryBadge(session: DiagnosisSessionRecord): { read
   if (session.reportStatus === "running") return { label: "进行中", tone: "run" };
   if (session.reportStatus === "pending") return { label: "等待中", tone: "wait" };
   return { label: "未完成", tone: "fail" };
+}
+
+export function observationSessionCanBeDeleted(session: DiagnosisSessionRecord): boolean {
+  return session.reportStatus === "succeeded" || session.reportStatus === "failed";
 }
 
 export interface ObservationCapturePanelProps {
@@ -128,14 +133,16 @@ export function ObservationPhotoConfirmSheet({
 export interface ObservationHistoryCardProps {
   readonly session: DiagnosisSessionRecord;
   readonly onOpen: () => void;
+  readonly onLongPress: () => void;
 }
 
-export function ObservationHistoryCard({ session, onOpen }: ObservationHistoryCardProps) {
+export function ObservationHistoryCard({ session, onOpen, onLongPress }: ObservationHistoryCardProps) {
   const badge = observationHistoryBadge(session);
   const time = formatTaskTime(session.updatedAt);
+  const longPress = useLongPress({ onLongPress });
 
   return (
-    <article className="observation-history-card">
+    <article aria-label={`${observationHistoryTitle(session.mode)}，长按管理记录`} className="observation-history-card" {...longPress}>
       <RuntimeMediaFrame className="observation-history-card__photo" label={observationHistoryTitle(session.mode)} media={session.image} />
       <div className="observation-history-card__body">
         <div className="observation-history-card__title">

@@ -48,11 +48,16 @@ function memoryFiles() {
   const key = (sessionId: string, relativePath: string) => `${sessionId}/${relativePath}`;
   return {
     values,
+    ids,
     plugin: {
       ensureObservation: async ({ sessionId }: { readonly sessionId: string }) => { ids.add(sessionId); },
       writeObservationText: async ({ sessionId, relativePath, value }: { readonly sessionId: string; readonly relativePath: string; readonly value: string; readonly replace: boolean }) => { values.set(key(sessionId, relativePath), value); },
       readObservationText: async ({ sessionId, relativePath }: { readonly sessionId: string; readonly relativePath: string }) => ({ value: values.get(key(sessionId, relativePath)) }),
       listObservationIds: async () => ({ sessionIds: [...ids] }),
+      deleteObservation: async ({ sessionId }: { readonly sessionId: string }) => {
+        ids.delete(sessionId);
+        for (const path of [...values.keys()]) if (path.startsWith(`${sessionId}/`)) values.delete(path);
+      },
       copyToObservation: async ({ sessionId, relativePath }: { readonly sessionId: string; readonly sourceUri: string; readonly relativePath: string }) => ({
         uri: `file:///private/observations/${sessionId}/${relativePath}`, sizeBytes: 128, mimeType: "image/jpeg",
       }),
@@ -116,6 +121,43 @@ test("StandaloneDiagnosisService saves a formal report and real follow-up histor
   assert.match(JSON.stringify(progressEvents), /private reasoning/);
   assert.doesNotMatch(JSON.stringify(progressEvents), /file:\/\//);
   assert.equal((await service.listMessages(session.sessionId)).length, 2);
+});
+
+test("StandaloneDiagnosisService deletes only terminal observation sessions and protects incomplete work", async () => {
+  const native = memoryFiles();
+  const state = (sessionId: string, reportStatus: "pending" | "succeeded") => ({
+    sessionId,
+    reportId: `report-${sessionId}`,
+    mode: "face",
+    image: { relativePath: "image.jpg", mimeType: "image/jpeg", sizeBytes: 64 },
+    reportStatus,
+    createdAt: "2026-08-07T00:00:00.000Z",
+    updatedAt: "2026-08-07T00:01:00.000Z",
+  });
+  native.ids.add("observation-pending");
+  native.values.set("observation-pending/session.json", JSON.stringify(state("observation-pending", "pending")));
+  native.ids.add("observation-done");
+  native.values.set("observation-done/session.json", JSON.stringify(state("observation-done", "succeeded")));
+
+  const service = new StandaloneDiagnosisService({
+    files: native.plugin,
+    fileMedia: {
+      pickPhoto: async () => ({ uri: "file:///private/media/photo.jpg", mimeType: "image/jpeg", sizeBytes: 64 }),
+      capturePhoto: async () => ({ uri: "file:///private/media/photo.jpg", mimeType: "image/jpeg", sizeBytes: 64 }),
+      consumePhotoOperation: async () => ({ status: "none" }),
+    },
+    getProvider: async () => ({ generate: async () => ({ content: "", reasoning: "" }), transcribe: async () => "" }),
+    toDisplayUri: (value) => value,
+  });
+
+  await assert.rejects(
+    () => service.deleteSession("observation-pending"),
+    (error: unknown) => error instanceof TaskError && error.code === "TASK_INTERRUPTED",
+  );
+  await service.deleteSession("observation-done");
+  assert.equal(native.ids.has("observation-done"), false);
+  assert.equal(native.values.has("observation-done/session.json"), false);
+  assert.equal(native.ids.has("observation-pending"), true);
 });
 
 test("StandaloneDiagnosisService does not stream an unvalidated follow-up reply", async () => {
@@ -454,6 +496,7 @@ test("StandaloneDiagnosisService keeps the selected image MIME across private co
       writeObservationText: async ({ relativePath, value }) => { values.set(relativePath, value); },
       readObservationText: async ({ relativePath }) => ({ value: values.get(relativePath) }),
       listObservationIds: async () => ({ sessionIds: ["session-png"] }),
+      deleteObservation: async () => undefined,
       copyToObservation: async ({ relativePath }) => {
         copiedPath = relativePath;
         return { uri: `file:///private/observations/session-png/${relativePath}`, sizeBytes: 256, mimeType: "application/octet-stream" };

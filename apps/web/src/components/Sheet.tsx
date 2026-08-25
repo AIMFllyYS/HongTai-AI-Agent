@@ -27,11 +27,12 @@ export interface SheetActionRowProps {
   readonly description?: string;
   readonly onSelect: () => void;
   readonly icon?: ReactNode;
+  readonly disabled?: boolean;
 }
 
-export function SheetActionRow({ title, description, onSelect, icon }: SheetActionRowProps) {
+export function SheetActionRow({ title, description, onSelect, icon, disabled = false }: SheetActionRowProps) {
   return (
-    <button className="sheet-action" onClick={onSelect} type="button">
+    <button className="sheet-action" disabled={disabled} onClick={onSelect} type="button">
       {icon ? <span className="sheet-action__icon">{icon}</span> : null}
       <span className="sheet-action__copy">
         <strong>{title}</strong>

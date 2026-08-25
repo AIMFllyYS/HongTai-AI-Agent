@@ -216,6 +216,8 @@
   border: 1px solid var(--color-outline-soft);
   border-radius: var(--radius-control);
   box-shadow: var(--shadow-card);
+  touch-action: manipulation;
+  user-select: none;
 }
 
 .runtime-task-history__item:hover {

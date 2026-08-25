@@ -122,6 +122,7 @@ export class StandaloneDiagnosisService implements DiagnosisService {
   readonly #reports = new DiagnosisReportSubscriptions();
   readonly #activeReports = new Map<string, Promise<DiagnosisReportRecord>>();
   readonly #followUpQueues = new Map<string, Promise<unknown>>();
+  readonly #deletions = new Map<string, Promise<void>>();
 
   constructor(options: StandaloneDiagnosisServiceOptions) {
     this.#files = options.files;
@@ -183,6 +184,7 @@ export class StandaloneDiagnosisService implements DiagnosisService {
       if (listener) void active.finally(() => this.#reports.remove(sessionId, listener)).catch(() => undefined);
       return active;
     }
+    if (this.#deletions.has(sessionId)) throw taskError("TASK_INTERRUPTED", "观察记录正在删除，请稍后再试", "wait_and_retry");
     const listener = onEvent ? this.#reports.attachRunListener(sessionId, onEvent) : undefined;
     const operation = this.#track(
       { kind: "diagnosis-report", id: sessionId, execution: "in-process" },
@@ -255,6 +257,28 @@ export class StandaloneDiagnosisService implements DiagnosisService {
     return sessions.sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
   }
 
+  async deleteSession(sessionId: string): Promise<void> {
+    if (!ID_PATTERN.test(sessionId)) throw taskError("AI_SESSION_NOT_FOUND", "未找到要删除的本地观察会话", "none");
+    const existing = this.#deletions.get(sessionId);
+    if (existing) return existing;
+    const operation = this.#deleteTerminalSession(sessionId).finally(() => this.#deletions.delete(sessionId));
+    this.#deletions.set(sessionId, operation);
+    return operation;
+  }
+
+  async #deleteTerminalSession(sessionId: string): Promise<void> {
+    if (this.#activeReports.has(sessionId) || this.#followUpQueues.has(sessionId)) {
+      throw taskError("TASK_INTERRUPTED", "观察正在处理中，尚未完成，不能删除", "wait_and_retry");
+    }
+    const state = await this.#readSession(sessionId);
+    if (!state) throw taskError("AI_SESSION_NOT_FOUND", "未找到要删除的本地观察会话", "none");
+    if (state.reportStatus === "pending" || state.reportStatus === "running") {
+      throw taskError("TASK_INTERRUPTED", "观察尚未完成，不能删除", "wait_and_retry");
+    }
+    await this.#files.deleteObservation({ sessionId });
+    this.#reports.clearSnapshot(sessionId);
+  }
+
   async getReport(sessionId: string): Promise<DiagnosisReportRecord | undefined> {
     const state = await this.#readSession(sessionId);
     if (!state) return undefined;
@@ -312,6 +336,7 @@ export class StandaloneDiagnosisService implements DiagnosisService {
   }
 
   async followUp(sessionId: string, question: string, onEvent?: (event: DiagnosisStreamEvent) => void | Promise<void>): Promise<DiagnosisMessage> {
+    if (this.#deletions.has(sessionId)) throw taskError("TASK_INTERRUPTED", "观察记录正在删除，请稍后再试", "wait_and_retry");
     return this.#queueFollowUp(sessionId, () => this.#track(
       { kind: "transient-operation", id: `diagnosis-follow-up:${sessionId}`, execution: "in-process" },
       () => this.#followUp(sessionId, question, onEvent),

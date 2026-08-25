@@ -96,6 +96,7 @@ export function createBrowserStandalonePlugins(): StandaloneNativePlugins {
         const result = await browserIoRpc<{ readonly ids: readonly string[] }>("files.listIds", { area: "observations" });
         return { sessionIds: result.ids };
       },
+      deleteObservation: async ({ sessionId }) => { await browserIoRpc("files.delete", { area: "observations", id: sessionId }); },
       copyToObservation: async (options) => browserIoRpc("files.copyTo", { area: "observations", id: options.sessionId, sourceUri: options.sourceUri, relativePath: options.relativePath }),
       getObservationUri: async (options) => browserIoRpc("files.getUri", { area: "observations", id: options.sessionId, relativePath: options.relativePath }),
       ensureProduction: async ({ projectId }) => { await browserIoRpc("files.ensure", { area: "productions", id: projectId }); },

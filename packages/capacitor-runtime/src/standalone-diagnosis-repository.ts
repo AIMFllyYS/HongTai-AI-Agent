@@ -25,6 +25,7 @@ export interface StandaloneObservationFilesPlugin {
   }): Promise<void>;
   readObservationText(options: { readonly sessionId: string; readonly relativePath: string }): Promise<{ readonly value?: string }>;
   listObservationIds(): Promise<{ readonly sessionIds: readonly string[] }>;
+  deleteObservation(options: { readonly sessionId: string }): Promise<void>;
   copyToObservation(options: { readonly sessionId: string; readonly sourceUri: string; readonly relativePath: string }): Promise<{
     readonly uri: string;
     readonly sizeBytes: number;

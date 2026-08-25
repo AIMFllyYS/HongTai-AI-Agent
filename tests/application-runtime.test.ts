@@ -23,7 +23,7 @@ import type {
 } from "../packages/core/src/index";
 
 test("应用运行时契约保留七个采集阶段，并将任务与内容拆解状态分开", () => {
-  assert.equal(APP_RUNTIME_CONTRACT_VERSION, "app-runtime.v3");
+  assert.equal(APP_RUNTIME_CONTRACT_VERSION, "app-runtime.v4");
   assert.deepEqual(TASK_STAGE_VALUES, [
     "detect-platform",
     "resolve-link",

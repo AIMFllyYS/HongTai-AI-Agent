@@ -1509,6 +1509,16 @@
   border-radius: var(--radius-card);
 }
 
+.sheet-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.sheet-action:disabled .sheet-action__icon {
+  color: var(--color-text-muted);
+  background: var(--color-surface-card);
+}
+
 .sheet-action__icon {
   display: grid;
   width: 2.125rem;
@@ -1539,6 +1549,62 @@
 }
 
 .sheet-cancel {
+  width: 100%;
+}
+
+.recent-record-actions-sheet__label {
+  margin: 0 0 var(--space-3);
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-record-actions-sheet__confirm {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.recent-record-actions-sheet__confirm-icon {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  color: var(--color-error);
+  background: var(--color-error-soft);
+  border-radius: 50%;
+}
+
+.recent-record-actions-sheet__confirm strong {
+  color: var(--color-text-primary);
+  font-size: var(--text-label);
+}
+
+.recent-record-actions-sheet__confirm p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: 1.55;
+}
+
+.recent-record-actions-sheet__confirm p span {
+  color: var(--color-text-subtle);
+  font-weight: 600;
+}
+
+.recent-record-actions-sheet__confirm .recent-record-actions-sheet__issue {
+  color: var(--color-error);
+}
+
+.recent-record-actions-sheet__confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.recent-record-actions-sheet__confirm-actions .button {
   width: 100%;
 }
 

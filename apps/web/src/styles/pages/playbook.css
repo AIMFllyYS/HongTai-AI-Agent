@@ -323,3 +323,92 @@
   display: grid;
   gap: 0.75rem;
 }
+
+.playbook-record-actions {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.playbook-record-actions__card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 3.25rem;
+  padding: var(--space-3);
+  color: var(--palette-ink-900);
+  background: var(--surface-paper);
+  border: 1px solid var(--palette-hairline);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-card);
+}
+
+.playbook-record-actions__card > span:nth-child(2),
+.playbook-record-actions__delete > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 0.125rem;
+}
+
+.playbook-record-actions__card small,
+.playbook-record-actions__delete small {
+  color: var(--palette-ink-400);
+  font-size: var(--text-caption);
+}
+
+.playbook-record-actions__icon {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  color: var(--palette-brand-deep);
+  background: var(--palette-brand-tint);
+  border-radius: 0.75rem;
+}
+
+.playbook-record-actions__sheet {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  background: var(--surface-paper);
+  border-radius: var(--radius-large) var(--radius-large) 0 0;
+  box-shadow: var(--shadow-sheet);
+}
+
+.playbook-record-actions__sheet h3,
+.playbook-record-actions__label {
+  margin: 0;
+}
+
+.playbook-record-actions__label {
+  color: var(--palette-ink-400);
+  font-size: var(--text-caption);
+}
+
+.playbook-record-actions__delete {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 3.5rem;
+  padding: var(--space-3);
+  text-align: left;
+  background: var(--color-surface-low);
+  border-radius: var(--radius-card);
+}
+
+.playbook-record-actions__delete strong {
+  color: var(--palette-ink-900);
+  font-size: var(--text-body);
+}
+
+.playbook-record-actions__cancel {
+  min-height: 2.75rem;
+  padding: 0.75rem;
+  color: var(--palette-ink-600);
+  text-align: center;
+  background: var(--surface-paper);
+  border: 1px solid var(--palette-hairline);
+  border-radius: var(--radius-control);
+  font-size: var(--text-caption);
+}

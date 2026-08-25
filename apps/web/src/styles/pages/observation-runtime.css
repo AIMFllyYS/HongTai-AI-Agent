@@ -1391,6 +1391,8 @@
   background: var(--surface-card);
   border: 1px solid var(--palette-hairline);
   border-radius: 0.875rem;
+  touch-action: manipulation;
+  user-select: none;
 }
 
 .observation-history-card__photo,

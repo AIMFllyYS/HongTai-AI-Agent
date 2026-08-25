@@ -240,3 +240,29 @@ export function PlaybookSettingsSpecimen() {
     </div>
   );
 }
+
+export function PlaybookRecentRecordActionsSpecimen() {
+  return (
+    <div className="playbook-record-actions">
+      <p className="playbook-kicker">设计稿标本 · 长按最近记录打开，不是真实数据</p>
+      <div className="playbook-record-actions__card">
+        <span className="playbook-record-actions__icon"><Icon name="video_file" size={18} /></span>
+        <span><strong>最近拆解 · 本地视频</strong><small>已完成 · 本机保存</small></span>
+        <Icon name="chevron_right" size={16} />
+      </div>
+      <div className="playbook-record-actions__sheet">
+        <span className="playbook-sheet__handle" />
+        <h3>记录操作</h3>
+        <p className="playbook-record-actions__label">拆解记录 · 本地视频</p>
+        <div className="sheet-action-list">
+          <div className="playbook-record-actions__delete">
+            <span className="sheet-action__icon"><Icon name="trash_2" size={20} /></span>
+            <span><strong>删除记录</strong><small>只移除这条记录的本机媒体与产物</small></span>
+          </div>
+        </div>
+        <div className="playbook-record-actions__cancel">取消</div>
+      </div>
+      <p className="playbook-hint">进行中的拆解或观察保持锁定；确认删除前会再次说明本机媒体和数据文件边界。</p>
+    </div>
+  );
+}

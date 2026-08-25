@@ -123,6 +123,12 @@ class LocalFilesPlugin : Plugin() {
   }
 
   @PluginMethod
+  fun deleteObservation(call: PluginCall) = execute(call) {
+    observations.delete(call.requiredSessionId())
+    call.resolve()
+  }
+
+  @PluginMethod
   fun copyToObservation(call: PluginCall) = execute(call) {
     val result = observations.copyPrivateFile(
       sessionId = call.requiredSessionId(),

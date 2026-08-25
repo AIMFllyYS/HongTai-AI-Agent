@@ -22,6 +22,8 @@ test("observation pages use the real diagnosis runtime rather than a visual diag
   assert.match(start, /runtime\.diagnosis\.pickImage/);
   assert.match(start, /runtime\.diagnosis\.captureImage/);
   assert.match(start, /runtime\.diagnosis\.createSession/);
+  assert.match(start, /runtime\.diagnosis\.deleteSession/);
+  assert.match(start, /ObservationHistoryCard[\s\S]*onLongPress/);
   assert.match(start, /navigate\(observationReportPath\(session\.sessionId\)\)/);
   assert.doesNotMatch(start, /runtime\.diagnosis\.runReport/);
   assert.doesNotMatch(start, /ValidatedModuleProgress/);
@@ -265,6 +267,8 @@ test("observation controls stay compact and clear above the fixed Android naviga
   assert.match(start, /ObservationCapturePanel/);
   assert.match(panels, /observation-capture-card__actions/);
   assert.match(panels, /observation-capture-card__laser/);
+  assert.match(panels, /useLongPress/);
+  assert.match(panels, /observationSessionCanBeDeleted/);
   assert.match(panels, /拍摄照片/);
   assert.match(panels, /相册选择/);
   const composer = read("features/diagnosis/observation-follow-up-composer.tsx");

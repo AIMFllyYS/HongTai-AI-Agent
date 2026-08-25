@@ -236,6 +236,9 @@ test("runtime task pages are wired to AppRuntime and static fixtures remain outs
   assert.match(read("pages/TaskHomePage.tsx"), /submitLocalTask\(runtime\.tasks/);
   assert.match(read("pages/TaskHomePage.tsx"), /runtime\.analysis\.importVideo\(/);
   assert.match(read("features/tasks/TaskHistory.tsx"), /sourceKind === "local_video"/);
+  assert.match(read("features/tasks/TaskHistory.tsx"), /useLongPress/);
+  assert.match(read("features/tasks/TaskHistory.tsx"), /runtime\.tasks\.delete/);
+  assert.match(read("components/RecentRecordActionsSheet.tsx"), /确认删除/);
   assert.match(read("pages/TaskPage.tsx"), /runtime\.tasks\.subscribe/);
   assert.match(read("pages/TaskPage.tsx"), /runtime\.tasks\.listEvents/);
   assert.match(read("pages/TaskPage.tsx"), /runtime\.tasks\.getDetail/);
@@ -686,6 +689,8 @@ test("首页来源用 Tabs，唯一主按钮跟在输入区后，成功后进入
   assert.match(home, /navigate\(taskDetailPath\(record\.taskId\)\)/);
   assert.match(home, /navigate\(taskDetailPath\(recovered\.record\.taskId\)\)/);
   assert.match(history, /navigate\(taskDetailPath\(task\.id\)\)/);
+  assert.match(history, /aria-label=.*长按管理记录/);
+  assert.match(history, /isTerminalTaskStatus\(selectedTask\.status\)/);
   assert.doesNotMatch(home, /taskAnalysisPath/);
   assert.doesNotMatch(home, /taskProcessingPath/);
   assert.doesNotMatch(home, /task-source-index/);

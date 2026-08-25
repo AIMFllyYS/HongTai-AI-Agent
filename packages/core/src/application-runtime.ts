@@ -12,7 +12,7 @@ import type {
 } from "./models";
 
 /** Versioned boundary between the presentation layer and local application services. */
-export const APP_RUNTIME_CONTRACT_VERSION = "app-runtime.v3";
+export const APP_RUNTIME_CONTRACT_VERSION = "app-runtime.v4";
 
 export const RUNTIME_WORK_KIND_VALUES = [
   "ingest",
@@ -749,6 +749,8 @@ export interface DiagnosisService {
   getSession(sessionId: string): Promise<DiagnosisSessionRecord | undefined>;
   /** Ordered by most recent change, with no image bytes or API reasoning exposed. */
   listSessions(): Promise<readonly DiagnosisSessionRecord[]>;
+  /** Permanently removes one terminal observation and its private artifacts. */
+  deleteSession(sessionId: string): Promise<void>;
   getReport(sessionId: string): Promise<DiagnosisReportRecord | undefined>;
   listMessages(sessionId: string): Promise<readonly DiagnosisMessage[]>;
   followUp(

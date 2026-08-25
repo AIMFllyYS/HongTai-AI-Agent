@@ -144,6 +144,7 @@ export interface StandaloneLocalFilesPlugin extends LocalTaskFilesPlugin, Native
   }): Promise<void>;
   readObservationText(options: { readonly sessionId: string; readonly relativePath: string }): Promise<{ readonly value?: string }>;
   listObservationIds(): Promise<{ readonly sessionIds: readonly string[] }>;
+  deleteObservation(options: { readonly sessionId: string }): Promise<void>;
   copyToObservation(options: { readonly sessionId: string; readonly sourceUri: NativeUri; readonly relativePath: string }): Promise<{
     readonly uri: NativeUri;
     readonly sizeBytes: number;

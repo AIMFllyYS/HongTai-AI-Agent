@@ -313,7 +313,7 @@ export function TaskHomePage({ runtime, navigate, searchEpoch = 0 }: TaskHomePag
         <section className="page-section">
           <div className="section-heading"><h3>最近拆解</h3>{historyIssue ? <Button onClick={() => void loadHistory()} variant="quiet">重新读取</Button> : null}</div>
           {historyIssue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), editInput: focusTaskShareInput }} issue={historyIssue} /> : null}
-          {historyIssue && tasks === undefined ? <ErrorState description={historyIssue.userMessage} title="任务历史无法读取" /> : historyPending ? <PageSkeleton layout="home-list" /> : <TaskHistory navigate={navigate} tasks={tasks ?? []} />}
+          {historyIssue && tasks === undefined ? <ErrorState description={historyIssue.userMessage} title="任务历史无法读取" /> : historyPending ? <PageSkeleton layout="home-list" /> : <TaskHistory navigate={navigate} onDeleted={(taskId) => setTasks((current) => (current ?? []).filter((task) => task.id !== taskId))} runtime={runtime} tasks={tasks ?? []} />}
         </section>
       </div>
     </AppShell>
