@@ -10,24 +10,24 @@ import { SwipeRouteViewport } from "./components/SwipeRouteViewport";
 import type { VisualDataAdapter } from "./data/visual-adapter";
 import { useInteractionFeedback } from "./hooks/useInteractionFeedback";
 import { useBrowserRoute } from "./hooks/useBrowserRoute";
-import { holdLazyModule } from "./motion/skeleton-hold";
+import { RouteSkeletonTimingProvider } from "./motion/skeleton-hold";
 import { isTaskPageAlias, matchRoute, showsPrimaryNav } from "./router";
 import { HomePage } from "./pages/HomePage";
 import { TaskHomePage } from "./pages/TaskHomePage";
 
-const TemplatesPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/TemplatesPage"))).TemplatesPage }));
-const CreatePage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/CreatePage"))).CreatePage }));
-const ProductionEditPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ProductionEditPage"))).ProductionEditPage }));
-const ReplicaWizardPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ReplicaWizardPage"))).ReplicaWizardPage }));
-const ObservationReportPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ObservationReportPage"))).ObservationReportPage }));
-const ObservationStartPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ObservationStartPage"))).ObservationStartPage }));
-const TaskPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/TaskPage"))).TaskPage }));
-const AiSettingsPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/AiSettingsPage"))).AiSettingsPage }));
-const ApplicationInfoPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ApplicationInfoPage"))).ApplicationInfoPage }));
-const UpdateLogPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/UpdateLogPage"))).UpdateLogPage }));
-const ProfileSettingsPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/ProfileSettingsPage"))).ProfileSettingsPage }));
-const SettingsPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./pages/SettingsPage"))).SettingsPage }));
-const PlaybookPage = lazy(async () => ({ default: (await holdLazyModule(() => import("./playbook/PlaybookPage"))).PlaybookPage }));
+const TemplatesPage = lazy(() => import("./pages/TemplatesPage").then(({ TemplatesPage: page }) => ({ default: page })));
+const CreatePage = lazy(() => import("./pages/CreatePage").then(({ CreatePage: page }) => ({ default: page })));
+const ProductionEditPage = lazy(() => import("./pages/ProductionEditPage").then(({ ProductionEditPage: page }) => ({ default: page })));
+const ReplicaWizardPage = lazy(() => import("./pages/ReplicaWizardPage").then(({ ReplicaWizardPage: page }) => ({ default: page })));
+const ObservationReportPage = lazy(() => import("./pages/ObservationReportPage").then(({ ObservationReportPage: page }) => ({ default: page })));
+const ObservationStartPage = lazy(() => import("./pages/ObservationStartPage").then(({ ObservationStartPage: page }) => ({ default: page })));
+const TaskPage = lazy(() => import("./pages/TaskPage").then(({ TaskPage: page }) => ({ default: page })));
+const AiSettingsPage = lazy(() => import("./pages/AiSettingsPage").then(({ AiSettingsPage: page }) => ({ default: page })));
+const ApplicationInfoPage = lazy(() => import("./pages/ApplicationInfoPage").then(({ ApplicationInfoPage: page }) => ({ default: page })));
+const UpdateLogPage = lazy(() => import("./pages/UpdateLogPage").then(({ UpdateLogPage: page }) => ({ default: page })));
+const ProfileSettingsPage = lazy(() => import("./pages/ProfileSettingsPage").then(({ ProfileSettingsPage: page }) => ({ default: page })));
+const SettingsPage = lazy(() => import("./pages/SettingsPage").then(({ SettingsPage: page }) => ({ default: page })));
+const PlaybookPage = lazy(() => import("./playbook/PlaybookPage").then(({ PlaybookPage: page }) => ({ default: page })));
 
 export interface AppProps {
   /** Real application runtime supplied only by the application composition root. */
@@ -132,7 +132,9 @@ export function App({ runtime, visualData }: AppProps = {}) {
     <AppShellNavigationProvider>
       <SwipeRouteViewport active={showPrimaryNav ? activeNav : undefined} currentPath={pathname} navigate={navigate}>
         <RouteTransition direction={direction} pathname={pathname} transitionMode={transitionMode}>
-          <Suspense fallback={<PageSkeleton path={pathname} />}>{renderRoute(pathname)}</Suspense>
+          <RouteSkeletonTimingProvider>
+            <Suspense fallback={<PageSkeleton path={pathname} />}>{renderRoute(pathname)}</Suspense>
+          </RouteSkeletonTimingProvider>
         </RouteTransition>
       </SwipeRouteViewport>
       {showPrimaryNav ? <BottomNav active={activeNav} navigate={navigate} /> : null}

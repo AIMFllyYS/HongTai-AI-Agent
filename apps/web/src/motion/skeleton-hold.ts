@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { createContext, createElement, useContext, useEffect, useRef, useState, type PropsWithChildren } from "react";
 
 import { motionDurations } from "./tokens";
 
@@ -14,23 +14,26 @@ export function remainingSkeletonHold(startedAt: number | null, now: number, min
   return Math.max(0, minMs - (now - startedAt));
 }
 
-export async function holdLazyModule<T>(loader: () => Promise<T>): Promise<T> {
-  const [mod] = await Promise.all([
-    loader(),
-    new Promise<void>((resolve) => {
-      setTimeout(resolve, skeletonHoldMs());
-    }),
-  ]);
-  return mod;
+const RouteSkeletonStartedAtContext = createContext<number | undefined>(undefined);
+
+/**
+ * Starts one skeleton clock for a route transition.  Lazy module loading and
+ * the first page-data read share this clock, so a slow module cannot add a
+ * second artificial skeleton dwell after the route fallback disappears.
+ */
+export function RouteSkeletonTimingProvider({ children }: PropsWithChildren) {
+  const [startedAt] = useState(() => Date.now());
+  return createElement(RouteSkeletonStartedAtContext.Provider, { value: startedAt }, children);
 }
 
 export function useSkeletonHold(pending: boolean): boolean {
+  const routeStartedAt = useContext(RouteSkeletonStartedAtContext);
   const [held, setHeld] = useState(pending);
-  const shownAt = useRef<number | null>(pending ? Date.now() : null);
+  const shownAt = useRef<number | null>(pending ? routeStartedAt ?? Date.now() : null);
 
   useEffect(() => {
     if (pending) {
-      shownAt.current = Date.now();
+      if (shownAt.current == null) shownAt.current = routeStartedAt ?? Date.now();
       setHeld(true);
       return undefined;
     }
@@ -45,7 +48,7 @@ export function useSkeletonHold(pending: boolean): boolean {
       setHeld(false);
     }, remain);
     return () => window.clearTimeout(timer);
-  }, [pending]);
+  }, [pending, routeStartedAt]);
 
   return held;
 }

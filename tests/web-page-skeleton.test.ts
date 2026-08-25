@@ -14,7 +14,9 @@ test("skeleton hold uses a shared minimum without inventing progress", () => {
   assert.equal(remainingSkeletonHold(1_000, 1_500, 400), 0);
   assert.equal(remainingSkeletonHold(null, 1_500, 400), 0);
   assert.match(read("motion/skeleton-hold.ts"), /motionDurations\.skeleton/);
-  assert.match(read("App.tsx"), /holdLazyModule/);
+  assert.match(read("motion/skeleton-hold.ts"), /RouteSkeletonTimingProvider/);
+  assert.match(read("App.tsx"), /RouteSkeletonTimingProvider/);
+  assert.doesNotMatch(read("App.tsx"), /holdLazyModule/);
 });
 
 test("route paths pick an honest skeleton layout without fake copy", () => {
