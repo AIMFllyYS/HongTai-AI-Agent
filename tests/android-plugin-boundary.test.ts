@@ -427,7 +427,7 @@ const opaqueBounds = (image: DecodedPng, alphaThreshold = 16) => {
   return { minX, minY, maxX, maxY, transparent, opaque, keptNearWhite };
 };
 
-test("release candidate v0.1.23 keeps the HongTai brand source and ships an adaptive launcher icon", () => {
+test("release candidate v0.1.24 keeps the HongTai brand source and ships an adaptive launcher icon", () => {
   const appBuild = read("android/app/build.gradle.kts");
   const manifest = read("android/app/src/main/AndroidManifest.xml");
   const adaptive = read("android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml");
@@ -443,8 +443,8 @@ test("release candidate v0.1.23 keeps the HongTai brand source and ships an adap
   const bounds = opaqueBounds(foreground);
   const inset = (foreground.width * 21) / 108;
 
-  assert.match(appBuild, /versionCode\s*=\s*31\b/);
-  assert.match(appBuild, /versionName\s*=\s*"0\.1\.23"/);
+  assert.match(appBuild, /versionCode\s*=\s*32\b/);
+  assert.match(appBuild, /versionName\s*=\s*"0\.1\.24"/);
   assert.equal(createHash("sha256").update(sourceBytes).digest("hex"), WEB_BRAND_ICON_SHA256, "the public brand PNG remains the cropped source");
   assert.equal(source.colorType, 2, "the web brand source stays an opaque RGB canvas");
   assert.match(manifest, /android:icon="@mipmap\/ic_launcher"/);

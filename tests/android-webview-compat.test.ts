@@ -79,12 +79,12 @@ test("the unsupported WebView page is local static Chinese HTML", () => {
   assert.doesNotMatch(page, /https?:\/\/|\/\/|location\s*[.=]|http-equiv\s*=\s*["']refresh/i);
 });
 
-test("release packaging verifies the v0.1.23 monotonic candidate version", () => {
+test("release packaging verifies the v0.1.24 monotonic candidate version", () => {
   const appBuild = read("android/app/build.gradle.kts");
   const releaseBuilder = read("scripts/build-android-release.ps1");
 
-  assert.match(appBuild, /versionCode\s*=\s*31\b/);
-  assert.match(appBuild, /versionName\s*=\s*"0\.1\.23"/);
+  assert.match(appBuild, /versionCode\s*=\s*32\b/);
+  assert.match(appBuild, /versionName\s*=\s*"0\.1\.24"/);
   assert.match(releaseBuilder, /Get-AndroidSourceIdentity/);
   assert.match(releaseBuilder, /\$versionCode\s+-ne\s+\$sourceIdentity\.VersionCode/);
   assert.match(releaseBuilder, /\$versionName\s+-ne\s+\$sourceIdentity\.VersionName/);

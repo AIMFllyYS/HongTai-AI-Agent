@@ -301,7 +301,7 @@ try {
 
   $dnMatch = [regex]::Match(
     $signature,
-    '(?m)^(?:Signer #1|V3[.]0 Signer): certificate DN:\s*([^\r\n]+)\r?$'
+    '(?m)^(?:Signer #1|V3[.]0 Signer):?\s+certificate DN:\s*([^\r\n]+)\r?$'
   )
   if (!$dnMatch.Success) {
     throw "Release APK signer DN is missing"
@@ -310,7 +310,7 @@ try {
 
   $fingerprintMatch = [regex]::Match(
     $signature,
-    '(?m)^(?:Signer #1|V3[.]0 Signer): certificate SHA-256 digest:\s*([0-9a-fA-F: ]+)\r?$'
+    '(?m)^(?:Signer #1|V3[.]0 Signer):?\s+certificate SHA-256 digest:\s*([0-9a-fA-F: ]+)\r?$'
   )
   if (!$fingerprintMatch.Success) {
     throw "Release APK signer SHA-256 is missing"
