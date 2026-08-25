@@ -153,7 +153,7 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
   const showSkeleton = useSkeletonHold(loading);
   if (showSkeleton) {
     return (
-      <AppShell activeNav="create" backPath={pathForRoute("create")} headerMode="detail" navigate={navigate} title="微调导出">
+      <AppShell activeNav="create" backPath={pathForRoute("create")} headerMode="detail" navigate={navigate} showNav={false} title="微调导出">
         <PageSkeleton layout="create" />
       </AppShell>
     );
@@ -161,7 +161,7 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
 
   if (!base || !draft) {
     return (
-      <AppShell activeNav="create" backPath={pathForRoute("create")} headerMode="detail" navigate={navigate} title="微调导出">
+      <AppShell activeNav="create" backPath={pathForRoute("create")} headerMode="detail" navigate={navigate} showNav={false} title="微调导出">
         <EmptyState action={<Button onClick={back}>回到制作</Button>} description="这个制作项目已经不在本机了，请返回制作页重新选择。" icon="movie_edit" title="找不到这个项目" />
         {issue ? <IssueNotice issue={issue} /> : null}
       </AppShell>
@@ -170,7 +170,7 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
 
   if (!plan.editable) {
     return (
-      <AppShell activeNav="create" backPath={pathForRoute("create")} headerMode="detail" navigate={navigate} subtitle={base.brief} title="微调导出">
+      <AppShell activeNav="create" backPath={pathForRoute("create")} headerMode="detail" navigate={navigate} showNav={false} subtitle={base.brief} title="微调导出">
         <EmptyState
           action={<Button onClick={back}>回到制作</Button>}
           description={plan.schemaVersion === "production-plan.v1"
@@ -195,6 +195,7 @@ export function ProductionEditPage({ projectId, navigate, runtime }: ProductionE
       )}
       headerMode="detail"
       navigate={navigate}
+      showNav={false}
       subtitle={`共 ${plan.shots.length} 个镜头 · ${(total / 1_000).toFixed(1)} 秒`}
       title="微调导出"
     >

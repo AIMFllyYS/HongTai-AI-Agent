@@ -152,6 +152,7 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
       className="replica-wizard-page"
       headerMode="detail"
       navigate={navigate}
+      showNav={false}
       {...(subtitle ? { subtitle } : {})}
       title="按清单复刻"
     >

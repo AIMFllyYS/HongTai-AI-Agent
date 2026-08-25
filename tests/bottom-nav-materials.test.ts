@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import { activeNavForRoute } from "../apps/web/src/components/BottomNav";
-import { matchRoute } from "../apps/web/src/router";
+import { matchRoute, showsPrimaryNav } from "../apps/web/src/router";
 
 const webRoot = join(process.cwd(), "apps", "web");
 const readSource = (relativePath: string) => readFileSync(join(webRoot, "src", relativePath), "utf8");
@@ -92,4 +92,31 @@ test("settings app-info keeps the settings tab active and /publish is not a live
   assert.equal(activeNavForRoute("playbook"), "settings");
   assert.equal(matchRoute("/publish").key, "not-found");
   assert.equal(matchRoute("/settings/app-info/updates").key, "settings-update-log");
+});
+
+test("detail routes unmount the portal bottom navigation", () => {
+  const detailPaths = [
+    "/tasks/task-1",
+    "/tasks/task-1/processing",
+    "/tasks/task-1/analysis",
+    "/create/project-1/edit",
+    "/replica/task-1",
+    "/observation/session-1",
+  ];
+
+  for (const path of detailPaths) {
+    const route = matchRoute(path);
+    assert.equal(showsPrimaryNav(route.key), false, `${path} should not keep the primary nav mounted`);
+  }
+});
+
+test("detail page shells also remove the bottom-nav padding", () => {
+  for (const page of [
+    "pages/TaskPage.tsx",
+    "pages/ProductionEditPage.tsx",
+    "pages/ReplicaWizardPage.tsx",
+    "pages/ObservationReportPage.tsx",
+  ]) {
+    assert.match(readSource(page), /showNav=\{false\}/u, `${page} should opt out of bottom-nav spacing`);
+  }
 });

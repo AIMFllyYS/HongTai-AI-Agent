@@ -109,6 +109,33 @@ test("StandaloneTaskService runs the existing IngestPipeline and persists its se
   assert.deepEqual(detail?.evidenceUnits.map((item) => item.text), ["真实图文标题", "真实正文第一段", "真实正文第二段"]);
 });
 
+test("StandaloneTaskService persists only replay-safe public URL parameters", async () => {
+  const native = memoryFiles();
+  const service = new StandaloneTaskService({
+    files: native.plugin,
+    adapters: [],
+    http: {
+      get: async () => ({ url: "", status: 200, headers: {}, body: "" }),
+      post: async () => ({ url: "", status: 200, headers: {}, body: "" }),
+    },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 0, extractAudio: async () => undefined, splitAudio: async () => [] },
+    createTaskId: () => "task-safe-url-1",
+    toDisplayUri: (value) => value,
+  });
+
+  const task = await service.create({
+    input: "https://www.bilibili.com/video/BV1xx123456?spm_id_from=secret-tracker&p=2&token=secret-token#fragment",
+  });
+  const persistedTask = native.values.get("task-safe-url-1/task.json") ?? "";
+  const persistedRequest = native.values.get("task-safe-url-1/request.json") ?? "";
+
+  assert.equal(task.sourceUrl, "https://www.bilibili.com/video/BV1xx123456");
+  assert.match(persistedTask, /"sourceUrl":"https:\/\/www\.bilibili\.com\/video\/BV1xx123456\?p=2"/);
+  assert.match(persistedRequest, /"normalizedUrl":"https:\/\/www\.bilibili\.com\/video\/BV1xx123456\?p=2"/);
+  assert.doesNotMatch(`${persistedTask}\n${persistedRequest}`, /spm_id_from|secret-tracker|token=|secret-token|fragment/);
+});
+
 test("StandaloneTaskService emits finite task changes only after the persisted projection is readable", async () => {
   const native = memoryFiles();
   const service = new StandaloneTaskService({

@@ -102,6 +102,12 @@ test("本地测试入口只绑定回环地址并保存标准图片、报告且�
   }
 });
 
+test("本地观察测试页不把用户或模型文本交给HTML注入sink", async () => {
+  const source = await readFile(join(process.cwd(), "packages", "node-runtime", "src", "ai", "diagnosis-harness-server.ts"), "utf8");
+  assert.doesNotMatch(source, /innerHTML|insertAdjacentHTML/u);
+  assert.match(source, /textContent/u);
+});
+
 test("损坏与超限图片返回稳定HTTP错误且不创建会话或调用Provider", async () => {
   const directory = await mkdtemp(join(tmpdir(), "hongtai-diagnosis-harness-errors-"));
   const repository = new FileDiagnosisRepository(directory);

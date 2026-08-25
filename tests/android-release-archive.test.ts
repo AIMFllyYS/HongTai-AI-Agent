@@ -37,6 +37,9 @@ test("Release is the only APK product and uses the canonical versioned archive n
   assert.match(releaseBuilder, /archive-android-release[.]ps1/u);
   assert.match(releaseBuilder, /output[\\/]apk-archive/u);
   assert.doesNotMatch(releaseBuilder, /assembleDebug/u);
+  const archiveScriptSource = readFileSync(archiveScript, "utf8");
+  assert.match(archiveScriptSource, /Assert-NoReparsePoint/);
+  assert.match(archiveScriptSource, /Release APK archive must not traverse a reparse point/);
 });
 
 test("archiving is idempotent for identical bytes and rejects a conflicting overwrite", () => {

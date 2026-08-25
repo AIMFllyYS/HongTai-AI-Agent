@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
@@ -19,19 +19,64 @@ const LOAD_TIMEOUT_MS = 20_000;
 export function UpdateLogPage({ navigate }: UpdateLogPageProps) {
   const [status, setStatus] = useState<FrameStatus>("loading");
   const [loadKey, setLoadKey] = useState(0);
+  const frameLoadedRef = useRef(false);
+  const loadFinishedRef = useRef(false);
+  const probeSucceededRef = useRef(false);
   const showSkeleton = useSkeletonHold(status === "loading");
 
   useEffect(() => {
-    if (status !== "loading") return;
+    frameLoadedRef.current = false;
+    loadFinishedRef.current = false;
+    probeSucceededRef.current = false;
+    let active = true;
+    const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      setStatus((current) => (current === "loading" ? "failed" : current));
+      if (!active || loadFinishedRef.current) return;
+      loadFinishedRef.current = true;
+      setStatus("failed");
+      controller.abort();
     }, LOAD_TIMEOUT_MS);
-    return () => window.clearTimeout(timer);
-  }, [loadKey, status]);
+    void fetch(OFFICIAL_UPDATE_LOG_URL, {
+      cache: "no-store",
+      mode: "no-cors",
+      signal: controller.signal,
+    })
+      .then(() => {
+        if (!active) return;
+        probeSucceededRef.current = true;
+        if (frameLoadedRef.current) {
+          loadFinishedRef.current = true;
+          setStatus("ready");
+        }
+      })
+      .catch(() => {
+        if (!active) return;
+        loadFinishedRef.current = true;
+        setStatus("failed");
+      });
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [loadKey]);
 
   const retry = useCallback(() => {
     setStatus("loading");
     setLoadKey((value) => value + 1);
+  }, []);
+
+  const markFrameLoaded = useCallback(() => {
+    frameLoadedRef.current = true;
+    if (probeSucceededRef.current) {
+      loadFinishedRef.current = true;
+      setStatus("ready");
+    }
+  }, []);
+
+  const markFrameFailed = useCallback(() => {
+    loadFinishedRef.current = true;
+    setStatus("failed");
   }, []);
 
   return (
@@ -57,8 +102,8 @@ export function UpdateLogPage({ navigate }: UpdateLogPageProps) {
               aria-hidden={showSkeleton}
               className={`update-log-frame${status === "ready" && !showSkeleton ? " is-ready" : ""}`}
               key={loadKey}
-              onError={() => setStatus("failed")}
-              onLoad={() => setStatus("ready")}
+              onError={markFrameFailed}
+              onLoad={markFrameLoaded}
               referrerPolicy="no-referrer-when-downgrade"
               src={OFFICIAL_UPDATE_LOG_URL}
               title="宏泰 AI 智能体官方更新日志"

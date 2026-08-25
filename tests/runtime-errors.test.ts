@@ -19,6 +19,7 @@ import { TaskError } from "../packages/core/src/index";
 import {
   assertDownloadedLength,
   FfmpegMediaTools,
+  MAX_PAGE_RESPONSE_BYTES,
   NodeHttpClient,
   NodeMediaDownloader,
   replaceDownloadedFile,
@@ -67,6 +68,42 @@ test("HTTP客户端对5xx有限重试后成功", async () => {
     const response = await new NodeHttpClient({ retryDelaysMs: [0, 0, 0] }).get({ url: "https://example.com/item" });
     assert.equal(response.body, "ok");
     assert.equal(attempts, 3);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("HTTP客户端拒绝超过页面响应上限的声明长度", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response("too-large", {
+    status: 200,
+    headers: { "content-length": String(MAX_PAGE_RESPONSE_BYTES + 1) },
+  });
+  try {
+    await assert.rejects(
+      () => new NodeHttpClient({ retryDelaysMs: [0] }).get({ url: "https://example.com/large" }),
+      (error) => error instanceof TaskError && error.code === "LINK_HTTP_ERROR" && /安全大小限制/u.test(error.message),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("HTTP客户端拒绝本机和私网 HTTPS 目标", async () => {
+  const originalFetch = globalThis.fetch;
+  let called = false;
+  globalThis.fetch = async () => {
+    called = true;
+    return new Response("unexpected");
+  };
+  try {
+    for (const url of ["https://127.0.0.1/private", "https://[::1]/private", "https://192.168.1.5/private"]) {
+      await assert.rejects(
+        () => new NodeHttpClient({ retryDelaysMs: [0] }).get({ url }),
+        (error) => error instanceof TaskError && error.code === "INPUT_URL_INVALID" && /公开网络地址/u.test(error.message),
+      );
+    }
+    assert.equal(called, false);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -603,6 +640,34 @@ test("媒体下载在HTTP失败、创建目录失败和打开文件失败时取�
       item.name,
     );
     assert.equal(cancelled, 1, item.name);
+  }
+});
+
+test("媒体下载在无Content-Length时也拒绝超过本地上限的流", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "hongtai-download-limit-"));
+  let cancelled = 0;
+  try {
+    await assert.rejects(
+      () => new NodeMediaDownloader({
+        maxRetries: 0,
+        minRetryDelayMs: 0,
+        maxBytes: 4,
+        fetch: (async () => ({
+          url: "https://media.example/video.mp4",
+          status: 200,
+          ok: true,
+          headers: { get: () => null },
+          body: lockingDownloadBody(() => { cancelled += 1; }, async () => ({ done: false, value: new Uint8Array([1, 2, 3, 4, 5]) })),
+        })) as MediaDownloadFetch,
+      }).download(
+        { kind: "video", url: "https://media.example/video.mp4" },
+        join(directory, "video.mp4"),
+      ),
+      (error) => error instanceof TaskError && error.code === "STORAGE_SPACE_INSUFFICIENT",
+    );
+    assert.equal(cancelled, 1);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 });
 

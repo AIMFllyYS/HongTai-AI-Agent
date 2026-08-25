@@ -1,6 +1,9 @@
 import { TaskError } from "@hongtai/core";
 import type { AiGenerateResult, AiReasoningDialect, AiStreamEvent, AiTransportResponse } from "../contracts/provider";
 
+/** Defensive ceiling for a single AI response kept in runtime memory. */
+export const MAX_AI_STREAM_OUTPUT_CHARS = 2 * 1024 * 1024;
+
 export interface ChatPayload {
   readonly choices?: readonly {
     readonly message?: { readonly content?: unknown; readonly reasoning_content?: unknown; readonly reasoning?: unknown };
@@ -38,9 +41,13 @@ export async function readChatEventStream(
   let buffer = "";
   let content = "";
   let reasoning = "";
+  let outputCharacters = 0;
   let usage: AiGenerateResult["usage"];
   for await (const chunk of response.body.chunks) {
     buffer += chunk;
+    if (buffer.length > MAX_AI_STREAM_OUTPUT_CHARS) {
+      throw new TaskError({ code: "AI_SERVER_ERROR", message: "AI流式响应超过安全大小限制", retryable: true, action: "retry" });
+    }
     const blocks = buffer.split(/\r?\n\r?\n/);
     buffer = blocks.pop() ?? "";
     for (const block of blocks) {
@@ -57,10 +64,18 @@ export async function readChatEventStream(
       const reasoningDelta = reasoningValue(delta, dialect);
       const contentDelta = textValue(delta?.content);
       if (reasoningDelta) {
+        outputCharacters += reasoningDelta.length;
+        if (outputCharacters > MAX_AI_STREAM_OUTPUT_CHARS) {
+          throw new TaskError({ code: "AI_SERVER_ERROR", message: "AI流式响应超过安全大小限制", retryable: true, action: "retry" });
+        }
         reasoning += reasoningDelta;
         await onEvent?.({ type: "reasoning_delta", delta: reasoningDelta });
       }
       if (contentDelta) {
+        outputCharacters += contentDelta.length;
+        if (outputCharacters > MAX_AI_STREAM_OUTPUT_CHARS) {
+          throw new TaskError({ code: "AI_SERVER_ERROR", message: "AI流式响应超过安全大小限制", retryable: true, action: "retry" });
+        }
         content += contentDelta;
         await onEvent?.({ type: "content_delta", delta: contentDelta });
       }

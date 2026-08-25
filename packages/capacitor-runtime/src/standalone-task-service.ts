@@ -1,4 +1,4 @@
-import { IngestPipeline, TaskError, inspectInput, isTerminalTaskStatus } from "@hongtai/core";
+import { IngestPipeline, TaskError, inspectInput, isTerminalTaskStatus, platformForHost, safeUrlForDisplay } from "@hongtai/core";
 import type {
   AppTaskRecord,
   CancellableTask,
@@ -47,6 +47,34 @@ import {
 export type { StandaloneTaskVideoPicker, TaskVideoRecovery };
 
 const TASK_REQUEST_PATH = "request.json";
+
+const BILIBILI_REPLAY_QUERY_KEYS = new Set(["aid", "p"]);
+
+/**
+ * Keep only non-secret input needed to replay a public-link task.
+ * Platform share URLs often carry tracking, session, or signature parameters;
+ * those must stay in memory and never enter the private task snapshot.
+ * Bilibili's public `aid` and `p` parameters are the only supported replay
+ * parameters that affect which public work item/page is selected.
+ */
+function persistableTaskUrl(normalizedUrl: string): string {
+  try {
+    const url = new URL(normalizedUrl);
+    const platform = platformForHost(url.hostname);
+    const retained = new URLSearchParams();
+    if (platform === "bilibili") {
+      for (const key of BILIBILI_REPLAY_QUERY_KEYS) {
+        const value = url.searchParams.get(key);
+        if (value && /^[1-9]\d*$/.test(value)) retained.set(key, value);
+      }
+    }
+    url.search = retained.toString();
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return safeUrlForDisplay(normalizedUrl);
+  }
+}
 
 export interface StandaloneTaskFilesPlugin extends LocalTaskFilesPlugin {
   readText(options: { readonly taskId: string; readonly relativePath: string }): Promise<{ readonly value?: string }>;
@@ -161,9 +189,10 @@ export class StandaloneTaskService implements TaskService {
     if (!TASK_ID_PATTERN.test(taskId)) throw taskError("INPUT_URL_INVALID", "本地任务标识无效", "edit_input");
     const paths = await this.#artifactStore.initializeTask(taskId);
     const now = currentIso(this.#now);
+    const persistedUrl = persistableTaskUrl(inspection.value.normalizedUrl);
     const task: TaskRecord = {
       id: taskId,
-      sourceUrl: inspection.value.normalizedUrl,
+      sourceUrl: persistedUrl,
       sourceKind: "public_link",
       status: "queued",
       platform: inspection.value.platform,
@@ -175,7 +204,7 @@ export class StandaloneTaskService implements TaskService {
     };
     await Promise.all([
       this.#artifactStore.writeJson(paths.task, task),
-      this.#artifactStore.writeJson(`task://${taskId}/${TASK_REQUEST_PATH}`, { kind: "public_link", normalizedUrl: inspection.value.normalizedUrl } satisfies StoredTaskRequest),
+      this.#artifactStore.writeJson(`task://${taskId}/${TASK_REQUEST_PATH}`, { kind: "public_link", normalizedUrl: persistedUrl } satisfies StoredTaskRequest),
     ]);
     const projection = toAppTask(task);
     await this.#emitChange({ schemaVersion: "task-change.v1", type: "upsert", task: projection });

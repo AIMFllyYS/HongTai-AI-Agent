@@ -294,12 +294,20 @@ class NativeAiRequestClient(
   }
 
   private fun streamUtf8(input: InputStream, onChunk: (String) -> Unit) {
+    var totalBytes = 0
     input.reader(StandardCharsets.UTF_8).use { reader ->
       val chars = CharArray(CHUNK_BYTES)
       while (true) {
         val count = reader.read(chars)
         if (count < 0) break
-        if (count > 0) onChunk(String(chars, 0, count))
+        if (count > 0) {
+          val chunk = String(chars, 0, count)
+          totalBytes += chunk.toByteArray(StandardCharsets.UTF_8).size
+          if (totalBytes > MAX_STREAM_RESPONSE_BYTES) {
+            throw NativeAiRequestException("ERR_AI_RESPONSE_TOO_LARGE", "The AI stream response is too large.", retryable = true)
+          }
+          onChunk(chunk)
+        }
       }
     }
   }
@@ -347,6 +355,7 @@ class NativeAiRequestClient(
     const val MAX_BASE64_CHARACTERS = 21 * 1024 * 1024
     const val MAX_JSON_REQUEST_BYTES = 24 * 1024 * 1024
     const val MAX_JSON_RESPONSE_BYTES = 2 * 1024 * 1024
+    const val MAX_STREAM_RESPONSE_BYTES = 2 * 1024 * 1024
     const val MAX_RESPONSE_HEADERS = 20
     const val MAX_HEADER_VALUE_LENGTH = 512
     const val MAX_MULTIPART_FIELD_LENGTH = 4 * 1024

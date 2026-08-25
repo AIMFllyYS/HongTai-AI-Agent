@@ -228,11 +228,11 @@ export function ObservationReportPage({ runtime, sessionId, navigate }: Observat
 
   const showSkeleton = useSkeletonHold(loading);
   if (showSkeleton) {
-    return <AppShell activeNav="ai" backPath={observationNewPath()} navigate={navigate} title="观察报告" visualTheme="warm-soft-tech"><PageSkeleton layout="report" /></AppShell>;
+    return <AppShell activeNav="ai" backPath={observationNewPath()} navigate={navigate} showNav={false} title="观察报告" visualTheme="warm-soft-tech"><PageSkeleton layout="report" /></AppShell>;
   }
   if (!session) {
     const unavailableIssue = readIssue ?? issue;
-    return <AppShell activeNav="ai" backPath={observationNewPath()} navigate={navigate} title="观察报告" visualTheme="warm-soft-tech"><ErrorState action={<Button onClick={() => navigate(observationNewPath())} variant="secondary">新建观察</Button>} description={unavailableIssue?.userMessage ?? "该本地观察会话不存在，或无法安全读取。"} title="找不到观察会话" /></AppShell>;
+    return <AppShell activeNav="ai" backPath={observationNewPath()} navigate={navigate} showNav={false} title="观察报告" visualTheme="warm-soft-tech"><ErrorState action={<Button onClick={() => navigate(observationNewPath())} variant="secondary">新建观察</Button>} description={unavailableIssue?.userMessage ?? "该本地观察会话不存在，或无法安全读取。"} title="找不到观察会话" /></AppShell>;
   }
 
   const canShowReport = report?.available === true;

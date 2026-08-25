@@ -9,6 +9,7 @@ import {
 } from "../packages/ai/src/index";
 import * as rootAi from "../packages/ai/src/index";
 import { createNodeAiTransport, createNodeOpenAiCompatibleProvider } from "../packages/ai/src/node";
+import { MAX_AI_STREAM_OUTPUT_CHARS, readChatEventStream } from "../packages/ai/src/providers/openai-compatible-sse";
 
 async function* rawChunks(chunks: readonly string[]): AsyncIterable<string> {
   for (const chunk of chunks) yield chunk;
@@ -305,6 +306,18 @@ test("OpenAI-compatible Provider maps malformed raw SSE chunks to a stable error
 
   await assert.rejects(
     () => provider.generate({ model: "text", messages: [{ role: "user", content: "reply" }], output: "text" }),
+    (error) => error instanceof TaskError && error.code === "AI_SERVER_ERROR",
+  );
+});
+
+test("OpenAI SSE parsing stops before retaining an unbounded response", async () => {
+  const oversized = "x".repeat(MAX_AI_STREAM_OUTPUT_CHARS + 1);
+  await assert.rejects(
+    () => readChatEventStream({
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+      body: { kind: "stream", chunks: rawChunks([`data: ${JSON.stringify({ choices: [{ delta: { content: oversized } }] })}\n\n`]) },
+    }, "generic"),
     (error) => error instanceof TaskError && error.code === "AI_SERVER_ERROR",
   );
 });

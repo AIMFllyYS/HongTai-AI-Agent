@@ -11,16 +11,15 @@ function requireMatch(value: string, pattern: RegExp, label: string): string {
   return matched;
 }
 
-test("the published v0.1.22/code 30 download matches the Android source version", () => {
+test("the v0.1.23/code 31 source candidate does not rewrite the published v0.1.22 download", () => {
   const gradle = readFileSync(join(root, "android", "app", "build.gradle.kts"), "utf8");
   const downloadPage = readFileSync(join(root, "download.html"), "utf8");
   const sourceCode = Number(requireMatch(gradle, /versionCode\s*=\s*(\d+)/u, "Android versionCode"));
   const sourceName = requireMatch(gradle, /versionName\s*=\s*"([^"]+)"/u, "Android versionName");
   const publishedName = requireMatch(downloadPage, /aria-label="当前推荐版本 v([0-9.]+)"/u, "published download version");
 
-  assert.equal(sourceCode, 30);
-  assert.equal(sourceName, "0.1.22");
-  assert.equal(publishedName, sourceName);
+  assert.equal(sourceCode, 31);
+  assert.equal(sourceName, "0.1.23");
   assert.equal(publishedName, "0.1.22");
   assert.match(downloadPage, /"versionCode":\s*"30"/u);
   assert.match(downloadPage, /23,329,541 bytes/u);

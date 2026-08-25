@@ -6,6 +6,9 @@ import type {
   AiTransportRequest,
   AiTransportResponse,
 } from "../contracts/provider";
+import { TaskError } from "@hongtai/core";
+
+const MAX_AI_RESPONSE_BYTES = 2 * 1024 * 1024;
 
 export interface FetchAiTransportConfig {
   readonly baseUrl: string;
@@ -119,6 +122,7 @@ async function* responseChunks(response: Response): AsyncIterable<string> {
   if (!response.body) return;
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
+  let completed = false;
   try {
     while (true) {
       const next = await reader.read();
@@ -130,6 +134,39 @@ async function* responseChunks(response: Response): AsyncIterable<string> {
     }
     const trailing = decoder.decode();
     if (trailing) yield trailing;
+    completed = true;
+  } finally {
+    if (!completed) await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+}
+
+async function responseTextBounded(response: Response): Promise<string> {
+  const declaredLength = Number(response.headers.get("content-length") ?? Number.NaN);
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_AI_RESPONSE_BYTES) {
+    throw new TaskError({ code: "AI_SERVER_ERROR", message: "AI响应超过安全大小限制", retryable: true, action: "retry" });
+  }
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const chunks: string[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.value) {
+        totalBytes += next.value.byteLength;
+        if (totalBytes > MAX_AI_RESPONSE_BYTES) {
+          throw new TaskError({ code: "AI_SERVER_ERROR", message: "AI响应超过安全大小限制", retryable: true, action: "retry" });
+        }
+        const text = decoder.decode(next.value, { stream: !next.done });
+        if (text) chunks.push(text);
+      }
+      if (next.done) break;
+    }
+    const trailing = decoder.decode();
+    if (trailing) chunks.push(trailing);
+    return chunks.join("");
   } finally {
     reader.releaseLock();
   }
@@ -159,7 +196,7 @@ export class FetchAiTransport implements AiTransport {
       headers: responseHeaders(response.headers),
       body: request.responseMode === "stream" && response.headers.get("content-type")?.includes("text/event-stream")
         ? { kind: "stream", chunks: responseChunks(response) }
-        : { kind: "json", text: await response.text() },
+        : { kind: "json", text: await responseTextBounded(response) },
     };
   }
 }

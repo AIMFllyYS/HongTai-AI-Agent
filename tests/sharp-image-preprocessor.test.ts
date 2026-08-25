@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import test from "node:test";
 import { TaskError } from "../packages/core/src/index";
-import { SharpImagePreprocessor } from "../packages/node-runtime/src/index";
+import { hasExpectedImageSignature, SharpImagePreprocessor } from "../packages/node-runtime/src/index";
 
 const FIXTURE_PATH = join(process.cwd(), "tests", "fixtures", "images", "sharp-orientation-6.jpg");
 const require = createRequire(join(process.cwd(), "packages", "node-runtime", "package.json"));
@@ -78,6 +78,19 @@ test("maps malformed, empty and unsupported inputs to the stable invalid-image i
   await assert.rejects(preprocessor.normalize(new Uint8Array([0xff, 0xd8, 0xff]), "image/jpeg"), isTaskIssue("IMAGE_INVALID"));
   await assert.rejects(preprocessor.normalize(new Uint8Array(), "image/jpeg"), isTaskIssue("IMAGE_INVALID"));
   await assert.rejects(preprocessor.normalize(new Uint8Array([0x47, 0x49, 0x46]), "image/gif"), isTaskIssue("IMAGE_INVALID"));
+});
+
+test("rejects a declared MIME type whose bytes belong to another image decoder", () => {
+  const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0]);
+  const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const webp = Uint8Array.from([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
+  const gif = Uint8Array.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]);
+
+  assert.equal(hasExpectedImageSignature(jpeg, "image/jpeg"), true);
+  assert.equal(hasExpectedImageSignature(png, "image/png"), true);
+  assert.equal(hasExpectedImageSignature(webp, "image/webp"), true);
+  assert.equal(hasExpectedImageSignature(gif, "image/jpeg"), false);
+  assert.equal(hasExpectedImageSignature(png, "image/jpeg"), false);
 });
 
 test("rejects 15 MiB plus one byte with the stable size issue before decoding", async () => {

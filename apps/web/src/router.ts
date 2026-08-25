@@ -72,12 +72,12 @@ export function isTaskPageAlias(key: RouteKey): key is TaskPageAliasKey {
 
 export const appRoutes: readonly AppRoute[] = [
   { path: "/", key: "home", navKey: "home" },
-  { path: "/tasks/:taskId/processing", key: "task-processing", navKey: "home" },
-  { path: "/tasks/:taskId", key: "task-detail", navKey: "home" },
-  { path: "/tasks/:taskId/analysis", key: "task-analysis", navKey: "home" },
+  { path: "/tasks/:taskId/processing", key: "task-processing", navKey: "home", showNav: false },
+  { path: "/tasks/:taskId", key: "task-detail", navKey: "home", showNav: false },
+  { path: "/tasks/:taskId/analysis", key: "task-analysis", navKey: "home", showNav: false },
   { path: "/create", key: "create", navKey: "create" },
-  { path: "/create/:projectId/edit", key: "production-edit", navKey: "create" },
-  { path: "/replica/:taskId", key: "replica-wizard", navKey: "create" },
+  { path: "/create/:projectId/edit", key: "production-edit", navKey: "create", showNav: false },
+  { path: "/replica/:taskId", key: "replica-wizard", navKey: "create", showNav: false },
   { path: "/templates", key: "templates", navKey: "templates" },
   { path: "/settings", key: "settings", navKey: "settings" },
   { path: "/settings/profile", key: "settings-profile", navKey: "settings" },

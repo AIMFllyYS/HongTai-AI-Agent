@@ -335,14 +335,16 @@ export class StandaloneDiagnosisService implements DiagnosisService {
         provider: await this.#getProvider(),
         repository: this.#repository(),
         contextWindowTokens: 32_000,
-        onEvent: async (event) => {
-          if (event.type === "content_delta") await onEvent?.({ type: "content_delta", delta: event.delta });
-        },
+        // Follow-up text is not safe to display until the flow has applied the
+        // medical boundary schema. Keep provider deltas inside the AI/runtime
+        // boundary; publish one validated reply below after persistence.
+        onEvent: async () => undefined,
       });
       const result = await flow.chat(sessionId, question.trim());
       const messages = await this.listMessages(sessionId);
       const saved = messages.find((message) => message.id === result.id);
       if (!saved) throw taskError("STORAGE_WRITE_FAILED", "追问回复没有保存到本地历史", "free_storage");
+      await onEvent?.({ type: "content_delta", delta: saved.content });
       await onEvent?.({ type: "completed", message: saved });
       return saved;
     } catch (error) {

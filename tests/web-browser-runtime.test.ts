@@ -24,6 +24,12 @@ test("浏览器入口仅在非原生平台注入本地 I/O，且不把 Node runt
   assert.match(plugin, /x-hongtai-browser-io/);
   assert.doesNotMatch(plugin, /console\.log/);
   assert.match(plugin, /active-ai-connection/);
+  assert.doesNotMatch(plugin, /secrets\.json/u, "浏览器开发运行时不得把 API Key 写入磁盘");
+  assert.match(plugin, /redirect:\s*"manual"/u, "浏览器 AI 请求必须逐跳校验重定向");
+  assert.match(plugin, /function replaceFile/);
+  assert.match(plugin, /temporaryPath\(destination, "part"\)/);
+  assert.doesNotMatch(plugin, /createWriteStream\(destination\)/);
+  assert.match(plugin, /compressedIpv4/);
   assert.match(plugin, /authorization: `Bearer \$\{apiKey\}`/);
   assert.doesNotMatch(plugin, /console\.(?:log|info|debug|error)/);
 

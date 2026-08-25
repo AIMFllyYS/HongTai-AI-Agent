@@ -23,10 +23,13 @@ export interface NodeMediaDownloaderOptions {
   readonly maxRetries?: number;
   readonly minRetryDelayMs?: number;
   readonly timeoutMs?: number;
+  readonly maxBytes?: number;
   readonly fetch?: MediaDownloadFetch;
   readonly mkdir?: typeof mkdir;
   readonly openFile?: typeof open;
 }
+
+export const MAX_MEDIA_DOWNLOAD_BYTES = 1_073_741_824;
 
 const REJECTED_VIDEO_CONTENT_TYPES = new Set([
   "text/html",
@@ -100,6 +103,7 @@ export async function replaceDownloadedFile(
 export class NodeMediaDownloader implements MediaDownloader {
   readonly #dispatcher: Dispatcher;
   readonly #timeoutMs: number;
+  readonly #maxBytes: number;
   readonly #fetch: MediaDownloadFetch;
   readonly #mkdir: typeof mkdir;
   readonly #open: typeof open;
@@ -117,6 +121,7 @@ export class NodeMediaDownloader implements MediaDownloader {
       throwOnError: false,
     });
     this.#timeoutMs = options.timeoutMs ?? 600_000;
+    this.#maxBytes = Math.max(1, Math.floor(options.maxBytes ?? MAX_MEDIA_DOWNLOAD_BYTES));
     this.#fetch = options.fetch ?? fetch;
     this.#mkdir = options.mkdir ?? mkdir;
     this.#open = options.openFile ?? open;
@@ -194,6 +199,9 @@ export class NodeMediaDownloader implements MediaDownloader {
         throw storageTaskError(error, "无法创建媒体目录");
       }
       const totalBytes = validContentLength(response.headers.get("content-length"));
+      if (totalBytes !== undefined && totalBytes > this.#maxBytes) {
+        throw new TaskError({ code: "STORAGE_SPACE_INSUFFICIENT", message: "媒体文件超过本地下载限制", action: "free_storage" });
+      }
       let file;
       try {
         file = await this.#open(temporary, "w");
@@ -207,6 +215,9 @@ export class NodeMediaDownloader implements MediaDownloader {
           const { done, value } = await reader.read();
           if (done) break;
           if (!value) continue;
+          if (downloadedBytes + value.byteLength > this.#maxBytes) {
+            throw new TaskError({ code: "STORAGE_SPACE_INSUFFICIENT", message: "媒体文件超过本地下载限制", action: "free_storage" });
+          }
           await file.write(value);
           downloadedBytes += value.byteLength;
           await onProgress?.({

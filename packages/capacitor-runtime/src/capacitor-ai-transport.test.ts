@@ -4,6 +4,7 @@ import { OpenAiCompatibleProvider } from "@hongtai/ai";
 
 import { CapacitorAiTransport, NativeAiTransportError } from "./capacitor-ai-transport.js";
 import { generatedRequestId } from "./capacitor-ai-transport-mapping.js";
+import { MAX_BUFFERED_CHARACTERS } from "./async-string-queue.js";
 
 type NativeEvent = Readonly<Record<string, unknown>>;
 type NativeRequest = Readonly<Record<string, unknown>>;
@@ -149,6 +150,32 @@ test("Capacitor AI transport waits for native JSON completion and maps native st
   await assert.rejects(
     () => collect(streamResponse.body.kind === "stream" ? streamResponse.body.chunks : (async function* () {})()),
     (error) => error instanceof NativeAiTransportError && error.code === "ERR_AI_NETWORK_FAILED" && error.retryable === true,
+  );
+});
+
+test("Capacitor AI transport fails instead of retaining an unbounded native stream backlog", async () => {
+  let listener: ((event: NativeEvent) => void) | undefined;
+  const nativeNetwork = {
+    addListener: async (_eventName: string, callback: (event: NativeEvent) => void) => {
+      listener = callback;
+      return { remove: async () => undefined };
+    },
+    startAiRequest: async (options: NativeRequest) => ({
+      requestId: options.requestId,
+      accepted: true,
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    }),
+  };
+  const transport = new CapacitorAiTransport({ nativeNetwork: nativeNetwork as never, createRequestId: () => "native-ai-buffer" });
+  const response = await transport.request(streamRequest());
+  const chunk = "x".repeat(Math.floor(MAX_BUFFERED_CHARACTERS / 2) + 1);
+  listener?.({ type: "chunk", requestId: "native-ai-buffer", sequence: 1, chunk });
+  listener?.({ type: "chunk", requestId: "native-ai-buffer", sequence: 2, chunk });
+
+  await assert.rejects(
+    () => collect(response.body.kind === "stream" ? response.body.chunks : (async function* () {})()),
+    /安全大小限制/,
   );
 });
 

@@ -118,6 +118,46 @@ test("StandaloneDiagnosisService saves a formal report and real follow-up histor
   assert.equal((await service.listMessages(session.sessionId)).length, 2);
 });
 
+test("StandaloneDiagnosisService does not stream an unvalidated follow-up reply", async () => {
+  const native = memoryFiles();
+  const unsafeReply = "根据图片已经确诊，请按处方停药并替代就医。";
+  const provider: AiProvider = {
+    generate: async (request) => {
+      const content = request.output === "json" ? diagnosisModuleContent(request) : unsafeReply;
+      await request.onEvent?.({ type: "content_delta", delta: content });
+      await request.onEvent?.({ type: "completed" });
+      return { content, reasoning: "provider reasoning" };
+    },
+    transcribe: async () => "",
+  };
+  const service = new StandaloneDiagnosisService({
+    files: native.plugin,
+    fileMedia: {
+      pickPhoto: async () => ({ uri: "file:///private/media/imported.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      capturePhoto: async () => ({ uri: "file:///private/media/captured.jpg", mimeType: "image/jpeg", sizeBytes: 128 }),
+      consumePhotoOperation: async () => ({ status: "none" }),
+    },
+    getProvider: async () => provider,
+    toDisplayUri: (value) => value,
+    createSessionId: () => "session-follow-up-boundary",
+  });
+
+  const image = await service.pickImage();
+  const session = await service.createSession({ mode: "tongue", image });
+  await service.runReport(session.sessionId);
+  const events: Array<{ readonly type: string; readonly delta?: string }> = [];
+
+  await assert.rejects(
+    () => service.followUp(session.sessionId, "我是不是生病了？", async (event) => {
+      events.push(event.type === "content_delta" ? { type: event.type, delta: event.delta } : { type: event.type });
+    }),
+    (error) => error instanceof TaskError && error.code === "DIAGNOSIS_FOLLOW_UP_FAILED",
+  );
+  assert.equal(events.some((event) => event.type === "content_delta"), false);
+  assert.equal(events.at(-1)?.type, "failed");
+  assert.equal((await service.listMessages(session.sessionId)).length, 0);
+});
+
 test("StandaloneDiagnosisService distinguishes external photo work from in-process AI work", async () => {
   const native = memoryFiles();
   const pickEntered = deferred();

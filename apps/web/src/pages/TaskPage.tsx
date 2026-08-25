@@ -179,13 +179,13 @@ export function TaskPage({ runtime, taskId, navigate }: TaskPageProps) {
 
   const showSkeleton = useSkeletonHold(surface === "loading");
   if (showSkeleton) {
-    return <AppShell activeNav="home" backPath="/" navigate={navigate} title="拆解详情"><PageSkeleton layout="task" /></AppShell>;
+    return <AppShell activeNav="home" backPath="/" navigate={navigate} showNav={false} title="拆解详情"><PageSkeleton layout="task" /></AppShell>;
   }
 
   if (surface === "missing-task" || !task) {
     const unavailableIssue = readIssue ?? issue;
     return (
-      <AppShell activeNav="home" backPath="/" navigate={navigate} title="拆解详情">
+      <AppShell activeNav="home" backPath="/" navigate={navigate} showNav={false} title="拆解详情">
         <div className="page-stack page-task-processing">
           {unavailableIssue ? <IssueNotice issue={unavailableIssue} /> : null}
           <ErrorState action={<Button onClick={() => navigate(pathForRoute("home"))} variant="secondary">重新提交链接</Button>} description={unavailableIssue?.userMessage ?? "该任务不存在，或本机无法读取它的安全投影。"} title="找不到本地任务" />
@@ -196,7 +196,7 @@ export function TaskPage({ runtime, taskId, navigate }: TaskPageProps) {
 
   if (surface === "processing") {
     return (
-      <AppShell activeNav="home" backPath="/" navigate={navigate} title="拆解详情">
+      <AppShell activeNav="home" backPath="/" navigate={navigate} showNav={false} title="拆解详情">
         <TaskProcessingPage
           activeIssue={newestIssue(task, events, issue)}
           events={events}
@@ -214,7 +214,7 @@ export function TaskPage({ runtime, taskId, navigate }: TaskPageProps) {
   if (surface === "completed-missing" || !detail) {
     const unavailableIssue = readIssue ?? issue;
     return (
-      <AppShell activeNav="home" backPath="/" navigate={navigate} title={completedTaskShellTitle(task.analysisStatus)}>
+      <AppShell activeNav="home" backPath="/" navigate={navigate} showNav={false} title={completedTaskShellTitle(task.analysisStatus)}>
         <div className="page-stack page-task-detail">
           {unavailableIssue ? <IssueNotice issue={unavailableIssue} /> : null}
           <ErrorState description={unavailableIssue?.userMessage ?? "该任务不存在，或没有可展示的本地详情。"} title="找不到任务详情" />
@@ -224,7 +224,7 @@ export function TaskPage({ runtime, taskId, navigate }: TaskPageProps) {
   }
 
   return (
-    <AppShell activeNav="home" backPath="/" contextualAction={completedChrome.contextualAction} headerAction={completedChrome.headerAction} navigate={navigate} title={completedTaskShellTitle(task.analysisStatus)}>
+    <AppShell activeNav="home" backPath="/" contextualAction={completedChrome.contextualAction} headerAction={completedChrome.headerAction} navigate={navigate} showNav={false} title={completedTaskShellTitle(task.analysisStatus)}>
       <div className="page-stack page-task-detail">
         <TaskDetailPage
           activeTab={resultTab}

@@ -167,6 +167,10 @@ test("settings keep cloud TTS inside AI connection and expose app information th
   assert.match(read("pages/UpdateLogPage.tsx"), /PageSkeleton/);
   assert.match(read("pages/UpdateLogPage.tsx"), /ErrorState/);
   assert.match(read("pages/UpdateLogPage.tsx"), /useSkeletonHold/);
+  assert.match(read("pages/UpdateLogPage.tsx"), /probeSucceededRef/);
+  assert.match(read("pages/UpdateLogPage.tsx"), /mode: "no-cors"/);
+  assert.match(read("pages/UpdateLogPage.tsx"), /onLoad=\{markFrameLoaded\}/);
+  assert.doesNotMatch(read("pages/UpdateLogPage.tsx"), /onLoad=\{\(\) => setStatus\("ready"\)\}/);
   assert.doesNotMatch(read("pages/UpdateLogPage.tsx"), /正在打开官方更新页|loader_circle/);
   assert.match(read("data/official-update-log.ts"), /https:\/\/husteread\.com\/HongTai\/download\.html/);
   assert.doesNotMatch(read("pages/UpdateLogPage.tsx"), /检查更新/);

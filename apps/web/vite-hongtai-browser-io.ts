@@ -1,11 +1,11 @@
 import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { mkdir, readFile, readdir, rm, stat, writeFile, copyFile, appendFile } from "node:fs/promises";
+import { isIP } from "node:net";
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile, copyFile, appendFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { pipeline } from "node:stream/promises";
 import type { Plugin } from "vite";
 
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/;
@@ -22,8 +22,52 @@ const PRIVATE_PREFIX = "file:///hongtai-browser-io/";
 
 const token = randomBytes(24).toString("hex");
 const rootDir = join(fileURLToPath(new URL(".", import.meta.url)), ".tmp", "hongtai-browser-io");
+let volatileSecrets: Record<string, string> = {};
 
 type Json = Record<string, unknown>;
+
+function temporaryPath(file: string, suffix: string): string {
+  return `${file}.${randomBytes(12).toString("hex")}.${suffix}`;
+}
+
+async function replaceFile(temporary: string, destination: string): Promise<void> {
+  try {
+    await rename(temporary, destination);
+    return;
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code !== "EEXIST" && code !== "EPERM") throw error;
+  }
+  const backup = temporaryPath(destination, "bak");
+  await rename(destination, backup);
+  try {
+    await rename(temporary, destination);
+  } catch (error) {
+    await rename(backup, destination).catch(() => undefined);
+    throw error;
+  }
+  await rm(backup, { force: true });
+}
+
+async function writeTextAtomically(file: string, value: string): Promise<void> {
+  const temporary = temporaryPath(file, "tmp");
+  try {
+    await writeFile(temporary, value, "utf8");
+    await replaceFile(temporary, file);
+  } finally {
+    await rm(temporary, { force: true }).catch(() => undefined);
+  }
+}
+
+async function copyFileAtomically(source: string, destination: string): Promise<void> {
+  const temporary = temporaryPath(destination, "tmp");
+  try {
+    await copyFile(source, temporary);
+    await replaceFile(temporary, destination);
+  } finally {
+    await rm(temporary, { force: true }).catch(() => undefined);
+  }
+}
 
 export function hongtaiBrowserIo(): Plugin {
   const seeded = seedFromLocalEnv().catch(() => undefined);
@@ -254,6 +298,7 @@ async function download(input: Json, emit: (event: Json) => void): Promise<void>
   const artifact = asRecord(input.artifact);
   const relativePath = artifactPath(artifact);
   const destination = diskPath("tasks", taskId, relativePath);
+  const temporary = temporaryPath(destination, "part");
   const headers = sanitizeHeaders(asRecord(input.headers), DOWNLOAD_HEADERS, 4);
   let current = publicHttps(stringValue(input.sourceUrl));
   try {
@@ -274,9 +319,10 @@ async function download(input: Json, emit: (event: Json) => void): Promise<void>
       throw Object.assign(new Error("媒体文件超过本地下载限制"), { code: "ERR_STORAGE_SPACE_INSUFFICIENT" });
     }
     const mimeType = response.headers.get("content-type")?.split(";")[0]?.trim();
-    const file = createWriteStream(destination);
+    const file = createWriteStream(temporary);
     const reader = response.body.getReader();
     let written = 0;
+    let completed = false;
     try {
       while (true) {
         const { done, value } = await reader.read();
@@ -286,9 +332,13 @@ async function download(input: Json, emit: (event: Json) => void): Promise<void>
         await new Promise<void>((resolve, reject) => file.write(value, (error) => error ? reject(error) : resolve()));
         emit({ type: "progress", downloadedBytes: written, ...(Number.isFinite(total) ? { totalBytes: total, progress: written / total } : {}) });
       }
+      completed = true;
     } finally {
+      if (!completed) await reader.cancel().catch(() => undefined);
+      reader.releaseLock();
       await new Promise<void>((resolve) => file.end(() => resolve()));
     }
+    await replaceFile(temporary, destination);
     const uri = `${PRIVATE_PREFIX}tasks/${taskId}/${relativePath}`;
     emit({ type: "completed", uri, sizeBytes: written, ...(mimeType ? { mimeType } : {}) });
     return;
@@ -297,6 +347,8 @@ async function download(input: Json, emit: (event: Json) => void): Promise<void>
   } catch (error) {
     if (isCodedError(error)) throw error;
     throw codedError(classifyLinkError(error, "ERR_MEDIA_DOWNLOAD_FAILED"), "媒体下载失败");
+  } finally {
+    await rm(temporary, { force: true }).catch(() => undefined);
   }
 }
 
@@ -314,7 +366,7 @@ async function aiRequest(input: Json, emit: (event: Json) => void): Promise<void
     method: "POST",
     headers: { ...headers, authorization: `Bearer ${apiKey}` },
     signal: AbortSignal.timeout(timeoutMs),
-    redirect: "follow",
+    redirect: "manual",
   };
   if (body.kind === "multipart") {
     const multipart = asRecord(body.file);
@@ -329,12 +381,26 @@ async function aiRequest(input: Json, emit: (event: Json) => void): Promise<void
     init.headers = { ...init.headers, "content-type": headers["content-type"] || "application/json; charset=utf-8" };
     init.body = await materializeJson(stringValue(body.json), Array.isArray(body.attachments) ? body.attachments : []);
   }
-  let response: Response;
+  let response: Response | undefined;
+  let currentEndpoint = endpoint;
+  const endpointOrigin = new URL(endpoint).origin;
   try {
-    response = await fetch(endpoint, init);
+    for (let redirects = 0; redirects <= 3; redirects += 1) {
+      response = await fetch(currentEndpoint, init);
+      if (response.status < 300 || response.status >= 400) break;
+      const location = response.headers.get("location");
+      if (!location) throw codedError("ERR_AI_REDIRECT_INVALID", "AI 跳转地址无效");
+      const next = publicHttps(new URL(location, currentEndpoint).toString());
+      if (new URL(next).origin !== endpointOrigin) throw codedError("ERR_AI_REDIRECT_INVALID", "AI 跳转超出已配置地址");
+      await response.body?.cancel();
+      currentEndpoint = next;
+      response = undefined;
+    }
   } catch (error) {
+    if (isCodedError(error)) throw error;
     throw codedError(classifyAiError(error), "本地 AI 请求失败");
   }
+  if (!response) throw codedError("ERR_AI_REDIRECT_LIMIT", "AI 跳转次数过多");
   emit({ type: "started", status: response.status, headers: publicResponseHeaders(response.headers) });
   let sequence = 0;
   if (stringValue(input.responseMode) === "stream") {
@@ -344,15 +410,24 @@ async function aiRequest(input: Json, emit: (event: Json) => void): Promise<void
     }
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      emit({ type: "chunk", sequence: ++sequence, chunk: decoder.decode(value, { stream: true }) });
+    let totalBytes = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        totalBytes += value.byteLength;
+        if (totalBytes > MAX_TEXT_BYTES) throw codedError("ERR_AI_RESPONSE_TOO_LARGE", "AI 响应超过安全大小限制");
+        emit({ type: "chunk", sequence: ++sequence, chunk: decoder.decode(value, { stream: true }) });
+      }
+    } finally {
+      reader.releaseLock();
     }
     emit({ type: "completed", sequence: ++sequence });
     return;
   }
-  const text = Buffer.from(await response.arrayBuffer()).toString("utf8").slice(0, MAX_TEXT_BYTES);
+  const responseBytes = Buffer.from(await response.arrayBuffer());
+  if (responseBytes.byteLength > MAX_TEXT_BYTES) throw codedError("ERR_AI_RESPONSE_TOO_LARGE", "AI 响应超过安全大小限制");
+  const text = responseBytes.toString("utf8");
   emit({ type: "completed", sequence: ++sequence, bodyText: text });
   void requestId;
 }
@@ -454,11 +529,29 @@ async function writeBinary(req: IncomingMessage, res: ServerResponse): Promise<v
   const uri = String(req.headers["x-hongtai-uri"] ?? "");
   const mimeType = String(req.headers["x-hongtai-mime"] ?? "");
   const destination = uriToDisk(uri);
+  const temporary = temporaryPath(destination, "part");
   await mkdir(dirname(destination), { recursive: true });
-  const file = createWriteStream(destination);
-  await pipeline(req, file);
-  const info = await stat(destination);
-  writeJson(res, 200, { uri, sizeBytes: info.size, ...(mimeType ? { mimeType } : {}) });
+  const file = createWriteStream(temporary);
+  let written = 0;
+  let ended = false;
+  try {
+    for await (const chunk of req) {
+      const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
+      written += value.byteLength;
+      if (written > MAX_DOWNLOAD_BYTES) {
+        throw codedError("ERR_STORAGE_SPACE_INSUFFICIENT", "媒体文件超过本地下载限制");
+      }
+      await new Promise<void>((resolve, reject) => file.write(value, (error) => error ? reject(error) : resolve()));
+    }
+    await new Promise<void>((resolve) => file.end(() => resolve()));
+    ended = true;
+    await replaceFile(temporary, destination);
+    const info = await stat(destination);
+    writeJson(res, 200, { uri, sizeBytes: info.size, ...(mimeType ? { mimeType } : {}) });
+  } finally {
+    if (!ended) await new Promise<void>((resolve) => file.end(() => resolve()));
+    await rm(temporary, { force: true }).catch(() => undefined);
+  }
 }
 
 function artifactPath(artifact: Json): string {
@@ -475,11 +568,37 @@ function publicHttps(value: string): string {
   if (parsed.protocol !== "https:" || parsed.username || parsed.password) {
     throw Object.assign(new Error("只允许访问公开 HTTPS 地址"), { code: "ERR_LINK_REQUEST_INVALID" });
   }
-  const host = parsed.hostname.toLowerCase();
-  if (host === "localhost" || host.endsWith(".local") || host === "127.0.0.1" || host === "::1") {
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (host === "localhost" || host.endsWith(".local") || isPrivateNetworkLiteral(host)) {
     throw Object.assign(new Error("禁止访问本地网络地址"), { code: "ERR_LINK_REQUEST_INVALID" });
   }
   return parsed.toString();
+}
+
+function isPrivateNetworkLiteral(host: string): boolean {
+  const version = isIP(host);
+  if (version === 4) {
+    const octets = host.split(".").map(Number);
+    const [first = -1, second = -1, third = -1] = octets;
+    return first === 0 || first === 10 || first === 127 || first >= 224 ||
+      (first === 100 && second >= 64 && second <= 127) ||
+      (first === 169 && second === 254) ||
+      (first === 172 && second >= 16 && second <= 31) ||
+      (first === 192 && second === 0 && third === 0) ||
+      (first === 192 && second === 0 && third === 2) ||
+      (first === 192 && second === 168) ||
+      (first === 198 && (second === 18 || second === 19)) ||
+      (first === 198 && second === 51 && third === 100) ||
+      (first === 203 && second === 0 && third === 113);
+  }
+  if (version === 6) {
+    const compressedIpv4 = host.match(/^(?:::ffff:|::)(\d{1,3}(?:\.\d{1,3}){3})$/iu)?.[1];
+    if (compressedIpv4 && isIP(compressedIpv4) === 4) return isPrivateNetworkLiteral(compressedIpv4);
+    const normalized = host.replace(/^(?:0+:){5}(?:ffff:|0:)/u, "");
+    if (isIP(normalized) === 4) return isPrivateNetworkLiteral(normalized);
+    return host === "::1" || host === "::" || /^(?:fc|fd|fe[89ab])/u.test(host);
+  }
+  return false;
 }
 
 function resolveAiEndpoint(baseUrl: string, relativePath: string): string {
@@ -593,13 +712,13 @@ async function fileInfo(area: string, id: string, relativePath: string): Promise
 async function writeTextFile(area: string, id: string, relativePath: string, value: string, replace: boolean): Promise<void> {
   const file = diskPath(area, id, relativePath);
   await mkdir(dirname(file), { recursive: true });
-  if (replace) await writeFile(file, value, "utf8");
+  if (replace) await writeTextAtomically(file, value);
   else await appendFile(file, value, "utf8");
 }
 
 async function copyUri(sourceUri: string, destination: string): Promise<void> {
   await mkdir(dirname(destination), { recursive: true });
-  await copyFile(uriToDisk(sourceUri), destination);
+  await copyFileAtomically(uriToDisk(sourceUri), destination);
 }
 
 async function listIds(area: string): Promise<string[]> {
@@ -612,16 +731,11 @@ async function listIds(area: string): Promise<string[]> {
 }
 
 async function loadSecrets(): Promise<Record<string, string>> {
-  try {
-    return JSON.parse(await readFile(join(rootDir, "secrets.json"), "utf8")) as Record<string, string>;
-  } catch {
-    return {};
-  }
+  return { ...volatileSecrets };
 }
 
 async function saveSecrets(value: Record<string, string>): Promise<void> {
-  await mkdir(rootDir, { recursive: true });
-  await writeFile(join(rootDir, "secrets.json"), JSON.stringify(value), "utf8");
+  volatileSecrets = { ...value };
 }
 
 async function loadState(): Promise<{ profile?: Json; connection?: Json }> {
@@ -634,7 +748,7 @@ async function loadState(): Promise<{ profile?: Json; connection?: Json }> {
 
 async function saveState(value: { profile?: Json; connection?: Json }): Promise<void> {
   await mkdir(rootDir, { recursive: true });
-  await writeFile(join(rootDir, "state.json"), JSON.stringify(value), "utf8");
+  await writeTextAtomically(join(rootDir, "state.json"), JSON.stringify(value));
 }
 
 async function exists(file: string): Promise<boolean> {
@@ -716,7 +830,7 @@ async function seedFromLocalEnv(): Promise<void> {
       ? "stepaudio-sse"
       : "audio-transcriptions";
   if (!secrets["active-ai-connection"]) {
-    await saveSecrets({ ...secrets, "active-ai-connection": apiKey });
+    volatileSecrets = { ...secrets, "active-ai-connection": apiKey };
   }
   if (state.connection) return;
   const now = Date.now();

@@ -1,7 +1,44 @@
+import { isIP } from "node:net";
 import { TaskError, type HttpClient, type HttpPostRequest, type HttpRequest, type HttpResponse } from "@hongtai/core";
 
 export interface NodeHttpClientOptions {
   readonly retryDelaysMs?: readonly number[];
+}
+
+export const MAX_PAGE_RESPONSE_BYTES = 8 * 1024 * 1024;
+
+async function readTextBounded(response: Response): Promise<string> {
+  const declaredLength = Number(response.headers.get("content-length") ?? Number.NaN);
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_PAGE_RESPONSE_BYTES) {
+    throw new TaskError({ code: "LINK_HTTP_ERROR", message: "页面响应超过安全大小限制", action: "retry" });
+  }
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let totalBytes = 0;
+  let completed = false;
+  const chunks: string[] = [];
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.value) {
+        totalBytes += next.value.byteLength;
+        if (totalBytes > MAX_PAGE_RESPONSE_BYTES) {
+          throw new TaskError({ code: "LINK_HTTP_ERROR", message: "页面响应超过安全大小限制", action: "retry" });
+        }
+        const text = decoder.decode(next.value, { stream: !next.done });
+        if (text) chunks.push(text);
+      }
+      if (next.done) break;
+    }
+    const trailing = decoder.decode();
+    if (trailing) chunks.push(trailing);
+    completed = true;
+    return chunks.join("");
+  } finally {
+    if (!completed) await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
 }
 
 function validateHttps(url: string, redirect = false): URL {
@@ -24,7 +61,42 @@ function validateHttps(url: string, redirect = false): URL {
       details: { hostname: parsed.hostname || "unknown" },
     });
   }
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (host === "localhost" || host.endsWith(".local") || isPrivateNetworkLiteral(host)) {
+    throw new TaskError({
+      code: redirect ? "LINK_REDIRECT_INVALID" : "INPUT_URL_INVALID",
+      message: "链接目标不是公开网络地址",
+      action: "edit_input",
+      details: { hostname: parsed.hostname || "unknown" },
+    });
+  }
   return parsed;
+}
+
+function isPrivateNetworkLiteral(host: string): boolean {
+  const version = isIP(host);
+  if (version === 4) {
+    const octets = host.split(".").map(Number);
+    const [first = -1, second = -1, third = -1] = octets;
+    return first === 0 || first === 10 || first === 127 || first >= 224 ||
+      (first === 100 && second >= 64 && second <= 127) ||
+      (first === 169 && second === 254) ||
+      (first === 172 && second >= 16 && second <= 31) ||
+      (first === 192 && second === 0 && third === 0) ||
+      (first === 192 && second === 0 && third === 2) ||
+      (first === 192 && second === 168) ||
+      (first === 198 && (second === 18 || second === 19)) ||
+      (first === 198 && second === 51 && third === 100) ||
+      (first === 203 && second === 0 && third === 113);
+  }
+  if (version === 6) {
+    const compressedIpv4 = host.match(/^(?:::ffff:|::)(\d{1,3}(?:\.\d{1,3}){3})$/iu)?.[1];
+    if (compressedIpv4 && isIP(compressedIpv4) === 4) return isPrivateNetworkLiteral(compressedIpv4);
+    const normalized = host.replace(/^(?:0+:){5}(?:ffff:|0:)/u, "");
+    if (isIP(normalized) === 4) return isPrivateNetworkLiteral(normalized);
+    return host === "::1" || host === "::" || /^(?:fc|fd|fe[89ab])/u.test(host);
+  }
+  return false;
 }
 
 function networkError(error: unknown, hostname: string): TaskError {
@@ -92,7 +164,7 @@ export class NodeHttpClient implements HttpClient {
         url: response.url || current.toString(),
         status: response.status,
         headers: Object.fromEntries(response.headers.entries()),
-        body: await response.text(),
+        body: await readTextBounded(response),
       };
     }
     throw new TaskError({ code: "LINK_REDIRECT_LIMIT", message: "无法完成链接跳转", action: "edit_input" });
