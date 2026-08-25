@@ -101,6 +101,14 @@ function assignedEngagement(details: Readonly<Record<string, unknown>>): {
   };
 }
 
+function coverReference(details: Readonly<Record<string, unknown>>): MediaReference | undefined {
+  const raw = contentString(details.coverUrl);
+  if (!raw) return undefined;
+  const uri = safeUrlForDisplay(raw);
+  if (!/^https?:\/\//iu.test(uri)) return undefined;
+  return { uri, kind: "image", origin: "downloaded", mimeType: "image/jpeg", displayName: "视频封面" };
+}
+
 export function projectTaskDetail(
   task: TaskRecord,
   media: readonly MediaReference[],
@@ -114,6 +122,7 @@ export function projectTaskDetail(
   const description = contentString(details.description);
   const author = contentString(details.author);
   const canonicalUrl = contentString(details.canonicalUrl);
+  const cover = coverReference(details) ?? media.find((item) => item.kind === "video");
   const durationSeconds = typeof details.durationSeconds === "number" && Number.isFinite(details.durationSeconds)
     ? details.durationSeconds
     : undefined;
@@ -123,6 +132,7 @@ export function projectTaskDetail(
     ...(author ? { author } : {}),
     ...(canonicalUrl ? { canonicalUrl: safeUrlForDisplay(canonicalUrl) } : {}),
     ...(durationSeconds === undefined ? {} : { durationSeconds }),
+    ...(cover ? { cover } : {}),
     ...assignedEngagement(details),
   };
 

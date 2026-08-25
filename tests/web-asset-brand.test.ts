@@ -68,5 +68,10 @@ test("template management uses runtime DTOs without fake media status", () => {
 
   assert.match(page, /runtime\.templates\.list/);
   assert.match(page, /runtime\.templates\.delete/);
+  assert.match(page, /runtime\.tasks\.getDetail/);
+  assert.match(page, /content\.cover/);
+  assert.match(page, /preload="metadata"/);
+  assert.match(page, /loading="lazy"/);
+  assert.match(read("styles/pages/library.css"), /templates-cover-media/);
   assert.doesNotMatch(page, /asset\.kind|asset-row__media--failed|StatusBadge|FeatureUnavailablePanel/);
 });

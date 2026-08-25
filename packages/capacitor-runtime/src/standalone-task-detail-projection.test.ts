@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { TaskRecord } from "@hongtai/core";
+import type { MediaReference, TaskRecord } from "@hongtai/core";
 
 import { projectTaskDetail } from "./standalone-task-detail-projection.js";
 
@@ -64,4 +64,20 @@ test("projectTaskDetail leaves local-upload metadata without engagement counts",
   assert.equal(detail.content.commentCount, undefined);
   assert.equal(detail.content.shareCount, undefined);
   assert.equal(detail.content.playCount, undefined);
+});
+
+test("projectTaskDetail exposes a safe remote cover and falls back to the stored video", () => {
+  const remote = projectTaskDetail(task(), [], { coverUrl: "https://cdn.example/cover.jpg?signature=secret#frame" }, undefined, undefined, undefined);
+  assert.deepEqual(remote.content.cover, {
+    uri: "https://cdn.example/cover.jpg",
+    kind: "image",
+    origin: "downloaded",
+    mimeType: "image/jpeg",
+    displayName: "视频封面",
+  });
+
+  const video: MediaReference = { uri: "capacitor://localhost/private/tasks/task-1/media/video.mp4", kind: "video", origin: "downloaded", displayName: "解析视频" };
+  const fallback = projectTaskDetail(task(), [video], {}, undefined, undefined, undefined);
+  assert.equal(fallback.content.cover?.uri, video.uri);
+  assert.equal(fallback.content.cover?.kind, "video");
 });

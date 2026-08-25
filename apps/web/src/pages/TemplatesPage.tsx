@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type UIEvent } from "react";
 import { issueFromAppError } from "@hongtai/core";
-import type { AppRuntime, AppTaskRecord, ContentTemplateInput, ContentTemplateRecord, TaskIssue } from "@hongtai/core";
+import type { AppRuntime, AppTaskRecord, ContentTemplateInput, ContentTemplateRecord, MediaReference, TaskIssue } from "@hongtai/core";
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
@@ -81,8 +81,46 @@ function coverTone(templateId: string): number {
   return total % 4;
 }
 
+function coverMediaFor(record: ContentTemplateRecord, covers: ReadonlyMap<string, MediaReference>): MediaReference | undefined {
+  return record.sourceTaskId ? covers.get(record.sourceTaskId) : undefined;
+}
+
+function TemplateCoverContent({ record, media }: { readonly record: ContentTemplateRecord; readonly media: MediaReference | undefined }) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [media?.uri]);
+
+  if (failed) {
+    return <span className="templates-cover-unavailable"><Icon name="video" size={22} /><span>原视频封面不可用</span></span>;
+  }
+  if (media?.kind === "image") {
+    return <img alt={`${record.name}来源视频封面`} className="templates-cover-media" decoding="async" loading="lazy" onError={() => setFailed(true)} src={media.uri} />;
+  }
+  if (media?.kind === "video") {
+    return (
+      <video
+        aria-label={`${record.name}来源视频首帧`}
+        className="templates-cover-media"
+        muted
+        onError={() => setFailed(true)}
+        onLoadedData={(event) => { event.currentTarget.currentTime = 0; }}
+        playsInline
+        preload="metadata"
+        src={media.uri}
+      />
+    );
+  }
+  if (record.sourceTaskId) {
+    return <span className="templates-cover-unavailable"><Icon name="video" size={22} /><span>原视频封面不可用</span></span>;
+  }
+  return <p>{formulaPreview(record)}</p>;
+}
+
 export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
   const [templates, setTemplates] = useState<readonly ContentTemplateRecord[]>();
+  const [sourceCovers, setSourceCovers] = useState<ReadonlyMap<string, MediaReference>>(new Map());
   const [sources, setSources] = useState<readonly AnalysisSource[]>([]);
   const [sourceTaskId, setSourceTaskId] = useState("");
   const [filterId, setFilterId] = useState<TemplateFilterId>("all");
@@ -102,7 +140,18 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
       const analyzed = await Promise.all(tasks.map(async (task) => ({ task, analysis: await runtime.analysis.get(task.id) })));
       const available = analyzed.filter(({ analysis }) => analysis?.status === "succeeded" && analysis.result?.schemaVersion === "content-analysis.v1")
         .map(({ task }) => ({ task, label: sourceLabel(task) }));
+      const sourceIds = [...new Set(saved.flatMap((record) => record.sourceTaskId ? [record.sourceTaskId] : []))];
+      const coverEntries = await Promise.all(sourceIds.map(async (taskId) => {
+        try {
+          const detail = await runtime.tasks.getDetail(taskId);
+          const cover = detail?.content.cover ?? detail?.media.find((item) => item.kind === "video");
+          return cover ? [taskId, cover] as const : undefined;
+        } catch {
+          return undefined;
+        }
+      }));
       setTemplates(saved);
+      setSourceCovers(new Map(coverEntries.filter((entry): entry is readonly [string, MediaReference] => Boolean(entry))));
       setSources(available);
       setSourceTaskId((current) => current || available[0]?.task.id || "");
       setReadIssue(undefined);
@@ -247,9 +296,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
               <div className="templates-carousel" onScroll={onFeaturedScroll}>
                 {featured.map((record) => (
                   <button aria-label={`打开模板 ${record.name}`} className="templates-featured-card" key={record.templateId} onClick={() => edit(record)} type="button">
-                    <div className={`templates-cover templates-cover--${coverTone(record.templateId)}`}>
-                      <p>{formulaPreview(record)}</p>
-                    </div>
+                    <div className={`templates-cover templates-cover--${coverTone(record.templateId)} ${coverMediaFor(record, sourceCovers) ? "templates-cover--media" : ""}`.trim()}><TemplateCoverContent media={coverMediaFor(record, sourceCovers)} record={record} /></div>
                     <span className="templates-featured-card__badge">我的</span>
                     <div className="templates-featured-card__scrim">
                       <strong>{record.name}</strong>
@@ -295,9 +342,9 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
             <EmptyState description="当前筛选只匹配名称、摘要或公式里的关键字。" icon="filter" title="未解析到这类模板" />
           ) : (
             <div className="templates-catalog-list">
-              {filtered.map((record) => (
-                <button aria-label={`使用模板 ${record.name}`} className={record.templateId === editingId ? "templates-catalog-row is-active" : "templates-catalog-row"} key={record.templateId} onClick={() => edit(record)} type="button">
-                  <span className={`templates-catalog-thumb templates-cover templates-cover--${coverTone(record.templateId)}`}><span>{formulaPreview(record)}</span></span>
+                {filtered.map((record) => (
+                  <button aria-label={`使用模板 ${record.name}`} className={record.templateId === editingId ? "templates-catalog-row is-active" : "templates-catalog-row"} key={record.templateId} onClick={() => edit(record)} type="button">
+                  <span className={`templates-catalog-thumb templates-cover templates-cover--${coverTone(record.templateId)} ${coverMediaFor(record, sourceCovers) ? "templates-cover--media" : ""}`.trim()}><TemplateCoverContent media={coverMediaFor(record, sourceCovers)} record={record} /></span>
                   <span className="templates-catalog-body">
                     <span className="templates-catalog-title"><strong>{record.name}</strong><span className="templates-mine-tag">我的</span></span>
                     <span className="templates-catalog-formula">{formulaPreview(record)}</span>
