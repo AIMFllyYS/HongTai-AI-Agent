@@ -1,10 +1,10 @@
-# v0.1.23 Release 候选验收记录（主机门禁通过，公开下载页暂未同步）
+# v0.1.23 Release 验收记录（主机门禁与公开文件回验通过）
 
 ## 结论
 
-本轮针对代码清洗后的未验证状态完成了多角色审查、代码级边界测试、Web 浏览器端到端测试和 Android Release 构建。源码候选已推进到 `versionName=0.1.23` / `versionCode=31`，Release APK 已正式签名并独立归档。
+本轮针对代码清洗后的未验证状态完成了多角色审查、代码级边界测试、Web 浏览器端到端测试和 Android Release 构建。源码已推进到 `versionName=0.1.23` / `versionCode=31`，Release APK 已正式签名、独立归档并完成公网文件回验。
 
-这是一份可交给后续用户端测的 Release 候选，不是已经公开分发的新版本：仓库 `download.html` 仍推荐已公开回验的 `v0.1.22`，没有把本候选伪装成线上最新版本。
+`v0.1.23` 已上传到固定公网地址，重新下载后与本地归档逐字节一致，仓库 `download.html` 已切换为当前推荐版本。公开分发只证明文件身份和下载链路已回验，不代表物理真机、真实 Provider 或最终成片全链路已经验收通过。
 
 ## APK 身份与文件
 
@@ -18,9 +18,10 @@
 | SHA-256 | `b63e9ab4135d6e4a1ebcb4543e906dc0119e59c7e7e75d61e07a547fab5d8315` |
 | 签名身份 | `CN=HongTai AI Agent Release, O=HongTai AI Agent, C=CN` |
 | 证书 SHA-256 | `54df122cd4f99720c613737815385e771bfaeb17715c160aed178062ab5b2fde` |
-| 公开推荐版本 | 仍为 `v0.1.22` / `versionCode=30`，未上传本候选 |
+| 公网地址 | `https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.23.apk` |
+| 公开推荐版本 | 已更新为 `v0.1.23` / `versionCode=31`，公网文件与本地归档逐字节一致 |
 
-归档由唯一入口 `scripts/build-android-release.ps1` 生成。脚本拒绝覆盖同版本不同字节的旧归档；`v0.1.22` 原归档保持不变。
+归档由唯一入口 `scripts/build-android-release.ps1` 生成。脚本拒绝覆盖同版本不同字节的旧归档；`v0.1.22` 原归档保持不变。公开文件使用固定版本化地址，不覆盖历史 APK。
 
 ## 本轮审查与修复
 
@@ -63,8 +64,8 @@
 
 ## 未宣称的边界
 
-- 没有物理 Android 手机、OEM WebView、真实外部 Activity 长任务和真实 Provider 网络的本轮证据；不能把本候选称为真机通过或真实模型全链路通过。
+- 没有物理 Android 手机、OEM WebView、真实外部 Activity 长任务和真实 Provider 网络的本轮证据；不能把本版本称为真机通过或真实模型全链路通过。
 - B 站 APK 真网下载仍按 [#122](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/122) 保留，浏览器/主机模拟响应不替代 APK 真网复验。
 - 模拟器 Media3、Agent 真实 `generatePlan`、硬件编码器失败回退和真实用户素材仍按既有验收文档的边界说明。
-- `download.html`、husteread 公网页面和公网 APK 未因本候选自动更新；若要公开分发，必须先上传后重新下载并核对大小/SHA-256，再同步下载页和状态文档。
+- `download.html` 已切换为 `v0.1.23`，公网 APK 已重新下载核对大小/SHA-256；随后读取 `https://husteread.com/HongTai/download.html`，在线页面当前也返回 v0.1.23、code31、同一 SHA-256 和 v0.1.22 历史卡。
 - 本地 workspace 中原有的 `.gitignore` 修改以及 `shot-start.png`、`start-screen.png` 未纳入本轮提交。
