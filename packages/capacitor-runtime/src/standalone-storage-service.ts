@@ -54,7 +54,7 @@ function protectionReasonFor(item: NativeStorageItem): string | undefined {
 }
 
 function normalizeItem(item: NativeStorageItem): StorageItem {
-  if (!item.id || item.id.length > 160 || /[\\/\u0000]/u.test(item.id)) {
+  if (!item.id || item.id.length > 160 || /[\\/]/u.test(item.id) || item.id.includes(String.fromCharCode(0))) {
     throw storageError("STORAGE_READ_FAILED", "本地存储清单包含无效项目", "retry");
   }
   if (!STORAGE_AREAS.includes(item.area) || !STORAGE_KINDS.includes(item.kind)) {

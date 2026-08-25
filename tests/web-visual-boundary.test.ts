@@ -38,6 +38,7 @@ test("web application routes expose canonical runtime paths", () => {
     "/settings",
     "/settings/profile",
     "/settings/ai",
+    "/settings/storage",
     "/settings/app-info",
     "/settings/app-info/updates",
     "/observation/new",
