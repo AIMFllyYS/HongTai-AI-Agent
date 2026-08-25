@@ -1,6 +1,6 @@
 # 待办 Issue 同步
 
-> 同步日期：2026-08-21。来源是 GitHub `AIMFllyYS/HongTai-AI-Agent` 当时的 open / 关单评论，以及同日 Issue 清洗（关 28 条、新打 `future` 5 条）。
+> 同步日期：2026-08-26。GitHub open / 关单状态仍沿用最近一次人工同步；本轮额外记录了代码审查后已落地、但未由本任务代关闭的 Issue 实现。
 >
 > 本文**不是**能力声明。当前能做什么仍以 [当前能力与发布状态](当前能力与发布状态.md) 为准。GitHub 当前队列是 **open 且无 `future`**。
 >
@@ -14,7 +14,7 @@
 
 清洗后，**当前队列只剩 2 条 open、无 `future`**：[#122](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/122)（P0 采集）和 [#94](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/94)（页面层 1:1，正在做，不是旧 bug）。
 
-真正「代码改过、验收没关上、用户路径仍可能失败」的，是 #122。#87 / #86 已关，但尾巴分别落在 #122 和「真机 / 硬件回退未触发」。#7 前半句做完、后半句没做。另有一批关单后没单独开票的孤儿残留。
+真正「代码改过、验收没关上、用户路径仍可能失败」的，是 #122。#87 / #86 已关，但尾巴分别落在 #122 和「真机 / 硬件回退未触发」。#7 与 #8 的本轮代码缺口已经补上，但 GitHub 状态和维护者验收没有被本任务代替。另有一批关单后没单独开票的孤儿残留。
 
 ### 1. P0 还开着：[#122](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/122) B 站解析成功后下载立即失败
 
@@ -119,23 +119,29 @@
 
 ---
 
-### 4. 半句做完、半句没做：[#7](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/7) sharp 升级并限制危险解码器
+### 4. 代码修复已补、Issue 尚未代关闭：[#7](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/7) sharp 升级并限制危险解码器
 
-**状态：** 仍 open，`priority: P1` + `future`。不能当已经修完。
+**状态：** 仍 open，`priority: P1` + `future`；本候选已落地代码修复和边界测试，未代 Issue 关闭。
 
 **前半句（已完成）：** `sharp` 升到精确 `0.35.3`，`pnpm audit --prod` 不再报那条 CVE。证据在 `docs/验收/2026-08-10-cli-sharp-security.md`。
 
-**后半句（没做）：** 标题要求「限制危险解码器」。2026-08-16 复核评论：
+**后半句（本候选已做）：** `SharpImagePreprocessor` 在 `sharp()` 前检查 JPEG、PNG、WebP 魔数，声明为 JPEG 的 GIF/TIFF 和 MIME/文件不一致输入稳定返回 `IMAGE_INVALID`；对应测试已通过。2026-08-16 的旧复核评论记录的是修复前状态：
 
 > `sharp-image-preprocessor.ts:18-32` 仍然先按声明的 MIME 判断，再把字节直接交给 `sharp()`，仓库内没有 `sharp.block()` 也没有魔数预检。伪装成 `image/jpeg` 的 GIF 或 TIFF 仍会进入解码器。
 >
 > 影响范围限于开发期 CLI，不进 APK。
 
-**要更新什么：** CLI 图片预处理在解码前做魔数预检或 `sharp.block()`，拒绝伪装 MIME 的 GIF/TIFF 等不需要的解码器。合法 JPEG/PNG 继续可用。
+**维护边界：** 代码已在本候选落地，仍需 Issue 维护者确认是否关闭；影响范围限于开发期 CLI，不进 APK。
 
 ---
 
-### 5. 关单后没有单独 Issue 的孤儿残留
+### 5. 本候选已落地但尚未代关闭：[#8](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/8) 诊察 harness 安全 DOM
+
+**状态：** GitHub 仍按最近一次同步保留为 open + `future`；本轮已移除 `innerHTML` / `insertAdjacentHTML`，改为 `textContent` 和显式节点组装，并通过源代码边界测试。没有把测试 harness 的修复写成 APK 产品能力，也没有代维护者关闭 Issue。
+
+---
+
+### 6. 关单后没有单独 Issue 的孤儿残留
 
 这些在旧状态文档或关单评论里写过，**看板不会提醒**：
 
@@ -179,12 +185,12 @@ open，无 `future`。当前分支 `feat/hongtai-mobile-ui-redesign` 就是这�
 | [97](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/97) | 数字人对标剪映 | 一键剪口播、字幕/转写/基础轨道，不是当前页面层 1:1 |
 | [128](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/128) | Capacitor 停在 8.0.0 | #101 键盘 inset 已关；写死 24px 底栏兜底、手势/三键留白不一致留在这里 |
 
-### 2026-08-16 转 future、后半句仍未做
+### 2026-08-16 转 future、实现状态按本候选复核
 
 | # | 优先级 | 要更新什么 |
 | --- | --- | --- |
-| [7](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/7) | P1 | 见第一节：限制危险解码器 |
-| [8](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/8) | P1 | 诊察 harness 仍 `innerHTML` 拼用户/模型文本，改成安全 DOM |
+| [7](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/7) | P1 | 本候选已完成魔数预检；待维护者更新 Issue 状态 |
+| [8](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/8) | P1 | 本候选已完成安全 DOM；待维护者更新 Issue 状态 |
 | [15](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/15) | P1 | 已知抖音/小红书 ID 时只接受精确目标媒体 |
 | [16](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/16) | P2 | Node 下载补私网地址和重定向防护 |
 | [17](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/17) | P2 | 跨桥接「非空文件」校验契约对齐 |
