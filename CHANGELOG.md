@@ -31,7 +31,7 @@
 
 - Android 源码版本推进为 `0.1.24` / `versionCode=32`；只生成 Release 产品并按 `HongTai-AI-Agent-release-v0.1.24.apk` 独立归档。
 - 本地归档为 23,354,343 字节、SHA-256 `53978b4f30de3d0173d2c00876ce0f09c18389894b469a618965c5af36acdd45`；Release 单测、lint、四 ABI assemble、16 KiB 对齐、v2/v3 签名、证书锚定和包版本后验通过。
-- 本轮未上传新 APK，`download.html` 与公网推荐仍保持已上传的 `v0.1.23`；`v0.1.24` 是已在本地完成签名和归档的候选版本。公开分发、真实 Provider、物理真机和最终成片全链路仍不因主机门禁通过而自动成立。
+- `v0.1.24` 已上传到固定公网地址 `https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.24.apk`，重新下载后与本地归档逐字节一致；`download.html` 已切换为当前推荐版本。公开分发只证明文件身份和下载链路已回验，不表示真实 Provider、物理真机或最终成片已经验收通过。
 
 ## [0.1.23] - 2026-08-26
 

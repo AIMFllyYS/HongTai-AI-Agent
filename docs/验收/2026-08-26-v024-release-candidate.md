@@ -4,7 +4,7 @@
 
 本轮四项功能已按任务周期分别完成代码、运行时边界和 Android Release 编译校验；随后将 Android 源码推进到 `versionName=0.1.24` / `versionCode=32`，使用仓库外正式签名配置完成 Release 构建、签名后验和独立归档。
 
-本地候选 APK 与构建产物逐字节一致。`download.html` 和公网推荐仍保持已上传的 `v0.1.23`，本轮没有把未上传的 `v0.1.24` 写成公开下载或发送到公网。主机/模拟器门禁不等于物理手机、真实 Provider 或最终成片全链路通过。
+本地归档 APK、构建产物与已上传公网文件逐字节一致。`download.html` 已切换为 `v0.1.24` 当前推荐版本。主机/模拟器门禁不等于物理手机、真实 Provider 或最终成片全链路通过。
 
 ## 版本与文件
 
@@ -17,7 +17,7 @@
 | APK 大小 | `23,354,343` bytes |
 | APK SHA-256 | `53978b4f30de3d0173d2c00876ce0f09c18389894b469a618965c5af36acdd45` |
 | 证书 SHA-256 | `54df122cd4f99720c613737815385e771bfaeb17715c160aed178062ab5b2fde` |
-| 公开推荐 | 仍为 `v0.1.23` / code31；本轮未上传新 APK |
+| 公开推荐 | 已更新为 `v0.1.24` / code32，公网文件与本地归档逐字节一致 |
 
 ## 四项功能的端侧保证链路
 
@@ -67,8 +67,14 @@ $env:ANDROID_SDK_ROOT = "C:\Android\Sdk"
 
 先前发布脚本因 Android Build Tools 当前 `apksigner --print-certs` 输出为 `Signer #1 certificate DN:`（无旧版预期的冒号）而在证书 DN 正则处停止；已做兼容两种输出形式的最小修复，随后完整 Release 流程成功。没有删除、覆盖或重命名历史 APK。
 
+## 公网文件回验
+
+- 公网地址：`https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.24.apk`。
+- 重新下载后文件大小为 `23,354,343` bytes，SHA-256 为 `53978b4f30de3d0173d2c00876ce0f09c18389894b469a618965c5af36acdd45`，与本地归档逐字节一致。
+- `download.html` 的首屏推荐卡、动态版本数组、无脚本降级卡和更新记录均已切换到 `v0.1.24`；`v0.1.23` 保留为历史版本。
+
 ## 未覆盖边界
 
 - 本轮没有物理 Android 手机端测，因此不声称真实触控、OEM WebView、外部选择器、真实媒体 I/O 或升级链路在物理设备通过。
 - 本轮没有真实 AI Provider 请求，因此不声称网络、Key、解析平台、ASR/视觉模型或最终成片端到端通过。
-- `download.html` 未切换到 `v0.1.24`，因为新 APK 尚未上传公网；公开下载链路仍以 `v0.1.23` 的历史验收记录为准。
+- 真实 Provider、物理真机和最终成片全链路仍未因公网文件回验而自动成立。
