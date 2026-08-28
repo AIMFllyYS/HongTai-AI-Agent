@@ -374,15 +374,18 @@ export class StandaloneProductionService implements ProductionService {
     if (!brief) throw productionArtifactError("请填写制作需求");
     // A regenerated storyboard mints fresh sentence ids, so everything keyed to the old ids is
     // honestly unusable: narration audio, the measured plan and any rendered output go now.
-    for (const { audioPath } of project.narrationAssets ?? []) {
-      await this.#options.files.deleteProductionFile({ projectId, relativePath: audioPath }).catch(() => undefined);
-    }
-    if (project.output) {
-      await this.#options.files.deleteProductionFile({ projectId, relativePath: "output.mp4" }).catch(() => undefined);
-    }
+    // Record first, delete after: a failed persist keeps the old record and its files intact,
+    // and a failed delete only leaves orphans the new record no longer references.
+    const obsoleteFiles = [
+      ...(project.narrationAssets ?? []).map((asset) => asset.audioPath),
+      ...(project.output ? ["output.mp4" as const] : []),
+    ];
     const { plan: _plan, output: _output, issue: _issue, storyboard: _storyboard, narrationTracks: _tracks, narrationAssets: _assets, ...base } = project;
     void _plan; void _output; void _issue; void _storyboard; void _tracks; void _assets;
     project = await this.#persist({ ...base, ...(input?.brief !== undefined ? { brief } : {}), status: "planning" });
+    for (const relativePath of obsoleteFiles) {
+      await this.#options.files.deleteProductionFile({ projectId, relativePath }).catch(() => undefined);
+    }
     try {
       // v4 拆解是可选增强：读得到就参考，读不到也不阻塞生成（与 v3 计划的硬前置不同）。
       const analysisRecord = await this.#options.analysis.get(project.analysisTaskId).catch(() => undefined);
@@ -555,9 +558,7 @@ export class StandaloneProductionService implements ProductionService {
 
     const allFailed = succeededCount === 0 && failures.length > 0;
     const stale = changedPlanSentences.size > 0;
-    if (stale && project.output) {
-      await this.#options.files.deleteProductionFile({ projectId, relativePath: "output.mp4" }).catch(() => undefined);
-    }
+    const staleOutput = stale && Boolean(project.output);
     const { plan: _previousPlan, output: _previousOutput, issue: _previousIssue, ...narrationBase } = project;
     void _previousPlan; void _previousOutput; void _previousIssue;
     const saved = await this.#persist({
@@ -568,6 +569,11 @@ export class StandaloneProductionService implements ProductionService {
       narrationAssets: [...assetsBySentence.values()],
       ...(allFailed ? { issue: failures[0]?.issue } : {}),
     });
+    // The record committed first, so deleting the stale output afterwards can at worst leave an
+    // orphan MP4 the new record no longer references - never a record pointing at a deleted file.
+    if (staleOutput) {
+      await this.#options.files.deleteProductionFile({ projectId, relativePath: "output.mp4" }).catch(() => undefined);
+    }
     return this.#narrationSnapshot(saved, narration, failures);
   }
 
@@ -697,16 +703,29 @@ export class StandaloneProductionService implements ProductionService {
       ...(referenceText ? { originalSourceText: referenceText } : {}),
     });
 
-    await this.#options.files.writeProductionText({ projectId, relativePath: PLAN_PATH, value: JSON.stringify(plan), replace: true });
-    if (project.output) {
-      await this.#options.files.deleteProductionFile({ projectId, relativePath: "output.mp4" }).catch(() => undefined);
-    }
     const { plan: _oldPlan, output: _oldOutput, issue: _oldIssue, ...composeBase } = project;
     void _oldPlan; void _oldOutput; void _oldIssue;
-    const saved = await this.#persist({ ...composeBase, status: "ready", plan });
+    // Commit the record before touching files (same contract as updatePlan): a failed persist
+    // keeps the old plan/output pair intact, and cleanup failures only leave orphans.
+    const saved = await this.#persist({ ...composeBase, status: "ready", plan }, { emit: false });
+    if (project.output) {
+      // The rendered MP4 no longer matches the measured plan. Leaving it would show the new plan
+      // as already exported; on delete failure the record rolls back to the pre-compose state.
+      try {
+        await this.#options.files.deleteProductionFile({ projectId, relativePath: "output.mp4" });
+      } catch (error) {
+        await this.#save(project).catch(() => undefined);
+        await this.#emit(projectId, { type: "state", project: this.#project(project) }).catch(() => undefined);
+        throw storageTaskError(error, "作废旧成片失败，制作计划已恢复到组装前的状态。");
+      }
+    }
+    // Derived sidecar, written last: project.json is the authority the UI reads.
+    await this.#options.files.writeProductionText({ projectId, relativePath: PLAN_PATH, value: JSON.stringify(plan), replace: true });
+    const value = this.#project(saved);
+    await this.#emit(projectId, { type: "state", project: value });
     return {
       schemaVersion: PRODUCTION_MEASURED_PLAN_RESULT_VERSION,
-      project: this.#project(saved),
+      project: value,
       softViolations,
     };
   }
@@ -774,19 +793,15 @@ export class StandaloneProductionService implements ProductionService {
         };
       });
 
-      // 改了文案的句子：配音音频文件删除（失败容忍，delete 时兜底清理），音轨记录移除。
+      // 改了文案的句子：音轨记录移除；音频文件在记录落盘后删除（失败容忍，留孤儿随
+      // 重新配音或删除项目收敛），persist 失败不会留下「记录还引用、文件已删掉」的半作废态。
       const invalidated = new Set(narrationChanged);
       const tracks = (project.narrationTracks ?? []).filter((track) => !invalidated.has(track.sentenceId));
       const assets = (project.narrationAssets ?? []).filter((asset) => !invalidated.has(asset.sentenceId));
-      for (const asset of project.narrationAssets ?? []) {
-        if (invalidated.has(asset.sentenceId)) {
-          await this.#options.files.deleteProductionFile({ projectId, relativePath: asset.audioPath }).catch(() => undefined);
-        }
-      }
+      const invalidatedAudio = (project.narrationAssets ?? [])
+        .filter((asset) => invalidated.has(asset.sentenceId))
+        .map((asset) => asset.audioPath);
       // 计划与成片由脚本派生：脚本变了就整体作废，重新组装（本地推导）即可恢复。
-      if (project.output) {
-        await this.#options.files.deleteProductionFile({ projectId, relativePath: "output.mp4" }).catch(() => undefined);
-      }
       const { plan: _plan, output: _output, issue: _issue, ...base } = project;
       void _plan; void _output; void _issue;
       const saved = await this.#persist({
@@ -795,7 +810,11 @@ export class StandaloneProductionService implements ProductionService {
         storyboard: { ...storyboard, sentences },
         ...(tracks.length > 0 ? { narrationTracks: tracks } : {}),
         ...(assets.length > 0 ? { narrationAssets: assets } : {}),
-      });
+      }, { emit: false });
+      const obsoleteFiles = [...invalidatedAudio, ...(project.output ? ["output.mp4" as const] : [])];
+      for (const relativePath of obsoleteFiles) {
+        await this.#options.files.deleteProductionFile({ projectId, relativePath }).catch(() => undefined);
+      }
       const record = toScriptRecord(saved);
       if (!record) throw productionArtifactError("分镜脚本没有保存成功");
       await this.#emit(projectId, { type: "state", project: this.#project(saved) });
