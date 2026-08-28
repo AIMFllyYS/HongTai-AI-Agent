@@ -1,16 +1,21 @@
 import {
+  isAvatarVideoAsset,
   MAX_PRODUCTION_DURATION_SECONDS,
   MAX_SHOT_DURATION_SECONDS,
   MIN_PRODUCTION_DURATION_SECONDS,
+  RECOMMENDED_AVATAR_SOURCE_DURATION_MS,
   type IssueAction,
   type MeasuredDurationViolation,
   type MeasuredDurationViolationReason,
+  type ProductionMode,
+  type ProductionPlanReadinessAsset,
   type ProductionProjectRecord,
   type ProductionService,
   type ProductionStatus,
   type ProductionTextPreset,
 } from "@hongtai/core";
 import type {
+  AutomaticPipelineResult,
   MeasuredPlanComposeResult,
   ProductionNarrationRecord,
   ProductionScriptRecord,
@@ -54,12 +59,17 @@ export type ScriptProductionService = ProductionService & {
   }): Promise<ProductionNarrationRecord>;
   getNarration(projectId: string): Promise<ProductionNarrationRecord | undefined>;
   composeMeasuredPlan(projectId: string, input?: { readonly subtitleTemplateId?: string }): Promise<MeasuredPlanComposeResult>;
+  /** 一键全自动管线（默认推进方式）：脚本→配音→组装→渲染；分步方法保留为编辑逃生口。 */
+  runAutomaticPipeline(projectId: string, input?: {
+    readonly brief?: string;
+    readonly subtitleTemplateId?: string;
+  }): Promise<AutomaticPipelineResult>;
   subscribe(projectId: string, listener: (event: StandaloneProductionEvent) => void | Promise<void>): () => void;
 };
 
 export function scriptProductionService(production: ProductionService): ScriptProductionService {
   const candidate = production as Partial<ScriptProductionService>;
-  const missing = (["generateScript", "getScript", "updateStoryboard", "synthesizeNarration", "getNarration", "composeMeasuredPlan"] as const)
+  const missing = (["generateScript", "getScript", "updateStoryboard", "synthesizeNarration", "getNarration", "composeMeasuredPlan", "runAutomaticPipeline"] as const)
     .filter((method) => typeof candidate[method] !== "function");
   if (missing.length > 0) {
     throw new Error("当前运行时尚不支持分镜脚本管线");
@@ -121,8 +131,8 @@ export type ProductionPipelineStage = "requirement" | "script" | "narration" | "
 
 /** 五阶段的中文标签与一句话副说明；措辞保持诚实，不承诺未接通的能力。 */
 export const PRODUCTION_PIPELINE_STAGE_LABELS: Readonly<Record<ProductionPipelineStage, { readonly title: string; readonly description: string }>> = {
-  requirement: { title: "需求", description: "确认这次想讲的内容；创建项目后会自动生成分镜脚本。" },
-  script: { title: "分镜文稿", description: "AI 按需求生成分镜脚本，确认文稿后才进入配音。" },
+  requirement: { title: "需求", description: "确认这次想讲的内容；创建项目后自动完成脚本、配音与合成。" },
+  script: { title: "分镜文稿", description: "AI 按需求生成分镜脚本；一键制作时生成完自动配音，也可逐句修改。" },
   narration: { title: "配音", description: "逐句合成配音，时长以实测为准。" },
   compose: { title: "合成", description: "按实测配音组装镜头，并在本机合成成片。" },
   output: { title: "成片", description: "渲染进度与成片回看都在这里，文件只保存在本机。" },
@@ -205,7 +215,7 @@ export function resolvePipelinePrimaryAction(
 ): PipelinePrimaryAction {
   if (context.failed) return { label: "重试", disabled: Boolean(context.busy) };
   const busy = Boolean(context.busy);
-  if (stage === "requirement") return { label: "创建制作项目", disabled: busy };
+  if (stage === "requirement") return { label: "一键制作成片", disabled: busy };
   if (stage === "script") {
     return { label: context.storyboardReady ? "确认文稿并生成配音" : "AI 生成分镜脚本", disabled: busy };
   }
@@ -290,6 +300,24 @@ export function composeViolationItems(violations: readonly MeasuredDurationViola
     reason: violation.reason,
     message: measuredViolationMessage(violation),
   }));
+}
+
+/**
+ * 数字人源偏短的旁路推导：组装结果没有被页面捕获时（向导一键跳转过来、重开应用后
+ * 重新进入制作页），直接从项目记录里的数字人视频实测时长推导同一条 `avatar-source-short`
+ * 软违规，提示不因页面切换而丢失。与真实组装结果重复时由调用方按 reason 去重。
+ */
+export function avatarSourceShortViolation(project: {
+  readonly mode: ProductionMode;
+  readonly assets: readonly ProductionPlanReadinessAsset[];
+}): readonly MeasuredDurationViolation[] {
+  if (project.mode !== "avatar") return [];
+  const avatar = project.assets.find(isAvatarVideoAsset);
+  if (avatar?.durationSeconds === undefined) return [];
+  const sourceDurationMs = Math.round(avatar.durationSeconds * 1_000);
+  if (!Number.isFinite(sourceDurationMs) || sourceDurationMs <= 0) return [];
+  if (sourceDurationMs >= RECOMMENDED_AVATAR_SOURCE_DURATION_MS) return [];
+  return [{ reason: "avatar-source-short", kind: "soft", sourceDurationMs }];
 }
 
 function measuredViolationMessage(violation: MeasuredDurationViolation): string {

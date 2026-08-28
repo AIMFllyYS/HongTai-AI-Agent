@@ -9,7 +9,7 @@ import type {
   SubtitleTemplateId,
   TaskIssue,
 } from "@hongtai/core";
-import type { MeasuredPlanComposeResult, ProductionNarrationRecord, ProductionScriptRecord, StandaloneProductionEvent } from "@hongtai/capacitor-runtime";
+import type { AutomaticPipelineResult, MeasuredPlanComposeResult, ProductionNarrationRecord, ProductionScriptRecord, StandaloneProductionEvent } from "@hongtai/capacitor-runtime";
 
 import { AppShell } from "../../components/AppShell";
 import { Button } from "../../components/Buttons";
@@ -261,8 +261,12 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
     setNarrationProgress(undefined);
     if (!projectId) return undefined;
     void refreshPipeline(projectId);
+    // 从向导一键跳转进来的项目可能已处于 planning（脚本在别处生成中）：补挂流式订阅，
+    // 让本页直接呈现「正在生成」的流水而不是空白脚本区。本地发起的生成在调用处挂好
+    // 订阅后才走到这里，且创建时状态还不是 planning，不会重复挂载清掉已有增量。
+    if (project?.status === "planning") startScriptStream(projectId);
     return undefined;
-  }, [project?.projectId, refreshPipeline]);
+  }, [project?.projectId, refreshPipeline, startScriptStream]);
 
   useEffect(() => {
     const projectId = project?.projectId;
@@ -277,6 +281,9 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
         if (event.type === "state") {
           if (event.project.projectId !== projectId) return;
           setProject(event.project);
+          // 自动管线各阶段持久化都会发 state；同步拉取脚本/配音记录，让管线面板的
+          // 阶段指示与句级状态跟着推进，而不是等整条管线结束才刷新。
+          void refreshPipeline(projectId);
           return;
         }
         if (event.type === "narration-progress") {
@@ -301,10 +308,10 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
       active = false;
       unsubscribe?.();
     };
-  }, [composingNew, project?.projectId, service]);
+  }, [composingNew, project?.projectId, refreshPipeline, service]);
 
   /** 执行一个管线动作：成功后刷新项目列表与脚本/配音记录；失败进入 issue 而不是假成功。 */
-  const perform = async (action: () => Promise<ProductionProjectRecord | ProductionScriptRecord | ProductionNarrationRecord | MeasuredPlanComposeResult>) => {
+  const perform = async (action: () => Promise<ProductionProjectRecord | ProductionScriptRecord | ProductionNarrationRecord | MeasuredPlanComposeResult | AutomaticPipelineResult>) => {
     setBusy(true);
     setIssue(undefined);
     setNarrationProgress(undefined);
@@ -345,20 +352,24 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
         analysisTaskId: sourceId,
         brief,
         // v4（文稿先行）管线时长由文稿与实测配音驱动；core 契约仍要求该字段，
-        // 传区间内的占位值，新链路创建后即走 generateScript，不再消费它。
+        // 传区间内的占位值，新链路创建后即走自动管线，不再消费它。
         targetDurationSeconds: 30,
         mode,
         headlineText: headlineText || undefined,
         textPreset,
       });
-      // 创建成功即切到管线面板：脚本在目标页面上流式生长，而不是停在表单里干等。
+      // 创建成功即切到管线面板并启动一键全自动管线：脚本流式生长，配音、组装与
+      // 渲染依次在同一页面上推进，用户无需再逐步点击。
       setComposingNew(false);
       setProject(created);
       setProjects((current) => [created, ...current.filter((item) => item.projectId !== created.projectId)]);
       const stopStream = startScriptStream(created.projectId);
       setScriptGenerating(true);
       try {
-        await service.generateScript(created.projectId, { brief });
+        const pipeline = await service.runAutomaticPipeline(created.projectId, { brief, subtitleTemplateId });
+        // 一键路径的软违规（数字人源偏短、总时长出界等）不阻塞渲染：成片照常产出，
+        // 提示保留在合成区做信息性展示，而不是像分步路径那样当作确认闸门。
+        if (pipeline.softViolations.length > 0) setComposeViolations(pipeline.softViolations);
       } finally {
         stopStream();
         setScriptGenerating(false);
@@ -438,8 +449,11 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   const legacyPipeline = Boolean(activeProject && !script && activeProject.plan && activeProject.plan.schemaVersion !== "production-plan.v4");
   const narrationReady = narration?.sentences.filter((sentence) => sentence.status === "ready").length ?? 0;
   const narrationTotal = narration?.sentences.length ?? 0;
+  // planning（脚本生成中）可能发生在别的页面（向导一键跳转过来）：面板要按生成中展示，
+  // 而不是摆一个「还没有分镜脚本」的空脚本区。本地发起的生成由 scriptGenerating 覆盖。
+  const scriptGeneratingInProject = activeProject?.status === "planning";
   const stage = resolveProductionPipelineStage({
-    scriptGenerating: scriptGenerating || busy && !activeProject && composerFlow === "agent",
+    scriptGenerating: scriptGenerating || scriptGeneratingInProject || busy && !activeProject && composerFlow === "agent",
     legacyPipeline,
     project: activeProject
       ? {
@@ -658,7 +672,7 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
             progressMessage={progressMessage}
             project={activeProject}
             script={script}
-            scriptGenerating={scriptGenerating}
+            scriptGenerating={scriptGenerating || Boolean(scriptGeneratingInProject)}
             scriptStream={scriptStream && scriptStream.projectId === activeProject.projectId
               ? { phase: scriptStream.phase, content: scriptStream.content, reasoning: scriptStream.reasoning, receivedCharacters: scriptStream.receivedCharacters }
               : undefined}

@@ -945,6 +945,7 @@
 
 .production-pipeline-violations li {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.375rem;
   align-items: flex-start;
   color: var(--palette-ink-600);
@@ -1093,10 +1094,6 @@
   .production-pipeline-sentence footer .button {
     width: 100%;
     margin-left: 0;
-  }
-
-  .production-pipeline-violations li {
-    flex-wrap: wrap;
   }
 
 }

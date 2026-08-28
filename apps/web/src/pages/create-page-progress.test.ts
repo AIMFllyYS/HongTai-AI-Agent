@@ -10,6 +10,7 @@ import {
   MIN_PRODUCTION_DURATION_SECONDS,
 } from "@hongtai/core";
 import {
+  avatarSourceShortViolation,
   composeViolationItems,
   PRODUCTION_PIPELINE_STAGE_LABELS,
   productionPreviewSource,
@@ -49,7 +50,7 @@ test("五阶段会话模型：阶段推导按项目状态映射，主按钮文�
   assert.equal(resolveProductionPipelineStage({ project: { status: "rendering", storyboard: {}, narration: { ready: 3, total: 3 } } }), "output");
   assert.equal(resolveProductionPipelineStage({ project: { status: "succeeded", storyboard: {}, narration: { ready: 3, total: 3 } } }), "output");
 
-  assert.equal(resolvePipelinePrimaryAction("requirement").label, "创建制作项目");
+  assert.equal(resolvePipelinePrimaryAction("requirement").label, "一键制作成片");
   assert.equal(resolvePipelinePrimaryAction("script", { storyboardReady: false }).label, "AI 生成分镜脚本");
   assert.equal(resolvePipelinePrimaryAction("script", { storyboardReady: true }).label, "确认文稿并生成配音");
   assert.equal(resolvePipelinePrimaryAction("narration").label, "补齐配音");
@@ -99,6 +100,47 @@ test("合成软违规按稳定 reason 投影为界面条目，不解析供应商
   assert.match(items[0]?.message ?? "", /第 2 句/);
   assert.equal(items[1]?.reason, "total-too-short");
   assert.match(items[1]?.message ?? "", /9 秒/);
+});
+
+test("数字人源偏短旁路推导：只看项目记录，不依赖页面是否捕获过组装结果", () => {
+  const items = composeViolationItems(avatarSourceShortViolation({
+    mode: "avatar",
+    assets: [{ role: "avatar", kind: "video", durationSeconds: 3.4 }],
+  }));
+  assert.equal(items.length, 1);
+  assert.equal(items[0]?.reason, "avatar-source-short");
+  assert.match(items[0]?.message ?? "", /3\.4 秒偏短/u);
+
+  // 达到推荐时长、图混剪模式、时长未知：都不推导，提示由真实组装结果决定。
+  assert.equal(avatarSourceShortViolation({
+    mode: "avatar",
+    assets: [{ role: "avatar", kind: "video", durationSeconds: 8 }],
+  }).length, 0);
+  assert.equal(avatarSourceShortViolation({
+    mode: "montage",
+    assets: [{ role: "avatar", kind: "video", durationSeconds: 3.4 }],
+  }).length, 0);
+  assert.equal(avatarSourceShortViolation({
+    mode: "avatar",
+    assets: [{ role: "avatar", kind: "video" }],
+  }).length, 0);
+});
+
+test("一键管线的软违规不丢：页面捕获结果展示，向导路径由面板旁路推导补上", () => {
+  const panel = read("features/production/production-pipeline-panel.tsx");
+  // 一键路径成片照常产出，页面把管线结果的软违规保留为信息性展示，而不是确认闸门。
+  assert.match(
+    page,
+    /const pipeline = await service\.runAutomaticPipeline\(created\.projectId/u,
+    "一键管线结果要留下来读 softViolations，不能只 await 完就丢",
+  );
+  assert.match(page, /if \(pipeline\.softViolations\.length > 0\) setComposeViolations\(pipeline\.softViolations\)/u);
+  // 向导一键跳转后页面没有组装结果：面板从项目记录旁路推导 avatar-source-short，并与真实结果去重。
+  assert.match(panel, /avatarSourceShortViolation\(project\)/u);
+  assert.match(panel, /violation\.reason === "avatar-source-short"/u, "真实组装结果已含该提示时不再重复推导");
+  // 已出片后的提示是信息性的：不能再说「确认后继续合成」。
+  assert.match(panel, /project\.output\s*\?/u);
+  assert.match(panel, /成片已按当前素材产出/u);
 });
 
 test("失败主按钮只按 TaskIssue.action 分支，重试操作不解析中文", () => {
@@ -423,7 +465,7 @@ test("五阶段主按钮：script 视脚本就绪、compose 视计划组装，ou
   }
   assert.equal(PRODUCTION_PIPELINE_STAGE_LABELS.narration.description, "逐句合成配音，时长以实测为准。");
 
-  assert.equal(resolvePipelinePrimaryAction("requirement").label, "创建制作项目");
+  assert.equal(resolvePipelinePrimaryAction("requirement").label, "一键制作成片");
   assert.equal(resolvePipelinePrimaryAction("requirement", { busy: true }).disabled, true);
   assert.equal(resolvePipelinePrimaryAction("script", { storyboardReady: false }).label, "AI 生成分镜脚本");
   assert.equal(resolvePipelinePrimaryAction("script", { storyboardReady: true }).label, "确认文稿并生成配音");

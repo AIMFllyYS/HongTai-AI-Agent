@@ -147,12 +147,17 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
     setProject(await runtime.production.removeAsset(project.projectId, assetId));
   }, "素材没有移除成功");
 
+  /**
+   * 一键制作：启动全自动管线后立即回制作页并带上 ?project=——脚本流式生长、配音与渲染
+   * 进度都在制作页跟进。管线失败由服务层落盘 project.issue（不依赖本页存活），制作页
+   * 打开同一项目即可看到失败原因与重试入口。
+   */
   const compose = () => run("plan", async () => {
     if (!project) return;
-    await scriptProductionService(runtime.production).generateScript(project.projectId);
-    setProject((await runtime.production.get(project.projectId)) ?? project);
-    navigate(pathForRoute("create"));
-  }, "分镜脚本没有生成成功");
+    const pipeline = scriptProductionService(runtime.production);
+    navigate(`${pathForRoute("create")}?project=${encodeURIComponent(project.projectId)}`);
+    await pipeline.runAutomaticPipeline(project.projectId);
+  }, "自动制作没有完成");
 
   const shell = (children: React.ReactNode, subtitle?: string) => (
     <AppShell
@@ -201,7 +206,7 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
         <ul>
           <li>共 {blueprint.requirements.length} 项素材，清单建议合计 {blueprint.totalSuggestedSeconds} 秒。</li>
           <li>成片时长由分镜口播的实测配音决定，不用再从固定档位里挑。</li>
-          <li>素材齐了以后生成分镜脚本，再逐句配音；云端配音不可用时会回退到系统语音。配音和组装都确认后再回制作页合成成片。</li>
+          <li>素材齐了以后一键制作：分镜脚本、逐句配音与本机合成自动完成；云端配音不可用时会回退到系统语音。</li>
         </ul>
       </GlassCard>
 
@@ -230,7 +235,7 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
             <Icon name="info" size={16} />
             {avatarAsset
               ? `已就绪：${avatarAsset.displayName ?? "数字人视频"}。画面会按每句配音自动裁剪拼接，视频偏短就循环补齐，原声会被应用的配音替换。`
-              : "上传一段数字人预处理视频后就可以生成分镜脚本：画面按每句配音自动裁剪拼接，偏短就循环补齐，原声会被应用的配音替换。"}
+              : "上传一段数字人预处理视频后就可以一键制作：画面按每句配音自动裁剪拼接，偏短就循环补齐，原声会被应用的配音替换。"}
           </p>
 
           <div className="replica-wizard__list">
@@ -260,10 +265,10 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
 
           <div className="replica-wizard__finish">
             <Button disabled={busy || !avatarAsset} onClick={compose} size="lg">
-              {pending === "plan" ? "正在写分镜脚本" : "生成分镜脚本"}
+              {pending === "plan" ? "正在自动制作" : "一键制作成片"}
             </Button>
             <small>
-              脚本按这份清单的思路写，逐句配音后画面自动对齐。生成完回制作页继续逐句配音，确认后合成成片。
+              点击后自动完成全流程：写分镜脚本、逐句配音、画面裁剪对齐，最后在本机合成成片，全程在制作页跟进进度。
             </small>
           </div>
         </>
@@ -308,10 +313,10 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
 
           <div className="replica-wizard__finish">
             <Button disabled={busy || !readiness.ready} onClick={compose} size="lg">
-              {pending === "plan" ? "正在写分镜脚本" : "生成分镜脚本"}
+              {pending === "plan" ? "正在自动制作" : "一键制作成片"}
             </Button>
             <small>
-              已绑定的素材会按清单编号从前往后成镜；跳过的项不会留空镜头，后面的素材会往前顶。生成完回制作页继续逐句配音，确认后再回制作页合成成片。
+              点击后自动完成全流程：写分镜脚本、逐句配音、按清单顺序成镜，最后在本机合成成片，全程在制作页跟进进度。已绑定的素材按清单编号从前往后成镜，跳过的项会由后面的素材往前顶。
             </small>
           </div>
         </>

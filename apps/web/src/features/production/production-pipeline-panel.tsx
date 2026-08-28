@@ -19,6 +19,7 @@ import { issueActionPresentation, issueTitle, type TaskIssueActionHandlers } fro
 import { SubtitleTemplatePicker } from "../../components/SubtitleTemplatePicker";
 import { PRODUCTION_TEXT_PRESET_LABELS, productionPreviewSource } from "./production-workbench-model";
 import {
+  avatarSourceShortViolation,
   composeViolationItems,
   narrationAdvisoryToComposeItems,
   PRODUCTION_PIPELINE_STAGE_LABELS,
@@ -146,14 +147,22 @@ export function ProductionPipelinePanel({
   };
 
   // 软违规展示：优先用最近一次组装的实测结果；还没组装过时用配音实测时长提前预告。
+  // 数字人源偏短走旁路推导（项目记录里就有源视频实测时长）：向导一键跳转或重开应用后
+  // 页面没有捕获过组装结果，这条提示也不丢。
+  const derivedAvatarViolations = composeViolations.some((violation) => violation.reason === "avatar-source-short")
+    ? []
+    : avatarSourceShortViolation(project);
   const violationItems: readonly ComposeViolationItem[] = composeViolations.length > 0
-    ? composeViolationItems(composeViolations)
-    : narrationAllReady && narration
-      ? narrationAdvisoryToComposeItems(resolveNarrationDurationAdvisory(
-        narration.totalDurationMs,
-        narration.sentences.map((sentence) => sentence.durationMs ?? 0),
-      ))
-      : [];
+    ? composeViolationItems([...composeViolations, ...derivedAvatarViolations])
+    : [
+      ...(narrationAllReady && narration
+        ? narrationAdvisoryToComposeItems(resolveNarrationDurationAdvisory(
+          narration.totalDurationMs,
+          narration.sentences.map((sentence) => sentence.durationMs ?? 0),
+        ))
+        : []),
+      ...composeViolationItems(derivedAvatarViolations),
+    ];
   const hasWordTiming = Boolean(narration?.sentences.some((sentence) => sentence.status === "ready" && sentence.alignmentSource));
   const stageIndex = STAGE_ORDER.indexOf(stage);
 
@@ -248,13 +257,18 @@ export function ProductionPipelinePanel({
             onChange={onSubtitleTemplate}
             value={subtitleTemplateId}
           />
+          <p className="production-pipeline-hint"><Icon name="info" size={16} />字幕分两层：口播字幕逐句全量、自动生成不丢字；强调词在字幕内放大，贴纸与浮字是画面上额外的文字提示。</p>
           {violationItems.length > 0 ? (
             <ul className="production-pipeline-violations">
               {violationItems.map((item, index) => <li key={index}><Icon name="info" size={15} />{item.message}</li>)}
             </ul>
           ) : null}
           {composeViolations.length > 0 ? (
-            <p className="production-pipeline-hint"><Icon name="info" size={16} />已按实测配音组装镜头。上面的提示是软边界：回改文稿可以修正，或用底部主按钮确认后继续合成。</p>
+            <p className="production-pipeline-hint">
+              <Icon name="info" size={16} />{project.output
+                ? "成片已按当前素材产出。上面的提示是软边界：回改文稿、更换更长的出镜视频后可重新合成。"
+                : "已按实测配音组装镜头。上面的提示是软边界：回改文稿可以修正，或用底部主按钮确认后继续合成。"}
+            </p>
           ) : null}
         </PipelineSection>
       ) : null}
@@ -417,6 +431,7 @@ function ScriptSection({ sentences, estimatedTotalMs, narrationBySentence, busy,
       <p className="production-pipeline-duration">
         <Icon name="video" size={16} />预估总时长约 <strong>{secondsLabel(estimatedTotalMs)}</strong> 秒（按文案字数估算，配音后以实测为准）
       </p>
+      <p className="production-pipeline-hint"><Icon name="info" size={16} />口播字幕逐句全量、自动生成；AI 会自动在本句里挑最多两个关键词在字幕中放大强调，贴纸与浮字则是画面上额外的提示文字。</p>
       <div className="production-pipeline-sentences">
         {sentences.map((sentence, index) => (
           <SentenceEditor

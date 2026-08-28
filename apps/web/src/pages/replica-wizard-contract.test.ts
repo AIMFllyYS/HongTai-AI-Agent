@@ -59,12 +59,15 @@ test("绑定关系只从素材读，向导不另存一份自己的完成状态",
   assert.doesNotMatch(page, /useState<[^>]*Record<number/u, "页面不能再存一份“哪项已完成”，否则删素材后会对不上");
 });
 
-test("素材齐了以后生成的是分镜脚本，而不是假装已经出片", () => {
-  assert.match(page, /generateScript\(project\.projectId\)/u);
-  assert.match(page, /navigate\(pathForRoute\("create"\)\)/u);
-  assert.match(page, /再回制作页合成成片/u, "要说清这一步只出脚本和字幕，成片还没做");
+test("素材齐了以后启动一键全自动管线，进度在制作页跟进而不是假装已出片", () => {
+  assert.match(page, /runAutomaticPipeline\(project\.projectId\)/u, "一键入口必须启动真实全自动管线，而不是只出个脚本就收工");
+  assert.match(
+    page,
+    /navigate\(`\$\{pathForRoute\("create"\)\}\?project=\$\{encodeURIComponent\(project\.projectId\)\}`\)/u,
+    "跳转要带上 ?project= 让制作页打开同一个项目，失败原因（服务层落盘的 project.issue）也在那里可见",
+  );
+  assert.match(page, /全程在制作页跟进进度/u, "要说清进度在哪看，不能点了按钮就当出片了");
   assert.match(page, /系统语音/u, "要说清云端配音失败时会回退系统语音，而不是假装一定有云端旁白");
-  assert.doesNotMatch(page, /素材齐了以后自动生成/u, "向导不能把生成计划和本地合成说成同一个自动步骤");
 });
 
 test("清单项的脚本草稿被标成参考，不承诺就是最终口播", () => {
@@ -77,7 +80,7 @@ test("清单只说该拍什么，页面不声称它看懂了画面里有什么",
 
 test("顺序保证按校验器实际做的说：相对顺序压紧，不是第 i 项一定进第 i 镜", () => {
   assert.match(page, /按清单编号从前往后成镜/u, "这是校验器唯一强制的事，必须说出来");
-  assert.match(page, /跳过的项不会留空镜头/u, "跳过后素材会往前顶，不能让用户以为槽位是固定的");
+  assert.match(page, /跳过的项会由后面的素材往前顶/u, "跳过后素材会往前顶，不能让用户以为槽位是固定的");
   assert.doesNotMatch(page, /第 1 项拍的素材会出现在第 1 个镜头/u, "跳过前面的项时这句话不成立");
 });
 
