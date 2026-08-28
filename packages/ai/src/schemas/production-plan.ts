@@ -104,6 +104,21 @@ export const productionPlanResultV3Schema = productionPlanBaseSchema.extend({
 });
 
 /**
+ * v4 数字人镜头的源视频窗口：把单段预处理数字人视频确定性裁剪/拼接成该镜头画面的映射，
+ * 由共享层 `planAvatarSourceWindows`（core）烘焙进计划，模型从不经手这些毫秒数。缺省表示
+ * 走旧路径（无窗口计划）；窗口毫秒为整数且 `endMs` 严格大于 `startMs`。上限按「最长单镜
+ * 60 秒 ÷ 最短源视频 2 秒」推导。
+ */
+export const MAX_SOURCE_WINDOWS_PER_SHOT = 30;
+
+const sourceWindowSchema = z
+  .object({
+    startMs: z.number().int().min(0),
+    endMs: z.number().int().min(0),
+  })
+  .refine((window) => window.endMs > window.startMs);
+
+/**
  * v4（文稿先行）的镜头：时长来自本镜口播句的实测 TTS 音频（`TtsTimedTrack.durationMs`），
  * 没有目标时长。`sentenceId` 把镜头对回分镜脚本里的那句话（`ScriptSentence.id`），回改
  * 文案、重新配音与重新渲染都以它定位受影响的句子。
@@ -113,6 +128,8 @@ const measuredProductionShotSchema = productionShotBaseSchema.omit({ durationSec
   durationMs: z.number().int().positive().max(MAX_MEASURED_SHOT_MS),
   sentenceId: z.string().min(1),
   cues: z.array(measuredSubtitleCueSchema).min(1).max(MAX_CUES_PER_SHOT),
+  /** 数字人窗口（可选）：窗口时长之和恒等于该镜头 `durationMs`，由规划器保证。 */
+  sourceWindows: z.array(sourceWindowSchema).min(1).max(MAX_SOURCE_WINDOWS_PER_SHOT).optional(),
 });
 
 /**

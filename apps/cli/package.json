@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@hongtai/ai": "workspace:*",
+    "@hongtai/capacitor-runtime": "workspace:*",
     "@hongtai/core": "workspace:*",
     "@hongtai/node-runtime": "workspace:*",
     "@hongtai/platforms": "workspace:*"

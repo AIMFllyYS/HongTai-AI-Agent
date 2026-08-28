@@ -47,6 +47,9 @@ importers:
       '@hongtai/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@hongtai/capacitor-runtime':
+        specifier: workspace:*
+        version: link:../../packages/capacitor-runtime
       '@hongtai/core':
         specifier: workspace:*
         version: link:../../packages/core

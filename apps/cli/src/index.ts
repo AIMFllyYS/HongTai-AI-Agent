@@ -22,6 +22,7 @@ import {
 import { platformRegistry } from "@hongtai/platforms";
 import { parseContentAnalysisOptions, parseDiagnosisServeOptions } from "./ai-command-options";
 import { experimentalPlatformNotice } from "./platform-support";
+import { runProductionE2e } from "./production-e2e";
 import { TerminalAiStreamPrinter } from "./terminal-ai-stream-printer";
 
 const HELP = `宏泰 AI 智能体 CLI
@@ -31,6 +32,7 @@ const HELP = `宏泰 AI 智能体 CLI
   pnpm cli ingest <分享文字或公开链接> [--output <目录>] [--max-duration <秒>]
   pnpm cli diagnosis serve [--port <端口>]
   pnpm cli analyze-content <任务ID>
+  pnpm cli production-e2e [--mode montage|avatar] [--brief <制作需求>] [--target-seconds <秒>]
 
 支持：
   抖音、小红书、B站公开单条作品；快手匿名公开单条视频（实验性）
@@ -216,6 +218,10 @@ async function main(args: readonly string[]): Promise<void> {
   }
   if (command === "analyze-content") {
     await runContentAnalysis(rest);
+    return;
+  }
+  if (command === "production-e2e") {
+    await runProductionE2e(rest);
     return;
   }
   if (command !== "ingest") {

@@ -51,12 +51,14 @@ output/browser-e2e/
 
 # 本地 APK 与端测证据保留在主项目目录，但不进入 Git。
 # output/playwright/ 里已跟踪的验收截图与脚本继续纳入版本管理。
+output/dev-e2e/
 output/apk-archive/*.apk
 output/local-evidence/
 output/stage*
 output/reference-video-analysis/
 output/android-*/
 output/validation/
+output/交付说明/
 
 # 根目录整仓压缩包是本地备份，不是交付物。HongTai.zip 当前已不在工作区。
 /HongTai.zip

@@ -4,6 +4,7 @@ import {
   resolveTemplateForPrecision,
   subtitleTimingPrecision,
   timedTrackTimingSource,
+  type AvatarSourceWindow,
   type SubtitleTimingSource,
   type TaskError,
   type TtsTimedTrack,
@@ -87,6 +88,12 @@ export interface MeasuredShotDraft {
   readonly narration: string;
   readonly caption: string;
   readonly fit: "cover" | "contain";
+  /**
+   * 数字人镜头的源视频窗口（可选）：调用方（avatar 模式组装）用 `planAvatarSourceWindows`
+   * 按实测时长烘焙好原样透传；此处既不裁剪也不取整——非整毫秒窗口会被 v4 schema 如实拒绝，
+   * 而不是悄悄偏移音画同步。窗口时长之和必须等于该镜头实测时长。
+   */
+  readonly sourceWindows?: readonly AvatarSourceWindow[];
 }
 
 export interface MeasuredSubtitleTimelineInput
@@ -116,8 +123,9 @@ export interface MeasuredSubtitleTimelineInput
  * （先取整到渲染器的毫秒时钟），毫秒数全部本地推导——模型从不经手时间。每镜 cue 边界优先
  * 用本句词级时间戳定界；缺词级的句子按实测句长比例铺排。计划级 `timing.source` 取全部音轨
  * 的最弱证据：任何一句缺词级时间戳，整份计划就如实声明 `tts_duration` 并按既有规则降级字幕
- * 模板，不宣称高于实际证据的精度。硬违规的实测时长在这里就拒绝；软违规（单镜超 20 秒、
- * 总时长出 15–60 秒）不阻塞组装，由 `validateMeasuredProductionPlan` 结构化返回给界面提示。
+ * 模板，不宣称高于实际证据的精度。硬违规（非法时长、镜头数越界）的实测时长在这里就拒绝；
+ * 软违规（单镜过短/超 20 秒、总时长出 15–60 秒）不阻塞组装，由 `validateMeasuredProductionPlan`
+ * 结构化返回给界面提示。
  */
 export function withMeasuredSubtitleTimeline(input: MeasuredSubtitleTimelineInput): ProductionPlanResultV4 {
   const shotsBySentenceId = new Map<string, MeasuredShotDraft>();
@@ -160,6 +168,17 @@ export function withMeasuredSubtitleTimeline(input: MeasuredSubtitleTimelineInpu
   const precision = subtitleTimingPrecision(source);
   const resolved = resolveTemplateForPrecision({ requestedId: input.requestedTemplateId ?? "", precision });
 
+  // 数字人窗口守恒：窗口时长之和必须精确等于该镜头取整后的实测时长，否则音画必然失步。
+  // 规划器在整数输入下天然保证这一点；这里只拦截调用方喂错数据的契约破坏，让失败发生在
+  // 组装期而不是端侧导出期。
+  for (const { shot, track } of matched) {
+    if (!shot.sourceWindows) continue;
+    const coveredMs = shot.sourceWindows.reduce((sum, window) => sum + (window.endMs - window.startMs), 0);
+    if (coveredMs !== Math.round(track.durationMs)) {
+      throw input.invalid(`句子 ${shot.sentenceId} 的数字人窗口时长之和与实测时长不一致`);
+    }
+  }
+
   const shots = matched.map(({ shot, track }, index) => ({
     order: index + 1,
     assetId: shot.assetId,
@@ -168,6 +187,7 @@ export function withMeasuredSubtitleTimeline(input: MeasuredSubtitleTimelineInpu
     narration: shot.narration,
     caption: shot.caption,
     fit: shot.fit,
+    ...(shot.sourceWindows ? { sourceWindows: [...shot.sourceWindows] } : {}),
     cues: buildShotCueTimeline({
       text: shot.narration,
       shotDurationMs: Math.round(track.durationMs),

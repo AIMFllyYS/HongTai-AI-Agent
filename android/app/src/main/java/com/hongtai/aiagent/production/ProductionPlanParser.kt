@@ -14,6 +14,13 @@ internal data class ProductionInput(
   val hasAudio: Boolean = false,
 )
 
+/**
+ * v4 avatar only: one contiguous slice of the single pre-processed avatar source video, in
+ * source-local milliseconds. The shared planner guarantees the windows of a shot sum to that
+ * shot's measured duration; Kotlin renders them and never re-decides the mapping.
+ */
+internal data class ProductionSourceWindow(val startMs: Long, val endMs: Long)
+
 internal data class ProductionShot(
   val order: Int,
   val input: ProductionInput,
@@ -25,6 +32,8 @@ internal data class ProductionShot(
   val cues: List<SubtitleCue> = emptyList(),
   /** v4 only: the storyboard sentence whose measured TTS audio produced this shot's duration. */
   val sentenceId: String? = null,
+  /** v4 avatar only: absent on legacy plans, which keep the sequential-accumulation path. */
+  val sourceWindows: List<ProductionSourceWindow> = emptyList(),
 )
 
 internal data class ProductionTextOverlay(
@@ -129,12 +138,13 @@ internal object ProductionPlanParser {
       require(narration.isNotEmpty() && narration.length <= 160) { "A production narration line is invalid." }
       require(caption.isNotEmpty() && caption.length <= 40) { "A production caption is invalid." }
       require(fit == "cover" || fit == "contain") { "A production fit mode is invalid." }
+      val sourceWindows = if (measuredShots) parseSourceWindows(value, shotDurationMs) else emptyList()
       val cues = if (timedCaptions) {
         SubtitleRenderSpecParser.parseCues(value.getJSONArray("cues"), shotDurationMs)
       } else {
         emptyList()
       }
-      ProductionShot(order, input, shotDurationMs, narration, caption, fit, cues, sentenceId)
+      ProductionShot(order, input, shotDurationMs, narration, caption, fit, cues, sentenceId, sourceWindows)
     }
     // v1–v3: the shot sum must match the declared target exactly. v4 has no target to match.
     if (!measuredShots) require(shots.sumOf(ProductionShot::durationMs) == durationMs) { "Production shot durations do not match the total duration." }
@@ -165,6 +175,28 @@ internal object ProductionPlanParser {
       width, height, fps, totalDurationMs, locale, speechRate, music, musicVolume, shots, textOverlay, renderMode,
       template, decorations,
     )
+  }
+
+  /**
+   * v4 avatar source windows: optional, so legacy plans without them keep the old render path. When
+   * present the windows must sum to the shot's measured duration exactly — the TTS narration track
+   * defines the shot length, and any drift would desynchronise audio from video. Bounds mirror the
+   * shared v4 schema (non-negative integers, end after start, at most 30 windows per shot).
+   */
+  private fun parseSourceWindows(value: JSONObject, shotDurationMs: Long): List<ProductionSourceWindow> {
+    val windowsJson = value.optJSONArray("sourceWindows") ?: return emptyList()
+    require(windowsJson.length() in 1..MAX_SOURCE_WINDOWS_PER_SHOT) { "A production source window list is invalid." }
+    val windows = (0 until windowsJson.length()).map { index ->
+      val window = windowsJson.getJSONObject(index)
+      val startMs = window.getLong("startMs")
+      val endMs = window.getLong("endMs")
+      require(startMs >= 0 && endMs > startMs) { "A production source window is invalid." }
+      ProductionSourceWindow(startMs, endMs)
+    }
+    require(windows.sumOf { it.endMs - it.startMs } == shotDurationMs) {
+      "A production shot's source windows do not cover its measured duration."
+    }
+    return windows
   }
 
   private fun parseSubtitleTemplate(json: String, root: JSONObject, shots: List<ProductionShot>): SubtitleTemplateSpec {
@@ -199,5 +231,7 @@ internal object ProductionPlanParser {
 
   /** Mirrors the shared v4 schema's structural shot maximum (`MAX_MEASURED_SHOT_MS`, 60 s). */
   private const val MAX_MEASURED_SHOT_MS = 60_000L
+  /** Mirrors the shared v4 schema's per-shot window cap (`MAX_SOURCE_WINDOWS_PER_SHOT`). */
+  private const val MAX_SOURCE_WINDOWS_PER_SHOT = 30
   private const val MAX_SENTENCE_ID_LENGTH = 128
 }

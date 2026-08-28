@@ -24,8 +24,8 @@ export const MIN_PRODUCTION_DURATION_SECONDS = 15;
 export const MAX_PRODUCTION_DURATION_SECONDS = 60;
 
 /**
- * v4 实测路径：单镜头时长的结构下限（毫秒）。低于此值的音频段不足以构成一个可渲染
- * 的镜头，属于硬违规；它比 v3 的整秒下限宽松得多，因为实测时长由真实语音决定。
+ * v4 实测路径：单镜头时长的建议下限（毫秒）。低于此值提示回改或合并文案，不阻断
+ * 合成——渲染层对更短的镜头同样可执行，这只是可读性偏好，不按结构错误处理。
  */
 export const MIN_MEASURED_SHOT_DURATION_MS = 300;
 
@@ -40,9 +40,10 @@ export const MIN_MONTAGE_VISUAL_ASSETS = 3;
 /**
  * v4 实测时长校验的稳定原因码。UI 与调用方只按 reason 分支：
  *
- * - hard（结构不可渲染，必须拒绝）：`shot-count-out-of-range`、`shot-duration-invalid`、
- *   `shot-too-short`。
- * - soft（可以回改文稿或确认后继续）：`shot-too-long`、`total-too-short`、`total-too-long`。
+ * - hard（结构不可渲染，必须拒绝）：`shot-count-out-of-range`、`shot-duration-invalid`。
+ * - soft（可以回改文稿或确认后继续）：`shot-too-short`、`shot-too-long`、
+ *   `total-too-short`、`total-too-long`、`avatar-source-short`（数字人源视频偏短，来自
+ *   `planAvatarSourceWindows`，经组装结果沿用同一条软违规通道）。
  */
 export const MEASURED_DURATION_VIOLATION_REASONS = [
   "shot-count-out-of-range",
@@ -51,6 +52,7 @@ export const MEASURED_DURATION_VIOLATION_REASONS = [
   "shot-too-long",
   "total-too-short",
   "total-too-long",
+  "avatar-source-short",
 ] as const;
 export type MeasuredDurationViolationReason = (typeof MEASURED_DURATION_VIOLATION_REASONS)[number];
 
@@ -64,6 +66,8 @@ export interface MeasuredDurationViolation {
   readonly durationMs?: number;
   /** Present only on total-duration violations. */
   readonly totalDurationMs?: number;
+  /** Present only on `avatar-source-short`（数字人源视频实测时长，毫秒）。 */
+  readonly sourceDurationMs?: number;
 }
 
 /**
@@ -81,9 +85,9 @@ export type MeasuredProductionDurationCheck =
 
 /**
  * v4 时长校验：输入每镜的实测音频时长（毫秒，来自 `TtsTimedTrack.durationMs`），检查
- * 镜头数与单镜/总时长边界。单镜 20 秒与总时长 15–60 秒是软边界——超界提示回改文稿
- * 或确认继续，而不是拒绝；镜头数上限与结构下限仍是硬违规。校验结果结构化返回，
- * 供 UI 区分「必须修」与「建议修」。
+ * 镜头数与单镜/总时长边界。单镜过短/过长与总时长 15–60 秒都是软边界——超界提示回改
+ * 文稿或确认继续，而不是拒绝；只有镜头数上限与非有限/非正时长是硬违规。校验结果
+ * 结构化返回，供 UI 区分「必须修」与「建议修」。
  */
 export function checkMeasuredProductionDurations(input: {
   readonly shotDurationMs: readonly number[];
@@ -103,7 +107,7 @@ export function checkMeasuredProductionDurations(input: {
     }
     totalMs += durationMs;
     if (durationMs < MIN_MEASURED_SHOT_DURATION_MS) {
-      hardViolations.push({ reason: "shot-too-short", kind: "hard", shotIndex: index + 1, durationMs });
+      softViolations.push({ reason: "shot-too-short", kind: "soft", shotIndex: index + 1, durationMs });
     }
     if (durationMs > MAX_SHOT_DURATION_SECONDS * 1_000) {
       softViolations.push({ reason: "shot-too-long", kind: "soft", shotIndex: index + 1, durationMs });

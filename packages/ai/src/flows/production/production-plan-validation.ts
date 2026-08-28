@@ -351,7 +351,8 @@ export function validateMeasuredProductionPlan(
   }
 
   validateRequirementOrder(plan.shots, constraints.assets);
-  assertOriginalNarration(plan, constraints);
+  // 原创性校验已前移到脚本生成期（script-generation-flow）：复刻场景沿用原文短语常见，
+  // 生成期可自动修复；等用户配完音才阻断属于校验时机错误。
 
   if (constraints.mode === "avatar") {
     const avatarId = constraints.assets.find((asset) => asset.role === "avatar")?.id;

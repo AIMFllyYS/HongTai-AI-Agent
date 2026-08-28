@@ -219,6 +219,49 @@ class ProductionPlanParserTest {
     }
   }
 
+  @Test
+  fun `parses a v4 avatar plan with source windows and keeps legacy plans windowless`() {
+    val avatarAssets = mapOf(
+      "avatar-1" to ProductionInput("avatar-1", "/private/avatar-1.mp4", ProductionAssetKind.VIDEO, durationMs = 10_000L, hasAudio = true),
+    )
+
+    val plan = ProductionPlanParser.parse(measuredAvatarWindowPlan(), avatarAssets, ProductionRenderMode.AVATAR, classicLineTemplate())
+
+    // 10 秒源视频配两镜各 8 秒：第一镜 [0,6]+[0,2]，第二镜延续游标 [2,8]+[0,2]。
+    assertEquals(listOf(ProductionSourceWindow(0, 6_000), ProductionSourceWindow(0, 2_000)), plan.shots[0].sourceWindows)
+    assertEquals(listOf(ProductionSourceWindow(2_000, 8_000), ProductionSourceWindow(0, 2_000)), plan.shots[1].sourceWindows)
+
+    // 没有窗口字段的 v4 计划走旧路径（空窗口），向后兼容。
+    val legacy = ProductionPlanParser.parse(measuredPlan(), assets, ProductionRenderMode.MONTAGE, classicLineTemplate())
+    assertEquals(emptyList<ProductionSourceWindow>(), legacy.shots.first().sourceWindows)
+  }
+
+  @Test
+  fun `rejects source windows that break the render contract`() {
+    val avatarAssets = mapOf(
+      "avatar-1" to ProductionInput("avatar-1", "/private/avatar-1.mp4", ProductionAssetKind.VIDEO, durationMs = 10_000L, hasAudio = true),
+    )
+    fun parse(json: String) = ProductionPlanParser.parse(json, avatarAssets, ProductionRenderMode.AVATAR, classicLineTemplate())
+
+    // 守恒破坏：第一镜窗口之和 7500 ≠ 实测 8000，音画必然失步。
+    assertThrows(IllegalArgumentException::class.java) {
+      parse(measuredAvatarWindowPlan().replace("\"endMs\":6000}", "\"endMs\":5500}"))
+    }
+    // 零长度窗口（endMs 不大于 startMs）。
+    assertThrows(IllegalArgumentException::class.java) {
+      parse(measuredAvatarWindowPlan().replace("\"startMs\":0,\"endMs\":6000", "\"startMs\":6000,\"endMs\":6000"))
+    }
+    // 空窗口数组：要么缺省走旧路径，要么至少一窗。
+    assertThrows(IllegalArgumentException::class.java) {
+      parse(
+        measuredAvatarWindowPlan().replace(
+          "\"sourceWindows\":[{\"startMs\":0,\"endMs\":6000},{\"startMs\":0,\"endMs\":2000}]",
+          "\"sourceWindows\":[]",
+        ),
+      )
+    }
+  }
+
   /** v4: per-shot measured durations, one sentence reference per shot, no total duration target. */
   private fun measuredPlan(): String = """
     {
@@ -236,6 +279,31 @@ class ProductionPlanParserTest {
         {"order":2,"assetId":"video-1","durationMs":4100,"sentenceId":"s-2","narration":"再看服务。","caption":"服务过程","fit":"contain","cues":[
           {"startMs":0,"endMs":4100,"text":"服务过程全程可看","emphasisWords":[],"words":null}
         ]}
+      ],
+      "decorations":[]
+    }
+  """.trimIndent()
+
+  /**
+   * v4 avatar: one pre-processed avatar video whose per-shot picture comes from planned source
+   * windows (a 10 s source covering two 8 s shots), mirroring what the shared planner bakes.
+   */
+  private fun measuredAvatarWindowPlan(): String = """
+    {
+      "schemaVersion":"production-plan.v4",
+      "source":{"analysisTaskId":null},
+      "title":"门店真实体验",
+      "settings":{"width":720,"height":1280,"fps":30},
+      "audio":{"voiceLocale":"zh-CN","speechRate":1,"backgroundMusicAssetId":null,"backgroundMusicVolume":0},
+      "textOverlay":{"primaryText":"看得见的真实服务","secondaryText":null,"preset":"aqua_accent"},
+      "subtitle":{"templateId":"classic_line"},
+      "shots":[
+        {"order":1,"assetId":"avatar-1","durationMs":8000,"sentenceId":"s-1","narration":"先看环境。","caption":"真实环境","fit":"cover",
+          "sourceWindows":[{"startMs":0,"endMs":6000},{"startMs":0,"endMs":2000}],
+          "cues":[{"startMs":0,"endMs":8000,"text":"先看真实环境","emphasisWords":[],"words":null}]},
+        {"order":2,"assetId":"avatar-1","durationMs":8000,"sentenceId":"s-2","narration":"再看服务。","caption":"服务过程","fit":"contain",
+          "sourceWindows":[{"startMs":2000,"endMs":8000},{"startMs":0,"endMs":2000}],
+          "cues":[{"startMs":0,"endMs":8000,"text":"服务过程全程可看","emphasisWords":[],"words":null}]}
       ],
       "decorations":[]
     }

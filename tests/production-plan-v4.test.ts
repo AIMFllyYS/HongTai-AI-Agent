@@ -171,6 +171,54 @@ test("withMeasuredSubtitleTimeline 用实测音轨组装 v4，时长取整到毫
   assert.deepEqual(validateMeasuredProductionPlan(result, constraints), []);
 });
 
+test("数字人源窗口原样烘焙进 v4 计划，与实测时长守恒", () => {
+  const avatarShots: MeasuredShotDraft[] = [
+    {
+      sentenceId: "sentence-1",
+      assetId: "asset-image",
+      narration: "第一次到店总是没底，不知道推拿的服务过程是什么样的，先把真实步骤拍给你看。",
+      caption: "先看清服务过程",
+      fit: "cover",
+      // 10 秒源视频：第一镜 8 秒 → [0,6]+[0,2]（跨尾回绕拆两窗）。
+      sourceWindows: [{ startMs: 0, endMs: 6_000 }, { startMs: 0, endMs: 2_000 }],
+    },
+    {
+      sentenceId: "sentence-2",
+      assetId: "asset-detail",
+      narration: "我们把每一步真实步骤完整呈现，你看完再决定要不要来，欢迎到店当面了解。",
+      caption: "真实步骤逐一呈现",
+      fit: "cover",
+    },
+  ];
+
+  const result = assemble({ shots: avatarShots, tracks: [track("sentence-1", 8_000), track("sentence-2", 8_000)] });
+  assert.deepEqual(result.shots[0]?.sourceWindows, [{ startMs: 0, endMs: 6_000 }, { startMs: 0, endMs: 2_000 }]);
+  assert.equal(result.shots[1]?.sourceWindows, undefined, "没有窗口的镜头不携带该字段（旧路径语义）");
+  assert.equal(productionPlanResultV4Schema.safeParse(result).success, true);
+
+  // 窗口之和 ≠ 实测时长：组装期就拒绝，不等端侧导出才失败。
+  const broken: MeasuredShotDraft[] = [{ ...avatarShots[0]!, sourceWindows: [{ startMs: 0, endMs: 6_000 }] }];
+  assert.throws(
+    () => assemble({ shots: broken, tracks: [track("sentence-1", 8_000)] }),
+    /数字人窗口时长之和与实测时长不一致/u,
+  );
+
+  // schema 边界：非整毫秒、endMs 不大于 startMs、空数组、超过 30 个窗口都拒绝。
+  const json = JSON.parse(JSON.stringify(result)) as ProductionPlanResultV4;
+  const mutateWindows = (windows: unknown): unknown =>
+    productionPlanResultV4Schema.safeParse({ ...json, shots: [{ ...json.shots[0]!, sourceWindows: windows }, json.shots[1]!] });
+  assert.equal(mutateWindows([{ startMs: 0.5, endMs: 6_000 }]).success, false, "窗口必须整毫秒");
+  assert.equal(mutateWindows([{ startMs: 6_000, endMs: 6_000 }]).success, false, "endMs 必须大于 startMs");
+  assert.equal(mutateWindows([{ startMs: 6_000, endMs: 5_000 }]).success, false, "倒序窗口拒绝");
+  assert.equal(mutateWindows([]).success, false, "空窗口数组拒绝：要么缺省，要么至少一窗");
+  assert.equal(mutateWindows([{ startMs: 0, endMs: -1 }]).success, false, "负毫秒拒绝");
+  assert.equal(
+    mutateWindows(Array.from({ length: 31 }, () => ({ startMs: 0, endMs: 1 }))).success,
+    false,
+    "单镜窗口数沿用共享上限 30",
+  );
+});
+
 test("词级时间戳直接定界 cue，词前词后静音如实留空", () => {
   const result = assemble({ tracks: wordedTracks(), requestedTemplateId: "karaoke_glow" });
 
@@ -230,11 +278,13 @@ test("分镜句与实测音轨必须一一对应，缺、多、重都不猜", ()
   );
 });
 
-test("低于结构下限的实测时长在组装处就被拒绝", () => {
-  assert.throws(
-    () => assemble({ tracks: [track("sentence-1", 250), track("sentence-2", 8_000)] }),
-    /实测时长存在无法渲染的硬违规/u,
-  );
+test("非法实测时长在组装处就被拒绝；单镜过短降为软提示不再阻断", () => {
+  // 250ms 单镜：渲染层可执行，只是可读性偏好，组装放行、软违规如实返回。
+  const shortShot = assemble({ tracks: [track("sentence-1", 250), track("sentence-2", 8_000)] });
+  assert.deepEqual(validateMeasuredProductionPlan(shortShot, constraints), [
+    { reason: "shot-too-short", kind: "soft", shotIndex: 1, durationMs: 250 },
+    { reason: "total-too-short", kind: "soft", totalDurationMs: 8_250 },
+  ]);
   assert.throws(
     () => assemble({ tracks: [track("sentence-1", 0), track("sentence-2", 8_000)] }),
     /实测时长存在无法渲染的硬违规/u,
@@ -275,7 +325,7 @@ test("v4 校验拒绝来源不符、顺序断裂、句子 id 重复与硬违规�
   rejects((draft) => { draft.source = { analysisTaskId: "task-2" }; }, /来源与真实拆解任务不一致/u);
   rejects((draft) => { draft.shots[0]!.order = 3; }, /顺序不连续/u);
   rejects((draft) => { draft.shots[1]!.sentenceId = draft.shots[0]!.sentenceId; }, /句子 id 不能重复/u);
-  rejects((draft) => { draft.shots[0]!.durationMs = 200; }, /实测时长存在无法渲染的硬违规/u);
+  rejects((draft) => { draft.shots[0]!.durationMs = 0; }, /实测时长存在无法渲染的硬违规/u);
 });
 
 test("v4 校验沿用素材、音频与文字层的既有规则", () => {

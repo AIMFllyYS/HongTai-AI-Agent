@@ -19,7 +19,7 @@ test("v3 边界常量保持原语义，存量调用方不受 v4 影响", () => {
   assert.equal(MIN_PRODUCTION_DURATION_SECONDS, 15);
   assert.equal(MAX_PRODUCTION_DURATION_SECONDS, 60);
   assert.equal(MIN_MONTAGE_VISUAL_ASSETS, 3);
-  assert.equal(MIN_MEASURED_SHOT_DURATION_MS, 300, "v4 结构下限放宽到 300ms");
+  assert.equal(MIN_MEASURED_SHOT_DURATION_MS, 300, "v4 单镜建议下限为 300ms（软提示，不阻断）");
 });
 
 test("实测时长全部落在边界内时通过，不携带任何违规", () => {
@@ -63,12 +63,12 @@ test("单镜超过 20 秒是软违规，并标注具体镜头位置", () => {
   ]);
 });
 
-test("结构违规是硬违规：低于 300ms、非法时长、镜头数越界都会拒绝", () => {
+test("结构违规是硬违规：非法时长、镜头数越界都会拒绝；单镜过短降为软提示", () => {
   const tooShortShot = checkMeasuredProductionDurations({ shotDurationMs: [200, 5_000, 6_000] });
-  assert.equal(tooShortShot.ok, false);
-  if (tooShortShot.ok) return;
-  assert.deepEqual(tooShortShot.hardViolations, [
-    { reason: "shot-too-short", kind: "hard", shotIndex: 1, durationMs: 200 },
+  assert.equal(tooShortShot.ok, true, "200ms 单镜不再阻断合成，只是提示回改文案");
+  assert.deepEqual(tooShortShot.softViolations, [
+    { reason: "shot-too-short", kind: "soft", shotIndex: 1, durationMs: 200 },
+    { reason: "total-too-short", kind: "soft", totalDurationMs: 11_200 },
   ]);
 
   const invalidDuration = checkMeasuredProductionDurations({ shotDurationMs: [5_000, 0, 6_000] });
@@ -89,13 +89,12 @@ test("结构违规是硬违规：低于 300ms、非法时长、镜头数越界�
   assert.equal(tooManyShots.hardViolations[0]?.reason, "shot-count-out-of-range");
 });
 
-test("硬违规与软违规同时存在时，两类都如实列出，不互相掩盖", () => {
+test("单镜过短与超长同时存在时都按软违规如实列出，不再互相掩盖", () => {
   const check = checkMeasuredProductionDurations({ shotDurationMs: [200, 25_000, 25_000, 25_000] });
-  assert.equal(check.ok, false);
-  if (check.ok) return;
-  assert.equal(check.hardViolations.length, 1);
-  assert.equal(check.hardViolations[0]?.reason, "shot-too-short");
-  assert.equal(check.softViolations.length, 4);
+  assert.equal(check.ok, true, "过短不再是硬违规，全部按软提示放行");
+  if (!check.ok) return;
+  assert.equal(check.softViolations.length, 5);
+  assert.ok(check.softViolations.some((violation) => violation.reason === "shot-too-short"));
   assert.ok(check.softViolations.some((violation) => violation.reason === "shot-too-long"));
   assert.ok(check.softViolations.some((violation) => violation.reason === "total-too-long"));
 });
