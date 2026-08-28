@@ -115,14 +115,15 @@ export class FfmpegMediaTools implements MediaTools {
   }
 
   async merge(videoPath: string, audioPath: string, outputPath: string): Promise<void> {
+    // 输出走 .part 临时文件，ffmpeg 无法从扩展名推断格式，必须显式声明。
     try {
       await writeViaTemporary(outputPath, (temporary) => this.#run("ffmpeg", [
-        "-y", "-i", videoPath, "-i", audioPath, "-c", "copy", "-movflags", "+faststart", temporary,
+        "-y", "-i", videoPath, "-i", audioPath, "-f", "mp4", "-c", "copy", "-movflags", "+faststart", temporary,
       ]).then(() => undefined));
     } catch {
       try {
         await writeViaTemporary(outputPath, (temporary) => this.#run("ffmpeg", [
-          "-y", "-i", videoPath, "-i", audioPath, "-c:v", "copy", "-c:a", "aac", "-movflags", "+faststart", temporary,
+          "-y", "-i", videoPath, "-i", audioPath, "-f", "mp4", "-c:v", "copy", "-c:a", "aac", "-movflags", "+faststart", temporary,
         ]).then(() => undefined));
       } catch (error) {
         throw mediaToolError(error, "MEDIA_MERGE_FAILED", "音视频合并失败");
@@ -152,7 +153,7 @@ export class FfmpegMediaTools implements MediaTools {
       await writeViaTemporary(audioPath, (temporary) => this.#run("ffmpeg", [
         "-y", "-i", videoPath,
         "-vn", "-ac", "1", "-ar", "16000", "-sample_fmt", "s16",
-        "-c:a", "pcm_s16le", temporary,
+        "-f", "wav", "-c:a", "pcm_s16le", temporary,
       ]).then(() => undefined));
     } catch (error) {
       throw mediaToolError(error, "MEDIA_PROBE_FAILED", "视频音频提取失败");

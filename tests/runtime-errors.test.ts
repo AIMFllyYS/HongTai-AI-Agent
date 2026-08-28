@@ -573,6 +573,44 @@ test("FFmpeg失败只删除临时文件并保留已有产物", async () => {
   }
 });
 
+test("FFmpeg合并与音频提取显式声明输出格式", async () => {
+  // 回归：输出经 .part 临时文件写入，ffmpeg 无法从扩展名推断格式，
+  // 必须靠显式 -f 声明，否则合并/提取直接失败。
+  const calls: string[][] = [];
+  const spawn: FfmpegSpawn = (_command, args) => {
+    calls.push([...args]);
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: EventEmitter;
+      stderr: EventEmitter;
+      kill: () => boolean;
+    };
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.kill = () => true;
+    const temporary = args[args.length - 1];
+    if (typeof temporary === "string") writeFileSync(temporary, "output");
+    queueMicrotask(() => child.emit("close", 0));
+    return child as unknown as ChildProcess;
+  };
+  const directory = await mkdtemp(join(tmpdir(), "hongtai-ffmpeg-format-test-"));
+  try {
+    const tools = new FfmpegMediaTools({ spawn });
+    await tools.merge("video.m4s", "audio.m4s", join(directory, "merged.mp4"));
+    await tools.extractAudio(join(directory, "merged.mp4"), join(directory, "audio.wav"));
+
+    const mergeArgs = calls[0];
+    const extractArgs = calls[1];
+    assert.ok(mergeArgs, "merge应发起ffmpeg调用");
+    assert.ok(extractArgs, "extractAudio应发起ffmpeg调用");
+    assert.equal(mergeArgs[mergeArgs.indexOf("-f") + 1], "mp4");
+    assert.equal(extractArgs[extractArgs.indexOf("-f") + 1], "wav");
+    assert.ok(mergeArgs[mergeArgs.length - 1].endsWith(".part"), "merge输出应是.part临时文件");
+    assert.ok(extractArgs[extractArgs.length - 1].endsWith(".part"), "提取输出应是.part临时文件");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("媒体下载在HTTP失败、创建目录失败和打开文件失败时取消响应流", async () => {
   const destination = join(tmpdir(), "hongtai-download-cancel", "video.mp4");
   let cancelled = 0;

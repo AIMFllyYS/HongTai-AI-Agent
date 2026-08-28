@@ -58,6 +58,14 @@
 
 **不要做的事：** 不要并回 #87 去改 `view` / `playurl`；不要引入 Cookie / buvid；不要取消对 HTML、JSON、HLS 的拒绝。
 
+**2026-08-28 追加（CLI 层第二根因，已修复并实跑验证）：**
+
+> 排查用户短链 `https://b23.tv/QuHScxo` 时发现 CLI 采集链路另有独立回归，与 APK 音频槽 MIME 无关：`b8a0ce4`（2026-08-17）把 `FfmpegMediaTools` 的输出改为 `.part` 临时文件原子写入后，ffmpeg 无法从 `.part` 扩展名推断输出格式，`merge` 与 `extractAudio` 双双失败（`MEDIA_MERGE_FAILED`）。这是「一个月前 CLI 好使、后来坏了」的直接原因；测试用 fake spawn 不执行真 ffmpeg，故从未拦截。
+>
+> 修复：`merge` 两处调用显式 `-f mp4`、`extractAudio` 显式 `-f wav`，新增回归测试锁定格式声明。验证：定向测试 28/28、`pnpm check` 全过；CLI 实跑该短链全链路成功（任务 `20260828093945-5yy4f7`：解析→双流下载→合并→34s 时长校验→转写 2 分段 214 字→`succeeded`/`transcribed`），产物 `video.mp4` 经 ffprobe 确认 h264+aac 双轨。
+>
+> 本段只收窄 #122 的排查面（CLI 已通、浏览器已通、APK 源码已含 MIME 修复）；**APK 真网复验条件不变**，见上文关单清单。Android 端 remux 逐项核对（显式 `MUXER_OUTPUT_MPEG_4`、编码白名单覆盖 `video/avc`+`audio/mp4a-latm`、时序约束满足）未发现新缺陷，不改原生代码。
+
 ---
 
 ### 2. 已关、但采集尾巴就是 #122：[#87](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/87) B 站 APK 一律解析失败
