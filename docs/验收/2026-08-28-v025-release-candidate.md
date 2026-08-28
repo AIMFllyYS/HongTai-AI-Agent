@@ -1,10 +1,10 @@
-# v0.1.25 Release 验收记录（端侧主机门禁与本地归档通过）
+# v0.1.25 Release 验收记录（公网分发与下载页切换完成）
 
 ## 结论
 
 制作板块「文稿先行」深度重构（spec `rebuild-production-pipeline`）的源码已按任务周期完成 TypeScript 层实现、运行时边界和 Android Release 编译校验；随后将 Android 源码推进到 `versionName=0.1.25` / `versionCode=33`，使用仓库外正式签名配置完成 Release 构建、签名后验和独立归档。
 
-本地归档已完成；`v0.1.25` 尚未上传公网，`download.html` 仍推荐 `v0.1.24`，待上传回验后再切换。主机/模拟器门禁不等于物理手机、真实 Provider 或最终成片全链路通过。
+`v0.1.25` 已上传公网（`https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.25.apk`），完整下载回验大小与 SHA-256 均与本地归档一致；`download.html` 公开推荐已切换为 `v0.1.25`，`v0.1.24` 降为历史版本。主机/模拟器门禁不等于物理手机、真实 Provider 或最终成片全链路通过。
 
 ## 版本与文件
 
@@ -14,10 +14,10 @@
 | versionName | `0.1.25` |
 | versionCode | `33` |
 | Release APK | `output/apk-archive/HongTai-AI-Agent-release-v0.1.25.apk` |
-| APK 大小 | `23,379,102` bytes |
-| APK SHA-256 | `2545ce401283badfbc4b85a782084e7e85ce47469f2f1564ac8c2c9cb73e03e8` |
+| APK 大小 | `23,379,102` bytes（本地归档与公网文件一致） |
+| APK SHA-256 | `2545ce401283badfbc4b85a782084e7e85ce47469f2f1564ac8c2c9cb73e03e8`（公网文件已下载回验一致） |
 | 证书 SHA-256 | `54df122cd4f99720c613737815385e771bfaeb17715c160aed178062ab5b2fde` |
-| 公开推荐 | 仍为 `v0.1.24` / code32；`v0.1.25` 待上传后切换 |
+| 公开推荐 | `v0.1.25` / code33（`download.html` 已切换，回验完成） |
 
 ## 文稿先行管线的端侧保证链路
 
@@ -71,5 +71,4 @@ TypeScript 层验证：`pnpm check` 全绿（613 web + 145 runtime 测试）与 
 
 - 本轮没有物理 Android 手机端测，因此不声称真实触控、OEM WebView、外部选择器、真实媒体 I/O 或升级链路在物理设备通过。
 - 本轮没有真实 AI Provider 请求，因此不声称网络、Key、解析平台、ASR/视觉模型或最终成片端到端通过。
-- `v0.1.25` 尚未上传公网，`download.html` 未切换；上传与大小/SHA-256 回验完成后另行登记。
 - 真实 Provider、物理真机和最终成片全链路仍需用户端测验收。
