@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { MIMO_CHAT_AUDIO_TTS_INSTRUCTION, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, type AiProvider, type DecorationSelection, type ProductionPlanResultV2 } from "@hongtai/ai";
+import { MIMO_CHAT_AUDIO_TTS_INSTRUCTION, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, type AiProvider, type AiStreamEvent, type DecorationSelection, type ProductionPlanResultV2 } from "@hongtai/ai";
 import { DECORATION_IDS, TaskError, type ContentAnalysisRecord, type TaskDetailRecord } from "@hongtai/core";
 
 import { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
-import { narrationProgressEvent } from "./standalone-production-script.js";
+import { narrationProgressEvent, type StandaloneProductionEvent } from "./standalone-production-script.js";
 import { StandaloneProductionService } from "./standalone-production-service.js";
 
 // Carries a real sticker rather than an empty list: the allow-list is supplied by this service, and
@@ -68,6 +68,8 @@ interface InsightHarnessOptions {
 interface V4HarnessOptions {
   /** What the text model drafts for `script_storyboard_v1`. Absent yields two grounded sentences. */
   readonly scriptDraft?: () => Record<string, unknown>;
+  /** Stream events the provider stub replays per script-generation call (1-based) before answering. */
+  readonly scriptStreamEvents?: (call: number) => readonly AiStreamEvent[];
   /** Duration of the single avatar video the picker returns; defaults to 20 s. */
   readonly avatarDurationSeconds?: number;
   /**
@@ -134,6 +136,7 @@ function harness(narration: "system" | "provider" = "system", now?: () => Date, 
       }
       if (request.jsonSchema?.name === "script_storyboard_v1") {
         scriptPrompts.push(String(request.messages[0]?.content ?? ""));
+        for (const event of v4?.scriptStreamEvents?.(scriptPrompts.length) ?? []) await request.onEvent?.(event);
         return {
           content: JSON.stringify(v4?.scriptDraft?.() ?? {
             purpose: "门店服务介绍",
@@ -1497,6 +1500,71 @@ test("分镜脚本生成本地 id 与字符估算，重启后仍可读取", asyn
   const reopened = create();
   const reread = await reopened.getScript("project-1");
   assert.deepEqual(scriptSentencesOf(reread!), sentences);
+});
+
+test("分镜生成流式增量聚合成 script-progress 事件，正文与推理分开携带", async () => {
+  const context = harness("system", undefined, undefined, {
+    scriptStreamEvents: () => [
+      { type: "reasoning_delta", delta: "先想结构" },
+      { type: "content_delta", delta: "第一段" },
+      { type: "content_delta", delta: "第二段" },
+      { type: "completed" },
+    ],
+  });
+  const service = context.create();
+  await service.create({ analysisTaskId: "task-1", brief: "突出真实服务", targetDurationSeconds: 20 });
+  await service.importAssets("project-1");
+
+  const progress: StandaloneProductionEvent[] = [];
+  const stop = service.subscribe("project-1", (event) => { progress.push(event); });
+  try {
+    await service.generateScript("project-1");
+  } finally {
+    stop();
+  }
+
+  // 短于 48 字且不足 120ms 时不分片：completed 一次性冲刷全部增量。
+  const streamed = progress.filter((event) => event.type === "script-progress");
+  assert.equal(streamed.length, 1, "小流量增量应合并为单次事件，避免逐字轰炸界面");
+  assert.deepEqual(
+    streamed[0],
+    { type: "script-progress", projectId: "project-1", phase: "generating", contentDelta: "第一段第二段", reasoningDelta: "先想结构", receivedCharacters: 6 },
+  );
+  assert.ok(!JSON.stringify(context.values).includes("先想结构"), "推理增量是运行期内存事件，绝不落盘");
+});
+
+test("初稿触发修复轮时先冲刷 generating 增量，再以 repairing 阶段继续", async () => {
+  let call = 0;
+  const context = harness("system", undefined, undefined, {
+    scriptDraft: () => {
+      call += 1;
+      return call === 1
+        ? { purpose: "初稿", sentences: [{ text: "看门店。", assetId: "asset-9" }] }
+        : { purpose: "门店服务介绍", sentences: [{ text: "先看看真实门店环境。", assetId: "asset-1" }, { text: "再了解完整服务过程。", assetId: "asset-2" }] };
+    },
+    scriptStreamEvents: (which) => which === 1
+      ? [{ type: "content_delta", delta: "初稿增量" }]
+      : [{ type: "content_delta", delta: "修复增量" }, { type: "completed" }],
+  });
+  const service = context.create();
+  await service.create({ analysisTaskId: "task-1", brief: "突出真实服务", targetDurationSeconds: 20 });
+  await service.importAssets("project-1");
+
+  const progress: StandaloneProductionEvent[] = [];
+  const stop = service.subscribe("project-1", (event) => { progress.push(event); });
+  try {
+    await service.generateScript("project-1");
+  } finally {
+    stop();
+  }
+
+  const streamed = progress.filter((event) => event.type === "script-progress");
+  // 阶段切换本身要冲刷：初稿增量不能被错误地标成 repairing。
+  assert.deepEqual(
+    streamed.map((event) => [event.phase, event.contentDelta, event.receivedCharacters]),
+    [["generating", "初稿增量", 4], ["repairing", "修复增量", 8]],
+    "receivedCharacters 跨阶段单调递增，不因冲刷归零",
+  );
 });
 
 test("重新生成分镜会作废旧句子上的配音、计划与成片", async () => {

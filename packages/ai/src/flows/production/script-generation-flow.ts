@@ -6,6 +6,7 @@ import {
   type ScriptStoryboard,
 } from "@hongtai/core";
 
+import type { AiStreamEvent } from "../../contracts/provider";
 import type { ScriptGenerationAsset, ScriptGenerationFlowDependencies, ScriptGenerationInput } from "../../contracts/script-storyboard-generation";
 import { sharesVerbatimRun } from "../../originality";
 import { scriptStoryboardPrompt, scriptStoryboardRepairPrompt } from "../../prompts/script-storyboard";
@@ -101,8 +102,8 @@ function assertOriginalStoryboard(storyboard: ScriptStoryboard, input: ScriptGen
  * 文稿先行的第一步：一句话需求（可选参考拆解与素材 insight）→ 逐句分镜脚本。
  *
  * 与 ProductionPlanningFlow 相同的调用结构：一次 structured-output 调用，解析失败或绑定
- * 校验失败走一次修复轮，修复仍失败抛 AI_FORMAT_REPAIR_FAILED。流式进度事件原样透传给
- * provider，界面据此呈现逐句生成的实时过程。
+ * 校验失败走一次修复轮，修复仍失败抛 AI_FORMAT_REPAIR_FAILED。流式进度事件透传给
+ * provider，并附带 generating/repairing 阶段标注，界面据此呈现逐句生成的实时过程。
  */
 export class ScriptGenerationFlow {
   readonly #dependencies: ScriptGenerationFlowDependencies;
@@ -113,14 +114,16 @@ export class ScriptGenerationFlow {
 
   async run(input: ScriptGenerationInput): Promise<ScriptStoryboard> {
     validateInput(input);
-    const request = async (prompt: string) => this.#dependencies.provider.generate({
+    const onEvent = this.#dependencies.onEvent;
+    const request = async (prompt: string, phase: "generating" | "repairing") => this.#dependencies.provider.generate({
       model: "text",
       output: "json",
       jsonSchema: { name: "script_storyboard_v1", schema: scriptStoryboardDraftJsonSchema, strict: true },
       messages: [{ role: "system", content: prompt }],
-      ...(this.#dependencies.onEvent ? { onEvent: this.#dependencies.onEvent } : {}),
+      // 阶段标注随流式事件透传：初稿 generating、修复轮 repairing。
+      ...(onEvent ? { onEvent: (event: AiStreamEvent) => onEvent(event, { phase }) } : {}),
     });
-    const initial = await request(scriptStoryboardPrompt(input));
+    const initial = await request(scriptStoryboardPrompt(input), "generating");
     try {
       const draft = parseStructuredOutput(initial.content, scriptStoryboardDraftSchema);
       validateGrounding(draft, input);
@@ -129,7 +132,7 @@ export class ScriptGenerationFlow {
       return storyboard;
     } catch (error) {
       if (!(error instanceof TaskError) || error.code !== "AI_STRUCTURED_OUTPUT_INVALID") throw error;
-      const repaired = await request(scriptStoryboardRepairPrompt(initial.content, input));
+      const repaired = await request(scriptStoryboardRepairPrompt(initial.content, input), "repairing");
       try {
         const draft = parseStructuredOutput(repaired.content, scriptStoryboardDraftSchema);
         validateGrounding(draft, input);

@@ -25,7 +25,7 @@ import { consumeCreateSourceIdFromSearch, isEligibleCreateSourceTask, peekCreate
 import { readContentAnalysis } from "../tasks/content-analysis-presenters";
 import { ProductionComposerPanel, type ComposerFlow } from "./production-composer-panel";
 import { ProductionHistoryList } from "./production-history-list";
-import { ProductionPipelinePanel, type PipelineStoryboardEdit } from "./production-pipeline-panel";
+import { ProductionPipelinePanel, type PipelineStoryboardEdit, type ProductionScriptStream } from "./production-pipeline-panel";
 import { sourceCardFromTask, type AnalysisSource } from "./production-setup-forms";
 import {
   productionRenderStageCopy,
@@ -39,6 +39,19 @@ import {
 function focusProductionInput(): void {
   if (typeof document === "undefined") return;
   document.getElementById("production-brief")?.focus();
+}
+
+/** 流式文本的界面累积上限：截头保尾，界面只做有界展示，绝不无限增长。 */
+const SCRIPT_STREAM_MAX_CHARACTERS = 4_000;
+
+function appendScriptStreamText(current: string, delta: string): string {
+  const next = current + delta;
+  return next.length <= SCRIPT_STREAM_MAX_CHARACTERS ? next : next.slice(next.length - SCRIPT_STREAM_MAX_CHARACTERS);
+}
+
+/** script-progress 事件的页面累积状态；projectId 用于丢弃跨项目的迟到事件。 */
+interface ScriptStreamState extends ProductionScriptStream {
+  readonly projectId: string;
 }
 
 function shellTitleFor(flow: ComposerFlow, showComposer: boolean): string {
@@ -83,6 +96,8 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   const [script, setScript] = useState<ProductionScriptRecord>();
   const [narration, setNarration] = useState<ProductionNarrationRecord>();
   const [scriptGenerating, setScriptGenerating] = useState(false);
+  const [scriptStream, setScriptStream] = useState<ScriptStreamState>();
+  const scriptStreamStopRef = useRef<(() => void) | undefined>(undefined);
   const [narrationProgress, setNarrationProgress] = useState<{ readonly index: number; readonly total: number }>();
   const [composeViolations, setComposeViolations] = useState<readonly MeasuredDurationViolation[]>([]);
   const [subtitleTemplateId, setSubtitleTemplateId] = useState<SubtitleTemplateId>(DEFAULT_SUBTITLE_TEMPLATE_ID);
@@ -97,6 +112,44 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
     setScript(nextScript);
     setNarration(nextNarration);
   }, [service]);
+
+  /**
+   * 分镜脚本生成期间的专用订阅：在调用 generateScript 之前挂上（新建项目时通用订阅
+   * 还没切到新项目），把 script-progress 增量累积成有界流文本。订阅失败只损失流式
+   * 展示，退化为骨架等待，生成本身不受影响。
+   */
+  const startScriptStream = useCallback((projectId: string): (() => void) => {
+    scriptStreamStopRef.current?.();
+    scriptStreamStopRef.current = undefined;
+    setScriptStream({ projectId, phase: "generating", content: "", reasoning: "", receivedCharacters: 0 });
+    let stopped = false;
+    let unsubscribe: (() => void) | undefined;
+    try {
+      unsubscribe = service.subscribe(projectId, (event: StandaloneProductionEvent) => {
+        if (stopped || event.type !== "script-progress" || event.projectId !== projectId) return;
+        setScriptStream((current) => current?.projectId === projectId
+          ? {
+            projectId,
+            phase: event.phase,
+            content: event.contentDelta === undefined ? current.content : appendScriptStreamText(current.content, event.contentDelta),
+            reasoning: event.reasoningDelta === undefined ? current.reasoning : appendScriptStreamText(current.reasoning, event.reasoningDelta),
+            receivedCharacters: event.receivedCharacters,
+          }
+          : current);
+      });
+    } catch {
+      setScriptStream(undefined);
+      return () => undefined;
+    }
+    const stop = () => {
+      stopped = true;
+      unsubscribe?.();
+    };
+    scriptStreamStopRef.current = stop;
+    return stop;
+  }, [service]);
+
+  useEffect(() => () => { scriptStreamStopRef.current?.(); }, []);
 
   const load = useCallback(async () => {
     const requestedSourceId = peekCreateSourceIdFromSearch();
@@ -198,6 +251,8 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   }, [applyAssetRecovery, loading]);
 
   // 活跃项目切换（含刚创建）时刷新脚本与配音记录；v3 存量项目两者都是 undefined。
+  // 流式状态不在这里重置：新建项目时本 effect 会在 startScriptStream 之后运行，
+  // 清掉会把刚挂上的流清空；流的生命周期由 startScriptStream/stop 自管。
   useEffect(() => {
     const projectId = project?.projectId;
     setScript(undefined);
@@ -231,6 +286,8 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
           }
           return;
         }
+        // script-progress 由生成期间的专用订阅累积（见 startScriptStream），这里不重复处理。
+        if (event.type === "script-progress") return;
         if (event.projectId !== projectId) return;
         setProgress(event.progress);
         setProgressMessage(productionRenderStageCopy(event.stage));
@@ -294,10 +351,16 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
         headlineText: headlineText || undefined,
         textPreset,
       });
+      // 创建成功即切到管线面板：脚本在目标页面上流式生长，而不是停在表单里干等。
+      setComposingNew(false);
+      setProject(created);
+      setProjects((current) => [created, ...current.filter((item) => item.projectId !== created.projectId)]);
+      const stopStream = startScriptStream(created.projectId);
       setScriptGenerating(true);
       try {
         await service.generateScript(created.projectId, { brief });
       } finally {
+        stopStream();
         setScriptGenerating(false);
       }
       return (await runtime.production.get(created.projectId)) ?? created;
@@ -307,10 +370,12 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   const generateScript = async () => {
     if (!project) return;
     await perform(async () => {
+      const stopStream = startScriptStream(project.projectId);
       setScriptGenerating(true);
       try {
         await service.generateScript(project.projectId);
       } finally {
+        stopStream();
         setScriptGenerating(false);
       }
       return (await runtime.production.get(project.projectId)) ?? project;
@@ -594,6 +659,9 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
             project={activeProject}
             script={script}
             scriptGenerating={scriptGenerating}
+            scriptStream={scriptStream && scriptStream.projectId === activeProject.projectId
+              ? { phase: scriptStream.phase, content: scriptStream.content, reasoning: scriptStream.reasoning, receivedCharacters: scriptStream.receivedCharacters }
+              : undefined}
             stage={stage}
             subtitleTemplateId={subtitleTemplateId}
           />

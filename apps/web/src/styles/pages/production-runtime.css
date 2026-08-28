@@ -645,6 +645,66 @@
   font-family: var(--font-data);
 }
 
+/* 分镜脚本流式生成：骨架句卡 + 流水文本（JSON 未完成不猜结构，只展示原始流） */
+.production-script-stream {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.production-script-stream__skeleton {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.production-script-stream__skeleton span {
+  width: 100%;
+  height: 3.4rem;
+  overflow: hidden;
+  background: linear-gradient(100deg, var(--palette-brand-tint) 12%, rgba(16, 185, 129, 0.22) 34%, var(--palette-brand-tint) 56%);
+  background-size: 220% 100%;
+  border-radius: var(--radius-control);
+  animation: production-script-stream-shimmer 1.35s linear infinite;
+}
+
+.production-script-stream__skeleton span:nth-child(2) { width: 92%; }
+
+.production-script-stream__skeleton span:nth-child(3) { width: 78%; }
+
+.production-script-stream__text {
+  max-height: 11rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--space-3);
+  color: var(--palette-ink-600);
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--surface-card);
+  border: 1px solid var(--palette-hairline);
+  border-radius: var(--radius-control);
+}
+
+.production-script-stream__meta {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+  color: var(--palette-ink-400);
+  font-size: var(--text-caption);
+}
+
+.production-script-stream__meta svg {
+  flex: none;
+  color: var(--palette-brand);
+  animation: spin 1.4s linear infinite;
+}
+
+@keyframes production-script-stream-shimmer {
+  to { background-position: -220% 0; }
+}
+
 .production-pipeline-requirement {
   background: var(--palette-fill);
   border-radius: var(--radius-card);

@@ -83,6 +83,20 @@ export type StandaloneProductionEvent =
     readonly sentenceIndex?: number;
     readonly total?: number;
     readonly sentenceId?: string;
+  }
+  | {
+    /**
+     * 分镜脚本生成的流式增量（含 provider 推理文本）。运行期内存事件：界面只做
+     * 有界展示，绝不写入 project.json 或任何持久化文件。
+     */
+    readonly type: "script-progress";
+    readonly projectId: string;
+    /** 初稿 generating；格式修复轮 repairing。 */
+    readonly phase: "generating" | "repairing";
+    readonly contentDelta?: string;
+    readonly reasoningDelta?: string;
+    /** 本次生成累计接收的正文（content delta）字符数，单调递增。 */
+    readonly receivedCharacters: number;
   };
 
 /** 把 native 的 `synthesize_narration` 进度事件映射为界面事件；其他阶段交由渲染监听处理。 */

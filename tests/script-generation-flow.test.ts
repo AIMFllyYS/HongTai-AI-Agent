@@ -226,11 +226,27 @@ test("数字人模式缺视频或缺时长直接拒绝", async () => {
   assert.equal(undated.calls.length, 0);
 });
 
-test("流式进度事件原样透传给 provider", async () => {
-  const provider = new SequenceProvider([JSON.stringify(draft())]);
-  const events: string[] = [];
+test("流式进度事件透传给 provider，并携带 generating/repairing 阶段标注", async () => {
+  const phases: string[] = [];
+  const provider: AiProvider = {
+    generate: async (request) => {
+      await request.onEvent?.({ type: "reasoning_delta", delta: "先想结构" });
+      await request.onEvent?.({ type: "content_delta", delta: "片段" });
+      const invalid = provider.calls.length === 0;
+      provider.calls.push(request);
+      return { content: invalid ? JSON.stringify(draft("invented-asset")) : JSON.stringify(draft()), reasoning: "" };
+    },
+    transcribe: async () => "",
+    calls: [] as AiGenerateRequest[],
+  } as AiProvider & { calls: AiGenerateRequest[] };
 
-  await new ScriptGenerationFlow({ provider, onEvent: () => { events.push("tick"); } }).run(montageInput);
+  await new ScriptGenerationFlow({
+    provider,
+    onEvent: (event, meta) => {
+      if (event.type === "reasoning_delta" || event.type === "content_delta") phases.push(meta.phase);
+    },
+  }).run(montageInput);
 
   assert.equal(typeof provider.calls[0]?.onEvent, "function");
+  assert.deepEqual(phases, ["generating", "generating", "repairing", "repairing"], "初稿事件标 generating，修复轮事件标 repairing");
 });

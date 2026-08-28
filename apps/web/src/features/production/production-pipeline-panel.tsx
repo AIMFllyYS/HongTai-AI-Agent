@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   DECORATION_CATALOGUE,
   MAX_SCRIPT_SENTENCE_CHARACTERS,
@@ -12,6 +12,7 @@ import {
 import type { ProductionNarrationRecord, ProductionScriptRecord } from "@hongtai/capacitor-runtime";
 
 import { Button } from "../../components/Buttons";
+import { DeepThinkingPanel } from "../../components/DeepThinkingPanel";
 import { GlassCard } from "../../components/GlassCard";
 import { Icon, type IconName } from "../../components/Icon";
 import { issueActionPresentation, issueTitle, type TaskIssueActionHandlers } from "../../components/IssueNotice";
@@ -34,12 +35,26 @@ export interface PipelineStoryboardEdit {
   readonly stickerId?: string | null;
 }
 
+/** 分镜脚本生成中的流式投影：运行期内存状态，界面只做有界展示，不落盘。 */
+export interface ProductionScriptStream {
+  /** 初稿 generating；格式修复轮 repairing。 */
+  readonly phase: "generating" | "repairing";
+  /** 累积的正文流（原始 JSON 文本，未完成不猜结构）。 */
+  readonly content: string;
+  /** 累积的推理文本；供应商不返回推理时恒为空串。 */
+  readonly reasoning: string;
+  /** 累计接收的正文（content delta）字符数。 */
+  readonly receivedCharacters: number;
+}
+
 export interface ProductionPipelinePanelProps {
   readonly project: ProductionProjectRecord;
   readonly stage: ProductionPipelineStage;
   /** v4 分镜脚本记录；v3 存量项目与「脚本尚未生成」的 v4 项目没有。 */
   readonly script?: ProductionScriptRecord;
   readonly scriptGenerating: boolean;
+  /** 生成中的流式投影；订阅不可用或尚未收到事件时为 undefined（退化为骨架等待）。 */
+  readonly scriptStream?: ProductionScriptStream;
   /** 逐句配音记录；有任何一句就绪或经历过配音调用后可用。 */
   readonly narration?: ProductionNarrationRecord;
   readonly narrationProgress?: { readonly index: number; readonly total: number };
@@ -94,6 +109,7 @@ export function ProductionPipelinePanel({
   stage,
   script,
   scriptGenerating,
+  scriptStream,
   narration,
   narrationProgress,
   composeViolations,
@@ -181,7 +197,7 @@ export function ProductionPipelinePanel({
 
       {scriptGenerating ? (
         <PipelineSection description="正在按你的需求逐句生成分镜脚本，完成后可以逐句修改。" stageState="current" title="分镜文稿">
-          <p className="production-pipeline-hint is-busy"><Icon name="sync" size={16} />正在生成分镜脚本…</p>
+          <ScriptGeneratingSection stream={scriptStream} />
         </PipelineSection>
       ) : script ? (
         <ScriptSection
@@ -292,6 +308,39 @@ function PipelineSection({ title, description, stageState, children }: {
       </header>
       {children}
     </section>
+  );
+}
+
+/**
+ * 分镜脚本生成中的实时区块：骨架句卡占位 + 流水文本自动滚底 + 深度思考面板。
+ * JSON 没输出完的板块不猜、不渲染半截结构——等脚本记录落地后整块切换为句卡编辑。
+ */
+function ScriptGeneratingSection({ stream }: { readonly stream?: ProductionScriptStream }) {
+  const textRef = useRef<HTMLPreElement>(null);
+  const phase = stream?.phase ?? "generating";
+
+  useEffect(() => {
+    if (textRef.current) textRef.current.scrollTop = textRef.current.scrollHeight;
+  }, [stream?.content]);
+
+  return (
+    <div className="production-script-stream" data-script-phase={phase}>
+      <div aria-hidden="true" className="production-script-stream__skeleton">
+        <span />
+        <span />
+        <span />
+      </div>
+      <pre aria-live="polite" className="production-script-stream__text" ref={textRef}>{stream?.content || "正在生成分镜脚本…"}</pre>
+      <p className="production-script-stream__meta">
+        <Icon name="sync" size={15} />
+        {phase === "repairing"
+          ? "初稿没有通过校验，正在自动修复格式…"
+          : stream
+            ? `正在逐句生成分镜脚本 · 已接收 ${stream.receivedCharacters} 字`
+            : "正在逐句生成分镜脚本…"}
+      </p>
+      <DeepThinkingPanel thinking={{ status: stream?.reasoning ? "streaming" : "waiting", text: stream?.reasoning ?? "" }} />
+    </div>
   );
 }
 

@@ -15,6 +15,7 @@ import {
   validateMeasuredProductionPlan,
   withMeasuredSubtitleTimeline,
   type AiProvider,
+  type AiStreamEvent,
   type DecorationIntent,
   type NarrationSentenceTimingInstruction,
   type ProductionPlanConstraints,
@@ -398,7 +399,11 @@ export class StandaloneProductionService implements ProductionService {
       }
       // 原创性校验前移到生成期：参考原文与 compose 路径同一来源，读不到则跳过。
       const sourceText = originalSourceText(await this.#options.tasks.getDetail(project.analysisTaskId).catch(() => undefined));
-      const storyboard = await new ScriptGenerationFlow({ provider: await this.#options.getProvider() }).run({
+      const storyboard = await new ScriptGenerationFlow({
+        provider: await this.#options.getProvider(),
+        // 流式进度：delta 轻量聚合后以 script-progress 事件发给界面，只做运行期展示。
+        onEvent: this.#scriptProgressListener(projectId),
+      }).run({
         brief,
         mode: project.mode,
         ...(parsed?.success ? { analysis: parsed.data } : {}),
@@ -413,6 +418,51 @@ export class StandaloneProductionService implements ProductionService {
       await this.#persist({ ...project, status: "failed", issue: issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "分镜脚本没有完成", action: "retry" }) });
       throw error;
     }
+  }
+
+  /**
+   * 分镜脚本生成的流式进度监听器：把 provider 的 delta 轻量聚合（累计 ≥48 字符或距
+   * 上次发射 ≥120ms 才 emit，完成即冲刷）后以 `script-progress` 事件发给界面。正文与
+   * 推理文本都只存在于本次生成的运行期内存，绝不写入 project.json。
+   */
+  #scriptProgressListener(projectId: string): (event: AiStreamEvent, meta: { readonly phase: "generating" | "repairing" }) => Promise<void> {
+    let phase: "generating" | "repairing" = "generating";
+    let pendingContent = "";
+    let pendingReasoning = "";
+    let receivedCharacters = 0;
+    let lastEmitAt = Date.now();
+
+    const flush = async (): Promise<void> => {
+      if (pendingContent.length === 0 && pendingReasoning.length === 0) return;
+      await this.#emit(projectId, {
+        type: "script-progress",
+        projectId,
+        phase,
+        ...(pendingContent.length > 0 ? { contentDelta: pendingContent } : {}),
+        ...(pendingReasoning.length > 0 ? { reasoningDelta: pendingReasoning } : {}),
+        receivedCharacters,
+      });
+      pendingContent = "";
+      pendingReasoning = "";
+      lastEmitAt = Date.now();
+    };
+
+    return async (event, meta) => {
+      if (meta.phase !== phase) {
+        await flush();
+        phase = meta.phase;
+      }
+      if (event.type === "content_delta") {
+        pendingContent += event.delta;
+        receivedCharacters += event.delta.length;
+      } else if (event.type === "reasoning_delta") {
+        pendingReasoning += event.delta;
+      } else if (event.type === "completed") {
+        await flush();
+        return;
+      }
+      if (pendingContent.length >= 48 || Date.now() - lastEmitAt >= 120) await flush();
+    };
   }
 
   /**

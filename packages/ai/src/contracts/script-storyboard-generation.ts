@@ -37,7 +37,13 @@ export interface ScriptGenerationInput {
   readonly originalSourceText?: string;
 }
 
+/** 流式事件的阶段标注：初稿是 generating，格式修复轮是 repairing。 */
+export interface ScriptGenerationStreamMeta {
+  readonly phase: "generating" | "repairing";
+}
+
 export interface ScriptGenerationFlowDependencies {
   readonly provider: AiProvider;
-  readonly onEvent?: (event: AiStreamEvent) => void | Promise<void>;
+  /** 每个流式事件都带阶段标注，界面据此区分「正在生成」与「正在修复格式」。 */
+  readonly onEvent?: (event: AiStreamEvent, meta: ScriptGenerationStreamMeta) => void | Promise<void>;
 }
