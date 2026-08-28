@@ -43,14 +43,14 @@ test("制作首页只有两张顶层入口卡，数字人不是第三张", () =>
   assert.match(page, /composerFlow/u);
 });
 
-test("口播切片只作为 Agent 流程里的二次选项，不改服务契约", () => {
+test("数字人出镜只作为 Agent 流程里的二次选项，不改服务契约", () => {
   assert.match(page, /composerFlow === "agent"/u);
   assert.match(forms, /<Switch checked=\{avatarOn\}/u);
   assert.match(forms, /onMode\(checked \? "avatar" : "montage"\)/u);
-  assert.match(page, /mode === "avatar" \? \{ avatarScript \}/u, "提交给 production.create 的仍是既有 mode + avatarScript");
-  assert.doesNotMatch(page, /production-mode-grid/u, "不再用两列顶层单选把口播切片和素材剪辑并列");
-  assert.match(entry, /口播切片是下一步里的开关/u, "入口卡只提示下一步有这个选项，本身不是第三张卡");
-  assert.match(forms, /不生成数字人形象/u, "开关说明要诚实：只切片，不生成形象");
+  assert.doesNotMatch(page, /avatarScript/u, "新项目不再提交逐字稿：脚本由 AI 按需求生成，配音由应用完成");
+  assert.doesNotMatch(page, /production-mode-grid/u, "不再用两列顶层单选把数字人和素材剪辑并列");
+  assert.match(entry, /数字人出镜是下一步里的开关/u, "入口卡只提示下一步有这个选项，本身不是第三张卡");
+  assert.match(forms, /上传一段数字人预处理视频，配音、字幕与画面裁剪拼接全部自动完成/u, "开关说明要讲清全自动范围");
 });
 
 test("Agent 文案不声称看懂或理解素材，并要求逐镜核对", () => {
@@ -82,10 +82,12 @@ test("爆款复刻走既有向导，没有拆解时说明下一步并导向拆�
   assert.match(entry, /成片仍要回制作页合成/u);
 });
 
-test("口播切片不承诺素材剪辑才有的能力", () => {
-  assert.match(forms, /只按稿烧字幕，不合成语音，也不改原声/u);
-  assert.match(forms, /生成后不能改口播和单镜时长/u);
-  assert.match(forms, /切分按字数估算，不是对着录音识别的/u);
+test("数字人出镜如实描述能力：预处理视频加自动配音，不声称照片生成数字人", () => {
+  assert.match(forms, /数字人预处理视频/u);
+  assert.match(forms, /画面会自动循环裁剪凑齐时长/u, "偏短视频的处理方式要讲清：裁剪拼接，不是拒绝");
+  assert.match(forms, /视频原声会被替换成应用的配音/u, "诚实说明原声被丢弃");
+  assert.doesNotMatch(surface, /一张图片[\s\S]{0,40}数字人/u);
+  assert.doesNotMatch(surface, /照片生成数字人/u);
   assert.doesNotMatch(page, /数字人口播[\s\S]{0,80}TTS/u);
   assert.doesNotMatch(page, /数字人口播[\s\S]{0,80}至少 3/u);
   assert.doesNotMatch(entry, /数字人口播[\s\S]{0,80}至少 3/u);
@@ -114,8 +116,8 @@ test("一句话需求是唯一必填主字段，无拆解也能直接开始", ()
   assert.match(forms, /还没有可参考的拆解/u, "无拆解时高级选项里诚实说明，并保留去拆解入口");
   assert.match(forms, /一句话需求也能直接开始/u);
   assert.doesNotMatch(page, /!sourceId \|\| !brief\.trim\(\)/u, "sourceId 不再阻断创建");
-  assert.match(page, /!brief\.trim\(\) \|\| mode === "avatar" && !avatarScript\.trim\(\)/u);
-  assert.match(forms, /口播切片逐字稿/u, "口播稿输入随开关显示，命名对齐口播切片");
+  assert.match(page, /!brief\.trim\(\)/u);
+  assert.doesNotMatch(forms, /production-avatar-script/u, "逐字稿输入已移除：数字人脚本由 AI 生成");
 });
 
 test("离开 Agent 会清掉失败，重试不会在选择屏上重建项目", () => {

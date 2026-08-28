@@ -29,7 +29,7 @@ export function assertImportAllowed(project: PersistedProject, requirementOrder?
   if (remainingAssetSlots(project) <= 0) throw productionArtifactError("每个制作项目最多使用12个素材", "select_media");
   const selection = importSelectionOf(project);
   if (selection === "avatar" && project.assets.some((asset) => (asset.role ?? defaultAssetRole(asset)) === "avatar")) {
-    throw productionArtifactError("数字人口播模式只能上传一个数字人口播视频", "select_media");
+    throw productionArtifactError("数字人出镜只能上传一段数字人视频", "select_media");
   }
   if (requirementOrder === undefined) return;
   if (!isRequirementOrder(requirementOrder)) throw productionArtifactError("素材清单项编号无效", "select_media");
@@ -57,7 +57,7 @@ export function bindImportedAssets(
     return { status: "rejected", clearPending: true, error: productionArtifactError("没有导入可用的图片、视频或音频", "select_media") };
   }
   if (selection === "avatar" && (imported.length !== 1 || imported[0]?.role !== "avatar" || imported[0].kind !== "video")) {
-    return { status: "rejected", clearPending: true, error: productionArtifactError("请选择一个包含口播原声的 MP4 数字人视频", "select_media") };
+    return { status: "rejected", clearPending: true, error: productionArtifactError("请选择一段数字人预处理视频（MP4），配音会由应用生成", "select_media") };
   }
   const order = project.pendingRequirementOrder;
   const bound: readonly PersistedAsset[] = order !== undefined && imported.length === 1

@@ -54,11 +54,9 @@ export function SourcePicker({
 }
 
 export function AgentSetupForm({
-  avatarScript,
   brief,
   headlineText,
   mode,
-  onAvatarScript,
   onBrief,
   onGoAnalyze,
   onHeadlineText,
@@ -69,11 +67,9 @@ export function AgentSetupForm({
   sources,
   textPreset,
 }: {
-  readonly avatarScript: string;
   readonly brief: string;
   readonly headlineText: string;
   readonly mode: ProductionMode;
-  readonly onAvatarScript: (value: string) => void;
   readonly onBrief: (value: string) => void;
   readonly onGoAnalyze: () => void;
   readonly onHeadlineText: (value: string) => void;
@@ -96,7 +92,7 @@ export function AgentSetupForm({
       {avatarOn ? (
         <p className="production-hint">
           <Icon name="info" size={16} />
-          上传一条已经录好自己声音的 MP4，并粘贴口播稿。应用只按稿烧字幕，不合成语音，也不改原声。字幕必须跟口播稿一致；生成后不能改口播和单镜时长。切分按字数估算，不是对着录音识别的。
+          只需上传一段数字人预处理视频：脚本按你的需求生成，配音、字幕与画面裁剪拼接全部自动完成。视频偏短也不怕，画面会自动循环裁剪凑齐时长；视频原声会被替换成应用的配音。
         </p>
       ) : (
         <p className="production-hint">
@@ -120,25 +116,12 @@ export function AgentSetupForm({
 
       <div className={avatarOn ? "production-avatar-option is-selected" : "production-avatar-option"}>
         <span id="production-avatar-option-label">
-          <strong>口播切片</strong>
-          <small>使用你导入的口播视频与逐字稿切片，只烧字幕、不配音，不生成数字人形象</small>
+          <strong>数字人出镜</strong>
+          <small>上传一段数字人预处理视频，配音、字幕与画面裁剪拼接全部自动完成</small>
         </span>
         <Switch checked={avatarOn} labelledBy="production-avatar-option-label" onChange={(checked) => onMode(checked ? "avatar" : "montage")} />
       </div>
 
-      {avatarOn ? (
-        <div className="production-field">
-          <label className="field-label" htmlFor="production-avatar-script">口播切片逐字稿</label>
-          <textarea
-            id="production-avatar-script"
-            maxLength={360}
-            onChange={(event) => onAvatarScript(event.target.value)}
-            placeholder="请粘贴与上传口播视频原声一致的逐字稿。它会在本地切分为短字幕，不会替换原视频声音。"
-            rows={5}
-            value={avatarScript}
-          />
-        </div>
-      ) : null}
 
       <details className="production-advanced">
         <summary>高级选项（参考拆解、主文字、文字预设）</summary>

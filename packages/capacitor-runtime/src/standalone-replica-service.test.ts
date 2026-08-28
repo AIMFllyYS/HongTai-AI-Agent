@@ -142,7 +142,7 @@ function harness(options: {
       pickCalls.push({ maxItems: pickOptions.maxItems });
       const id = ["asset-a", "asset-b", "asset-c", "asset-d"][pick] ?? "asset-x";
       pick += 1;
-      return { assets: [{ id, uri: `file:///private/productions/project-1/inputs/${id}.mp4`, kind: "video" as const, mimeType: "video/mp4", displayName: `${id}.mp4`, sizeBytes: 200, durationSeconds: 12 }] };
+      return { assets: [{ id, uri: `file:///private/productions/project-1/inputs/${id}.mp4`, kind: "video" as const, mimeType: "video/mp4", displayName: `${id}.mp4`, sizeBytes: 200, durationSeconds: 12, ...(pickOptions.selection === "avatar" ? { role: "avatar" as const } : {}) }] };
     },
     render: async () => ({ uri: "file:///private/productions/project-1/output.mp4", mimeType: "video/mp4" as const, sizeBytes: 1_024, durationSeconds: 30 }),
     consumeAssetOperation: async () => ({ status: "none" as const }),
@@ -338,6 +338,27 @@ test("空清单和镜头太少的清单都不能开项目，并说明原因", as
     assert.equal(error.action, "none", "向导按 none 展示 userMessage；改成 retry 会重新走共享套话");
     return true;
   });
+});
+
+test("数字人单视频路径：两镜清单也能开项目，一段视频就绑定完成", async () => {
+  const twoShots = (JSON.parse(blueprint()) as { readonly shots: readonly Record<string, unknown>[] }).shots
+    .slice(0, 2)
+    .map((shot, index) => ({ ...shot, material: { kind: "video", contentHint: `第 ${index + 1} 段`, suggestedDurationSeconds: 10 } }));
+  const context = harness({ blueprintJson: blueprint({ shots: twoShots }) });
+  await context.replica.run("task-1");
+
+  const project = await context.replica.startProject("task-1", { mode: "avatar" });
+  assert.equal(project.mode, "avatar", "数字人路径建的是 avatar 项目");
+  assert.equal(project.targetDurationSeconds, 30, "文稿先行：占位时长，实际时长由实测配音决定");
+
+  // 不带清单项导入：项目模式已把选择器钉死为单视频。
+  const bound = await context.production.importAssets(project.projectId);
+  assert.deepEqual(context.pickCalls, [{ maxItems: 1 }], "数字人导入是单选");
+  assert.equal(bound.assets.length, 1);
+  assert.equal(bound.assets[0]?.role, "avatar", "数字人视频以 avatar 角色入册");
+
+  const again = await context.replica.startProject("task-1", { mode: "avatar" });
+  assert.equal(again.projectId, project.projectId, "重开向导仍回到同一个项目");
 });
 
 test("读不到已绑定的项目时拒绝重新生成清单，而不是当成项目已删除", async () => {

@@ -38,9 +38,7 @@ import {
 
 function focusProductionInput(): void {
   if (typeof document === "undefined") return;
-  const brief = document.getElementById("production-brief");
-  const script = document.getElementById("production-avatar-script");
-  (brief ?? script)?.focus();
+  document.getElementById("production-brief")?.focus();
 }
 
 function shellTitleFor(flow: ComposerFlow, showComposer: boolean): string {
@@ -75,7 +73,6 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   const [sourceId, setSourceId] = useState("");
   const [brief, setBrief] = useState("");
   const [mode, setMode] = useState<ProductionMode>("montage");
-  const [avatarScript, setAvatarScript] = useState("");
   const [headlineText, setHeadlineText] = useState("");
   const [textPreset, setTextPreset] = useState<ProductionTextPreset>("classic_top");
   const [progress, setProgress] = useState(0);
@@ -282,9 +279,8 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   };
 
   const createProject = async () => {
-    if (!brief.trim() || mode === "avatar" && !avatarScript.trim()) {
-      const message = mode === "avatar" ? "请填写制作需求和口播切片逐字稿" : "请填写制作需求";
-      setIssue(issueFromAppError(new TaskError({ code: "INPUT_EMPTY", message, action: "edit_input" }), { code: "INPUT_EMPTY", message: "制作输入不完整", action: "edit_input" }));
+    if (!brief.trim()) {
+      setIssue(issueFromAppError(new TaskError({ code: "INPUT_EMPTY", message: "请填写制作需求", action: "edit_input" }), { code: "INPUT_EMPTY", message: "制作输入不完整", action: "edit_input" }));
       return;
     }
     await perform(async () => {
@@ -297,7 +293,6 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
         mode,
         headlineText: headlineText || undefined,
         textPreset,
-        ...(mode === "avatar" ? { avatarScript } : {}),
       });
       setScriptGenerating(true);
       try {
@@ -401,7 +396,7 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
     failed,
     busy,
   });
-  const createBlocked = busy || !brief.trim() || (mode === "avatar" && !avatarScript.trim());
+  const createBlocked = busy || !brief.trim();
   const showComposer = !activeProject;
   const replicaComposer = showComposer && composerFlow === "replica";
   const agentComposer = showComposer && composerFlow === "agent";
@@ -427,7 +422,6 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
     setMode("montage");
     setBrief("");
     setHeadlineText("");
-    setAvatarScript("");
     setComposerFlow("pick");
     setProgress(0);
     setProgressMessage("");
@@ -563,12 +557,10 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
 
         {showComposer ? (
           <ProductionComposerPanel
-            avatarScript={avatarScript}
             brief={brief}
             flow={composerFlow}
             headlineText={headlineText}
             mode={mode}
-            onAvatarScript={setAvatarScript}
             onBrief={setBrief}
             onGoAnalyze={() => navigate(pathForRoute("home"))}
             onHeadlineText={setHeadlineText}

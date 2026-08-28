@@ -30,9 +30,18 @@ test("向导回到前台会消费素材恢复，失败时清掉 pending", () => 
   assert.match(page, /recovered\.status === "failed"[\s\S]*setPending\(undefined\)/u);
 });
 
-test("向导逐项绑定，不打开批量选择器", () => {
+test("向导逐项绑定，数字人路径单视频导入", () => {
   assert.match(page, /importAssets\(project\.projectId, \{ requirementOrder: order \}\)/u, "每次导入都要说明这是哪一项的素材");
-  assert.doesNotMatch(page, /importAssets\((?!project\.projectId, \{ requirementOrder)/u, "向导里不能出现不带清单项的导入");
+  assert.match(page, /bindAvatar[\s\S]*?importAssets\(project\.projectId\)\)/u, "数字人路径不带清单项：项目模式已把选择器钉死为单视频");
+});
+
+test("数字人单视频路径：一键入口绕过三项绑定门禁", () => {
+  assert.match(page, /startProject\(taskId, mode \? \{ mode \} : undefined\)/u, "建项目要能把模式传给服务层");
+  assert.match(page, /用一段数字人视频出镜/u, "开始卡片上要给出数字人替代路径");
+  assert.match(page, /project\?\.mode === "avatar"/u, "向导按项目模式分流两种素材准备方式");
+  assert.match(page, /画面会按每句配音自动裁剪拼接/u, "要说清偏短视频的循环补齐处理");
+  assert.match(page, /原声会被应用的配音替换/u, "要诚实说明原声被丢弃");
+  assert.match(page, /busy \|\| !avatarAsset/u, "生成分镜脚本要等数字人视频就绪");
 });
 
 test("向导不借用制作页的重试映射，也不自己合成成片", () => {

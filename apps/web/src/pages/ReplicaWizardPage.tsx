@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { issueFromAppError } from "@hongtai/core";
-import type { AppRuntime, ProductionProjectRecord, ReplicaBlueprintRecord, TaskIssue } from "@hongtai/core";
+import type { AppRuntime, ProductionMode, ProductionProjectRecord, ReplicaBlueprintRecord, TaskIssue } from "@hongtai/core";
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
@@ -119,20 +119,28 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
   const readiness = wizardReadiness(bindings);
   const strays = unboundAssetCount(project?.assets ?? []);
   const busy = pending !== undefined;
+  const avatarMode = project?.mode === "avatar";
+  const avatarAsset = project?.assets.find((asset) => asset.role === "avatar");
 
   const generate = () => run("blueprint", async () => {
     setRecord(await runtime.replica.run(taskId));
     setProject(undefined);
   }, "复刻清单没有生成成功");
 
-  const start = () => run("project", async () => {
-    setProject(await runtime.replica.startProject(taskId));
+  const start = (mode?: ProductionMode) => run("project", async () => {
+    setProject(await runtime.replica.startProject(taskId, mode ? { mode } : undefined));
   }, "没能打开这条爆款的制作项目");
 
   const bind = (order: number) => run("asset", async () => {
     if (!project) return;
     setProject(await runtime.production.importAssets(project.projectId, { requirementOrder: order }));
   }, "素材没有导入成功");
+
+  /** Avatar import needs no requirement order: the project mode already pins the single-video pick. */
+  const bindAvatar = () => run("asset", async () => {
+    if (!project) return;
+    setProject(await runtime.production.importAssets(project.projectId));
+  }, "数字人视频没有导入成功");
 
   const unbind = (assetId: string) => run("asset", async () => {
     if (!project) return;
@@ -201,13 +209,65 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
         <GlassCard className="replica-wizard__start">
           <h2>开始准备素材</h2>
           <p>先按这份清单建一个制作项目，之后逐项把拍好的素材放进对应位置。项目会记住每一项对应哪个文件。</p>
-          <Button disabled={busy} onClick={start} size="lg">
+          <Button disabled={busy} onClick={() => start()} size="lg">
             {pending === "project" ? "正在建项目" : "按这份清单建项目"}
           </Button>
+          <p className="replica-wizard__alt">不想逐项拍素材？</p>
+          <Button disabled={busy} onClick={() => start("avatar")} variant="secondary">
+            {pending === "project" ? "正在建项目" : "用一段数字人视频出镜"}
+          </Button>
+          <small>只需上传一段数字人预处理视频：脚本按这份清单写，配音、字幕与画面裁剪拼接全部自动完成，不用凑齐清单里的每一项素材。</small>
         </GlassCard>
       )}
 
-      {project ? (
+      {project && avatarMode ? (
+        <>
+          <p className="replica-wizard__progress" role="status">
+            数字人出镜 · {avatarAsset ? "已上传 1/1 段视频" : "已上传 0/1 段视频"}
+          </p>
+
+          <p className="production-hint" role="status">
+            <Icon name="info" size={16} />
+            {avatarAsset
+              ? `已就绪：${avatarAsset.displayName ?? "数字人视频"}。画面会按每句配音自动裁剪拼接，视频偏短就循环补齐，原声会被应用的配音替换。`
+              : "上传一段数字人预处理视频后就可以生成分镜脚本：画面按每句配音自动裁剪拼接，偏短就循环补齐，原声会被应用的配音替换。"}
+          </p>
+
+          <div className="replica-wizard__list">
+            {avatarAsset ? (
+              <article className="replica-wizard__avatar-asset">
+                <Icon name="video" size={25} />
+                <span>{avatarAsset.displayName ?? "数字人视频"}</span>
+                <small>数字人视频</small>
+                <button
+                  aria-label={`删除素材 ${avatarAsset.displayName ?? avatarAsset.id}`}
+                  className="production-asset-delete"
+                  disabled={busy}
+                  onClick={() => unbind(avatarAsset.id)}
+                  type="button"
+                >
+                  <Icon name="x" size={15} />
+                </button>
+              </article>
+            ) : (
+              <button className="production-add-asset" disabled={busy} onClick={() => bindAvatar()} type="button">
+                <Icon name="upload_file" size={24} />
+                <span>上传数字人视频</span>
+                <small>0/1</small>
+              </button>
+            )}
+          </div>
+
+          <div className="replica-wizard__finish">
+            <Button disabled={busy || !avatarAsset} onClick={compose} size="lg">
+              {pending === "plan" ? "正在写分镜脚本" : "生成分镜脚本"}
+            </Button>
+            <small>
+              脚本按这份清单的思路写，逐句配音后画面自动对齐。生成完回制作页继续逐句配音，确认后合成成片。
+            </small>
+          </div>
+        </>
+      ) : project ? (
         <>
           <p className="replica-wizard__progress" role="status">
             已绑定 {readiness.boundCount}/{blueprint.requirements.length} 项 · 清单建议合计 {project.targetDurationSeconds} 秒

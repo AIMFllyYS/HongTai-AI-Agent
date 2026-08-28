@@ -652,8 +652,11 @@ export interface ReplicaService {
    * Opens the production project the list will be rebuilt in, reusing the one already linked to this
    * breakdown. The target duration is the blueprint's own total, so the list stays internally
    * consistent instead of being squeezed into a preset the user never chose.
+   *
+   * `mode: "avatar"` starts the single-video path instead: the list only feeds the script, one
+   * avatar video covers every shot, and the three-material montage gate does not apply.
    */
-  startProject(taskId: string): Promise<ProductionProjectRecord>;
+  startProject(taskId: string, options?: { readonly mode?: ProductionMode }): Promise<ProductionProjectRecord>;
 }
 
 export interface ContentTemplateInput {

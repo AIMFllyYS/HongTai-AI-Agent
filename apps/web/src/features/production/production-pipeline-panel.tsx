@@ -319,28 +319,27 @@ function RequirementSection({ project, busy, onImport, onRemoveAsset }: {
       <summary>
         <Icon name="movie_edit" size={18} />
         <span>需求与素材</span>
-        <small>{avatarMode ? `口播切片 · ${project.assets.length} 个素材` : `素材剪辑 · ${project.assets.length} 个素材`}</small>
+        <small>{avatarMode ? `数字人 · ${project.assets.length} 个素材` : `素材剪辑 · ${project.assets.length} 个素材`}</small>
       </summary>
       <div className="production-pipeline-requirement__body">
         <dl className="production-copy">
           <div><dt>这次想讲什么</dt><dd>{project.brief}</dd></div>
           <div><dt>主文字</dt><dd>{project.headlineText || "留空，由 AI 根据真实需求生成"}</dd></div>
           <div><dt>文字预设</dt><dd>{PRODUCTION_TEXT_PRESET_LABELS[project.textPreset]}</dd></div>
-          {avatarMode ? <div><dt>口播逐字稿</dt><dd>{project.avatarScript || "尚未填写"}</dd></div> : null}
         </dl>
         <div className="production-assets">
           {project.assets.map((asset) => (
             <article key={asset.id}>
               <div>{asset.kind === "image" ? <img alt={asset.displayName ?? "制作素材"} src={asset.uri} /> : <Icon name={asset.kind === "video" ? "video" : "voice"} size={25} />}</div>
               <span>{asset.displayName ?? "本地素材"}</span>
-              <small>{asset.role === "avatar" ? "口播切片视频" : asset.role === "music" ? "音乐" : asset.kind === "image" ? "图片" : "视频"}</small>
+              <small>{asset.role === "avatar" ? "数字人视频" : asset.role === "music" ? "音乐" : asset.kind === "image" ? "图片" : "视频"}</small>
               {asset.reshootAdvice ? <p className="production-asset-reshoot"><Icon name="info" size={14} />{asset.reshootAdvice}</p> : null}
               <button aria-label={`删除素材 ${asset.displayName ?? asset.id}`} className="production-asset-delete" disabled={busy} onClick={() => onRemoveAsset(asset.id, asset.displayName ?? "本地素材")} type="button"><Icon name="x" size={15} /></button>
             </article>
           ))}
           <button className="production-add-asset" disabled={busy || project.assets.length >= 12 || avatarMode && usableVisualAssets >= 1} onClick={onImport} type="button">
             <Icon name="upload_file" size={24} />
-            <span>{avatarMode ? "上传口播切片视频" : "上传素材"}</span>
+            <span>{avatarMode ? "上传数字人视频" : "上传素材"}</span>
             <small>{avatarMode ? `${usableVisualAssets}/1` : `${project.assets.length}/12`}</small>
           </button>
         </div>

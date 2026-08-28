@@ -40,6 +40,16 @@
   line-height: 1.55;
 }
 
+.replica-wizard__start small {
+  color: var(--palette-ink-400);
+  font-size: var(--text-meta);
+  line-height: 1.6;
+}
+
+.replica-wizard__alt {
+  margin: 0;
+}
+
 .replica-wizard__progress {
   padding: var(--space-3) var(--space-4);
   color: var(--palette-brand-deep);
@@ -48,6 +58,37 @@
   font-variant-numeric: tabular-nums;
   background: var(--palette-brand-tint);
   border-radius: var(--radius-control);
+}
+
+.replica-wizard__avatar-asset {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+  padding: var(--space-3) 3.2rem var(--space-3) var(--space-4);
+  background: linear-gradient(180deg, var(--palette-brand-tint) 0%, var(--surface-card) 42%);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  border-radius: var(--radius-card);
+}
+
+.replica-wizard__avatar-asset > svg {
+  color: var(--palette-brand);
+}
+
+.replica-wizard__avatar-asset span {
+  overflow: hidden;
+  color: var(--palette-ink-600);
+  font-size: var(--text-meta);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replica-wizard__avatar-asset small {
+  grid-column: 2;
+  color: var(--palette-ink-400);
+  font-size: var(--text-caption);
 }
 
 .replica-wizard__list {

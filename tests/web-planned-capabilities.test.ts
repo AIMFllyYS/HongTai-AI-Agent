@@ -43,7 +43,7 @@ test("templates and production use real runtimes while publishing remains planne
   assert.doesNotMatch(create, /template-tile__selected/);
   assert.match(create, /<ProductionComposerPanel\b/);
   assert.match(createForms, /<Switch checked=\{avatarOn\}/);
-  assert.match(create, /mode === "avatar" \? \{ avatarScript \}/);
+  assert.doesNotMatch(create, /avatarScript/u, "数字人脚本由 AI 按需求生成，页面不再提交逐字稿");
 
   const templates = read("pages/TemplatesPage.tsx");
   assert.match(templates, /runtime\.templates\.(list|createFromAnalysis|create|update|delete)/);

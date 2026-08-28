@@ -9,6 +9,7 @@ import {
 import type {
   AnalysisService,
   JsonObject,
+  ProductionMode,
   ProductionProjectRecord,
   ProductionService,
   ReplicaBlueprintRecord,
@@ -200,11 +201,12 @@ export class StandaloneReplicaService implements ReplicaService {
     };
   }
 
-  async startProject(taskId: string): Promise<ProductionProjectRecord> {
-    return this.#exclusive(taskId, () => this.#startProject(taskId));
+  async startProject(taskId: string, options?: { readonly mode?: ProductionMode }): Promise<ProductionProjectRecord> {
+    return this.#exclusive(taskId, () => this.#startProject(taskId, options));
   }
 
-  async #startProject(taskId: string): Promise<ProductionProjectRecord> {
+  async #startProject(taskId: string, options?: { readonly mode?: ProductionMode }): Promise<ProductionProjectRecord> {
+    const avatar = options?.mode === "avatar";
     const record = await this.get(taskId);
     const parsed = record?.status === "succeeded" && record.blueprint?.schemaVersion === "replica-blueprint.v1"
       ? replicaBlueprintResultSchema.safeParse(record.blueprint.document) : undefined;
@@ -213,7 +215,9 @@ export class StandaloneReplicaService implements ReplicaService {
     if (blueprint.shots.length === 0) {
       throw taskError(blueprint.emptyReason ?? "这条内容没有给出可拍摄的分镜，无法复刻", "none");
     }
-    if (blueprint.shots.length < MIN_MONTAGE_VISUAL_ASSETS) {
+    // The single avatar video replaces the whole material list, so the montage minimum of three
+    // bound visuals does not apply to that path.
+    if (!avatar && blueprint.shots.length < MIN_MONTAGE_VISUAL_ASSETS) {
       throw taskError(`素材剪辑至少需要 ${MIN_MONTAGE_VISUAL_ASSETS} 个镜头，这份清单只有 ${blueprint.shots.length} 个`, "none");
     }
 
@@ -223,6 +227,18 @@ export class StandaloneReplicaService implements ReplicaService {
     if (existing) return existing;
 
     const total = blueprint.shots.reduce((sum, shot) => sum + shot.material.suggestedDurationSeconds, 0);
+    if (avatar) {
+      // Script-first pipeline: the finished length comes from the measured narration, so the
+      // legacy duration field only needs an in-range placeholder, exactly like the workbench.
+      const project = await this.#options.production.create({
+        analysisTaskId: taskId,
+        brief: blueprint.premise,
+        targetDurationSeconds: 30,
+        mode: "avatar",
+      });
+      if (record) await this.#link(record, project);
+      return project;
+    }
     if (total < MIN_PRODUCTION_DURATION_SECONDS || total > MAX_PRODUCTION_DURATION_SECONDS) {
       throw taskError(`这份清单合计 ${total} 秒，超出可成片的时长范围，请重新生成清单`);
     }

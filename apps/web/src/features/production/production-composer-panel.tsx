@@ -11,14 +11,12 @@ export interface ProductionComposerPanelProps {
   readonly sourceId: string;
   readonly brief: string;
   readonly mode: ProductionMode;
-  readonly avatarScript: string;
   readonly headlineText: string;
   readonly textPreset: ProductionTextPreset;
   readonly onSelectEntry: (flow: ComposerFlow) => void;
   readonly onSourceId: (id: string) => void;
   readonly onBrief: (value: string) => void;
   readonly onMode: (value: ProductionMode) => void;
-  readonly onAvatarScript: (value: string) => void;
   readonly onHeadlineText: (value: string) => void;
   readonly onTextPreset: (value: ProductionTextPreset) => void;
   readonly onGoAnalyze: () => void;
@@ -30,14 +28,12 @@ export function ProductionComposerPanel({
   sourceId,
   brief,
   mode,
-  avatarScript,
   headlineText,
   textPreset,
   onSelectEntry,
   onSourceId,
   onBrief,
   onMode,
-  onAvatarScript,
   onHeadlineText,
   onTextPreset,
   onGoAnalyze,
@@ -57,11 +53,9 @@ export function ProductionComposerPanel({
   if (flow === "agent") {
     return (
       <AgentSetupForm
-        avatarScript={avatarScript}
         brief={brief}
         headlineText={headlineText}
         mode={mode}
-        onAvatarScript={onAvatarScript}
         onBrief={onBrief}
         onGoAnalyze={onGoAnalyze}
         onHeadlineText={onHeadlineText}
