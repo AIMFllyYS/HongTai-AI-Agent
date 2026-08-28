@@ -11,7 +11,7 @@ function requireMatch(value: string, pattern: RegExp, label: string): string {
   return matched;
 }
 
-test("the v0.1.24/code 32 source and published download stay aligned", () => {
+test("the v0.1.25/code 33 source stays ahead of the published download", () => {
   const gradle = readFileSync(join(root, "android", "app", "build.gradle.kts"), "utf8");
   const downloadPage = readFileSync(join(root, "download.html"), "utf8");
   const sourceCode = Number(requireMatch(gradle, /versionCode\s*=\s*(\d+)/u, "Android versionCode"));
@@ -19,11 +19,11 @@ test("the v0.1.24/code 32 source and published download stay aligned", () => {
   const publishedCode = Number(requireMatch(downloadPage, /"versionCode":\s*"(\d+)"/u, "published download versionCode"));
   const publishedName = requireMatch(downloadPage, /aria-label="当前推荐版本 v([0-9.]+)"/u, "published download version");
 
-  assert.equal(sourceCode, 32);
-  assert.equal(sourceName, "0.1.24");
+  assert.equal(sourceCode, 33);
+  assert.equal(sourceName, "0.1.25");
   assert.equal(publishedCode, 32);
   assert.equal(publishedName, "0.1.24");
-  assert.equal(sourceCode, publishedCode);
+  assert.ok(sourceCode > publishedCode);
   assert.match(downloadPage, /23,354,343 bytes/u);
   assert.match(downloadPage, /53978B4F30DE3D0173D2C00876CE0F09C18389894B469A618965C5AF36ACDD45/iu);
   assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.24\.apk/u);
