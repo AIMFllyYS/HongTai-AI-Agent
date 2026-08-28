@@ -139,3 +139,63 @@ test("解析结果可直接进入就绪检查：合法脚本保留句子顺序",
   if (!parsed.ok) return;
   assert.deepEqual(parsed.value.sentences.map((sentence) => sentence.id), ["a", "b", "c"]);
 });
+
+test("强调词建议按宽容规则净化：保留文中词，丢弃其余并截断超量", () => {
+  const parsed = parseScriptStoryboard({
+    schemaVersion: "script-storyboard.v1",
+    sentences: [
+      {
+        id: "s1",
+        text: "我们坚持只用当天现熬的草本汤底。",
+        estimatedMs: 2_000,
+        emphasisWords: ["现熬", "不存在的词", "现熬", "当天", "汤底"],
+      },
+      {
+        id: "s2",
+        text: "到店先看环境再决定。",
+        estimatedMs: 1_600,
+        emphasisWords: ["不在这句里的词"],
+      },
+      {
+        id: "s3",
+        text: "没有强调词的句子。",
+        estimatedMs: 1_600,
+      },
+    ],
+  });
+
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  // 现熬保留；不在文案中的词与重复项丢弃；数量达上限（2）后"汤底"被截断。
+  assert.deepEqual(parsed.value.sentences[0]?.emphasisWords, ["现熬", "当天"]);
+  // 全部被过滤时省略字段，而不是留下空数组。
+  assert.equal(parsed.value.sentences[1]?.emphasisWords, undefined);
+  assert.equal(parsed.value.sentences[2]?.emphasisWords, undefined);
+});
+
+test("超长强调词被丢弃，不使整个脚本解析失败", () => {
+  const longWord = "长".repeat(13);
+  const parsed = parseScriptStoryboard({
+    schemaVersion: "script-storyboard.v1",
+    sentences: [
+      { id: "s1", text: `这句话里有${longWord}这个词。`, estimatedMs: 1_000, emphasisWords: [longWord, "这句"] },
+    ],
+  });
+
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  assert.deepEqual(parsed.value.sentences[0]?.emphasisWords, ["这句"]);
+});
+
+test("非数组强调词字段被静默忽略", () => {
+  const parsed = parseScriptStoryboard({
+    schemaVersion: "script-storyboard.v1",
+    sentences: [
+      { id: "s1", text: "这句没问题。", estimatedMs: 1_000, emphasisWords: "现熬" },
+    ],
+  });
+
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  assert.equal(parsed.value.sentences[0]?.emphasisWords, undefined);
+});

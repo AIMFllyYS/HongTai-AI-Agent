@@ -78,6 +78,7 @@ function assembleStoryboard(draft: ScriptStoryboardDraft): ScriptStoryboard {
       text: sentence.text,
       ...(sentence.assetId === undefined ? {} : { assetId: sentence.assetId }),
       ...(sentence.stickerId === undefined ? {} : { stickerId: sentence.stickerId }),
+      ...(sentence.emphasisWords === undefined || sentence.emphasisWords.length === 0 ? {} : { emphasisWords: sentence.emphasisWords }),
       estimatedMs: estimateScriptSentenceMs(sentence.text),
     })),
     ...(draft.purpose === undefined ? {} : { purpose: draft.purpose }),

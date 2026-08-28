@@ -149,6 +149,7 @@ test("没有参考拆解也可以直接发起，prompt 如实说明并约束未�
   assert.match(prompt, /只能讲insight里确实提到的东西/u);
   assert.match(prompt, /以下素材没有画面识别结果/u);
   assert.match(prompt, /不得自造文件名/u);
+  assert.match(prompt, /整片最多6个贴纸/u, "AI 逐句建议贴纸，必须提前知道全片上限，减少服务端截断");
 });
 
 test("带参考拆解时只吸收结构，不照抄措辞", async () => {

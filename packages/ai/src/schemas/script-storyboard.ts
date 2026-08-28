@@ -1,4 +1,4 @@
-import { DECORATION_IDS, MAX_SCRIPT_SENTENCE_CHARACTERS, MAX_SHOTS_PER_PRODUCTION } from "@hongtai/core";
+import { DECORATION_IDS, MAX_EMPHASIS_WORD_CHARACTERS, MAX_SCRIPT_EMPHASIS_WORDS, MAX_SCRIPT_SENTENCE_CHARACTERS, MAX_SHOTS_PER_PRODUCTION } from "@hongtai/core";
 import { z } from "zod";
 
 import { toProviderJsonSchema } from "../structured-output/json-schema";
@@ -17,6 +17,11 @@ const scriptSentenceDraftSchema = z.object({
   assetId: z.string().min(1).optional(),
   /** 贴纸建议：内置装饰清单 id；不需要贴纸时省略。 */
   stickerId: z.enum(DECORATION_IDS).optional(),
+  /**
+   * 字幕强调词建议（AI 自动配置）：必须逐字出现在本句 text 中，最多两个；平淡句子
+   * 省略该字段。解析层会做同样的过滤兜底，这里不设硬失败。
+   */
+  emphasisWords: z.array(z.string().min(1).max(MAX_EMPHASIS_WORD_CHARACTERS)).max(MAX_SCRIPT_EMPHASIS_WORDS).optional(),
 });
 
 export const scriptStoryboardDraftSchema = z.object({

@@ -94,6 +94,11 @@ export interface MeasuredShotDraft {
    * 而不是悄悄偏移音画同步。窗口时长之和必须等于该镜头实测时长。
    */
   readonly sourceWindows?: readonly AvatarSourceWindow[];
+  /**
+   * 本句字幕的强调词建议（来自分镜脚本的 AI 自动配置）。透传给 cue 构建，按既有
+   * `emphasisFor` 规则过滤（不在文案中的词丢弃），不影响 cue 边界。
+   */
+  readonly emphasisWords?: readonly string[];
 }
 
 export interface MeasuredSubtitleTimelineInput
@@ -179,22 +184,41 @@ export function withMeasuredSubtitleTimeline(input: MeasuredSubtitleTimelineInpu
     }
   }
 
-  const shots = matched.map(({ shot, track }, index) => ({
-    order: index + 1,
-    assetId: shot.assetId,
-    durationMs: Math.round(track.durationMs),
-    sentenceId: shot.sentenceId,
-    narration: shot.narration,
-    caption: shot.caption,
-    fit: shot.fit,
-    ...(shot.sourceWindows ? { sourceWindows: [...shot.sourceWindows] } : {}),
-    cues: buildShotCueTimeline({
+  const shots = matched.map(({ shot, track }, index) => {
+    const cues = buildShotCueTimeline({
       text: shot.narration,
       shotDurationMs: Math.round(track.durationMs),
       typography: resolved.template.typography,
       words: track.words ?? null,
-    }).map((cue) => ({ ...cue, emphasisWords: [...cue.emphasisWords] })),
-  }));
+      ...(shot.emphasisWords && shot.emphasisWords.length > 0 ? { emphasisWords: shot.emphasisWords } : {}),
+    }).map((cue) => ({ ...cue, emphasisWords: [...cue.emphasisWords] }));
+
+    // 字幕完整性：非空口播必须产出字幕；比例路径（cue 不带词级时间）的拼接去空白后
+    // 必须逐字等于整句口播——字幕允许切分换行，不允许丢字或改写。词级路径的 cue 文本
+    // 来自实测词文本（可能含 TTS 归一化差异），由词级校验保证自洽，不与口播稿强相等。
+    const spoken = shot.narration.replace(/\s+/gu, "");
+    if (spoken.length > 0 && cues.length === 0) {
+      throw input.invalid(`句子 ${shot.sentenceId} 的口播没有产出任何字幕`);
+    }
+    if (spoken.length > 0 && cues.length > 0 && cues.every((cue) => cue.words === null)) {
+      const covered = cues.map((cue) => cue.text).join("").replace(/\s+/gu, "");
+      if (covered !== spoken) {
+        throw input.invalid(`句子 ${shot.sentenceId} 的字幕没有逐字覆盖整句口播`);
+      }
+    }
+
+    return {
+      order: index + 1,
+      assetId: shot.assetId,
+      durationMs: Math.round(track.durationMs),
+      sentenceId: shot.sentenceId,
+      narration: shot.narration,
+      caption: shot.caption,
+      fit: shot.fit,
+      ...(shot.sourceWindows ? { sourceWindows: [...shot.sourceWindows] } : {}),
+      cues,
+    };
+  });
 
   const derived = {
     schemaVersion: "production-plan.v4",

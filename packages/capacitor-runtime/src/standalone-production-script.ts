@@ -70,6 +70,22 @@ export interface MeasuredPlanComposeResult {
   readonly softViolations: readonly MeasuredDurationViolation[];
 }
 
+export const PRODUCTION_AUTOMATIC_PIPELINE_RESULT_VERSION = "production-automatic-pipeline.v1";
+
+/**
+ * 一键全自动管线（脚本→配音→组装→渲染）的结果投影。这是默认路径，不是新能力：
+ * 分步操作仍保留为编辑逃生口。配音部分失败时管线诚实地停在配音阶段并携带
+ * `narrationFailures`，界面引导逐句补齐，不假装成片可合成。
+ */
+export interface AutomaticPipelineResult {
+  readonly schemaVersion: typeof PRODUCTION_AUTOMATIC_PIPELINE_RESULT_VERSION;
+  readonly project: ProductionProjectRecord;
+  /** 组装期软违规：全自动路径继续渲染，仅作提示展示。 */
+  readonly softViolations: readonly MeasuredDurationViolation[];
+  /** 仅配音部分失败时存在：管线没有走到组装与渲染。 */
+  readonly narrationFailures?: readonly ProductionNarrationFailure[];
+}
+
 /**
  * 制作事件的 v4 扩展：逐句配音阶段没有整体百分比可报（见 bridge 的进度事件契约），
  * 因此不塞进 `render-progress` 编造 progress，而是携带句子定位的独立事件类型。

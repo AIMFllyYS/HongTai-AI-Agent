@@ -80,6 +80,26 @@ test("句尾不会留下几个字的碎片字幕", () => {
   }
 });
 
+test("字幕完整性：比例路径多条 cue 拼接去空白后等于口播全文", () => {
+  // 口播里的空白只影响排版，不属于内容；切分允许在空白处断句并丢掉边界空白，
+  // 但任何一个非空白字符都不能丢——字幕必须覆盖整句口播。
+  const narrations = [
+    "我们把服务过程完整拍下来 你可以先看清每一步 再决定要不要到店",
+    "  到店看过程 再决定要不要来  ",
+    "三十秒讲清楚 一家店靠不靠谱 先看过程 再看价格 最后看口碑",
+  ];
+  for (const narration of narrations) {
+    const cues = buildShotCueTimeline({ text: narration, shotDurationMs: 20_000, typography: classic.typography });
+    assert.ok(cues.length >= 1, "任何非空口播都必须产出字幕");
+    assert.ok(cues.every((cue) => cue.text.trim().length > 0), "不能产出空白字幕");
+    assert.equal(
+      cues.map((cue) => cue.text).join("").replace(/\s+/gu, ""),
+      narration.replace(/\s+/gu, ""),
+      `字幕拼接必须覆盖整句口播：「${narration}」`,
+    );
+  }
+});
+
 test("镜头时长不足时如实给出偏短的字幕，而不是丢字或撑破字幕框", () => {
   const text = "第一次到店总是没底，不知道服务过程是否适合自己，也不清楚要花多少时间。我们把真实步骤逐一拍下来。";
   const shotDurationMs = 1_000;

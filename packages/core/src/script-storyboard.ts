@@ -6,8 +6,15 @@
  * 字符估算，用于生成阶段向用户实时展示预估总时长；它从不冒充实测，也不会进入渲染。
  */
 import { isDecorationId, type DecorationId } from "./decoration";
+import { MAX_EMPHASIS_WORD_CHARACTERS } from "./subtitle-timing";
 
 export const SCRIPT_STORYBOARD_CONTRACT_VERSION = "script-storyboard.v1";
+
+/**
+ * 每句口播最多携带的强调词数。字幕 cue 的渲染上限（`MAX_EMPHASIS_WORDS_PER_CUE`）比它宽，
+ * 这里收紧到 2：强调词是点缀，句级超配只会让字幕画面变花。
+ */
+export const MAX_SCRIPT_EMPHASIS_WORDS = 2;
 
 /**
  * 单句口播文案的长度上限，与 v3 计划里每镜 narration 的上限一致：分镜句最终会
@@ -30,6 +37,11 @@ export interface ScriptSentence {
   readonly assetId?: string;
   /** 贴纸建议：内置装饰清单 id，渲染层据此取图。 */
   readonly stickerId?: DecorationId;
+  /**
+   * 字幕强调词建议（AI 自动配置）：必须逐字出现在本句 `text` 中，组装时进入对应
+   * 字幕 cue 的 `emphasisWords`。省略表示本句不做强调。
+   */
+  readonly emphasisWords?: readonly string[];
   /** 预估时长（毫秒），按字符估算得出，仅供生成阶段展示。 */
   readonly estimatedMs: number;
 }
@@ -171,7 +183,26 @@ function parseSentence(raw: unknown, index: number): ScriptSentenceParse {
       text: raw.text,
       ...(typeof raw.assetId === "string" && raw.assetId.trim() ? { assetId: raw.assetId } : {}),
       ...(isDecorationId(raw.stickerId) ? { stickerId: raw.stickerId } : {}),
+      ...emphasisWordsOf(raw.emphasisWords, raw.text),
       estimatedMs: raw.estimatedMs,
     },
   };
+}
+
+/**
+ * 强调词是装饰性建议，沿用字幕层 `emphasisFor` 的宽容策略：空串、超长、不在本句文案中
+ * 或重复的项直接丢弃，数量超限截断，而不是让整个脚本为几个词走修复轮。全部被过滤时
+ * 省略字段（本句不做强调）。
+ */
+function emphasisWordsOf(value: unknown, text: string): { readonly emphasisWords?: readonly string[] } {
+  if (!Array.isArray(value)) return {};
+  const kept: string[] = [];
+  for (const word of value) {
+    if (kept.length >= MAX_SCRIPT_EMPHASIS_WORDS) break;
+    if (typeof word !== "string" || !word.trim()) continue;
+    if ([...word].length > MAX_EMPHASIS_WORD_CHARACTERS) continue;
+    if (!text.includes(word) || kept.includes(word)) continue;
+    kept.push(word);
+  }
+  return kept.length > 0 ? { emphasisWords: kept } : {};
 }

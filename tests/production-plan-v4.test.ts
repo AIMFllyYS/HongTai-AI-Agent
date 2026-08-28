@@ -171,6 +171,50 @@ test("withMeasuredSubtitleTimeline 用实测音轨组装 v4，时长取整到毫
   assert.deepEqual(validateMeasuredProductionPlan(result, constraints), []);
 });
 
+test("字幕完整性：每句口播在 v4 计划里都有逐字覆盖的字幕", () => {
+  // 口播含空格与前后空白：切分允许在空白处断句并丢掉边界空白，但非空白字符一个都不能丢。
+  const spacedShots: MeasuredShotDraft[] = [
+    {
+      sentenceId: "sentence-1",
+      assetId: "asset-image",
+      narration: "  第一次到店总是没底 不知道推拿的服务过程是什么样的 先把真实步骤拍给你看  ",
+      caption: "先看清服务过程",
+      fit: "cover",
+      emphasisWords: ["真实步骤"],
+    },
+    {
+      sentenceId: "sentence-2",
+      assetId: "asset-detail",
+      narration: "我们把每一步真实步骤完整呈现，你看完再决定要不要来，欢迎到店当面了解。",
+      caption: "真实步骤逐一呈现",
+      fit: "cover",
+    },
+  ];
+
+  const result = assemble({
+    shots: spacedShots,
+    tracks: [track("sentence-1", 9_500), track("sentence-2", 8_000)],
+  });
+
+  for (const shot of result.shots) {
+    const cues = shot.cues;
+    assert.ok(cues.length >= 1, `句子 ${shot.sentenceId} 的口播必须产出字幕`);
+    assert.equal(
+      cues.map((cue) => cue.text).join("").replace(/\s+/gu, ""),
+      shot.narration.replace(/\s+/gu, ""),
+      `句子 ${shot.sentenceId} 的字幕拼接必须逐字覆盖整句口播`,
+    );
+  }
+  // 分镜脚本的强调词建议进入对应句的字幕 cue（只挂在包含它的那条上）。
+  const emphasisCues = result.shots[0]!.cues.filter((cue) => cue.emphasisWords.length > 0);
+  assert.ok(
+    emphasisCues.length >= 1 && emphasisCues.every((cue) => cue.text.includes("真实步骤")),
+    "强调词必须挂在真正包含它的字幕上",
+  );
+
+  assert.deepEqual(validateMeasuredProductionPlan(result, constraints), []);
+});
+
 test("数字人源窗口原样烘焙进 v4 计划，与实测时长守恒", () => {
   const avatarShots: MeasuredShotDraft[] = [
     {

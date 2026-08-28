@@ -7,6 +7,7 @@ import {
   contentAnalysisResultSchema,
   createAvatarCaptionPlan,
   MIMO_CHAT_AUDIO_TTS_INSTRUCTION,
+  MAX_DECORATIONS_PER_PLAN,
   ProductionPlanningFlow,
   replicaBlueprintResultSchema,
   requestedSubtitleTemplateId,
@@ -87,9 +88,11 @@ import {
 } from "./standalone-production-record.js";
 import {
   narrationProgressEvent,
+  PRODUCTION_AUTOMATIC_PIPELINE_RESULT_VERSION,
   PRODUCTION_MEASURED_PLAN_RESULT_VERSION,
   toNarrationRecord,
   toScriptRecord,
+  type AutomaticPipelineResult,
   type MeasuredPlanComposeResult,
   type ProductionNarrationFailure,
   type ProductionNarrationRecord,
@@ -711,6 +714,7 @@ export class StandaloneProductionService implements ProductionService {
         narration: sentence.text,
         caption: [...sentence.text.replace(/\s+/gu, "")].slice(0, 20).join(""),
         fit: "cover" as const,
+        ...(sentence.emphasisWords && sentence.emphasisWords.length > 0 ? { emphasisWords: sentence.emphasisWords } : {}),
       };
     });
 
@@ -742,9 +746,12 @@ export class StandaloneProductionService implements ProductionService {
     }
 
     // 分镜句的贴纸建议映射为装饰意图：落点窗口由字幕 cue 决定，这里只携带选择。
+    // AI 是逐句建议、不知道全片上限；超过渲染契约上限的后续建议确定性丢弃，而不是让
+    // 整次组装在最后一步被 schema 拒绝（真机复现：8 句里 7 句带贴纸建议导致合成失败）。
     const decorations: DecorationIntent[] = [];
     for (const [index, sentence] of storyboard.sentences.entries()) {
       if (!sentence.stickerId) continue;
+      if (decorations.length >= MAX_DECORATIONS_PER_PLAN) break;
       decorations.push({
         kind: "sticker",
         assetRef: sentence.stickerId,
@@ -810,6 +817,76 @@ export class StandaloneProductionService implements ProductionService {
       project: value,
       softViolations: [...softViolations, ...avatarSoftViolations],
     };
+  }
+
+  /**
+   * 一键全自动管线（v4 的默认推进方式，不是新增能力）：分镜脚本 → 逐句配音 → 组装实测
+   * 计划 → 本机渲染成片，一次 `#exclusive` 互斥锁内顺序执行。各阶段沿用阶段方法自身的
+   * 事件与持久化契约（script-progress 流式增量、narration-progress、render-progress、
+   * state），界面在目标页面上按阶段生长，无需用户逐步点击；分步方法仍保留为编辑逃生口。
+   *
+   * 配音部分失败时诚实地停在配音阶段（组装要求全部句子就绪）：结果携带
+   * `narrationFailures`，界面引导逐句补齐后重试，而不是假装管线走到了成片。
+   */
+  async runAutomaticPipeline(projectId: string, input?: {
+    readonly brief?: string;
+    readonly subtitleTemplateId?: string;
+  }): Promise<AutomaticPipelineResult> {
+    return this.#exclusive(projectId, () => this.#track(
+      { kind: "production-plan", id: projectId, execution: "in-process" },
+      () => this.#runAutomaticPipeline(projectId, input),
+    ));
+  }
+
+  async #runAutomaticPipeline(projectId: string, input?: {
+    readonly brief?: string;
+    readonly subtitleTemplateId?: string;
+  }): Promise<AutomaticPipelineResult> {
+    // 已有脚本且没有新需求时复用现有分镜：重试（如部分配音失败）从配音继续补齐，
+    // 不悄悄重写用户可能已经确认过的文稿。
+    const existing = await this.#required(projectId);
+    try {
+      if (!existing.storyboard || input?.brief !== undefined) {
+        await this.#generateScript(projectId, input?.brief !== undefined ? { brief: input.brief } : undefined);
+      }
+      const narration = await this.#synthesizeNarration(projectId);
+      if (narration.failures.length > 0) {
+        const project = await this.#required(projectId);
+        return {
+          schemaVersion: PRODUCTION_AUTOMATIC_PIPELINE_RESULT_VERSION,
+          project: this.#project(project),
+          softViolations: [],
+          narrationFailures: narration.failures,
+        };
+      }
+      const composed = await this.#composeMeasuredPlan(
+        projectId,
+        input?.subtitleTemplateId !== undefined ? { subtitleTemplateId: input.subtitleTemplateId } : undefined,
+      );
+      // 软违规是一键路径的提示而非闸门：全自动语义下继续渲染，成片照常产出。
+      await this.#render(projectId);
+      const project = await this.#required(projectId);
+      return {
+        schemaVersion: PRODUCTION_AUTOMATIC_PIPELINE_RESULT_VERSION,
+        project: this.#project(project),
+        softViolations: composed.softViolations,
+      };
+    } catch (error) {
+      // 脚本、配音与渲染阶段失败时各自已落盘 issue 并 rethrow；组装阶段没有失败持久化
+      // 路径。一键失败必须把可行动错误写进 project.issue：向导跳走后界面在制作页仍能
+      // 看到失败原因与重试入口，而不是一个既没有成片也没有解释的项目。
+      const current = await this.#readPersisted(projectId).catch(() => undefined);
+      if (current && current.status !== "failed") {
+        const { plan: _plan, output: _output, issue: _issue, ...base } = current;
+        void _plan; void _output; void _issue;
+        await this.#persist({
+          ...base,
+          status: "failed",
+          issue: issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "一键制作没有完成", action: "retry" }),
+        }).catch(() => undefined);
+      }
+      throw error;
+    }
   }
 
   /**

@@ -1670,6 +1670,83 @@ test("配音未补齐不能组装计划；补齐后组装 v4 计划、渲染消�
   assert.ok(renderCalls[0]?.narrationAssets?.every((asset) => asset.audioPath.startsWith("narration/")));
 });
 
+/** 走到「素材已导入、尚无分镜」的一键起点：一键管线从这里接管，不预生成脚本。 */
+async function importedProject(v4?: V4HarnessOptions) {
+  const context = harness("system", undefined, undefined, v4);
+  const service = context.create();
+  await service.create({ analysisTaskId: "task-1", brief: "突出真实服务", targetDurationSeconds: 20 });
+  await service.importAssets("project-1");
+  return { ...context, service };
+}
+
+test("一键全自动：从导入完素材直达成片，脚本→配音→组装→渲染一次跑完", async () => {
+  const { service, scriptPrompts, renderCalls } = await importedProject();
+
+  const result = await service.runAutomaticPipeline("project-1");
+
+  assert.equal(result.schemaVersion, "production-automatic-pipeline.v1");
+  assert.equal(result.project.status, "succeeded");
+  assert.equal(result.project.plan?.schemaVersion, "production-plan.v4");
+  assert.ok(result.project.output, "一键的终点是成片，不是停在计划");
+  assert.equal(scriptPrompts.length, 1, "脚本只生成一次");
+  assert.equal(renderCalls.length, 1);
+  assert.equal(renderCalls[0]?.narrationAssets?.length, 2, "渲染消费逐句实测音频");
+  assert.ok(result.softViolations.some((violation) => violation.reason === "total-too-short"), "九秒成片的软违规随结果透出，不阻断渲染");
+  assert.equal(result.narrationFailures, undefined);
+});
+
+test("一键重试复用已生成的文稿：配音失败停在配音阶段，重试从配音续跑", async () => {
+  const { service, scriptPrompts, renderCalls } = await importedProject({
+    narrationOutcomes: (request, call) => request.sentences.map((sentence, index) => call === 0 && index === 0
+      ? { sentenceId: sentence.sentenceId, transcribedWords: null, error: "ERR_TTS_SYNTHESIS_FAILED" }
+      : { sentenceId: sentence.sentenceId, durationMs: 4_000 + index * 1_000, audioPath: `narration/${sentence.sentenceId}.m4a`, transcribedWords: null }),
+  });
+
+  const partial = await service.runAutomaticPipeline("project-1");
+
+  assert.equal(partial.project.status, "draft", "配音部分失败不是成片失败，界面按句引导补齐");
+  assert.deepEqual(partial.narrationFailures?.map((failure) => failure.issue.code), ["TTS_SYNTHESIS_FAILED"]);
+  assert.equal(partial.project.plan, undefined, "没走到组装就不出现计划");
+  assert.equal(renderCalls.length, 0, "配音不齐不得把项目送进渲染");
+
+  const recovered = await service.runAutomaticPipeline("project-1");
+
+  assert.equal(recovered.project.status, "succeeded");
+  assert.equal(scriptPrompts.length, 1, "重试复用已生成的分镜，不悄悄重写文稿");
+  assert.equal(recovered.narrationFailures, undefined);
+  assert.equal(renderCalls.length, 1);
+});
+
+test("一键带新需求会重写文稿：传入 brief 时即使已有脚本也重新生成", async () => {
+  const { service, scriptPrompts } = await importedProject();
+
+  await service.runAutomaticPipeline("project-1");
+  assert.equal(scriptPrompts.length, 1);
+
+  const renewed = await service.runAutomaticPipeline("project-1", { brief: "换个角度，突出老师傅的手法" });
+
+  assert.equal(scriptPrompts.length, 2, "新 brief 必须触发重新生成分镜");
+  assert.match(scriptPrompts.at(-1) ?? "", /换个角度/u);
+  assert.equal(renewed.project.status, "succeeded");
+  assert.equal(renewed.project.plan?.schemaVersion, "production-plan.v4");
+});
+
+test("一键管线组装失败把可行动 issue 落盘，而不是留下没有解释的半成品", async () => {
+  const { service } = await avatarScriptedProject({ avatarDurationSeconds: 1.5 });
+
+  await assert.rejects(() => service.runAutomaticPipeline("project-1"), /不足2秒/u);
+
+  const project = await service.get("project-1");
+  assert.equal(project?.status, "failed", "一键失败进入 failed 终态，制作页据此展示原因与重试");
+  assert.equal(project?.issue?.code, "TASK_ARTIFACT_MISSING", "组装阶段的 TaskError 原样落盘，不吞成通用错误");
+  assert.match(project?.issue?.userMessage ?? "", /不足2秒/u);
+  assert.equal(project?.issue?.action, "select_media", "可行动动作保留：换更长的出镜视频，而不是无脑重试");
+
+  // failed 不是终局死胡同：换素材后同一入口可以重试。
+  const recovered = await service.runAutomaticPipeline("project-1").then(() => undefined, () => "still-failed");
+  assert.equal(recovered, "still-failed", "源视频时长不变时重试仍然失败，但不会卡死在 planning/rendering");
+});
+
 /** 走到「数字人 v4 已生成脚本」的公共前置：单段数字人视频，草稿两句都绑 avatar-1。 */
 async function avatarScriptedProject(v4?: V4HarnessOptions) {
   const context = harness("system", undefined, undefined, {
@@ -1737,6 +1814,30 @@ test("数字人源视频不足2秒直接拒绝组装", async () => {
 
   await assert.rejects(() => service.composeMeasuredPlan("project-1"), /不足2秒/u);
   assert.equal((await service.get("project-1"))?.status, "draft", "拒绝发生在写计划之前，项目状态不被污染");
+});
+
+test("贴纸建议超过全片上限时组装截断到上限，而不是整次被 schema 拒绝", async () => {
+  // 真机复现：AI 逐句建议贴纸、不知道全片上限，8 句里 7 句带 stickerId 曾让 v4 组装
+  // 在 decorations 的 max(6) 上整体失败；服务端必须确定性截断，让组装继续走到渲染。
+  const sentences = Array.from({ length: 8 }, (_, index) => ({
+    text: `第${index + 1}句，带你看看门店的真实服务。`,
+    assetId: "avatar-1",
+    ...(index === 0 ? {} : { stickerId: DECORATION_IDS[index % DECORATION_IDS.length] }),
+  }));
+  const { service } = await avatarScriptedProject({
+    scriptDraft: () => ({ purpose: "门店服务介绍", sentences }),
+  });
+  await service.synthesizeNarration("project-1");
+
+  const composed = await service.composeMeasuredPlan("project-1");
+
+  assert.equal(composed.project.plan?.schemaVersion, "production-plan.v4");
+  const decorations = decorationsOf(composed.project);
+  assert.equal(decorations.length, 6, "7 条贴纸建议截断到全片上限 6 个，组装不再失败");
+  assert.ok(decorations.every((decoration) => typeof decoration.assetRef === "string"), "截断保留的是前 6 句的合法贴纸建议");
+
+  const rendered = await service.render("project-1");
+  assert.equal(rendered.status, "succeeded", "截断后管线能继续走到成片");
 });
 
 test("v4 计划缺任何一句音频都拒绝渲染，且不先进入渲染中状态", async () => {

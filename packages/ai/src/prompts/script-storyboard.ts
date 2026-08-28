@@ -1,6 +1,8 @@
 import {
   DECORATION_CATALOGUE,
+  MAX_EMPHASIS_WORD_CHARACTERS,
   MAX_PRODUCTION_DURATION_SECONDS,
+  MAX_SCRIPT_EMPHASIS_WORDS,
   MAX_SCRIPT_SENTENCE_CHARACTERS,
   MAX_SHOTS_PER_PRODUCTION,
   MIN_PRODUCTION_DURATION_SECONDS,
@@ -9,11 +11,12 @@ import {
 
 import type { ScriptGenerationAsset, ScriptGenerationInput } from "../contracts/script-storyboard-generation";
 import { scriptStoryboardDraftJsonSchema } from "../schemas/script-storyboard";
+import { MAX_DECORATIONS_PER_PLAN } from "../schemas/production-plan-overlays";
 
 const RULES = `你是手机端短视频分镜脚本撰写助手，服务大健康门店（养生、推拿、艾灸、足浴、健康食品零售等）的经营者。
 根据用户的一句话需求（以及可选的参考拆解与素材画面识别结果），撰写逐句口播分镜脚本。
 只输出一个JSON对象，包含purpose（可选）与sentences数组，不要Markdown、thinking标签或JSON以外的内容。
-每个sentences条目只包含text、assetId（可选）、stickerId（可选）三个字段，不要输出id、时长或毫秒数。
+每个sentences条目只包含text、assetId（可选）、stickerId（可选）、emphasisWords（可选）四个字段，不要输出id、时长或毫秒数。
 每句text是一句完整、自然、可直接朗读的中文口播，不超过${MAX_SCRIPT_SENTENCE_CHARACTERS}个字符，句与句连起来是一条完整的短视频文稿。
 分镜句数不超过${MAX_SHOTS_PER_PRODUCTION}句。口播时长不由你决定：系统按每字约${SCRIPT_SENTENCE_MS_PER_CHARACTER / 1_000}秒估算，请按口播节奏自然组织句子。
 不得虚构经营事实、顾客评价、价格优惠或疗效；不做疾病诊断、治疗承诺、医疗功效或无法验证的表述。`;
@@ -68,15 +71,20 @@ function assetRules(input: ScriptGenerationInput): string {
 /** Catalogue ids only; the sticker is a suggestion recorded on the sentence, never a timestamp. */
 function stickerRules(): string {
   const catalogue = DECORATION_CATALOGUE.map((item) => ({ id: item.id, label: item.label, tags: item.tags }));
-  return `stickerId从下列内置贴纸中选择，不需要贴纸时省略该字段，不得自造文件名、路径或未列出的id。可选贴纸：${JSON.stringify(catalogue)}`;
+  return `stickerId从下列内置贴纸中选择，不需要贴纸时省略该字段，不得自造文件名、路径或未列出的id。整片最多${MAX_DECORATIONS_PER_PLAN}个贴纸（即最多${MAX_DECORATIONS_PER_PLAN}句带stickerId），只在真正能强化关键信息时使用，宁缺毋滥。可选贴纸：${JSON.stringify(catalogue)}`;
+}
+
+/** AI 自动配置的字幕强调词：必须逐字出现在本句 text 中，是字幕排版建议不是新文案。 */
+function emphasisRules(): string {
+  return `emphasisWords是本句字幕要放大强调的词：最多${MAX_SCRIPT_EMPHASIS_WORDS}个，每个不超过${MAX_EMPHASIS_WORD_CHARACTERS}字，且必须逐字出现在该句text里（系统会过滤不在text中的词）。只在句子确有值得突出的关键词时才写，平淡句子直接省略。`;
 }
 
 const CONTRACT = `输出逐字段匹配以下JSON Schema，不得增加包装层：\n${JSON.stringify(scriptStoryboardDraftJsonSchema)}`;
 
 export function scriptStoryboardPrompt(input: ScriptGenerationInput): string {
-  return `${RULES}\n${modeRules(input)}\n${analysisRules(input)}\n${assetRules(input)}\n${stickerRules()}\n${CONTRACT}\n用户的一句话需求：${JSON.stringify(input.brief)}`;
+  return `${RULES}\n${modeRules(input)}\n${analysisRules(input)}\n${assetRules(input)}\n${stickerRules()}\n${emphasisRules()}\n${CONTRACT}\n用户的一句话需求：${JSON.stringify(input.brief)}`;
 }
 
 export function scriptStoryboardRepairPrompt(raw: string, input: ScriptGenerationInput): string {
-  return `${RULES}\n${modeRules(input)}\n${analysisRules(input)}\n${assetRules(input)}\n${stickerRules()}\n${CONTRACT}\n下面结果不符合Schema或执行约束。只修复分镜脚本，不新增素材。\n用户的一句话需求：${JSON.stringify(input.brief)}\n原始响应：${raw.slice(0, 32_000)}`;
+  return `${RULES}\n${modeRules(input)}\n${analysisRules(input)}\n${assetRules(input)}\n${stickerRules()}\n${emphasisRules()}\n${CONTRACT}\n下面结果不符合Schema或执行约束。只修复分镜脚本，不新增素材。\n用户的一句话需求：${JSON.stringify(input.brief)}\n原始响应：${raw.slice(0, 32_000)}`;
 }
