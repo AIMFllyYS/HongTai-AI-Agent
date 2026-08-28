@@ -37,8 +37,9 @@ internal data class ProductionRenderResult(val uri: String, val sizeBytes: Long,
 internal class ProductionRenderer(private val context: Context, private val store: ProductionMediaStore) {
   /**
    * @param narrationAssets sentenceId → project-relative audio path synthesized by the front-loaded
-   *   narration stage. When present (montage mode), rendering skips TTS entirely and consumes the
-   *   existing files in shot order; when null, the legacy render-time synthesis path runs unchanged.
+   *   narration stage. When present (montage and v4 avatar), rendering skips TTS entirely and
+   *   consumes the existing files in shot order; when null, the legacy render-time synthesis path
+   *   runs unchanged.
    */
   fun render(
     projectId: String,
@@ -47,28 +48,32 @@ internal class ProductionRenderer(private val context: Context, private val stor
     narrationAssets: Map<String, String>? = null,
     onProgress: (Int, String) -> Unit,
   ): ProductionRenderResult {
+    // Legacy v3 avatar plans carry no narration assets: they keep the recording's original audio
+    // and its validation stage. A v4 avatar plan renders like montage — our own TTS track over a
+    // muted, window-planned visual sequence cut from the single avatar video.
+    val legacyAvatarAudio = plan.renderMode == ProductionRenderMode.AVATAR && narrationAssets == null
     val progress = ProductionRenderProgressGate(onProgress)
-    // Audio-ready montage renders never emit a synthesis stage: that work already happened in the
+    // Audio-ready renders never emit a synthesis stage: that work already happened in the
     // front-loaded stage, and a fake synthesize_narration event would misreport real progress.
     progress.emit(
       5,
       when {
-        plan.renderMode == ProductionRenderMode.AVATAR -> ProductionRenderStage.VALIDATE_AVATAR_AUDIO.wireName
+        legacyAvatarAudio -> ProductionRenderStage.VALIDATE_AVATAR_AUDIO.wireName
         narrationAssets != null -> ProductionRenderStage.COMPILE_SHOTS.wireName
         else -> ProductionRenderStage.SYNTHESIZE_NARRATION.wireName
       },
     )
     val narration = when {
-      plan.renderMode == ProductionRenderMode.AVATAR -> emptyList()
+      legacyAvatarAudio -> emptyList()
       narrationAssets != null -> ProductionNarrationAssets.resolve(plan, narrationAssets) { path ->
         store.resolveProjectRelative(projectId, path)
       }
       else -> narrationSynthesizer.synthesize(projectId, plan)
     }
-    if (plan.renderMode == ProductionRenderMode.AVATAR || narrationAssets == null) {
+    if (legacyAvatarAudio || narrationAssets == null) {
       progress.emit(25, ProductionRenderStage.COMPILE_SHOTS.wireName)
     }
-    val composition = compile(plan, narration)
+    val composition = compile(plan, narration, legacyAvatarAudio)
     val (temporary, output) = store.outputTarget(projectId)
     progress.emit(35, ProductionRenderStage.EXPORT.wireName)
     var attempt = exportOnce(composition, temporary, progress, softwareOnly = false)
@@ -184,7 +189,7 @@ internal class ProductionRenderer(private val context: Context, private val stor
     return ProductionExportFailureClassifier.classifyExport(code)
   }
 
-  private fun compile(plan: NativeProductionPlan, narration: List<Pair<File, Long>>): Composition {
+  private fun compile(plan: NativeProductionPlan, narration: List<Pair<File, Long>>, legacyAvatarAudio: Boolean): Composition {
     val stickers = decodeStickers(plan)
     val visualItems = if (plan.renderMode == ProductionRenderMode.AVATAR) {
       avatarVisualItems(plan, stickers)
@@ -192,13 +197,15 @@ internal class ProductionRenderer(private val context: Context, private val stor
       plan.shots.flatMap { shot -> visualItems(plan, shot, stickers = stickers) }
     }
     val sequences = mutableListOf(
-      if (plan.renderMode == ProductionRenderMode.AVATAR) {
+      if (legacyAvatarAudio) {
         EditedMediaItemSequence.withAudioAndVideoFrom(visualItems)
       } else {
         EditedMediaItemSequence.withVideoFrom(visualItems)
       },
     )
-    if (plan.renderMode == ProductionRenderMode.MONTAGE) {
+    // Everything except legacy avatar mixes narration as its own audio sequence: montage always
+    // did, and a v4 avatar plan's own TTS track replaces the recording's original sound.
+    if (!legacyAvatarAudio) {
       sequences += EditedMediaItemSequence.withAudioFrom(narration.map { (file, maximumDurationMs) ->
         val media = MediaItem.Builder().setUri(file.toURI().toString()).setClipEndPositionMs(maximumDurationMs).build()
         EditedMediaItem.Builder(media).setRemoveVideo(true).build()
@@ -217,6 +224,8 @@ internal class ProductionRenderer(private val context: Context, private val stor
   private fun avatarVisualItems(plan: NativeProductionPlan, stickers: Map<String, Bitmap>): List<EditedMediaItem> {
     var sourceOffsetMs = 0L
     return plan.shots.flatMap { shot ->
+      // v4 avatar shots consume their planner-baked windows verbatim (the offset is ignored);
+      // only legacy v3 avatar shots keep the sequential-accumulation offset of the old path.
       visualItems(plan, shot, sourceOffsetMs, stickers).also { sourceOffsetMs += shot.durationMs }
     }
   }
@@ -228,18 +237,30 @@ internal class ProductionRenderer(private val context: Context, private val stor
     stickers: Map<String, Bitmap>,
   ): List<EditedMediaItem> {
     var shotOffsetMs = 0L
-    val durations = when (shot.input.kind) {
-      ProductionAssetKind.IMAGE -> listOf(shot.durationMs)
-      ProductionAssetKind.VIDEO -> {
+    // Source-local clip list. v4 avatar shots carry planner-baked windows that may loop or wrap
+    // the single source video (10 s of footage can carry a 30 s narration); every other shot
+    // derives its clips here — images hold the whole shot, videos replay from their offset.
+    val clips: List<Pair<Long, Long>> = when {
+      shot.sourceWindows.isNotEmpty() -> shot.sourceWindows.map { it.startMs to it.endMs }
+      shot.input.kind == ProductionAssetKind.IMAGE -> listOf(0L to shot.durationMs)
+      shot.input.kind == ProductionAssetKind.VIDEO -> {
         val source = requireNotNull(shot.input.durationMs).coerceAtLeast(1L)
-        buildList { var remaining = shot.durationMs; while (remaining > 0L) { val part = minOf(source, remaining); add(part); remaining -= part } }
+        buildList {
+          var remaining = shot.durationMs
+          while (remaining > 0L) {
+            val part = minOf(source, remaining)
+            add(sourceOffsetMs to sourceOffsetMs + part)
+            remaining -= part
+          }
+        }
       }
-      ProductionAssetKind.AUDIO -> error("Audio cannot be used as a visual shot.")
+      else -> error("Audio cannot be used as a visual shot.")
     }
-    return durations.map { duration ->
+    return clips.map { (startMs, endMs) ->
+      val duration = endMs - startMs
       val media = MediaItem.Builder().setUri(File(shot.input.path).toURI().toString()).apply {
         if (shot.input.kind == ProductionAssetKind.IMAGE) setImageDurationMs(duration)
-        else { setClipStartPositionMs(sourceOffsetMs); setClipEndPositionMs(sourceOffsetMs + duration) }
+        else { setClipStartPositionMs(startMs); setClipEndPositionMs(endMs) }
       }.build()
       val presentation = Presentation.createForWidthAndHeight(
         plan.width, plan.height,
@@ -247,7 +268,10 @@ internal class ProductionRenderer(private val context: Context, private val stor
       )
       val overlay = OverlayEffect(headlineOverlays(plan.textOverlay) + productionShotOverlays(plan, shot, shotOffsetMs, stickers))
       shotOffsetMs += duration
-      EditedMediaItem.Builder(media).setRemoveAudio(plan.renderMode == ProductionRenderMode.MONTAGE)
+      // Window-planned avatar slices are silent wallpaper under our own TTS track; legacy avatar
+      // keeps the recording's original audio, and montage always mixed its narration separately.
+      EditedMediaItem.Builder(media)
+        .setRemoveAudio(shot.sourceWindows.isNotEmpty() || plan.renderMode == ProductionRenderMode.MONTAGE)
         .apply { if (shot.input.kind == ProductionAssetKind.IMAGE) setFrameRate(plan.fps) }
         .setEffects(Effects(emptyList(), listOf(presentation, overlay))).build()
     }
