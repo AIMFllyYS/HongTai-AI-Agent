@@ -158,13 +158,12 @@ export function wizardReadiness(bindings: readonly RequirementBinding[]): Wizard
 }
 
 /**
- * What skipping an item actually does to the finished video. The total length is fixed when the
- * project opens, so a skipped item's seconds go to the shots that remain rather than shortening the
- * video — worth saying out loud before the user skips half the list.
+ * What skipping an item actually does to the finished video. In the script-first pipeline the
+ * length comes from the measured narration, not the list's suggested seconds — a skipped item only
+ * removes one bound visual, it neither leaves a hole nor shortens the video.
  */
-export function skipEffectHint(bindings: readonly RequirementBinding[], targetDurationSeconds: number): string {
+export function skipEffectHint(bindings: readonly RequirementBinding[]): string {
   const bound = bindings.filter((binding) => binding.asset !== undefined).length;
   if (bound === 0 || bound === bindings.length) return "";
-  const average = targetDurationSeconds / bound;
-  return `跳过的 ${bindings.length - bound} 项不会缩短成片：${targetDurationSeconds} 秒会分给已绑定的 ${bound} 个镜头，平均每个约 ${average.toFixed(1)} 秒。`;
+  return `跳过的 ${bindings.length - bound} 项不会留空镜头：分镜按已绑定的 ${bound} 个素材写，口播和时长由脚本与实测配音决定。`;
 }

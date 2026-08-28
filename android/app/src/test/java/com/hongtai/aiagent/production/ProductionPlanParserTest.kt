@@ -1,5 +1,6 @@
 package com.hongtai.aiagent.production
 
+import org.json.JSONException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
@@ -178,6 +179,67 @@ class ProductionPlanParserTest {
       ProductionPlanParser.parse(validPlan().replace("\"durationSeconds\":8,", "\"durationSeconds\":8.0005,"), assets)
     }
   }
+
+  @Test
+  fun `parses a v4 measured plan whose shots follow measured sentence audio`() {
+    // 7.3 秒总时长低于产品 15 秒软下限：那是共享层业务规则，Kotlin 结构校验不镜像它。
+    val plan = ProductionPlanParser.parse(measuredPlan(), assets, ProductionRenderMode.MONTAGE, classicLineTemplate())
+
+    assertEquals(7_300L, plan.durationMs)
+    assertEquals(listOf(3_200L, 4_100L), plan.shots.map { it.durationMs })
+    assertEquals(listOf("s-1", "s-2"), plan.shots.map { it.sentenceId })
+    assertEquals("classic_line", plan.subtitleTemplate?.id)
+    assertEquals(listOf(1, 1), plan.shots.map { it.cues.size })
+  }
+
+  @Test
+  fun `v4 structural validation rejects broken sentence references and durations`() {
+    assertThrows(JSONException::class.java) {
+      ProductionPlanParser.parse(measuredPlan().replace("\"sentenceId\":\"s-1\",", ""), assets, ProductionRenderMode.MONTAGE, classicLineTemplate())
+    }
+    assertThrows(IllegalArgumentException::class.java) {
+      ProductionPlanParser.parse(measuredPlan().replace("\"sentenceId\":\"s-2\"", "\"sentenceId\":\"s-1\""), assets, ProductionRenderMode.MONTAGE, classicLineTemplate())
+    }
+    assertThrows(IllegalArgumentException::class.java) {
+      ProductionPlanParser.parse(measuredPlan().replace("\"durationMs\":3200", "\"durationMs\":0"), assets, ProductionRenderMode.MONTAGE, classicLineTemplate())
+    }
+    assertThrows(IllegalArgumentException::class.java) {
+      ProductionPlanParser.parse(measuredPlan().replace("\"durationMs\":3200", "\"durationMs\":60001"), assets, ProductionRenderMode.MONTAGE, classicLineTemplate())
+    }
+    // A v4 plan still needs its subtitle template: timing captions are not optional.
+    assertThrows(IllegalArgumentException::class.java) {
+      ProductionPlanParser.parse(measuredPlan(), assets)
+    }
+  }
+
+  @Test
+  fun `a v4 shot without a measured duration fails the read instead of falling back`() {
+    assertThrows(JSONException::class.java) {
+      ProductionPlanParser.parse(measuredPlan().replace("\"durationMs\":3200,", ""), assets, ProductionRenderMode.MONTAGE, classicLineTemplate())
+    }
+  }
+
+  /** v4: per-shot measured durations, one sentence reference per shot, no total duration target. */
+  private fun measuredPlan(): String = """
+    {
+      "schemaVersion":"production-plan.v4",
+      "source":{"analysisTaskId":"task-1"},
+      "title":"门店真实体验",
+      "settings":{"width":720,"height":1280,"fps":30},
+      "audio":{"voiceLocale":"zh-CN","speechRate":1,"backgroundMusicAssetId":null,"backgroundMusicVolume":0},
+      "textOverlay":{"primaryText":"看得见的真实服务","secondaryText":"先看环境，再看过程","preset":"aqua_accent"},
+      "subtitle":{"templateId":"classic_line"},
+      "shots":[
+        {"order":1,"assetId":"image-1","durationMs":3200,"sentenceId":"s-1","narration":"先看环境。","caption":"真实环境","fit":"cover","cues":[
+          {"startMs":0,"endMs":3200,"text":"先看真实环境","emphasisWords":[],"words":null}
+        ]},
+        {"order":2,"assetId":"video-1","durationMs":4100,"sentenceId":"s-2","narration":"再看服务。","caption":"服务过程","fit":"contain","cues":[
+          {"startMs":0,"endMs":4100,"text":"服务过程全程可看","emphasisWords":[],"words":null}
+        ]}
+      ],
+      "decorations":[]
+    }
+  """.trimIndent()
 
   private fun timedPlan(): String = """
     {

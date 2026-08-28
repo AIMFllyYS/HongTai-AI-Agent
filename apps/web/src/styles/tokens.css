@@ -46,6 +46,19 @@
   --surface-progress: var(--palette-brand-tint);
   --surface-warning: #ffedd5;
   --surface-error: #ffdad6;
+  --surface-error-hairline: rgba(192, 57, 43, 0.18);
+
+  /* Media surfaces: dark frames that host video/photo previews, player chips and publish mockups. */
+  --surface-media: #111827;
+  --surface-publish-canvas:
+    radial-gradient(circle at 74% 24%, rgba(16, 185, 129, 0.28), transparent 22%),
+    linear-gradient(135deg, #0e4138, #1d7668 55%, #aacdc3);
+  --media-on: rgba(255, 255, 255, 0.72);
+  --media-chip: rgba(27, 29, 31, 0.72);
+  --media-chip-deep: rgba(0, 52, 43, 0.68);
+  --media-chip-border: rgba(255, 255, 255, 0.52);
+  --media-line-soft: rgba(255, 255, 255, 0.4);
+  --media-line-strong: rgba(255, 255, 255, 0.76);
 
   --font-display: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -193,6 +206,7 @@
     --surface-success: #16351f;
     --surface-warning: #3a2c14;
     --surface-error: #3a1c1a;
+    --surface-error-hairline: rgba(192, 57, 43, 0.45);
     --glass-fill: #1c1f1d;
     --shadow-sheet: 0 -0.5rem 2rem rgba(0, 0, 0, 0.4);
     --overlay-scrim: rgba(0, 0, 0, 0.56);
@@ -221,6 +235,7 @@
   --surface-success: #16351f;
   --surface-warning: #3a2c14;
   --surface-error: #3a1c1a;
+  --surface-error-hairline: rgba(192, 57, 43, 0.45);
   --glass-fill: #1c1f1d;
   --shadow-sheet: 0 -0.5rem 2rem rgba(0, 0, 0, 0.4);
   --overlay-scrim: rgba(0, 0, 0, 0.56);

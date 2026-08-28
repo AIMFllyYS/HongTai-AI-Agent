@@ -239,8 +239,39 @@ export interface NativeProductionResult {
 
 export interface NativeProductionProgressEvent {
   readonly projectId: string;
-  readonly progress: number;
+  /** 0..1 渲染进度。逐句配音事件按句子推进、没有整体百分比可报，此时省略而不是编造。 */
+  readonly progress?: number;
   readonly stage: string;
+  /** 逐句配音事件（stage = `synthesize_narration`）携带的句子定位，渲染阶段事件省略。 */
+  readonly sentenceIndex?: number;
+  readonly total?: number;
+  readonly sentenceId?: string;
+}
+
+/** One sentence of a front-loaded narration synthesis request. */
+export interface NativeNarrationSentenceInstruction {
+  readonly sentenceId: string;
+  readonly speechText: string;
+  readonly needsTranscription?: boolean;
+}
+
+/** Where the native layer uploads finished sentence audio for Whisper word timings. */
+export interface NativeNarrationTranscriptionInstruction {
+  readonly baseUrl: string;
+  readonly model: string;
+}
+
+/**
+ * One sentence's synthesis outcome. A success carries the measured duration, the project-relative
+ * audio path and (when requested) raw transcribed words; a failure carries only a stable native
+ * issue code so the shared layer can retry exactly that sentence.
+ */
+export interface NativeNarrationSentenceOutcome {
+  readonly sentenceId: string;
+  readonly durationMs?: number;
+  readonly audioPath?: string;
+  readonly transcribedWords: readonly { readonly word: string; readonly startMs: number; readonly endMs: number }[] | null;
+  readonly error?: string;
 }
 
 export type NativeAssetOperationResult =
@@ -260,13 +291,34 @@ export interface StandaloneProductionRuntimePlugin {
   render(options: {
     readonly projectId: string;
     readonly planJson: string;
-    /** Resolved `subtitle-template.v1` object; required by `production-plan.v3` plans only. */
+    /** Resolved `subtitle-template.v1` object; required by `production-plan.v3`/`v4` plans only. */
     readonly subtitleTemplateJson?: string;
     readonly mode?: "montage" | "avatar";
     readonly narration?: "system" | "provider";
     readonly miMoInstruction?: string;
     readonly stepFunInstruction?: string;
+    /**
+     * Pre-synthesized sentence audio (project-relative paths) for the audio-ready v4 render path.
+     * A non-empty list means the renderer consumes persisted narration and synthesizes nothing.
+     */
+    readonly narrationAssets?: readonly { readonly sentenceId: string; readonly audioPath: string }[];
   }): Promise<NativeProductionResult>;
+  /**
+   * Front-loaded narration stage: synthesize the given sentences, measure each audio file's real
+   * duration and (when asked) transcribe it for word timings. One sentence failing never aborts
+   * the rest; failures come back per sentence so exactly those can be retried.
+   */
+  synthesizeNarration(options: {
+    readonly projectId: string;
+    readonly mode: "montage" | "avatar";
+    readonly narration: "system" | "provider";
+    readonly speechRate?: number;
+    /** Cloud narration requires both TTS instructions; system narration omits it. */
+    readonly providerInstruction?: { readonly miMoInstruction: string; readonly stepFunInstruction: string };
+    readonly sentences: readonly NativeNarrationSentenceInstruction[];
+    /** Required when any sentence asks for transcription. */
+    readonly transcriptionInstruction?: NativeNarrationTranscriptionInstruction;
+  }): Promise<{ readonly sentences: readonly NativeNarrationSentenceOutcome[] }>;
   /** Runs a short non-personal synthesis request using the saved protected key. */
   probeTts(options: { readonly miMoInstruction: string; readonly stepFunInstruction: string }): Promise<void>;
   /**

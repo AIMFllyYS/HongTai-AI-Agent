@@ -1,29 +1,39 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { issueFromAppError, TaskError } from "@hongtai/core";
-import type { AppRuntime, ProductionMode, ProductionProjectRecord, ProductionTextPreset, TaskIssue } from "@hongtai/core";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DEFAULT_SUBTITLE_TEMPLATE_ID, issueFromAppError, TaskError } from "@hongtai/core";
+import type {
+  AppRuntime,
+  MeasuredDurationViolation,
+  ProductionMode,
+  ProductionProjectRecord,
+  ProductionTextPreset,
+  SubtitleTemplateId,
+  TaskIssue,
+} from "@hongtai/core";
+import type { MeasuredPlanComposeResult, ProductionNarrationRecord, ProductionScriptRecord, StandaloneProductionEvent } from "@hongtai/capacitor-runtime";
 
 import { AppShell } from "../../components/AppShell";
 import { Button } from "../../components/Buttons";
 import { MaterialLibraryHeaderAction } from "../../components/MaterialLibraryHeaderAction";
 import { Icon, type IconName } from "../../components/Icon";
 import { IssueNotice, issueTitle } from "../../components/IssueNotice";
-import { ProductionProjectCard } from "../../components/ProductionProjectCard";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { useSkeletonHold } from "../../motion/skeleton-hold";
 import { useAppResume } from "../../hooks/useAppResume";
 import { composeEntryFromSearch, consumeComposeEntryFromSearch } from "../../navigation/compose-actions";
-import { aiSettingsPath, pathForRoute, productionEditPath, replicaWizardPath } from "../../router";
+import { aiSettingsPath, pathForRoute, replicaWizardPath } from "../../router";
 import { consumeCreateSourceIdFromSearch, isEligibleCreateSourceTask, peekCreateSourceIdFromSearch, resolveCreateWorkbenchEntry } from "../../pages/task-page-model";
 import { readContentAnalysis } from "../tasks/content-analysis-presenters";
 import { ProductionComposerPanel, type ComposerFlow } from "./production-composer-panel";
 import { ProductionHistoryList } from "./production-history-list";
+import { ProductionPipelinePanel, type PipelineStoryboardEdit } from "./production-pipeline-panel";
 import { sourceCardFromTask, type AnalysisSource } from "./production-setup-forms";
 import {
-  productionPlanReady,
   productionRenderStageCopy,
-  resolveProductionPrimaryAction,
+  resolvePipelinePrimaryAction,
+  resolveProductionPipelineStage,
   resolveProductionRetryKind,
   resolveProductionRetryOperation,
+  scriptProductionService,
 } from "./production-workbench-model";
 
 function focusProductionInput(): void {
@@ -40,7 +50,23 @@ function shellTitleFor(flow: ComposerFlow, showComposer: boolean): string {
   return "制作";
 }
 
+/** 旧「微调」路由重定向携带的 ?project= 参数：选中后即从地址栏消费，避免刷新反复触发。 */
+function consumeProjectParamFromSearch(): string {
+  if (typeof window === "undefined") return "";
+  const params = new URLSearchParams(window.location.search);
+  const requested = params.get("project")?.trim() ?? "";
+  if (!requested) return "";
+  params.delete("project");
+  const next = params.toString();
+  const nextUrl = `${window.location.pathname}${next ? `?${next}` : ""}${window.location.hash ?? ""}`;
+  if (`${window.location.pathname}${window.location.search}${window.location.hash ?? ""}` !== nextUrl) {
+    window.history.replaceState(window.history.state ?? {}, "", nextUrl);
+  }
+  return requested;
+}
+
 export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { readonly runtime: AppRuntime; readonly navigate: (path: string) => void; readonly searchEpoch: number }) {
+  const service = useMemo(() => scriptProductionService(runtime.production), [runtime.production]);
   const [sources, setSources] = useState<readonly AnalysisSource[]>([]);
   const [projects, setProjects] = useState<readonly ProductionProjectRecord[]>([]);
   const [project, setProject] = useState<ProductionProjectRecord>();
@@ -52,14 +78,28 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   const [avatarScript, setAvatarScript] = useState("");
   const [headlineText, setHeadlineText] = useState("");
   const [textPreset, setTextPreset] = useState<ProductionTextPreset>("classic_top");
-  const [duration, setDuration] = useState(30);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [issue, setIssue] = useState<TaskIssue>();
+  const [script, setScript] = useState<ProductionScriptRecord>();
+  const [narration, setNarration] = useState<ProductionNarrationRecord>();
+  const [scriptGenerating, setScriptGenerating] = useState(false);
+  const [narrationProgress, setNarrationProgress] = useState<{ readonly index: number; readonly total: number }>();
+  const [composeViolations, setComposeViolations] = useState<readonly MeasuredDurationViolation[]>([]);
+  const [subtitleTemplateId, setSubtitleTemplateId] = useState<SubtitleTemplateId>(DEFAULT_SUBTITLE_TEMPLATE_ID);
   const composingNewRef = useRef(composingNew);
   composingNewRef.current = composingNew;
+
+  const refreshPipeline = useCallback(async (projectId: string): Promise<void> => {
+    const [nextScript, nextNarration] = await Promise.all([
+      service.getScript(projectId).catch(() => undefined),
+      service.getNarration(projectId).catch(() => undefined),
+    ]);
+    setScript(nextScript);
+    setNarration(nextNarration);
+  }, [service]);
 
   const load = useCallback(async () => {
     const requestedSourceId = peekCreateSourceIdFromSearch();
@@ -110,9 +150,18 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
         }).sourceId);
         setIssue(undefined);
       }
-      setProject((current) => current
-        ? savedProjects.find((candidate) => candidate.projectId === current.projectId) ?? savedProjects[0]
-        : savedProjects[0]);
+      const requestedProject = consumeProjectParamFromSearch();
+      const nextProject = requestedProject
+        ? savedProjects.find((candidate) => candidate.projectId === requestedProject)
+        : undefined;
+      if (nextProject) {
+        setComposingNew(false);
+        setProject(nextProject);
+      } else {
+        setProject((current) => current
+          ? savedProjects.find((candidate) => candidate.projectId === current.projectId) ?? savedProjects[0]
+          : savedProjects[0]);
+      }
     } catch (error) {
       setIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "本地制作数据暂时无法读取", action: "none" }));
     } finally {
@@ -150,6 +199,19 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
     void applyAssetRecovery();
     return undefined;
   }, [applyAssetRecovery, loading]);
+
+  // 活跃项目切换（含刚创建）时刷新脚本与配音记录；v3 存量项目两者都是 undefined。
+  useEffect(() => {
+    const projectId = project?.projectId;
+    setScript(undefined);
+    setNarration(undefined);
+    setComposeViolations([]);
+    setNarrationProgress(undefined);
+    if (!projectId) return undefined;
+    void refreshPipeline(projectId);
+    return undefined;
+  }, [project?.projectId, refreshPipeline]);
+
   useEffect(() => {
     const projectId = project?.projectId;
     setProgress(0);
@@ -158,11 +220,18 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
     let active = true;
     let unsubscribe: (() => void) | undefined;
     try {
-      unsubscribe = runtime.production.subscribe(projectId, (event) => {
+      unsubscribe = service.subscribe(projectId, (event: StandaloneProductionEvent) => {
         if (!active) return;
         if (event.type === "state") {
           if (event.project.projectId !== projectId) return;
           setProject(event.project);
+          return;
+        }
+        if (event.type === "narration-progress") {
+          if (event.projectId !== projectId) return;
+          if (typeof event.sentenceIndex === "number" && typeof event.total === "number") {
+            setNarrationProgress({ index: event.sentenceIndex + 1, total: event.total });
+          }
           return;
         }
         if (event.projectId !== projectId) return;
@@ -178,15 +247,25 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
       active = false;
       unsubscribe?.();
     };
-  }, [composingNew, project?.projectId, runtime.production]);
+  }, [composingNew, project?.projectId, service]);
 
-  const perform = async (action: () => Promise<ProductionProjectRecord>) => {
+  /** 执行一个管线动作：成功后刷新项目列表与脚本/配音记录；失败进入 issue 而不是假成功。 */
+  const perform = async (action: () => Promise<ProductionProjectRecord | ProductionScriptRecord | ProductionNarrationRecord | MeasuredPlanComposeResult>) => {
     setBusy(true);
     setIssue(undefined);
+    setNarrationProgress(undefined);
     try {
       const next = await action();
-      setComposingNew(false);
-      setProject(next);
+      const record = next as Partial<ProductionProjectRecord> & Partial<MeasuredPlanComposeResult> & Partial<ProductionScriptRecord> & Partial<ProductionNarrationRecord>;
+      const nextProject = "project" in record && record.project ? record.project as ProductionProjectRecord
+        : "projectId" in record && record.projectId ? next as unknown as ProductionProjectRecord
+        : undefined;
+      const projectId = nextProject?.projectId ?? project?.projectId;
+      if (projectId) {
+        setComposingNew(false);
+        await refreshPipeline(projectId);
+        setProject((await runtime.production.get(projectId)) ?? nextProject ?? project);
+      }
       setProjects(await runtime.production.list());
     } catch (error) {
       setIssue(issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "本地制作操作没有完成", action: "retry" }));
@@ -195,26 +274,83 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
       setProject((current) => current
         ? remaining.find((candidate) => candidate.projectId === current.projectId) ?? current
         : remaining[0]);
+      if (project?.projectId) await refreshPipeline(project.projectId);
     } finally {
       setBusy(false);
+      setNarrationProgress(undefined);
     }
   };
 
   const createProject = async () => {
-    if (!sourceId || !brief.trim() || mode === "avatar" && !avatarScript.trim()) {
-      const message = mode === "avatar" ? "请选择拆解来源，填写制作需求和数字人口播稿" : "请选择拆解来源并填写制作需求";
+    if (!brief.trim() || mode === "avatar" && !avatarScript.trim()) {
+      const message = mode === "avatar" ? "请填写制作需求和口播切片逐字稿" : "请填写制作需求";
       setIssue(issueFromAppError(new TaskError({ code: "INPUT_EMPTY", message, action: "edit_input" }), { code: "INPUT_EMPTY", message: "制作输入不完整", action: "edit_input" }));
       return;
     }
-    await perform(() => runtime.production.create({
-      analysisTaskId: sourceId,
-      brief,
-      targetDurationSeconds: duration,
-      mode,
-      headlineText: headlineText || undefined,
-      textPreset,
-      ...(mode === "avatar" ? { avatarScript } : {}),
+    await perform(async () => {
+      const created = await runtime.production.create({
+        analysisTaskId: sourceId,
+        brief,
+        // v4（文稿先行）管线时长由文稿与实测配音驱动；core 契约仍要求该字段，
+        // 传区间内的占位值，新链路创建后即走 generateScript，不再消费它。
+        targetDurationSeconds: 30,
+        mode,
+        headlineText: headlineText || undefined,
+        textPreset,
+        ...(mode === "avatar" ? { avatarScript } : {}),
+      });
+      setScriptGenerating(true);
+      try {
+        await service.generateScript(created.projectId, { brief });
+      } finally {
+        setScriptGenerating(false);
+      }
+      return (await runtime.production.get(created.projectId)) ?? created;
+    });
+  };
+
+  const generateScript = async () => {
+    if (!project) return;
+    await perform(async () => {
+      setScriptGenerating(true);
+      try {
+        await service.generateScript(project.projectId);
+      } finally {
+        setScriptGenerating(false);
+      }
+      return (await runtime.production.get(project.projectId)) ?? project;
+    });
+  };
+
+  const synthesizeNarration = async (sentenceIds?: readonly string[]) => {
+    if (!project) return;
+    await perform(async () => service.synthesizeNarration(project.projectId, sentenceIds ? { sentenceIds } : undefined));
+  };
+
+  const updateStoryboard = async (sentences: readonly PipelineStoryboardEdit[]) => {
+    if (!project) return;
+    await perform(async () => service.updateStoryboard(project.projectId, {
+      expectedUpdatedAt: project.updatedAt,
+      sentences,
     }));
+  };
+
+  /** 合成阶段：先组装实测计划；软违规只在首次出现时展示并等待确认，确认后才继续渲染。 */
+  const composeAndRender = async () => {
+    if (!project) return;
+    if (composeViolations.length > 0) {
+      setComposeViolations([]);
+      await perform(() => runtime.production.render(project.projectId));
+      return;
+    }
+    await perform(async () => {
+      const result = await service.composeMeasuredPlan(project.projectId, { subtitleTemplateId });
+      if (result.softViolations.length > 0) {
+        setComposeViolations(result.softViolations);
+        return result;
+      }
+      return runtime.production.render(project.projectId);
+    });
   };
 
   const deleteProject = async (projectId: string) => {
@@ -237,27 +373,42 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   };
 
   const activeProject = composingNew ? undefined : project;
-  const planReady = activeProject ? productionPlanReady(activeProject) : false;
-  const avatarMode = activeProject?.mode === "avatar";
-  const usableVisualAssets = activeProject
-    ? activeProject.assets.filter((asset) => avatarMode ? asset.role === "avatar" : asset.role === "visual").length
-    : 0;
-  const importBlocked = Boolean(activeProject && (activeProject.assets.length >= 12 || avatarMode && usableVisualAssets >= 1));
-  const primary = resolveProductionPrimaryAction({
-    composingNew,
-    project: activeProject,
-    busy,
-    planReady,
-    importBlocked,
+  // v3 存量判据：没有分镜脚本、但带着旧版计划。新 v4 项目在首次组装前没有计划，
+  // 不属于存量；没有任何计划与脚本的旧草稿项目按 v4 处理（生成脚本即转入新管线）。
+  const legacyPipeline = Boolean(activeProject && !script && activeProject.plan && activeProject.plan.schemaVersion !== "production-plan.v4");
+  const narrationReady = narration?.sentences.filter((sentence) => sentence.status === "ready").length ?? 0;
+  const narrationTotal = narration?.sentences.length ?? 0;
+  const stage = resolveProductionPipelineStage({
+    scriptGenerating: scriptGenerating || busy && !activeProject && composerFlow === "agent",
+    legacyPipeline,
+    project: activeProject
+      ? {
+        status: activeProject.status,
+        storyboard: script,
+        narration: narrationTotal > 0 ? { ready: narrationReady, total: narrationTotal } : undefined,
+      }
+      : undefined,
   });
-  const createBlocked = busy || !sourceId || !brief.trim() || (mode === "avatar" && !avatarScript.trim());
+  const storyboardReady = Boolean(script);
+  const planComposed = activeProject?.plan?.schemaVersion === "production-plan.v4";
+  const rendering = activeProject?.status === "rendering";
+  const failed = activeProject?.status === "failed";
+  const primary = resolvePipelinePrimaryAction(stage, {
+    storyboardReady,
+    planComposed,
+    rendering,
+    hasOutput: Boolean(activeProject?.output),
+    failed,
+    busy,
+  });
+  const createBlocked = busy || !brief.trim() || (mode === "avatar" && !avatarScript.trim());
   const showComposer = !activeProject;
   const replicaComposer = showComposer && composerFlow === "replica";
   const agentComposer = showComposer && composerFlow === "agent";
   const primaryDisabled = replicaComposer
     ? busy || !sourceId
-    : primary.stage === "no-project" ? createBlocked : primary.disabled;
-  const composerPrimaryVisible = (agentComposer || replicaComposer) && sources.length > 0;
+    : showComposer ? createBlocked : primary.disabled;
+  const composerPrimaryVisible = replicaComposer ? sources.length > 0 : agentComposer;
   const showHistory = projects.length > 1 || composingNew && projects.length > 0;
   const shellTitle = shellTitleFor(composerFlow, showComposer);
 
@@ -307,7 +458,7 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
     }
     const operation = resolveProductionRetryOperation(activeProject);
     if (operation === "render") void perform(() => runtime.production.render(activeProject.projectId));
-    else if (operation === "generate-plan") void perform(() => runtime.production.generatePlan(activeProject.projectId));
+    else if (operation === "generate-plan") void generateScript();
     else void perform(() => runtime.production.importAssets(activeProject.projectId));
   };
 
@@ -316,28 +467,32 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
       if (sourceId) navigate(replicaWizardPath(sourceId));
       return;
     }
-    if (primary.stage === "no-project") {
+    if (showComposer) {
       void createProject();
       return;
     }
     if (!activeProject) return;
-    if (primary.stage === "no-assets") {
-      void perform(() => runtime.production.importAssets(activeProject.projectId));
+    if (failed) {
+      retryCurrent();
       return;
     }
-    if (primary.stage === "no-plan") {
-      void perform(() => runtime.production.generatePlan(activeProject.projectId));
+    if (stage === "script") {
+      if (storyboardReady) void synthesizeNarration();
+      else void generateScript();
       return;
     }
-    if (primary.stage === "no-output") {
-      void perform(() => runtime.production.render(activeProject.projectId));
+    if (stage === "narration") {
+      void synthesizeNarration();
       return;
     }
-    if (primary.stage === "has-output") {
-      startNewProduction();
+    if (stage === "compose") {
+      void composeAndRender();
       return;
     }
-    if (primary.stage === "failed") retryCurrent();
+    if (stage === "output") {
+      if (activeProject.output) startNewProduction();
+      else void perform(() => runtime.production.render(activeProject.projectId));
+    }
   };
 
   const issueActions = {
@@ -347,27 +502,29 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
     retry: () => retryCurrent(),
   };
 
-  const primaryIcon: IconName = replicaComposer
-    ? "list"
-    : primary.stage === "no-assets" || primary.stage === "failed" && resolveProductionRetryKind(activeProject?.issue?.action ?? issue?.action) === "import"
-      ? "upload_file"
-      : primary.stage === "no-plan"
-        ? "auto_awesome"
-        : primary.stage === "no-output"
+  const stageIcon: IconName = showComposer
+    ? composerFlow === "replica" ? "list" : "movie_edit"
+    : stage === "script" && !storyboardReady
+      ? "auto_awesome"
+      : stage === "narration"
+        ? "record_voice_over"
+        : stage === "compose"
           ? "bolt"
-          : primary.stage === "rendering"
+          : stage === "output" && rendering
             ? "sync"
-            : primary.stage === "has-output"
+            : stage === "output" && activeProject?.output
               ? "sparkle"
-              : "movie_edit";
+              : "play";
 
-  const primaryLabel = replicaComposer
-    ? "按清单复刻"
-    : primary.stage === "rendering" ? `${progressMessage || primary.label} ${progress}%` : primary.label;
+  const primaryLabel = rendering
+    ? `${progressMessage || primary.label} ${progress}%`
+    : stage === "compose" && composeViolations.length > 0
+      ? "了解提示，继续合成"
+      : primary.label;
 
   const contextualAction = !showComposer || composerPrimaryVisible
     ? (
-      <Button className={busy || primary.stage === "rendering" ? "is-busy" : ""} disabled={primaryDisabled} icon={<Icon name={primaryIcon} size={19} />} onClick={runPrimary} size="lg">
+      <Button className={busy || rendering ? "is-busy" : ""} disabled={primaryDisabled} icon={<Icon name={stageIcon} size={19} />} onClick={runPrimary} size="lg">
         {primaryLabel}
       </Button>
     )
@@ -395,7 +552,7 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
       navigate={navigate}
       title={shellTitle}
     >
-      <div className="page-stack page-create production-workbench" data-composer-flow={showComposer ? composerFlow : "project"} data-production-stage={primary.stage}>
+      <div className="page-stack page-create production-workbench" data-composer-flow={showComposer ? composerFlow : "project"} data-pipeline-stage={stage}>
         {issue && !(showComposer && issue.action === "none") ? <IssueNotice actions={issueActions} issue={issue} /> : null}
         {issue && showComposer && issue.action === "none" ? (
           <aside className={`issue-notice issue-notice--${issue.severity}`} role={issue.severity === "error" ? "alert" : "status"}>
@@ -408,13 +565,11 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
           <ProductionComposerPanel
             avatarScript={avatarScript}
             brief={brief}
-            duration={duration}
             flow={composerFlow}
             headlineText={headlineText}
             mode={mode}
             onAvatarScript={setAvatarScript}
             onBrief={setBrief}
-            onDuration={setDuration}
             onGoAnalyze={() => navigate(pathForRoute("home"))}
             onHeadlineText={setHeadlineText}
             onMode={setMode}
@@ -426,23 +581,33 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
             textPreset={textPreset}
           />
         ) : activeProject ? (
-          <ProductionProjectCard
+          <ProductionPipelinePanel
             busy={busy}
+            composeViolations={composeViolations}
+            legacyPipeline={legacyPipeline}
+            narration={narration}
+            narrationProgress={narrationProgress}
             onConfigureAi={() => navigate(aiSettingsPath())}
             onDeleteProject={() => void deleteProject(activeProject.projectId)}
-            onEditPlan={() => navigate(productionEditPath(activeProject.projectId))}
-            onGeneratePlan={() => void perform(() => runtime.production.generatePlan(activeProject.projectId))}
             onImport={() => void perform(() => runtime.production.importAssets(activeProject.projectId))}
+            onRegenerateScript={() => void generateScript()}
             onRemoveAsset={(assetId) => void perform(() => runtime.production.removeAsset(activeProject.projectId, assetId))}
             onRemoveOutput={() => void perform(() => runtime.production.removeOutput(activeProject.projectId))}
+            onSubtitleTemplate={setSubtitleTemplateId}
+            onSynthesizeSentence={(sentenceId) => void synthesizeNarration([sentenceId])}
+            onUpdateStoryboard={updateStoryboard}
             pageIssue={issue}
             progress={progress}
             progressMessage={progressMessage}
             project={activeProject}
+            script={script}
+            scriptGenerating={scriptGenerating}
+            stage={stage}
+            subtitleTemplateId={subtitleTemplateId}
           />
         ) : null}
 
-        {activeProject && primary.stage !== "has-output" ? (
+        {activeProject && stage !== "output" ? (
           <button className="production-entry-switch" onClick={startNewProduction} type="button">
             <Icon name="sparkle" size={19} />
             <span>再做一条</span>

@@ -5,6 +5,7 @@ import { MIMO_CHAT_AUDIO_TTS_INSTRUCTION, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, 
 import { DECORATION_IDS, TaskError, type ContentAnalysisRecord, type TaskDetailRecord } from "@hongtai/core";
 
 import { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
+import { narrationProgressEvent } from "./standalone-production-script.js";
 import { StandaloneProductionService } from "./standalone-production-service.js";
 
 // Carries a real sticker rather than an empty list: the allow-list is supplied by this service, and
@@ -64,7 +65,27 @@ interface InsightHarnessOptions {
   readonly vision?: () => Promise<{ readonly content: string; readonly reasoning: string }>;
 }
 
-function harness(narration: "system" | "provider" = "system", now?: () => Date, insight?: InsightHarnessOptions) {
+interface V4HarnessOptions {
+  /** What the text model drafts for `script_storyboard_v1`. Absent yields two grounded sentences. */
+  readonly scriptDraft?: () => Record<string, unknown>;
+  /**
+   * Per-call sentence outcomes from the native synthesis stage; `call` counts native invocations
+   * so a retry can be scripted to succeed. Absent succeeds for every sentence on every call.
+   */
+  readonly narrationOutcomes?: (request: {
+    readonly sentences: readonly { readonly sentenceId: string; readonly speechText: string; readonly needsTranscription?: boolean }[];
+  }, call: number) => readonly { sentenceId: string; durationMs?: number; audioPath?: string; transcribedWords: null; error?: string }[];
+  /** Overrides `getNarrationConnection`; absent leaves the port unwired (system-narration default). */
+  readonly narrationConnection?: () => Promise<{
+    readonly ttsTransport: string | null;
+    readonly ttsModel: string | null;
+    readonly ttsVoice: string | null;
+    readonly baseUrl: string;
+    readonly asrModel: string | null;
+  } | null>;
+}
+
+function harness(narration: "system" | "provider" = "system", now?: () => Date, insight?: InsightHarnessOptions, v4?: V4HarnessOptions) {
   const values = new Map<string, string>();
   const ids = new Set<string>();
   const deletedPaths: string[] = [];
@@ -78,8 +99,11 @@ function harness(narration: "system" | "provider" = "system", now?: () => Date, 
     readonly narration?: "system" | "provider";
     readonly miMoInstruction?: string;
     readonly stepFunInstruction?: string;
+    readonly narrationAssets?: readonly { readonly sentenceId: string; readonly audioPath: string }[];
   }> = [];
   const planningPrompts: string[] = [];
+  const scriptPrompts: string[] = [];
+  const synthesizeCalls: Array<{ readonly projectId: string; readonly sentences: readonly { readonly sentenceId: string }[]; readonly narration: string }> = [];
   const files = {
     ensureProduction: async ({ projectId }: { readonly projectId: string }) => { ids.add(projectId); },
     writeProductionText: async ({ projectId, relativePath, value }: { readonly projectId: string; readonly relativePath: string; readonly value: string; readonly replace: boolean }) => { values.set(`${projectId}/${relativePath}`, value); },
@@ -102,6 +126,19 @@ function harness(narration: "system" | "provider" = "system", now?: () => Date, 
             tags: ["前台", "店员"],
             usable: true,
             unusableReason: null,
+          }),
+          reasoning: "",
+        };
+      }
+      if (request.jsonSchema?.name === "script_storyboard_v1") {
+        scriptPrompts.push(String(request.messages[0]?.content ?? ""));
+        return {
+          content: JSON.stringify(v4?.scriptDraft?.() ?? {
+            purpose: "门店服务介绍",
+            sentences: [
+              { text: "先看看真实门店环境。", assetId: "asset-1" },
+              { text: "再了解完整服务过程。", assetId: "asset-2" },
+            ],
           }),
           reasoning: "",
         };
@@ -129,11 +166,29 @@ function harness(narration: "system" | "provider" = "system", now?: () => Date, 
       readonly narration?: "system" | "provider";
       readonly miMoInstruction?: string;
       readonly stepFunInstruction?: string;
+      readonly narrationAssets?: readonly { readonly sentenceId: string; readonly audioPath: string }[];
     }) => {
       renderCalls.push(options);
       return { uri: "file:///private/productions/project-1/output.mp4", mimeType: "video/mp4" as const, sizeBytes: 1_024, durationSeconds: 20 };
     },
     consumeAssetOperation: async () => ({ status: "none" as const }),
+    synthesizeNarration: async (request: {
+      readonly projectId: string;
+      readonly narration: string;
+      readonly sentences: readonly { readonly sentenceId: string }[];
+    }) => {
+      synthesizeCalls.push({ projectId: request.projectId, sentences: request.sentences, narration: request.narration });
+      const outcomes = v4?.narrationOutcomes?.(request as never, synthesizeCalls.length - 1);
+      if (outcomes) return { sentences: outcomes };
+      return {
+        sentences: request.sentences.map((sentence, index) => ({
+          sentenceId: sentence.sentenceId,
+          durationMs: 4_000 + index * 1_000,
+          audioPath: `narration/${sentence.sentenceId}.m4a`,
+          transcribedWords: null,
+        })),
+      };
+    },
     probeTts: async () => undefined,
     ...(insight?.frames
       ? {
@@ -151,11 +206,12 @@ function harness(narration: "system" | "provider" = "system", now?: () => Date, 
     tasks,
     getProvider: async () => provider,
     getNarrationMode: async () => narration,
+    ...(v4?.narrationConnection ? { getNarrationConnection: v4.narrationConnection } : {}),
     toDisplayUri: (uri: string) => uri.replace("file:///private/", "capacitor://localhost/private/"),
     createProjectId: () => "project-1",
     now: now ?? (() => new Date("2026-08-08T00:00:00.000Z")),
   });
-  return { create, values, ids, files, pickCalls, renderCalls, planningPrompts, deletedPaths, insightCalls, visionPrompts };
+  return { create, values, ids, files, pickCalls, renderCalls, planningPrompts, scriptPrompts, synthesizeCalls, deletedPaths, insightCalls, visionPrompts };
 }
 
 /** Advances a second per persist so assertions can tell the writes apart by timestamp alone. */
@@ -572,6 +628,7 @@ test("渲染进度只转发原生 stage 和百分比，不补文案也不回传 
       }),
       consumeAssetOperation: async () => ({ status: "none" as const }),
       probeTts: async () => undefined,
+      synthesizeNarration: async () => ({ sentences: [] }),
       addListener: async (_eventName, listener) => {
         progressListener = listener;
         return { remove: async () => { progressListener = undefined; } };
@@ -637,6 +694,7 @@ test("StandaloneProductionService listener failures never rewrite a succeeded re
       pickAssets: async () => ({ assets: [] }),
       consumeAssetOperation: async () => ({ status: "none" as const }),
       probeTts: async () => undefined,
+      synthesizeNarration: async () => ({ sentences: [] }),
       render: async () => ({ uri: "file:///private/productions/project-1/output.mp4", mimeType: "video/mp4", sizeBytes: 1_024, durationSeconds: 20 }),
     },
     analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
@@ -689,7 +747,7 @@ test("制作计划失败时保留项目和已导入素材", async () => {
       deleteProductionFile: async () => undefined,
       deleteProduction: async () => undefined,
     },
-    native: { pickAssets: async () => ({ assets: [] }), consumeAssetOperation: async () => ({ status: "none" as const }), render: async () => { throw new Error("unused"); }, probeTts: async () => undefined },
+    native: { pickAssets: async () => ({ assets: [] }), consumeAssetOperation: async () => ({ status: "none" as const }), render: async () => { throw new Error("unused"); }, probeTts: async () => undefined, synthesizeNarration: async () => ({ sentences: [] }) },
     analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
     tasks,
     getProvider: async () => ({ generate: async () => { throw new Error("provider down"); }, transcribe: async () => "" }),
@@ -710,7 +768,7 @@ test("没有正式拆解时生成计划失败且不得进入 ready", async () =>
   await seeded.importAssets("project-1");
   const missing = new StandaloneProductionService({
     files,
-    native: { pickAssets: async () => ({ assets: [] }), consumeAssetOperation: async () => ({ status: "none" as const }), render: async () => { throw new Error("unused"); }, probeTts: async () => undefined },
+    native: { pickAssets: async () => ({ assets: [] }), consumeAssetOperation: async () => ({ status: "none" as const }), render: async () => { throw new Error("unused"); }, probeTts: async () => undefined, synthesizeNarration: async () => ({ sentences: [] }) },
     analysis: { get: async () => undefined, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
     tasks,
     getProvider: async () => ({ generate: async () => ({ content: JSON.stringify(plan), reasoning: "" }), transcribe: async () => "" }),
@@ -737,7 +795,7 @@ test("来源任务没有原文时生成计划失败且不得进入 ready", async
   } as unknown as TaskDetailRecord;
   const missing = new StandaloneProductionService({
     files,
-    native: { pickAssets: async () => ({ assets: [] }), consumeAssetOperation: async () => ({ status: "none" as const }), render: async () => { throw new Error("unused"); }, probeTts: async () => undefined },
+    native: { pickAssets: async () => ({ assets: [] }), consumeAssetOperation: async () => ({ status: "none" as const }), render: async () => { throw new Error("unused"); }, probeTts: async () => undefined, synthesizeNarration: async () => ({ sentences: [] }) },
     analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
     tasks: { getDetail: async () => emptyDetail },
     getProvider: async () => ({ generate: async () => ({ content: JSON.stringify(plan), reasoning: "" }), transcribe: async () => "" }),
@@ -848,6 +906,7 @@ test("正在渲染时 list 与 recover 不得把项目标成中断", async () =>
       },
       consumeAssetOperation: async () => ({ status: "none" as const }),
       probeTts: async () => undefined,
+      synthesizeNarration: async () => ({ sentences: [] }),
     },
     analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
     tasks,
@@ -910,6 +969,7 @@ test("制作服务按真实 Promise 区分系统素材选择、计划与渲染",
       },
       consumeAssetOperation: async () => ({ status: "none" as const }),
       probeTts: async () => undefined,
+      synthesizeNarration: async () => ({ sentences: [] }),
     },
     analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
     tasks,
@@ -1077,6 +1137,7 @@ test("制作服务将原生媒体和 TTS 失败转换为可行动的稳定错误
       consumeAssetOperation: async () => ({ status: "none" as const }),
       render: async () => { throw { code: "ERR_TTS_UNAVAILABLE" }; },
       probeTts: async () => undefined,
+      synthesizeNarration: async () => ({ sentences: [] }),
     },
     analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
     tasks,
@@ -1134,6 +1195,7 @@ test("制作服务将导出失败拆成可区分的稳定错误且不再提示�
         consumeAssetOperation: async () => ({ status: "none" as const }),
         render: async () => { throw { code: nativeCode }; },
         probeTts: async () => undefined,
+        synthesizeNarration: async () => ({ sentences: [] }),
       },
       analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
       tasks,
@@ -1191,6 +1253,7 @@ test("StandaloneProductionService consumes a recovered native asset picker as pr
       }),
       render: async () => { throw new Error("unused"); },
       probeTts: async () => undefined,
+      synthesizeNarration: async () => ({ sentences: [] }),
     },
     analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
     tasks,
@@ -1228,6 +1291,7 @@ test("consume 返回 none 时保留待绑定标记，以免清掉仍在进行的
       consumeAssetOperation: async () => ({ status: "none" as const }),
       render: async () => { throw new Error("unused"); },
       probeTts: async () => undefined,
+      synthesizeNarration: async () => ({ sentences: [] }),
     },
     analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
     tasks,
@@ -1274,6 +1338,7 @@ test("StandaloneProductionService maps every recovered native asset terminal to 
         consumeAssetOperation: async () => ({ status: "failed" as const, code: nativeCode }),
         render: async () => { throw new Error("unused"); },
         probeTts: async () => undefined,
+        synthesizeNarration: async () => ({ sentences: [] }),
       },
       analysis: { get: async () => analysis, run: async () => analysis, importVideo: async () => analysis, consumeVideoRecovery: async () => ({ status: "none" as const }), subscribe: () => () => undefined },
       tasks,
@@ -1391,4 +1456,267 @@ test("数字人口播不去看素材，计划记成与画面匹配无关", async
 
   assert.deepEqual(context.insightCalls, [], "口播稿是用户自己写的，没有画面要匹配");
   assert.deepEqual(planOf(ready).grounding, { visual: "not_applicable", describedAssetIds: [] });
+});
+
+// ============================ v4（文稿先行）管线 ============================
+
+function scriptSentencesOf(record: { readonly storyboard: { readonly document: unknown } }) {
+  return (record.storyboard.document as {
+    readonly sentences: readonly { readonly id: string; readonly text: string; readonly assetId?: string; readonly estimatedMs: number }[];
+  }).sentences;
+}
+
+/** 走到「已生成分镜脚本」的公共前置；返回的 service 已持有两句话的分镜。 */
+async function scriptedProject(v4?: V4HarnessOptions) {
+  const context = harness("system", undefined, undefined, v4);
+  const service = context.create();
+  await service.create({ analysisTaskId: "task-1", brief: "突出真实服务", targetDurationSeconds: 20 });
+  await service.importAssets("project-1");
+  const script = await service.generateScript("project-1");
+  return { ...context, service, script };
+}
+
+test("分镜脚本生成本地 id 与字符估算，重启后仍可读取", async () => {
+  const { service, script, scriptPrompts, create } = await scriptedProject();
+
+  assert.equal(script.schemaVersion, "production-script.v1");
+  const sentences = scriptSentencesOf(script);
+  assert.equal(sentences.length, 2);
+  assert.deepEqual(sentences.map((sentence) => sentence.text), ["先看看真实门店环境。", "再了解完整服务过程。"]);
+  assert.deepEqual(sentences.map((sentence) => sentence.assetId), ["asset-1", "asset-2"], "草稿的素材绑定建议必须原样带进契约");
+  assert.ok(sentences.every((sentence) => /^[A-Za-z0-9_-]+$/u.test(sentence.id)), "句子 id 由本地生成，不来自模型");
+  assert.ok(sentences.every((sentence) => sentence.estimatedMs === [...sentence.text].length * 250), "预估时长按字符估算，不问模型要毫秒");
+  assert.equal(script.estimatedTotalMs, sentences.reduce((sum, sentence) => sum + sentence.estimatedMs, 0));
+  assert.match(scriptPrompts.at(-1) ?? "", /突出真实服务/u);
+  assert.equal((await service.get("project-1"))?.status, "draft", "脚本生成后项目停在草稿，不伪装成就绪");
+
+  // 重启后从 project.json 读回：脚本是持久化事实，不活在内存里。
+  const reopened = create();
+  const reread = await reopened.getScript("project-1");
+  assert.deepEqual(scriptSentencesOf(reread!), sentences);
+});
+
+test("重新生成分镜会作废旧句子上的配音、计划与成片", async () => {
+  const { service, script, deletedPaths } = await scriptedProject();
+  await service.synthesizeNarration("project-1");
+  await service.composeMeasuredPlan("project-1");
+  await service.render("project-1");
+
+  const regenerated = await service.generateScript("project-1", { brief: "换个说法介绍门店服务" });
+
+  const oldIds = new Set(scriptSentencesOf(script).map((sentence) => sentence.id));
+  const newSentences = scriptSentencesOf(regenerated);
+  assert.ok(newSentences.every((sentence) => !oldIds.has(sentence.id)), "重新生成必须换发新句子 id，旧配音才不会错挂");
+  assert.ok(deletedPaths.includes("output.mp4"), "旧成片对不上新脚本，必须删掉而不是继续展示");
+  assert.equal(deletedPaths.filter((path) => path.startsWith("narration/")).length, 2, "两句旧配音音频都要清理");
+  const project = await service.get("project-1");
+  assert.equal(project?.plan, undefined);
+  assert.equal(project?.output, undefined);
+  const narration = await service.getNarration("project-1");
+  assert.deepEqual(narration?.sentences.map((sentence) => sentence.status), ["missing", "missing"], "脚本已换，旧配音不跟到新句子上：每句都要重新合成");
+  assert.ok(narration?.sentences.every((sentence) => newSentences.some((fresh) => fresh.id === sentence.sentenceId)));
+});
+
+test("逐句配音持久化实测音轨并可在重启后读回", async () => {
+  const { service, synthesizeCalls, create } = await scriptedProject();
+
+  const record = await service.synthesizeNarration("project-1");
+
+  assert.equal(record.schemaVersion, "production-narration.v1");
+  assert.equal(record.mode, "system");
+  assert.equal(synthesizeCalls.length, 1);
+  assert.equal(synthesizeCalls[0]?.sentences.length, 2, "缺省补齐所有未就绪句子");
+  assert.deepEqual(record.sentences.map((sentence) => sentence.status), ["ready", "ready"]);
+  assert.equal(record.totalDurationMs, 9_000);
+  assert.ok(record.sentences.every((sentence) => sentence.durationMs !== undefined && sentence.alignmentSource === "whisper_fallback"));
+
+  const reopened = create();
+  const reread = await reopened.getNarration("project-1");
+  assert.deepEqual(reread?.sentences.map((sentence) => [sentence.sentenceId, sentence.status]), record.sentences.map((sentence) => [sentence.sentenceId, sentence.status]), "实测音轨是持久化事实，重启不丢");
+});
+
+test("单句失败不拖垮其余句子，重试只补失败的那句", async () => {
+  const { service, script, synthesizeCalls } = await scriptedProject({
+    narrationOutcomes: (request, call) => request.sentences.map((sentence, index) => call === 0 && index === 0
+      ? { sentenceId: sentence.sentenceId, transcribedWords: null, error: "ERR_TTS_SYNTHESIS_FAILED" }
+      : { sentenceId: sentence.sentenceId, durationMs: 5_000, audioPath: `narration/${sentence.sentenceId}.m4a`, transcribedWords: null }),
+  });
+
+  const partial = await service.synthesizeNarration("project-1");
+
+  const failedId = scriptSentencesOf(script)[0]!.id;
+  assert.equal(partial.sentences[0]?.status, "missing");
+  assert.equal(partial.sentences[1]?.status, "ready");
+  assert.deepEqual(partial.failures.map((failure) => [failure.sentenceId, failure.issue.code]), [[failedId, "TTS_SYNTHESIS_FAILED"]]);
+  assert.equal((await service.get("project-1"))?.status, "draft", "部分成功不是项目失败，界面按句引导重试");
+
+  const recovered = await service.synthesizeNarration("project-1", { sentenceIds: [failedId] });
+
+  assert.equal(synthesizeCalls.at(-1)?.sentences.length, 1, "单句重试只把失败句送去合成，成功句不重花一次语音");
+  assert.equal(synthesizeCalls.at(-1)?.sentences[0]?.sentenceId, failedId);
+  assert.ok(recovered.sentences.every((sentence) => sentence.status === "ready"));
+  assert.equal(recovered.failures.length, 0);
+});
+
+test("全部句子失败时项目进入失败终态并携带可行动的 issue", async () => {
+  const { service } = await scriptedProject({
+    narrationOutcomes: (request, call) => call === 0
+      ? request.sentences.map((sentence) => ({ sentenceId: sentence.sentenceId, transcribedWords: null, error: "ERR_TTS_SYNTHESIS_FAILED" }))
+      : request.sentences.map((sentence, index) => ({ sentenceId: sentence.sentenceId, durationMs: 4_000 + index * 1_000, audioPath: `narration/${sentence.sentenceId}.m4a`, transcribedWords: null })),
+  });
+
+  const record = await service.synthesizeNarration("project-1");
+
+  assert.ok(record.sentences.every((sentence) => sentence.status === "missing"));
+  assert.equal(record.failures.length, 2);
+  const project = await service.get("project-1");
+  assert.equal(project?.status, "failed");
+  assert.equal(project?.issue?.code, "TTS_SYNTHESIS_FAILED");
+  assert.equal(project?.issue?.action, "retry");
+
+  const recovered = await service.synthesizeNarration("project-1");
+  assert.ok(recovered.sentences.every((sentence) => sentence.status === "ready"));
+  assert.equal((await service.get("project-1"))?.status, "draft", "重试成功后离开失败终态，不永远卡在失败");
+});
+
+test("配音未补齐不能组装计划；补齐后组装 v4 计划、渲染消费实测音频", async () => {
+  const { service, renderCalls } = await scriptedProject();
+
+  await assert.rejects(() => service.composeMeasuredPlan("project-1"), /配音/u);
+
+  const composed = await service.synthesizeNarration("project-1").then(() => service.composeMeasuredPlan("project-1"));
+
+  assert.equal(composed.schemaVersion, "production-measured-plan.v1");
+  assert.equal(composed.project.status, "ready");
+  assert.equal(composed.project.plan?.schemaVersion, "production-plan.v4");
+  const shots = shotsOf(composed.project) as unknown as readonly { readonly sentenceId?: string; readonly durationMs?: number }[];
+  assert.deepEqual(shots.map((shot) => shot.durationMs), [4_000, 5_000], "每镜时长等于对应句的实测音频时长");
+  assert.ok(composed.softViolations.some((violation) => violation.reason === "total-too-short"), "九秒总时长低于 15 秒软边界，必须提示而不是拒绝");
+
+  const rendered = await service.render("project-1");
+  assert.equal(rendered.status, "succeeded");
+  assert.equal(renderCalls[0]?.narrationAssets?.length, 2, "v4 渲染消费已持久化的逐句音频");
+  assert.ok(renderCalls[0]?.narrationAssets?.every((asset) => asset.audioPath.startsWith("narration/")));
+});
+
+test("v4 计划缺任何一句音频都拒绝渲染，且不先进入渲染中状态", async () => {
+  const { service, values, renderCalls } = await scriptedProject();
+  await service.synthesizeNarration("project-1");
+  await service.composeMeasuredPlan("project-1");
+
+  // 模拟记录损坏：从磁盘上抠掉第二句的音频文件记录，只留音轨。
+  const stored = JSON.parse(values.get("project-1/project.json")!) as { narrationAssets: { sentenceId: string }[] };
+  values.set("project-1/project.json", JSON.stringify({ ...stored, narrationAssets: stored.narrationAssets.slice(0, 1) }));
+
+  await assert.rejects(() => service.render("project-1"), /配音/u);
+  assert.equal(renderCalls.length, 0, "音频不齐就不该把计划送进渲染器");
+  assert.equal((await service.get("project-1"))?.status, "ready", "拒绝发生在进入渲染中之前，项目状态不被污染");
+});
+
+test("重合成已进计划的句子会让计划与成片立即过期", async () => {
+  const { service, script, deletedPaths } = await scriptedProject();
+  await service.synthesizeNarration("project-1");
+  await service.composeMeasuredPlan("project-1");
+  await service.render("project-1");
+
+  const resynthesized = await service.synthesizeNarration("project-1", { sentenceIds: [scriptSentencesOf(script)[0]!.id] });
+
+  assert.ok(resynthesized.sentences.every((sentence) => sentence.status === "ready"));
+  const project = await service.get("project-1");
+  assert.equal(project?.plan, undefined, "计划时间轴锚定旧实测时长，句子变了就不能继续展示");
+  assert.equal(project?.output, undefined);
+  assert.ok(deletedPaths.includes("output.mp4"), "过期成片要删，避免界面把旧产物当成新计划的结果");
+});
+
+test("旧版逐镜秒数微调对分镜项目拒绝，指向阶段页回改文稿", async () => {
+  const { service } = await scriptedProject();
+  await service.synthesizeNarration("project-1");
+  const { project } = await service.composeMeasuredPlan("project-1");
+
+  await assert.rejects(
+    () => service.updatePlan("project-1", { expectedUpdatedAt: project.updatedAt, shots: [{ order: 1, durationSeconds: 5 }] }),
+    (error: unknown) => error instanceof TaskError && error.code === "PRODUCTION_PLAN_EDIT_INVALID",
+  );
+});
+
+test("逐句编辑只作废被改句的配音，计划与成片随之失效、句子 id 保持稳定", async () => {
+  const { service, script, deletedPaths } = await scriptedProject();
+  await service.synthesizeNarration("project-1");
+  await service.composeMeasuredPlan("project-1");
+  await service.render("project-1");
+
+  const sentences = scriptSentencesOf(script);
+  const firstId = sentences[0]!.id;
+  const edited = await service.updateStoryboard("project-1", {
+    expectedUpdatedAt: (await service.get("project-1"))!.updatedAt,
+    sentences: [{ sentenceId: firstId, text: "先看看焕新后的门店环境。", assetId: "asset-3", stickerId: null }],
+  });
+
+  const editedSentences = scriptSentencesOf(edited);
+  assert.deepEqual(editedSentences.map((sentence) => sentence.id), sentences.map((sentence) => sentence.id), "编辑不换发句子 id，未改句的配音才能继续挂住");
+  assert.equal(editedSentences[0]?.text, "先看看焕新后的门店环境。");
+  assert.equal(editedSentences[0]?.assetId, "asset-3");
+  assert.equal(editedSentences[0]?.estimatedMs, [..."先看看焕新后的门店环境。"].length * 250, "改文案后按新字符数重算预估");
+  assert.equal(editedSentences[1]?.assetId, sentences[1]?.assetId, "未提交的句子原样保留");
+
+  const narration = await service.getNarration("project-1");
+  assert.equal(narration?.sentences[0]?.status, "missing", "改了文案的句子必须重新配音");
+  assert.equal(narration?.sentences[1]?.status, "ready", "其余句的实测配音保持就绪，不陪着重来");
+  assert.ok(deletedPaths.some((path) => path === `narration/${firstId}.m4a`), "被改句的旧音频文件要清理");
+  assert.ok(deletedPaths.includes("output.mp4"), "计划与成片由脚本派生，脚本变了就作废");
+  const project = await service.get("project-1");
+  assert.equal(project?.plan, undefined);
+  assert.equal(project?.output, undefined);
+  assert.equal(project?.status, "draft", "回改后回到草稿，由阶段页引导补配音再重新组装");
+});
+
+test("逐句编辑拒绝未知句子、超长文案、无效素材绑定与过期版本", async () => {
+  const { service, script } = await scriptedProject();
+  await service.synthesizeNarration("project-1");
+  const project = await service.get("project-1");
+  const firstId = scriptSentencesOf(script)[0]!.id;
+
+  await assert.rejects(() => service.updateStoryboard("project-1", {
+    expectedUpdatedAt: project!.updatedAt,
+    sentences: [{ sentenceId: "not-in-script", text: "新文案" }],
+  }), /不在分镜脚本/u);
+  await assert.rejects(() => service.updateStoryboard("project-1", {
+    expectedUpdatedAt: project!.updatedAt,
+    sentences: [{ sentenceId: firstId, text: "超".repeat(161) }],
+  }), /160 字上限/u);
+  await assert.rejects(() => service.updateStoryboard("project-1", {
+    expectedUpdatedAt: project!.updatedAt,
+    sentences: [{ sentenceId: firstId, assetId: "not-an-asset" }],
+  }), /项目内已导入/u);
+  await assert.rejects(() => service.updateStoryboard("project-1", {
+    expectedUpdatedAt: "2000-01-01T00:00:00.000Z",
+    sentences: [{ sentenceId: firstId, text: "新文案" }],
+  }), /已被更新/u);
+  assert.deepEqual(
+    scriptSentencesOf((await service.getScript("project-1"))!).map((sentence) => sentence.text),
+    scriptSentencesOf(script).map((sentence) => sentence.text),
+    "全部拒绝路径都不落盘，脚本保持原样",
+  );
+});
+
+test("云端配音连接不完整时按稳定错误拒绝，而不是静默退回系统语音", async () => {
+  const context = harness("provider", undefined, undefined, {
+    narrationConnection: async () => ({ ttsTransport: null, ttsModel: null, ttsVoice: null, baseUrl: "https://api.example.com", asrModel: null }),
+  });
+  const service = context.create();
+  await service.create({ analysisTaskId: "task-1", brief: "突出真实服务", targetDurationSeconds: 20 });
+  await service.importAssets("project-1");
+  await service.generateScript("project-1");
+
+  await assert.rejects(
+    () => service.synthesizeNarration("project-1"),
+    (error: unknown) => error instanceof TaskError && error.code === "TTS_UNAVAILABLE",
+  );
+});
+
+test("narrationProgressEvent 只映射逐句配音阶段，不编造整体百分比", () => {
+  const mapped = narrationProgressEvent({ projectId: "project-1", stage: "synthesize_narration", sentenceIndex: 2, total: 5, sentenceId: "s-2" });
+  assert.deepEqual(mapped, { type: "narration-progress", projectId: "project-1", stage: "synthesize_narration", sentenceIndex: 2, total: 5, sentenceId: "s-2" });
+  assert.equal(mapped !== undefined && "progress" in mapped, false, "逐句事件没有整体百分比可报，缺省而不是编造");
+  assert.equal(narrationProgressEvent({ projectId: "project-1", progress: 0.5, stage: "export" }), undefined, "渲染阶段事件不属于配音进度，交由渲染监听处理");
 });

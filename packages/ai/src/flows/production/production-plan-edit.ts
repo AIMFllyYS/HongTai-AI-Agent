@@ -27,6 +27,11 @@ export function requestedSubtitleTemplateId(plan: ProductionPlanResult): string 
  * cues would let an edited narration keep timings that no longer match its own text.
  */
 function editableBase(plan: ProductionPlanResult): ProductionPlanResultV2 {
+  // v4 的镜头时长来自实测配音且没有目标时长，这条「按秒微调 + 总和守恒」的旧路对它既算不出
+  // 也校验不了；如实拒绝，请用户回分镜改文案后重新配音。
+  if (plan.schemaVersion === "production-plan.v4") {
+    throw invalidEdit("实测时长计划的镜头时长来自实测配音，请回分镜修改文案后重新配音。");
+  }
   if (plan.schemaVersion === "production-plan.v1") {
     throw invalidEdit("这个制作计划太旧，缺少字幕与文字信息，请重新生成后再微调。");
   }

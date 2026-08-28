@@ -25,6 +25,14 @@ import com.hongtai.aiagent.production.CloudNarrationConfiguration
 import com.hongtai.aiagent.production.CloudNarrationSynthesizer
 import com.hongtai.aiagent.production.CloudTtsProtocol
 import com.hongtai.aiagent.production.DecorationAssets
+import com.hongtai.aiagent.production.NarrationAudioDurationProbe
+import com.hongtai.aiagent.production.NarrationSentenceAssets
+import com.hongtai.aiagent.production.NarrationSentenceOutcome
+import com.hongtai.aiagent.production.NarrationSentenceRequest
+import com.hongtai.aiagent.production.NarrationSynthesisCoordinator
+import com.hongtai.aiagent.production.NarrationTranscribedWord
+import com.hongtai.aiagent.production.NarrationTranscriptionClient
+import com.hongtai.aiagent.production.NarrationTranscriptionConfiguration
 import com.hongtai.aiagent.production.ProductionException
 import com.hongtai.aiagent.production.ProductionFailureKind
 import com.hongtai.aiagent.production.ProductionImportSelection
@@ -37,9 +45,12 @@ import com.hongtai.aiagent.production.SystemNarrationSynthesizer
 import com.hongtai.aiagent.runtime.ActiveWorkScreenStay
 import com.hongtai.aiagent.storage.AndroidKeystoreSecretStore
 import com.hongtai.aiagent.storage.LocalPreferences
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
+import org.json.JSONArray
+import org.json.JSONObject
 
 @UnstableApi
 @CapacitorPlugin(name = "ProductionRuntime")
@@ -166,7 +177,14 @@ class ProductionRuntimePlugin : Plugin() {
       call.reject("projectId and planJson are required.", NativeIssueCode.INVALID_ARGUMENT)
       return
     }
-    val cloudInstructions = if (mode == ProductionRenderMode.MONTAGE && narration == ProductionNarrationMode.PROVIDER) {
+    val narrationAssets = try {
+      narrationAssets(call)
+    } catch (error: Exception) {
+      call.reject(error.message ?: "The narration audio assets are invalid.", NativeIssueCode.INVALID_ARGUMENT)
+      return
+    }
+    // Audio-ready renders synthesize nothing, so they must not demand TTS instructions either.
+    val cloudInstructions = if (mode == ProductionRenderMode.MONTAGE && narration == ProductionNarrationMode.PROVIDER && narrationAssets == null) {
       requiredCloudTtsInstructions(call) ?: return
     } else {
       null
@@ -193,7 +211,7 @@ class ProductionRuntimePlugin : Plugin() {
         } else {
           SystemNarrationSynthesizer(context, store)
         }
-        val output = renderer.render(projectId, plan, synthesizer) { progress, stage ->
+        val output = renderer.render(projectId, plan, synthesizer, narrationAssets) { progress, stage ->
           notifyListeners("productionProgress", JSObject().put("projectId", projectId).put("progress", progress).put("stage", stage))
         }
         call.resolve(
@@ -206,6 +224,39 @@ class ProductionRuntimePlugin : Plugin() {
         call.reject(error.message ?: "The production plan is invalid.", NativeIssueCode.INVALID_ARGUMENT)
       } catch (error: Exception) {
         call.reject("The local production render failed.", NativeIssueCode.MEDIA_MERGE_FAILED)
+      } finally {
+        ActiveWorkScreenStay.release(activity)
+      }
+    }
+  }
+
+  /**
+   * Front-loaded narration stage: synthesize every sentence before rendering, measure each audio
+   * file's real duration, and optionally upload it to an OpenAI-compatible transcription endpoint
+   * for word timings. One sentence failing never aborts the rest; the response marks failures
+   * per sentence so the shared layer can retry exactly those sentences.
+   */
+  @PluginMethod
+  fun synthesizeNarration(call: PluginCall) {
+    val request = try {
+      parseNarrationSynthesisRequest(call)
+    } catch (error: Exception) {
+      call.reject(error.message ?: "The narration synthesis request is invalid.", NativeIssueCode.INVALID_ARGUMENT)
+      return
+    }
+    PRODUCTION_EXECUTOR.execute {
+      ActiveWorkScreenStay.acquire(activity)
+      try {
+        val outcomes = synthesizeNarrationSentences(request)
+        val sentences = JSONArray()
+        outcomes.forEach { outcome -> sentences.put(narrationOutcomeJson(outcome)) }
+        call.resolve(JSObject().put("sentences", sentences))
+      } catch (error: ProductionException) {
+        call.reject(error.message ?: "The narration synthesis failed.", nativeIssueCode(error.kind))
+      } catch (error: IllegalArgumentException) {
+        call.reject(error.message ?: "The narration synthesis request is invalid.", NativeIssueCode.INVALID_ARGUMENT)
+      } catch (error: Exception) {
+        call.reject("The narration synthesis failed.", NativeIssueCode.TTS_SYNTHESIS_FAILED)
       } finally {
         ActiveWorkScreenStay.release(activity)
       }
@@ -265,6 +316,153 @@ class ProductionRuntimePlugin : Plugin() {
         call.reject("Cloud TTS probe failed.", NativeIssueCode.TTS_SYNTHESIS_FAILED)
       }
     }
+  }
+
+  /** Narrow request holder so the executor receives validated data only. */
+  private class NarrationSynthesisRequest(
+    val projectId: String,
+    val narration: ProductionNarrationMode,
+    val speechRate: Float,
+    val cloudInstructions: Pair<String, String>?,
+    val sentences: List<NarrationSentenceRequest>,
+    val transcription: NarrationTranscriptionConfiguration?,
+  )
+
+  private fun parseNarrationSynthesisRequest(call: PluginCall): NarrationSynthesisRequest {
+    val projectId = LocalFilesPolicy.projectId(call.getString("projectId").orEmpty())
+    val mode = renderMode(call.getString("mode"))
+    val narration = narrationMode(call.getString("narration"))
+    if (mode == null || narration == null) {
+      throw IllegalArgumentException("mode and narration are required.")
+    }
+    val rate = call.getDouble("speechRate")
+    require(rate == null || rate in 0.75..1.25) { "speechRate is invalid." }
+    val sentences = parseNarrationSentences(call.getArray("sentences"))
+    val cloudInstructions = if (narration == ProductionNarrationMode.PROVIDER) {
+      val instruction = call.getObject("providerInstruction") ?: throw IllegalArgumentException("providerInstruction is required.")
+      CloudTtsProtocol.requireInstruction(instruction.getString("miMoInstruction")) to
+        CloudTtsProtocol.requireInstruction(instruction.getString("stepFunInstruction"))
+    } else {
+      null
+    }
+    val transcription = if (sentences.any { it.needsTranscription }) {
+      val instruction = call.getObject("transcriptionInstruction") ?: throw IllegalArgumentException("transcriptionInstruction is required.")
+      NarrationTranscriptionConfiguration.from(instruction.getString("baseUrl"), instruction.getString("model"))
+    } else {
+      null
+    }
+    return NarrationSynthesisRequest(projectId, narration, (rate ?: 1.0).toFloat(), cloudInstructions, sentences, transcription)
+  }
+
+  private fun parseNarrationSentences(array: JSONArray?): List<NarrationSentenceRequest> {
+    if (array == null) throw IllegalArgumentException("sentences are required.")
+    require(array.length() in 1..MAX_NARRATION_SENTENCES) { "The narration sentence count is invalid." }
+    val seen = mutableSetOf<String>()
+    return (0 until array.length()).map { index ->
+      val value = array.getJSONObject(index)
+      val sentenceId = value.getString("sentenceId")
+      if (!NarrationSentenceAssets.SENTENCE_ID.matches(sentenceId)) {
+        throw IllegalArgumentException("A narration sentence identifier is invalid.")
+      }
+      require(seen.add(sentenceId)) { "A narration sentence identifier is duplicated." }
+      val speechText = value.getString("speechText").trim()
+      require(
+        speechText.isNotEmpty() &&
+          speechText.length <= CloudNarrationSynthesizer.MAX_NARRATION_CHARACTERS,
+      ) { "A narration sentence text is invalid." }
+      NarrationSentenceRequest(sentenceId, speechText, value.optBoolean("needsTranscription", false))
+    }
+  }
+
+  private fun synthesizeNarrationSentences(request: NarrationSynthesisRequest): List<NarrationSentenceOutcome> {
+    when (request.narration) {
+      ProductionNarrationMode.PROVIDER -> {
+        if (!secrets.hasActiveAiConnectionSecret()) {
+          throw ProductionException(ProductionFailureKind.TTS_UNAVAILABLE, "The protected cloud TTS credential is unavailable.")
+        }
+        val instructions = requireNotNull(request.cloudInstructions)
+        val synthesizer = CloudNarrationSynthesizer(
+          context,
+          store,
+          CloudNarrationConfiguration.from(preferences.readAiConnection()),
+          instructions.first,
+          instructions.second,
+          secrets,
+        )
+        return secrets.withActiveAiConnectionSecret { apiKey ->
+          narrationCoordinator(request) { sentence ->
+            synthesizer.synthesizeSentence(request.projectId, sentence.sentenceId, sentence.speechText, request.speechRate, apiKey)
+          }.run(request.sentences)
+        }
+      }
+      ProductionNarrationMode.SYSTEM -> {
+        val synthesizer = SystemNarrationSynthesizer(context, store)
+        return synthesizer.openSession(VOICE_LOCALE, request.speechRate).use { session ->
+          narrationCoordinator(request) { sentence ->
+            session.synthesizeSentence(request.projectId, sentence.sentenceId, sentence.speechText)
+          }.run(request.sentences)
+        }
+      }
+    }
+  }
+
+  private fun narrationCoordinator(
+    request: NarrationSynthesisRequest,
+    synthesize: (NarrationSentenceRequest) -> File,
+  ): NarrationSynthesisCoordinator = NarrationSynthesisCoordinator(
+    synthesize = synthesize,
+    measureDurationMs = NarrationAudioDurationProbe::measureMs,
+    transcribe = narrationTranscriber(request),
+    onSentenceFinished = { index, total, sentenceId ->
+      notifyListeners(
+        "productionProgress",
+        JSObject().put("projectId", request.projectId)
+          .put("type", "progress")
+          .put("stage", "synthesize_narration")
+          .put("sentenceIndex", index)
+          .put("total", total)
+          .put("sentenceId", sentenceId),
+      )
+    },
+  )
+
+  private fun narrationTranscriber(request: NarrationSynthesisRequest): ((File) -> List<NarrationTranscribedWord>)? {
+    val configuration = request.transcription ?: return null
+    if (!secrets.hasActiveAiConnectionSecret()) return null
+    val client = NarrationTranscriptionClient(configuration, secrets)
+    return { audio -> client.transcribe(audio) }
+  }
+
+  private fun narrationOutcomeJson(outcome: NarrationSentenceOutcome): JSObject = JSObject()
+    .put("sentenceId", outcome.sentenceId)
+    .also { json ->
+      outcome.durationMs?.let { json.put("durationMs", it) }
+      outcome.audioPath?.let { json.put("audioPath", it) }
+      json.put(
+        "transcribedWords",
+        outcome.transcribedWords?.let { words ->
+          JSONArray(words.map { word ->
+            JSObject().put("word", word.word).put("startMs", word.startMs).put("endMs", word.endMs)
+          })
+        } ?: JSONObject.NULL,
+      )
+      outcome.failure?.let { json.put("error", nativeIssueCode(it)) }
+    }
+
+  /** sentenceId → project-relative audioPath; absent or empty keeps the legacy synthesis path. */
+  private fun narrationAssets(call: PluginCall): Map<String, String>? {
+    val array = call.getArray("narrationAssets") ?: return null
+    if (array.length() == 0) return null
+    val assets = LinkedHashMap<String, String>(array.length())
+    for (index in 0 until array.length()) {
+      val value = array.getJSONObject(index)
+      val sentenceId = value.getString("sentenceId")
+      val audioPath = value.getString("audioPath")
+      require(sentenceId.isNotBlank() && audioPath.isNotBlank()) { "A narration audio asset is invalid." }
+      require(!assets.containsKey(sentenceId)) { "A narration audio asset is duplicated." }
+      assets[sentenceId] = audioPath
+    }
+    return assets
   }
 
   private fun resumePersistedAssetImport() {
@@ -418,6 +616,8 @@ class ProductionRuntimePlugin : Plugin() {
     ProductionFailureKind.MEDIA_SOURCE_INVALID -> NativeIssueCode.MEDIA_SOURCE_INVALID
     ProductionFailureKind.TTS_UNAVAILABLE -> NativeIssueCode.TTS_UNAVAILABLE
     ProductionFailureKind.TTS_SYNTHESIS_FAILED -> NativeIssueCode.TTS_SYNTHESIS_FAILED
+    ProductionFailureKind.TTS_SENTENCE_FAILED -> NativeIssueCode.TTS_SENTENCE_FAILED
+    ProductionFailureKind.TRANSCRIPTION_FAILED -> NativeIssueCode.TRANSCRIPTION_FAILED
     ProductionFailureKind.MEDIA_RENDER_TIMEOUT -> NativeIssueCode.MEDIA_RENDER_TIMEOUT
     ProductionFailureKind.MEDIA_ENCODER_UNAVAILABLE -> NativeIssueCode.MEDIA_ENCODER_UNAVAILABLE
     ProductionFailureKind.MEDIA_DECODE_FAILED -> NativeIssueCode.MEDIA_DECODE_FAILED
@@ -429,6 +629,9 @@ class ProductionRuntimePlugin : Plugin() {
   }
 
   private companion object {
+    /** Mirrors the v4 plan's structural shot ceiling: one measured sentence per shot. */
+    const val MAX_NARRATION_SENTENCES = 12
+    const val VOICE_LOCALE = "zh-CN"
     val SUPPORTED_MIME_TYPES = arrayOf("image/jpeg", "image/png", "image/webp", "video/mp4", "audio/mpeg", "audio/mp4", "audio/wav")
     val AVATAR_MIME_TYPES = arrayOf("video/mp4")
     val PRODUCTION_EXECUTOR = Executors.newSingleThreadExecutor { runnable ->

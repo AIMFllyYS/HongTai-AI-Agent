@@ -1,9 +1,22 @@
-import { resolveTemplateForPrecision, subtitleTimingPrecision, TaskError } from "@hongtai/core";
+import {
+  checkMeasuredProductionDurations,
+  resolveTemplateForPrecision,
+  subtitleTimingPrecision,
+  TaskError,
+  type MeasuredDurationViolation,
+  type SubtitleTimingPrecision,
+  type SubtitleTimingSource,
+} from "@hongtai/core";
 
 import type { ProductionPlanningAsset } from "../../contracts/production-planning";
 import { sharesVerbatimRun } from "../../originality";
 import { MAX_DECORATIONS_PER_PLAN, MAX_DECORATIONS_PER_SHOT } from "../../schemas/production-plan-overlays";
-import type { ProductionPlanResult, ProductionPlanResultV3 } from "../../schemas/production-plan";
+import type {
+  LegacyProductionPlanResult,
+  ProductionPlanGrounding,
+  ProductionPlanResultV3,
+  ProductionPlanResultV4,
+} from "../../schemas/production-plan";
 
 /** A cue may finish this many milliseconds past its shot to absorb encoder rounding. */
 const CUE_TAIL_TOLERANCE_MS = 60;
@@ -23,6 +36,19 @@ export interface ProductionPlanConstraints {
   readonly originalSourceText?: string;
 }
 
+/** v4（实测时长）计划的校验约束：没有目标时长，拆解来源可为空。 */
+export interface MeasuredProductionPlanConstraints {
+  /** 本次生成所依据的拆解任务；null 表示本次没有参考拆解（v4 起拆解是可选增强）。 */
+  readonly analysisTaskId: string | null;
+  readonly mode: "montage" | "avatar";
+  readonly textPreset: "classic_top" | "clean_card" | "aqua_accent";
+  readonly headlineText?: string;
+  readonly subtitleTemplateId?: string;
+  readonly allowedDecorationIds?: readonly string[];
+  readonly assets: readonly ProductionPlanningAsset[];
+  readonly originalSourceText?: string;
+}
+
 export function invalidPlan(message: string, cause?: unknown): TaskError {
   return new TaskError({ code: "AI_STRUCTURED_OUTPUT_INVALID", message, action: "retry", cause });
 }
@@ -34,7 +60,10 @@ export function isWholeMilliseconds(seconds: number): boolean {
 }
 
 /** Rejects plans that lift twelve or more consecutive characters straight from the reference copy. */
-export function assertOriginalNarration(plan: ProductionPlanResult, constraints: ProductionPlanConstraints): void {
+export function assertOriginalNarration(
+  plan: { readonly shots: readonly { readonly narration: string }[] },
+  constraints: { readonly mode: "montage" | "avatar"; readonly originalSourceText?: string },
+): void {
   if (constraints.mode !== "montage" || !constraints.originalSourceText) return;
   const narration = plan.shots.map((shot) => shot.narration).join("");
   if (sharesVerbatimRun(narration, constraints.originalSourceText)) {
@@ -42,15 +71,44 @@ export function assertOriginalNarration(plan: ProductionPlanResult, constraints:
   }
 }
 
+/** v3 与 v4 的 cue 在结构上共享的字段，让同一套时间轴规则服务两个版本。 */
+interface CueTimingShape {
+  readonly startMs: number;
+  readonly endMs: number;
+  readonly text: string;
+  readonly emphasisWords: readonly string[];
+  readonly words: readonly { readonly text: string; readonly startMs: number; readonly endMs: number }[] | null;
+}
+
+/** v3 与 v4 的装饰在结构上共享的字段。 */
+interface DecorationShape {
+  readonly kind: "sticker" | "floating_text";
+  readonly assetRef: string | null;
+  readonly text: string | null;
+  readonly shotOrder: number;
+  readonly startMs: number;
+  readonly endMs: number;
+}
+
+/** v3 与 v4 计划里字幕设置在结构上共享的部分。 */
+interface SubtitleTimedPlanShape {
+  readonly subtitle: {
+    readonly templateId: string;
+    readonly timing: { readonly precision: SubtitleTimingPrecision; readonly source: SubtitleTimingSource };
+    readonly degradedFromTemplateId: string | null;
+  };
+  readonly shots: readonly { readonly cues: readonly CueTimingShape[] }[];
+}
+
 /**
  * Keeps the promised subtitle look in step with the evidence behind the cue times. The
  * renderer trusts `templateId` as-is, so the degrade has to be settled and recorded here
  * rather than re-decided at render time.
  */
-function validateSubtitleTiming(plan: ProductionPlanResultV3, constraints: ProductionPlanConstraints): void {
+function validateSubtitleTiming(plan: SubtitleTimedPlanShape, requestedTemplateId: string | undefined): void {
   const { templateId, timing, degradedFromTemplateId } = plan.subtitle;
   const requestedId = degradedFromTemplateId ?? templateId;
-  if (constraints.subtitleTemplateId && requestedId !== constraints.subtitleTemplateId) {
+  if (requestedTemplateId && requestedId !== requestedTemplateId) {
     throw invalidPlan("制作计划字幕模板与用户选择不一致");
   }
   if (subtitleTimingPrecision(timing.source) !== timing.precision) throw invalidPlan("字幕时间精度与时间来源不一致");
@@ -64,27 +122,7 @@ function validateSubtitleTiming(plan: ProductionPlanResultV3, constraints: Produ
   }
 }
 
-function validateCues(plan: ProductionPlanResultV3): void {
-  for (const shot of plan.shots) {
-    // A shot without cues renders as a silent gap and is rejected by both the plan schema and
-    // the Android parser, so it must never reach persistence.
-    if (shot.cues.length === 0) throw invalidPlan("每个镜头都必须有至少一条字幕");
-    const shotEndMs = Math.round(shot.durationSeconds * 1000) + CUE_TAIL_TOLERANCE_MS;
-    let previousEndMs = -1;
-    for (const cue of shot.cues) {
-      if (cue.endMs <= cue.startMs) throw invalidPlan("字幕起止时间必须是正区间");
-      if (cue.startMs < previousEndMs) throw invalidPlan("同一镜头内的字幕不能重叠或倒序");
-      if (cue.endMs > shotEndMs) throw invalidPlan("字幕结束时间超出所属镜头时长");
-      for (const word of cue.emphasisWords) {
-        if (!cue.text.includes(word)) throw invalidPlan("强调词必须出现在该条字幕文本中");
-      }
-      validateCueWords(cue);
-      previousEndMs = cue.endMs;
-    }
-  }
-}
-
-function validateCueWords(cue: ProductionPlanResultV3["shots"][number]["cues"][number]): void {
+function validateCueWords(cue: CueTimingShape): void {
   if (!cue.words) return;
   let previousEndMs = cue.startMs;
   for (const word of cue.words) {
@@ -97,23 +135,47 @@ function validateCueWords(cue: ProductionPlanResultV3["shots"][number]["cues"][n
   if (joined !== cue.text.replace(/\s+/gu, "")) throw invalidPlan("词级时间拼接后必须与字幕文本一致");
 }
 
-function validateDecorations(plan: ProductionPlanResultV3, constraints: ProductionPlanConstraints): void {
-  if (plan.decorations.length > MAX_DECORATIONS_PER_PLAN) throw invalidPlan("装饰数量超出单条视频上限");
-  const allowed = new Set(constraints.allowedDecorationIds ?? []);
-  const shots = new Map(plan.shots.map((shot) => [shot.order, shot]));
+/** Cue timeline rules one shot must satisfy; v3 seconds and v4 milliseconds both feed into it. */
+function validateShotCues(cues: readonly CueTimingShape[], shotEndMs: number): void {
+  // A shot without cues renders as a silent gap and is rejected by both the plan schema and
+  // the Android parser, so it must never reach persistence.
+  if (cues.length === 0) throw invalidPlan("每个镜头都必须有至少一条字幕");
+  let previousEndMs = -1;
+  for (const cue of cues) {
+    if (cue.endMs <= cue.startMs) throw invalidPlan("字幕起止时间必须是正区间");
+    if (cue.startMs < previousEndMs) throw invalidPlan("同一镜头内的字幕不能重叠或倒序");
+    if (cue.endMs > shotEndMs) throw invalidPlan("字幕结束时间超出所属镜头时长");
+    for (const word of cue.emphasisWords) {
+      if (!cue.text.includes(word)) throw invalidPlan("强调词必须出现在该条字幕文本中");
+    }
+    validateCueWords(cue);
+    previousEndMs = cue.endMs;
+  }
+}
+
+function validateCues(plan: ProductionPlanResultV3): void {
+  for (const shot of plan.shots) {
+    validateShotCues(shot.cues, Math.round(shot.durationSeconds * 1000) + CUE_TAIL_TOLERANCE_MS);
+  }
+}
+
+/** Decoration rules shared by v3 and v4; the shot clock differs, so the end times arrive precomputed. */
+function validateDecorationList(
+  decorations: readonly DecorationShape[],
+  shotEndMsByOrder: ReadonlyMap<number, number>,
+  allowed: ReadonlySet<string>,
+): void {
   const perShot = new Map<number, number>();
 
-  for (const decoration of plan.decorations) {
-    const shot = shots.get(decoration.shotOrder);
-    if (!shot) throw invalidPlan("装饰引用了不存在的镜头");
+  for (const decoration of decorations) {
+    const shotEndMs = shotEndMsByOrder.get(decoration.shotOrder);
+    if (shotEndMs === undefined) throw invalidPlan("装饰引用了不存在的镜头");
     const used = (perShot.get(decoration.shotOrder) ?? 0) + 1;
     if (used > MAX_DECORATIONS_PER_SHOT) throw invalidPlan("单个镜头的装饰数量超出上限");
     perShot.set(decoration.shotOrder, used);
 
     if (decoration.endMs <= decoration.startMs) throw invalidPlan("装饰起止时间必须是正区间");
-    if (decoration.endMs > Math.round(shot.durationSeconds * 1000) + CUE_TAIL_TOLERANCE_MS) {
-      throw invalidPlan("装饰结束时间超出所属镜头时长");
-    }
+    if (decoration.endMs > shotEndMs) throw invalidPlan("装饰结束时间超出所属镜头时长");
     if (decoration.kind === "sticker") {
       if (!decoration.assetRef || decoration.text !== null) throw invalidPlan("贴纸装饰必须引用素材清单且不带文字");
       if (!allowed.has(decoration.assetRef)) throw invalidPlan("装饰引用了不在内置素材清单中的资源");
@@ -123,6 +185,15 @@ function validateDecorations(plan: ProductionPlanResultV3, constraints: Producti
   }
 }
 
+function validateDecorations(plan: ProductionPlanResultV3, constraints: ProductionPlanConstraints): void {
+  if (plan.decorations.length > MAX_DECORATIONS_PER_PLAN) throw invalidPlan("装饰数量超出单条视频上限");
+  validateDecorationList(
+    plan.decorations,
+    new Map(plan.shots.map((shot) => [shot.order, Math.round(shot.durationSeconds * 1_000) + CUE_TAIL_TOLERANCE_MS])),
+    new Set(constraints.allowedDecorationIds ?? []),
+  );
+}
+
 /**
  * Keeps the record of "did the planner see the material" internally consistent.
  *
@@ -130,9 +201,7 @@ function validateDecorations(plan: ProductionPlanResultV3, constraints: Producti
  * lying model — but it is the field the export screen uses to tell the user their video was matched
  * blind, and a wrong value there is worse than no field at all.
  */
-function validateGrounding(plan: ProductionPlanResultV3, constraints: ProductionPlanConstraints): void {
-  const grounding = plan.grounding;
-  if (!grounding) return;
+function validateGroundingRecord(grounding: ProductionPlanGrounding, assets: readonly ProductionPlanningAsset[]): void {
   const described = grounding.describedAssetIds;
   if (grounding.visual === "asset_insight") {
     if (described.length === 0) throw invalidPlan("声明已识别画面时必须列出被识别的素材");
@@ -140,8 +209,14 @@ function validateGrounding(plan: ProductionPlanResultV3, constraints: Production
     throw invalidPlan("未识别画面时不能列出被识别的素材");
   }
   if (new Set(described).size !== described.length) throw invalidPlan("被识别的素材不能重复");
-  const known = new Set(constraints.assets.map((asset) => asset.id));
+  const known = new Set(assets.map((asset) => asset.id));
   if (described.some((assetId) => !known.has(assetId))) throw invalidPlan("被识别的素材必须是本项目已导入的素材");
+}
+
+function validateGrounding(plan: ProductionPlanResultV3, constraints: ProductionPlanConstraints): void {
+  const grounding = plan.grounding;
+  if (!grounding) return;
+  validateGroundingRecord(grounding, constraints.assets);
   if (constraints.mode === "avatar" && grounding.visual !== "not_applicable") {
     throw invalidPlan("数字人口播模式的字幕来自用户口播稿，不应声明画面识别状态");
   }
@@ -155,23 +230,29 @@ function validateGrounding(plan: ProductionPlanResultV3, constraints: Production
  * suggestion, so the shots must be exactly the bound assets, in the list's own order. Items the user
  * skipped simply are not here; the ones that remain keep their relative order.
  */
-function validateRequirementOrder(plan: ProductionPlanResult, constraints: ProductionPlanConstraints): void {
-  const bound = constraints.assets
+function validateRequirementOrder(
+  shots: readonly { readonly order: number; readonly assetId: string }[],
+  assets: readonly ProductionPlanningAsset[],
+): void {
+  const bound = assets
     .filter((asset) => asset.requirement !== undefined)
     .sort((left, right) => (left.requirement?.order ?? 0) - (right.requirement?.order ?? 0));
   if (bound.length === 0) return;
-  if (plan.shots.length !== bound.length) throw invalidPlan("制作计划镜头数量必须与已绑定的素材清单项一致");
+  if (shots.length !== bound.length) throw invalidPlan("制作计划镜头数量必须与已绑定的素材清单项一致");
   for (const [index, asset] of bound.entries()) {
-    if (plan.shots[index]?.assetId !== asset.id) throw invalidPlan("制作计划镜头必须按素材清单的顺序使用对应素材");
+    if (shots[index]?.assetId !== asset.id) throw invalidPlan("制作计划镜头必须按素材清单的顺序使用对应素材");
   }
 }
 
 /**
- * The single place that decides whether a production plan is executable. Both the planning flow
- * and any later partial edit run these rules, so an edited plan can never be looser than a
+ * The single place that decides whether a v1–v3 production plan is executable. Both the planning
+ * flow and any later partial edit run these rules, so an edited plan can never be looser than a
  * generated one.
  */
-export function validateProductionPlan(plan: ProductionPlanResult, constraints: ProductionPlanConstraints): void {
+export function validateProductionPlan(
+  plan: LegacyProductionPlanResult,
+  constraints: ProductionPlanConstraints,
+): void {
   if (plan.source.analysisTaskId !== constraints.analysisTaskId) throw invalidPlan("制作计划来源与真实拆解任务不一致");
   if (plan.settings.durationSeconds !== constraints.targetDurationSeconds) throw invalidPlan("制作计划时长与目标时长不一致");
   if (plan.shots.some((shot, index) => shot.order !== index + 1)) throw invalidPlan("制作计划镜头顺序不连续");
@@ -201,13 +282,13 @@ export function validateProductionPlan(plan: ProductionPlanResult, constraints: 
   }
 
   if (plan.schemaVersion === "production-plan.v3") {
-    validateSubtitleTiming(plan, constraints);
+    validateSubtitleTiming(plan, constraints.subtitleTemplateId);
     validateCues(plan);
     validateDecorations(plan, constraints);
     validateGrounding(plan, constraints);
   }
 
-  validateRequirementOrder(plan, constraints);
+  validateRequirementOrder(plan.shots, constraints.assets);
   assertOriginalNarration(plan, constraints);
 
   if (constraints.mode === "avatar") {
@@ -215,4 +296,68 @@ export function validateProductionPlan(plan: ProductionPlanResult, constraints: 
     if (!avatarId || plan.shots.some((shot) => shot.assetId !== avatarId)) throw invalidPlan("数字人口播计划只能使用上传的数字人视频");
     if (musicId !== null || plan.audio.backgroundMusicVolume !== 0) throw invalidPlan("数字人口播模式保留原视频声音，不能叠加背景音乐");
   }
+}
+
+/**
+ * v4（实测时长）计划的唯一裁决处：硬违规（镜头数出界、时长非法或低于结构下限）抛
+ * `AI_STRUCTURED_OUTPUT_INVALID`，与 v3 同一恢复语义；软违规（单镜超 20 秒、总时长出
+ * 15–60 秒）结构化返回，交给界面提示回改文稿或用户确认后继续——软边界从不悄悄吞掉，
+ * 也从不阻塞。时长检查走 `checkMeasuredProductionDurations`，与 v3 的「总和精确等于目标」
+ * 是两套规则，互不替代。
+ */
+export function validateMeasuredProductionPlan(
+  plan: ProductionPlanResultV4,
+  constraints: MeasuredProductionPlanConstraints,
+): readonly MeasuredDurationViolation[] {
+  if (plan.source.analysisTaskId !== constraints.analysisTaskId) throw invalidPlan("制作计划来源与真实拆解任务不一致");
+  if (plan.shots.some((shot, index) => shot.order !== index + 1)) throw invalidPlan("制作计划镜头顺序不连续");
+  if (new Set(plan.shots.map((shot) => shot.sentenceId)).size !== plan.shots.length) {
+    throw invalidPlan("制作计划的句子 id 不能重复，否则重新配音无法定位到具体句子");
+  }
+
+  const durationCheck = checkMeasuredProductionDurations({ shotDurationMs: plan.shots.map((shot) => shot.durationMs) });
+  if (!durationCheck.ok) throw invalidPlan("实测时长存在无法渲染的硬违规", durationCheck.hardViolations);
+
+  const assets = new Map(constraints.assets.map((asset) => [asset.id, asset]));
+  if (plan.shots.some((shot) => !assets.has(shot.assetId))) throw invalidPlan("制作计划引用了不存在的素材");
+  if (plan.shots.some((shot) => assets.get(shot.assetId)?.kind === "audio")) throw invalidPlan("镜头画面不能引用音频素材");
+  const musicId = plan.audio.backgroundMusicAssetId;
+  if (musicId !== null && assets.get(musicId)?.kind !== "audio") throw invalidPlan("背景音乐必须引用已导入的音频素材");
+  if (musicId === null && plan.audio.backgroundMusicVolume !== 0) throw invalidPlan("没有背景音乐时音量必须为0");
+  if (musicId !== null && plan.audio.backgroundMusicVolume <= 0) throw invalidPlan("选择了背景音乐时音量必须大于0");
+
+  if (plan.textOverlay.preset !== constraints.textPreset) throw invalidPlan("制作计划文字预设与用户选择不一致");
+  if (constraints.headlineText && plan.textOverlay.primaryText !== constraints.headlineText.trim()) {
+    throw invalidPlan("制作计划没有逐字使用用户填写的主文字");
+  }
+
+  validateSubtitleTiming(plan, constraints.subtitleTemplateId);
+  for (const shot of plan.shots) {
+    validateShotCues(shot.cues, shot.durationMs + CUE_TAIL_TOLERANCE_MS);
+  }
+  if (plan.decorations.length > MAX_DECORATIONS_PER_PLAN) throw invalidPlan("装饰数量超出单条视频上限");
+  validateDecorationList(
+    plan.decorations,
+    new Map(plan.shots.map((shot) => [shot.order, shot.durationMs + CUE_TAIL_TOLERANCE_MS])),
+    new Set(constraints.allowedDecorationIds ?? []),
+  );
+
+  const grounding = plan.grounding;
+  if (grounding) {
+    validateGroundingRecord(grounding, constraints.assets);
+    if (constraints.mode === "avatar" && grounding.visual !== "not_applicable") {
+      throw invalidPlan("口播切片模式的字幕来自用户口播稿，不应声明画面识别状态");
+    }
+  }
+
+  validateRequirementOrder(plan.shots, constraints.assets);
+  assertOriginalNarration(plan, constraints);
+
+  if (constraints.mode === "avatar") {
+    const avatarId = constraints.assets.find((asset) => asset.role === "avatar")?.id;
+    if (!avatarId || plan.shots.some((shot) => shot.assetId !== avatarId)) throw invalidPlan("口播切片计划只能使用上传的口播切片视频");
+    if (musicId !== null || plan.audio.backgroundMusicVolume !== 0) throw invalidPlan("口播切片模式保留原视频声音，不能叠加背景音乐");
+  }
+
+  return durationCheck.softViolations;
 }

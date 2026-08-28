@@ -18,7 +18,8 @@ import {
   unboundAssetCount,
   wizardReadiness,
 } from "../features/replica/replica-blueprint-view";
-import { pathForRoute, productionEditPath, taskDetailPath, type Navigate } from "../router";
+import { scriptProductionService } from "../features/production/production-workbench-model";
+import { pathForRoute, taskDetailPath, type Navigate } from "../router";
 import { useAppResume } from "../hooks/useAppResume";
 
 export interface ReplicaWizardPageProps {
@@ -140,10 +141,10 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
 
   const compose = () => run("plan", async () => {
     if (!project) return;
-    const ready = await runtime.production.generatePlan(project.projectId);
-    setProject(ready);
-    navigate(productionEditPath(ready.projectId));
-  }, "脚本和字幕没有生成成功");
+    await scriptProductionService(runtime.production).generateScript(project.projectId);
+    setProject((await runtime.production.get(project.projectId)) ?? project);
+    navigate(pathForRoute("create"));
+  }, "分镜脚本没有生成成功");
 
   const shell = (children: React.ReactNode, subtitle?: string) => (
     <AppShell
@@ -191,8 +192,8 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
         <p>{blueprint.premise}</p>
         <ul>
           <li>共 {blueprint.requirements.length} 项素材，清单建议合计 {blueprint.totalSuggestedSeconds} 秒。</li>
-          <li>成片时长按清单合计定下，不用再从固定档位里挑。</li>
-          <li>素材齐了以后生成口播、配音和字幕计划；云端配音不可用时会回退到系统语音。确认微调后再回制作页合成成片。</li>
+          <li>成片时长由分镜口播的实测配音决定，不用再从固定档位里挑。</li>
+          <li>素材齐了以后生成分镜脚本，再逐句配音；云端配音不可用时会回退到系统语音。配音和组装都确认后再回制作页合成成片。</li>
         </ul>
       </GlassCard>
 
@@ -209,7 +210,7 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
       {project ? (
         <>
           <p className="replica-wizard__progress" role="status">
-            已绑定 {readiness.boundCount}/{blueprint.requirements.length} 项 · 成片 {project.targetDurationSeconds} 秒
+            已绑定 {readiness.boundCount}/{blueprint.requirements.length} 项 · 清单建议合计 {project.targetDurationSeconds} 秒
           </p>
 
           {readiness.ready ? null : (
@@ -219,10 +220,10 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
             </p>
           )}
 
-          {skipEffectHint(bindings, project.targetDurationSeconds) ? (
+          {skipEffectHint(bindings) ? (
             <p className="production-hint">
               <Icon name="info" size={16} />
-              {skipEffectHint(bindings, project.targetDurationSeconds)}
+              {skipEffectHint(bindings)}
             </p>
           ) : null}
 
@@ -247,10 +248,10 @@ export function ReplicaWizardPage({ taskId, navigate, runtime }: ReplicaWizardPa
 
           <div className="replica-wizard__finish">
             <Button disabled={busy || !readiness.ready} onClick={compose} size="lg">
-              {pending === "plan" ? "正在写脚本和字幕" : "生成脚本与字幕"}
+              {pending === "plan" ? "正在写分镜脚本" : "生成分镜脚本"}
             </Button>
             <small>
-              已绑定的素材会按清单编号从前往后成镜；跳过的项不会留空镜头，后面的素材会往前顶。生成完可以在微调页改时长和文案，再回制作页合成成片。
+              已绑定的素材会按清单编号从前往后成镜；跳过的项不会留空镜头，后面的素材会往前顶。生成完回制作页继续逐句配音，确认后再回制作页合成成片。
             </small>
           </div>
         </>

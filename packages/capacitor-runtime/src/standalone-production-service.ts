@@ -1,12 +1,38 @@
-import { applyProductionPlanEdit, AssetInsightFlow, contentAnalysisResultSchema, createAvatarCaptionPlan, MIMO_CHAT_AUDIO_TTS_INSTRUCTION, ProductionPlanningFlow, replicaBlueprintResultSchema, requestedSubtitleTemplateId, STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION, type AiProvider, type ProductionPlanConstraints, type ProductionPlanningAsset } from "@hongtai/ai";
+import {
+  alignNarrationWordsWithWhisper,
+  applyProductionPlanEdit,
+  AssetInsightFlow,
+  buildNarrationTimingInstructionPlan,
+  cleanNarrationSpeechText,
+  contentAnalysisResultSchema,
+  createAvatarCaptionPlan,
+  MIMO_CHAT_AUDIO_TTS_INSTRUCTION,
+  ProductionPlanningFlow,
+  replicaBlueprintResultSchema,
+  requestedSubtitleTemplateId,
+  ScriptGenerationFlow,
+  STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION,
+  validateMeasuredProductionPlan,
+  withMeasuredSubtitleTimeline,
+  type AiProvider,
+  type DecorationIntent,
+  type NarrationSentenceTimingInstruction,
+  type ProductionPlanConstraints,
+  type ProductionPlanningAsset,
+} from "@hongtai/ai";
 import {
   createRuntimeId,
   DECORATION_IDS,
+  estimateScriptSentenceMs,
+  inspectNarrationReadiness,
   inspectProductionPlanReadiness,
+  inspectScriptStoryboardReadiness,
   isAvatarVideoAsset,
+  isDecorationId,
   isMontageVisualAsset,
   issueFromAppError,
   MAX_PRODUCTION_DURATION_SECONDS,
+  MAX_SCRIPT_SENTENCE_CHARACTERS,
   MIN_MONTAGE_VISUAL_ASSETS,
   MIN_PRODUCTION_DURATION_SECONDS,
   PRODUCTION_TEXT_PRESET_VALUES,
@@ -23,12 +49,15 @@ import type {
   ProductionTextPreset,
   ReplicaService,
   RuntimeUnfinishedWork,
+  ScriptSentence,
+  SubtitleCueWordTiming,
   TaskService,
+  TtsTimingAlignmentSource,
 } from "@hongtai/core";
 
 import { persistedRuntimeWork, runtimeInterruptedIssue } from "./runtime-interruption.js";
 import type { RuntimeOperationIdentity, RuntimeOperationRegistry } from "./runtime-operation-registry.js";
-import type { NativeProductionAsset, StandaloneProductionRuntimePlugin } from "./standalone-bridge.js";
+import type { NativeNarrationSentenceInstruction, NativeNarrationSentenceOutcome, NativeProductionAsset, StandaloneProductionRuntimePlugin } from "./standalone-bridge.js";
 import {
   assertImportAllowed,
   bindImportedAssets,
@@ -41,6 +70,7 @@ import {
   assetPath,
   defaultAssetRole,
   originalSourceText,
+  pairedNarration,
   parseProject,
   PLAN_PATH,
   planningAsset,
@@ -52,6 +82,17 @@ import {
   type PersistedProject,
   type ProductionFilesPort,
 } from "./standalone-production-record.js";
+import {
+  narrationProgressEvent,
+  PRODUCTION_MEASURED_PLAN_RESULT_VERSION,
+  toNarrationRecord,
+  toScriptRecord,
+  type MeasuredPlanComposeResult,
+  type ProductionNarrationFailure,
+  type ProductionNarrationRecord,
+  type ProductionScriptRecord,
+  type StandaloneProductionEvent,
+} from "./standalone-production-script.js";
 
 export interface StandaloneProductionServiceOptions {
   readonly files: ProductionFilesPort;
@@ -67,6 +108,18 @@ export interface StandaloneProductionServiceOptions {
   readonly getProvider: () => Promise<AiProvider>;
   /** App logic decides whether a saved connection has an executable cloud narration path. */
   readonly getNarrationMode: () => Promise<"system" | "provider">;
+  /**
+   * v4 逐句配音的连接只读快照：transport 决定词级时间戳策略，`baseUrl`+`asrModel` 决定
+   * 能否做 Whisper 转写反查。省略（或返回 null）表示没有可用云端配音——合成仍可走系统
+   * 语音，只是字幕边界退回实测句长比例（`tts_duration`），不编造词级时间戳。
+   */
+  readonly getNarrationConnection?: () => Promise<{
+    readonly ttsTransport: string | null;
+    readonly ttsModel: string | null;
+    readonly ttsVoice: string | null;
+    readonly baseUrl: string;
+    readonly asrModel: string | null;
+  } | null>;
   readonly toDisplayUri: (uri: string) => string;
   readonly createProjectId?: () => string;
   readonly now?: () => Date;
@@ -100,7 +153,7 @@ function throwIfNotReadyToPlan(project: PersistedProject): void {
 
 export class StandaloneProductionService implements ProductionService {
   readonly #options: StandaloneProductionServiceOptions;
-  readonly #listeners = new Map<string, Set<(event: ProductionEvent) => void | Promise<void>>>();
+  readonly #listeners = new Map<string, Set<(event: StandaloneProductionEvent) => void | Promise<void>>>();
   readonly #mutations = new Map<string, Promise<unknown>>();
 
   constructor(options: StandaloneProductionServiceOptions) { this.#options = options; }
@@ -299,11 +352,471 @@ export class StandaloneProductionService implements ProductionService {
     }
   }
 
+  // ============================ v4（文稿先行）管线 ============================
+
+  /** 生成或重新生成分镜脚本。重新生成会作废旧句子 id 上的配音、计划与成片。 */
+  async generateScript(projectId: string, input?: { readonly brief?: string }): Promise<ProductionScriptRecord> {
+    return this.#exclusive(projectId, () => this.#track(
+      { kind: "production-plan", id: projectId, execution: "in-process" },
+      () => this.#generateScript(projectId, input),
+    ));
+  }
+
+  async getScript(projectId: string): Promise<ProductionScriptRecord | undefined> {
+    const project = await this.#readPersisted(projectId);
+    return project ? toScriptRecord(project) : undefined;
+  }
+
+  async #generateScript(projectId: string, input?: { readonly brief?: string }): Promise<ProductionScriptRecord> {
+    let project = await this.#required(projectId);
+    this.#requireIdle(project);
+    const brief = input?.brief !== undefined ? input.brief.trim() : project.brief;
+    if (!brief) throw productionArtifactError("请填写制作需求");
+    // A regenerated storyboard mints fresh sentence ids, so everything keyed to the old ids is
+    // honestly unusable: narration audio, the measured plan and any rendered output go now.
+    for (const { audioPath } of project.narrationAssets ?? []) {
+      await this.#options.files.deleteProductionFile({ projectId, relativePath: audioPath }).catch(() => undefined);
+    }
+    if (project.output) {
+      await this.#options.files.deleteProductionFile({ projectId, relativePath: "output.mp4" }).catch(() => undefined);
+    }
+    const { plan: _plan, output: _output, issue: _issue, storyboard: _storyboard, narrationTracks: _tracks, narrationAssets: _assets, ...base } = project;
+    void _plan; void _output; void _issue; void _storyboard; void _tracks; void _assets;
+    project = await this.#persist({ ...base, ...(input?.brief !== undefined ? { brief } : {}), status: "planning" });
+    try {
+      // v4 拆解是可选增强：读得到就参考，读不到也不阻塞生成（与 v3 计划的硬前置不同）。
+      const analysisRecord = await this.#options.analysis.get(project.analysisTaskId).catch(() => undefined);
+      const parsed = analysisRecord?.status === "succeeded" && analysisRecord.result?.schemaVersion === "content-analysis.v1"
+        ? contentAnalysisResultSchema.safeParse(analysisRecord.result.document) : undefined;
+      if (project.mode === "montage") {
+        project = await this.#describeAssets(project, project.assets.filter((asset) => isMontageVisualAsset({ role: asset.role ?? defaultAssetRole(asset), kind: asset.kind })));
+      }
+      const storyboard = await new ScriptGenerationFlow({ provider: await this.#options.getProvider() }).run({
+        brief,
+        mode: project.mode,
+        ...(parsed?.success ? { analysis: parsed.data } : {}),
+        assets: project.assets.map(planningAsset),
+      });
+      const saved = await this.#persist({ ...project, status: "draft", storyboard });
+      const record = toScriptRecord(saved);
+      if (!record) throw productionArtifactError("分镜脚本没有保存成功");
+      return record;
+    } catch (error) {
+      await this.#persist({ ...project, status: "failed", issue: issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "分镜脚本没有完成", action: "retry" }) });
+      throw error;
+    }
+  }
+
+  /**
+   * 逐句合成配音并把实测音轨（与音频文件路径）持久化到项目。单句失败不影响其余句；
+   * `sentenceIds` 指定只（重）合成哪些句子，缺省补齐所有还没就绪的句子。
+   */
+  async synthesizeNarration(projectId: string, input?: {
+    readonly sentenceIds?: readonly string[];
+    readonly speechRate?: number;
+  }): Promise<ProductionNarrationRecord> {
+    return this.#exclusive(projectId, () => this.#track(
+      { kind: "transient-operation", id: `production-narration:${projectId}`, execution: "in-process" },
+      () => this.#synthesizeNarration(projectId, input),
+    ));
+  }
+
+  async getNarration(projectId: string): Promise<ProductionNarrationRecord | undefined> {
+    const project = await this.#readPersisted(projectId);
+    if (!project?.storyboard) return undefined;
+    const mode = project.mode === "montage" ? await this.#options.getNarrationMode() : "system";
+    return toNarrationRecord(project, mode, []);
+  }
+
+  async #synthesizeNarration(projectId: string, input?: {
+    readonly sentenceIds?: readonly string[];
+    readonly speechRate?: number;
+  }): Promise<ProductionNarrationRecord> {
+    const project = await this.#required(projectId);
+    this.#requireIdle(project);
+    const storyboard = project.storyboard;
+    if (!storyboard) throw productionArtifactError("请先生成分镜脚本");
+    if (!inspectScriptStoryboardReadiness({ storyboard }).ok) throw productionArtifactError("分镜脚本还没有可配音的句子");
+    const speechRate = input?.speechRate ?? 1;
+    if (!Number.isFinite(speechRate) || speechRate < 0.75 || speechRate > 1.25) {
+      throw productionArtifactError("语速必须在0.75到1.25之间");
+    }
+    const byId = new Map(storyboard.sentences.map((sentence) => [sentence.id, sentence]));
+    const requested = input?.sentenceIds;
+    if (requested !== undefined) {
+      if (requested.length === 0) throw productionArtifactError("请选择要配音的句子");
+      if (new Set(requested).size !== requested.length) throw productionArtifactError("要配音的句子不能重复");
+      if (requested.some((id) => !byId.has(id))) throw productionArtifactError("指定的句子不在分镜脚本中");
+    }
+    const paired = pairedNarration(project);
+    const targets = requested !== undefined
+      ? requested.map((id) => byId.get(id)!)
+      : storyboard.sentences.filter((sentence) => !paired.has(sentence.id));
+    const narration = project.mode === "montage" ? await this.#options.getNarrationMode() : "system";
+    if (targets.length === 0) return this.#narrationSnapshot(project, narration, []);
+
+    const connection = (await this.#options.getNarrationConnection?.()) ?? null;
+    const transcription = connection?.baseUrl && connection.asrModel
+      ? { baseUrl: connection.baseUrl, model: connection.asrModel }
+      : undefined;
+    if (narration === "provider" && !connection?.ttsTransport) {
+      throw new TaskError({ code: "TTS_UNAVAILABLE", message: "云端配音连接不完整，请在 AI 连接中配置 TTS 后重试", action: "retry" });
+    }
+
+    let strategy: TtsTimingAlignmentSource = "whisper_fallback";
+    let instructions: readonly NarrationSentenceTimingInstruction[];
+    if (project.mode === "avatar" || narration === "provider") {
+      // 云端配音与口播切片走 ai 层的指令计划：策略按 Provider 能力分派，含文本预清洗。
+      const timingPlan = buildNarrationTimingInstructionPlan({
+        mode: project.mode,
+        sentences: targets,
+        ...(project.mode === "montage"
+          ? { connection: { ttsTransport: connection?.ttsTransport ?? "", ttsModel: connection?.ttsModel ?? null, ttsVoice: connection?.ttsVoice ?? null } }
+          : {}),
+      });
+      if (!timingPlan.ok) throw new TaskError({ code: "TTS_UNAVAILABLE", message: timingPlan.message, action: "retry" });
+      strategy = timingPlan.value.sentences[0]?.strategy ?? "whisper_fallback";
+      instructions = timingPlan.value.sentences;
+    } else {
+      // 系统语音没有云端连接可言：直接用同一套清洗助手构造指令；ASR 已配置时才请求转写。
+      instructions = targets.map((sentence) => {
+        const cleaning = cleanNarrationSpeechText(sentence.text);
+        return { sentenceId: sentence.id, speechText: cleaning.speechText, strategy: "whisper_fallback" as const, needsTranscription: Boolean(transcription), replacements: cleaning.replacements };
+      });
+    }
+    const nativeSentences: readonly NativeNarrationSentenceInstruction[] = instructions.map((instruction) => ({
+      sentenceId: instruction.sentenceId,
+      speechText: instruction.speechText,
+      ...(instruction.needsTranscription && transcription ? { needsTranscription: true } : {}),
+    }));
+    const wantsTranscription = nativeSentences.some((sentence) => sentence.needsTranscription === true);
+
+    const handle = await this.#options.native.addListener?.("productionProgress", (event) => {
+      if (event.projectId !== projectId) return;
+      const mapped = narrationProgressEvent(event);
+      if (mapped) void this.#emit(projectId, mapped);
+    });
+    let outcomes: readonly NativeNarrationSentenceOutcome[];
+    try {
+      outcomes = (await this.#options.native.synthesizeNarration({
+        projectId,
+        mode: project.mode,
+        narration,
+        speechRate,
+        ...(narration === "provider"
+          ? { providerInstruction: { miMoInstruction: MIMO_CHAT_AUDIO_TTS_INSTRUCTION, stepFunInstruction: STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION } }
+          : {}),
+        sentences: nativeSentences,
+        ...(wantsTranscription && transcription ? { transcriptionInstruction: transcription } : {}),
+      })).sentences;
+    } catch (error) {
+      // 整次调用失败进入可解释终态；已就绪句子的音轨保持原样，重试只补缺失部分。
+      const failure = productionTaskError(error, "逐句配音没有完成");
+      await this.#persist({ ...project, status: "failed", issue: issueFromAppError(failure, { code: "TTS_SYNTHESIS_FAILED", message: "逐句配音没有完成", action: "retry" }) });
+      throw failure;
+    } finally {
+      await handle?.remove();
+    }
+
+    const targetIds = new Set(targets.map((sentence) => sentence.id));
+    const tracksBySentence = new Map((project.narrationTracks ?? []).map((track) => [track.sentenceId, track]));
+    const assetsBySentence = new Map((project.narrationAssets ?? []).map((asset) => [asset.sentenceId, asset]));
+    const instructionBySentence = new Map(instructions.map((instruction) => [instruction.sentenceId, instruction]));
+    const failures: ProductionNarrationFailure[] = [];
+    // 重合成改变了既有计划依赖的句子 → 计划与成片立即过期，宁可回退也不展示不匹配产物。
+    const planSentenceIds = project.plan?.schemaVersion === "production-plan.v4"
+      ? new Set(project.plan.shots.map((shot) => shot.sentenceId)) : null;
+    const changedPlanSentences = new Set<string>();
+    let succeededCount = 0;
+    for (const outcome of outcomes) {
+      // native 回传了未请求的句子时忽略：它不属于本次调用承诺的范围。
+      if (!targetIds.has(outcome.sentenceId)) continue;
+      const sentence = byId.get(outcome.sentenceId);
+      if (!sentence) continue;
+      if (typeof outcome.durationMs !== "number" || !Number.isFinite(outcome.durationMs) || outcome.durationMs <= 0
+        || typeof outcome.audioPath !== "string" || !outcome.audioPath.trim()) {
+        failures.push({
+          sentenceId: outcome.sentenceId,
+          issue: issueFromAppError(productionTaskError({ code: outcome.error ?? "ERR_TTS_SYNTHESIS_FAILED" }, "这句配音没有生成成功")),
+        });
+        continue;
+      }
+      const words = this.#wordsFromOutcome(outcome, sentence, instructionBySentence.get(outcome.sentenceId), strategy);
+      tracksBySentence.set(outcome.sentenceId, {
+        sentenceId: outcome.sentenceId,
+        durationMs: outcome.durationMs,
+        alignmentSource: strategy,
+        ...(words ? { words } : {}),
+      });
+      assetsBySentence.set(outcome.sentenceId, { sentenceId: outcome.sentenceId, audioPath: outcome.audioPath });
+      succeededCount += 1;
+      if (planSentenceIds?.has(outcome.sentenceId)) changedPlanSentences.add(outcome.sentenceId);
+    }
+
+    const allFailed = succeededCount === 0 && failures.length > 0;
+    const stale = changedPlanSentences.size > 0;
+    if (stale && project.output) {
+      await this.#options.files.deleteProductionFile({ projectId, relativePath: "output.mp4" }).catch(() => undefined);
+    }
+    const { plan: _previousPlan, output: _previousOutput, issue: _previousIssue, ...narrationBase } = project;
+    void _previousPlan; void _previousOutput; void _previousIssue;
+    const saved = await this.#persist({
+      // 非 stale 时把计划与成片放回；stale 时它们已被判定过期，不再展示。
+      ...stale ? narrationBase : project,
+      status: allFailed ? "failed" : "draft",
+      narrationTracks: [...tracksBySentence.values()],
+      narrationAssets: [...assetsBySentence.values()],
+      ...(allFailed ? { issue: failures[0]?.issue } : {}),
+    });
+    return this.#narrationSnapshot(saved, narration, failures);
+  }
+
+  /**
+   * 词级时间戳来源：`native` 策略的词与朗读文本同源，直接映射；`whisper_fallback` 走
+   * ai 层对齐纯函数反查原文词。对齐失败或没有转写时返回 undefined——本句只有句级实测
+   * 时长，字幕边界按既有规则退回比例估算，不编造词级精度。
+   */
+  #wordsFromOutcome(
+    outcome: NativeNarrationSentenceOutcome,
+    sentence: ScriptSentence,
+    instruction: NarrationSentenceTimingInstruction | undefined,
+    strategy: TtsTimingAlignmentSource,
+  ): readonly SubtitleCueWordTiming[] | undefined {
+    const transcribed = outcome.transcribedWords;
+    if (!transcribed || transcribed.length === 0) return undefined;
+    if (strategy === "native") {
+      const words = transcribed
+        .filter((word) => typeof word?.word === "string" && word.word.trim())
+        .map((word) => ({ text: word.word, startMs: word.startMs, endMs: word.endMs }));
+      return words.length > 0 ? words : undefined;
+    }
+    const alignment = alignNarrationWordsWithWhisper({
+      sentenceId: sentence.id,
+      text: sentence.text,
+      replacements: instruction?.replacements ?? [],
+      transcribedWords: transcribed,
+      durationMs: outcome.durationMs!,
+    });
+    return alignment.ok ? alignment.value.track.words ?? undefined : undefined;
+  }
+
+  async #narrationSnapshot(
+    project: PersistedProject,
+    mode: "system" | "provider",
+    failures: readonly ProductionNarrationFailure[],
+  ): Promise<ProductionNarrationRecord> {
+    const record = toNarrationRecord(project, mode, failures);
+    if (!record) throw productionArtifactError("分镜脚本缺失，无法读取配音状态");
+    return record;
+  }
+
+  /**
+   * 把「分镜脚本 + 逐句实测音轨」组装成 v4 计划。毫秒全部来自实测，本地推导；软违规
+   * （单镜超 20 秒、总时长出 15–60 秒）结构化返回给界面提示，从不静默吞掉也不阻塞。
+   */
+  async composeMeasuredPlan(projectId: string, input?: { readonly subtitleTemplateId?: string }): Promise<MeasuredPlanComposeResult> {
+    return this.#exclusive(projectId, () => this.#track(
+      { kind: "production-plan", id: projectId, execution: "in-process" },
+      () => this.#composeMeasuredPlan(projectId, input),
+    ));
+  }
+
+  async #composeMeasuredPlan(projectId: string, input?: { readonly subtitleTemplateId?: string }): Promise<MeasuredPlanComposeResult> {
+    const project = await this.#required(projectId);
+    this.#requireIdle(project);
+    const storyboard = project.storyboard;
+    if (!storyboard) throw productionArtifactError("请先生成分镜脚本");
+    const paired = pairedNarration(project);
+    const readiness = inspectNarrationReadiness({ storyboard, tracks: [...paired.values()].map((entry) => entry.track) });
+    if (!readiness.ok) {
+      throw productionArtifactError(readiness.reason === "need-storyboard-sentences" ? "分镜脚本还没有可配音的句子" : "还有句子没有完成配音，请补齐后再组装计划");
+    }
+
+    // 镜头草稿：句子顺序即镜头顺序；绑定沿用脚本建议，缺失或已失效的绑定按画面素材轮换补齐。
+    const visualPool = project.assets
+      .filter((asset) => isMontageVisualAsset({ role: asset.role ?? defaultAssetRole(asset), kind: asset.kind }))
+      .map((asset) => asset.id);
+    const avatarAsset = project.assets.find((asset) => isAvatarVideoAsset({ role: asset.role ?? defaultAssetRole(asset), kind: asset.kind }));
+    if (project.mode === "avatar" && !avatarAsset) throw productionArtifactError("请先上传口播切片视频", "select_media");
+    if (project.mode === "montage" && visualPool.length === 0) throw productionArtifactError("请先导入图片或视频素材", "select_media");
+    const visualIds = new Set(visualPool);
+    let unboundCursor = 0;
+    const drafts = storyboard.sentences.map((sentence) => {
+      const suggested = sentence.assetId !== undefined && visualIds.has(sentence.assetId) ? sentence.assetId : undefined;
+      const assetId = suggested ?? (project.mode === "avatar" ? avatarAsset!.id : visualPool[unboundCursor++ % visualPool.length]!);
+      return {
+        sentenceId: sentence.id,
+        assetId,
+        narration: sentence.text,
+        caption: [...sentence.text.replace(/\s+/gu, "")].slice(0, 20).join(""),
+        fit: "cover" as const,
+      };
+    });
+
+    // 分镜句的贴纸建议映射为装饰意图：落点窗口由字幕 cue 决定，这里只携带选择。
+    const decorations: DecorationIntent[] = [];
+    for (const [index, sentence] of storyboard.sentences.entries()) {
+      if (!sentence.stickerId) continue;
+      decorations.push({
+        kind: "sticker",
+        assetRef: sentence.stickerId,
+        text: null,
+        shotOrder: index + 1,
+        anchor: "above_caption",
+        scale: 1,
+        animation: "fade",
+      });
+    }
+
+    const title = [...(storyboard.purpose?.trim() || project.brief.trim())].slice(0, 80).join("");
+    const primaryText = project.headlineText ?? [...project.brief.replace(/\s+/gu, "")].slice(0, 24).join("");
+    const describedAssetIds = project.assets.filter((asset) => asset.insight?.usable === true).map((asset) => asset.id);
+    const plan = withMeasuredSubtitleTimeline({
+      source: { analysisTaskId: project.analysisTaskId },
+      title,
+      audio: { voiceLocale: "zh-CN", speechRate: 1, backgroundMusicAssetId: null, backgroundMusicVolume: 0 },
+      textOverlay: { primaryText, secondaryText: null, preset: project.textPreset },
+      shots: drafts,
+      tracks: drafts.map((draft) => paired.get(draft.sentenceId)!.track),
+      ...(input?.subtitleTemplateId ? { requestedTemplateId: input.subtitleTemplateId } : {}),
+      ...(project.mode === "montage" && describedAssetIds.length > 0
+        ? { grounding: { visual: "asset_insight" as const, describedAssetIds } }
+        : {}),
+      ...(decorations.length > 0 ? { decorations } : {}),
+      invalid: (cause) => new TaskError({ code: "AI_STRUCTURED_OUTPUT_INVALID", message: "实测制作计划组装失败", action: "retry", cause }),
+    });
+    const referenceText = originalSourceText(await this.#options.tasks.getDetail(project.analysisTaskId).catch(() => undefined));
+    const softViolations = validateMeasuredProductionPlan(plan, {
+      analysisTaskId: project.analysisTaskId,
+      mode: project.mode,
+      textPreset: project.textPreset,
+      ...(project.headlineText ? { headlineText: project.headlineText } : {}),
+      ...(input?.subtitleTemplateId ? { subtitleTemplateId: input.subtitleTemplateId } : {}),
+      allowedDecorationIds: [...DECORATION_IDS],
+      assets: await this.#planningAssets(project),
+      ...(referenceText ? { originalSourceText: referenceText } : {}),
+    });
+
+    await this.#options.files.writeProductionText({ projectId, relativePath: PLAN_PATH, value: JSON.stringify(plan), replace: true });
+    if (project.output) {
+      await this.#options.files.deleteProductionFile({ projectId, relativePath: "output.mp4" }).catch(() => undefined);
+    }
+    const { plan: _oldPlan, output: _oldOutput, issue: _oldIssue, ...composeBase } = project;
+    void _oldPlan; void _oldOutput; void _oldIssue;
+    const saved = await this.#persist({ ...composeBase, status: "ready", plan });
+    return {
+      schemaVersion: PRODUCTION_MEASURED_PLAN_RESULT_VERSION,
+      project: this.#project(saved),
+      softViolations,
+    };
+  }
+
+  /**
+   * v4 分镜脚本的逐句有界编辑。句子 id、顺序与句数不可变（那是「重新生成」的职责）；
+   * 只允许改文案、素材绑定建议与贴纸建议。改文案会使该句配音（音轨与音频文件）作废；
+   * 任何编辑都使旧计划与成片失效——计划由脚本派生，宁可回退也不展示不匹配的产物。
+   */
+  async updateStoryboard(projectId: string, input: {
+    readonly expectedUpdatedAt: string;
+    readonly sentences: readonly {
+      readonly sentenceId: string;
+      readonly text?: string;
+      readonly assetId?: string | null;
+      readonly stickerId?: string | null;
+    }[];
+  }): Promise<ProductionScriptRecord> {
+    return this.#exclusive(projectId, async () => {
+      const project = await this.#required(projectId);
+      this.#requireIdle(project);
+      const storyboard = project.storyboard;
+      if (!storyboard) throw productionArtifactError("这个项目还没有分镜脚本");
+      if (input.sentences.length === 0) throw productionArtifactError("请选择要修改的句子");
+
+      const byId = new Map(storyboard.sentences.map((sentence) => [sentence.id, sentence]));
+      const edits = new Map<string, (typeof input.sentences)[number]>();
+      for (const edit of input.sentences) {
+        if (!byId.has(edit.sentenceId)) throw productionArtifactError("要修改的句子不在分镜脚本中");
+        if (edits.has(edit.sentenceId)) throw productionArtifactError("同一句不能重复修改");
+        edits.set(edit.sentenceId, edit);
+      }
+      this.#requireExpectedVersion(project, input.expectedUpdatedAt);
+
+      const visualIds = new Set(project.assets
+        .filter((asset) => isMontageVisualAsset({ role: asset.role ?? defaultAssetRole(asset), kind: asset.kind }))
+        .map((asset) => asset.id));
+      const narrationChanged: string[] = [];
+      const sentences = storyboard.sentences.map((sentence, index): ScriptSentence => {
+        const edit = edits.get(sentence.id);
+        if (!edit) return sentence;
+        const text = edit.text !== undefined ? edit.text.trim() : sentence.text;
+        if (!text) throw productionArtifactError(`第 ${index + 1} 句口播文案不能为空`);
+        if ([...text].length > MAX_SCRIPT_SENTENCE_CHARACTERS) {
+          throw productionArtifactError(`第 ${index + 1} 句口播文案超过 ${MAX_SCRIPT_SENTENCE_CHARACTERS} 字上限`);
+        }
+        if (edit.assetId !== undefined && edit.assetId !== null && !visualIds.has(edit.assetId)) {
+          throw productionArtifactError("素材绑定必须指向项目内已导入的图片或视频");
+        }
+        if (edit.stickerId !== undefined && edit.stickerId !== null && !isDecorationId(edit.stickerId)) {
+          throw productionArtifactError("贴纸建议不在内置装饰清单中");
+        }
+        const assetId = edit.assetId === undefined ? sentence.assetId : edit.assetId ?? undefined;
+        const stickerId = edit.stickerId === undefined ? sentence.stickerId : edit.stickerId ?? undefined;
+        const textChanged = edit.text !== undefined && text !== sentence.text;
+        if (textChanged) narrationChanged.push(sentence.id);
+        const { assetId: _oldAsset, stickerId: _oldSticker, ...rest } = sentence;
+        void _oldAsset; void _oldSticker;
+        return {
+          ...rest,
+          text,
+          ...(assetId !== undefined ? { assetId } : {}),
+          ...(stickerId !== undefined ? { stickerId } : {}),
+          estimatedMs: textChanged ? estimateScriptSentenceMs(text) : sentence.estimatedMs,
+        };
+      });
+
+      // 改了文案的句子：配音音频文件删除（失败容忍，delete 时兜底清理），音轨记录移除。
+      const invalidated = new Set(narrationChanged);
+      const tracks = (project.narrationTracks ?? []).filter((track) => !invalidated.has(track.sentenceId));
+      const assets = (project.narrationAssets ?? []).filter((asset) => !invalidated.has(asset.sentenceId));
+      for (const asset of project.narrationAssets ?? []) {
+        if (invalidated.has(asset.sentenceId)) {
+          await this.#options.files.deleteProductionFile({ projectId, relativePath: asset.audioPath }).catch(() => undefined);
+        }
+      }
+      // 计划与成片由脚本派生：脚本变了就整体作废，重新组装（本地推导）即可恢复。
+      if (project.output) {
+        await this.#options.files.deleteProductionFile({ projectId, relativePath: "output.mp4" }).catch(() => undefined);
+      }
+      const { plan: _plan, output: _output, issue: _issue, ...base } = project;
+      void _plan; void _output; void _issue;
+      const saved = await this.#persist({
+        ...base,
+        status: "draft",
+        storyboard: { ...storyboard, sentences },
+        ...(tracks.length > 0 ? { narrationTracks: tracks } : {}),
+        ...(assets.length > 0 ? { narrationAssets: assets } : {}),
+      });
+      const record = toScriptRecord(saved);
+      if (!record) throw productionArtifactError("分镜脚本没有保存成功");
+      await this.#emit(projectId, { type: "state", project: this.#project(saved) });
+      return record;
+    });
+  }
+
   async updatePlan(projectId: string, input: ProductionPlanUpdate): Promise<ProductionProjectRecord> {
     return this.#exclusive(projectId, async () => {
       const project = await this.#required(projectId);
       if (project.status === "planning" || project.status === "rendering") {
         throw productionArtifactError("制作项目正在处理中，请等结束后再微调");
+      }
+      if (project.storyboard) {
+        // v4 项目的计划由实测配音组装，旧版逐镜秒数微调对它没有意义；阶段化编辑随后续
+        // 任务落在分镜与配音阶段，而不是这里悄悄改坏实测时间轴。
+        throw new TaskError({
+          code: "PRODUCTION_PLAN_EDIT_INVALID",
+          message: "分镜项目的计划由实测配音组装，请在阶段页调整文稿后重新组装",
+          action: "edit_input",
+        });
       }
       this.#requireExpectedVersion(project, input.expectedUpdatedAt);
       const plan = project.plan;
@@ -355,6 +868,12 @@ export class StandaloneProductionService implements ProductionService {
       await this.#emit(projectId, { type: "state", project: value });
       return value;
     });
+  }
+
+  /** v4 阶段操作与微调/删除共用同一守卫：处理中的项目不接受并发变更。 */
+  #requireIdle(project: PersistedProject): void {
+    if (project.status !== "planning" && project.status !== "rendering") return;
+    throw productionArtifactError("制作项目正在处理中，请等结束后再操作");
   }
 
   #requireExpectedVersion(project: PersistedProject, expectedUpdatedAt: string): void {
@@ -474,6 +993,17 @@ export class StandaloneProductionService implements ProductionService {
     let project = await this.#required(projectId);
     const plan = project.plan;
     if (!plan) throw productionArtifactError("请先生成可执行制作计划");
+    // v4（文稿先行）计划走「音频已就绪」路径：渲染器只消费已持久化的逐句配音，渲染期
+    // 不再触发 TTS。缺任何一句都拒绝渲染——放行只会产出一半实测音频、一半现场合成
+    // 语音的混合成片，那种产物无法解释也无法重试到一致。
+    let narrationAssets: readonly { readonly sentenceId: string; readonly audioPath: string }[] | undefined;
+    if (plan.schemaVersion === "production-plan.v4") {
+      const paired = pairedNarration(project);
+      if (plan.shots.some((shot) => !paired.has(shot.sentenceId))) {
+        throw productionArtifactError("还有句子没有完成配音，请补齐后再合成");
+      }
+      narrationAssets = plan.shots.map((shot) => ({ sentenceId: shot.sentenceId, audioPath: paired.get(shot.sentenceId)!.audioPath }));
+    }
     // A retry must not hide a previously verified MP4 while the replacement is
     // rendering. Native rendering writes and validates a temporary file first;
     // keep this metadata until a new output succeeds as well.
@@ -482,6 +1012,9 @@ export class StandaloneProductionService implements ProductionService {
     project = await this.#persist({ ...renderBase, status: "rendering" });
     const handle = await this.#options.native.addListener?.("productionProgress", (event) => {
       if (event.projectId !== projectId) return;
+      // 逐句配音等阶段事件没有整体百分比（bridge 契约允许省略 progress）；没有真实
+      // progress 的原生事件不属于渲染进度，不编造数值发出去。
+      if (typeof event.progress !== "number") return;
       const stage = typeof event.stage === "string" ? event.stage : "";
       void this.#emit(projectId, { type: "render-progress", projectId: event.projectId, progress: event.progress, stage });
     });
@@ -498,6 +1031,7 @@ export class StandaloneProductionService implements ProductionService {
         ...(narration === "provider"
           ? { miMoInstruction: MIMO_CHAT_AUDIO_TTS_INSTRUCTION, stepFunInstruction: STEPFUN_AUDIO_SPEECH_TTS_INSTRUCTION }
           : {}),
+        ...(narrationAssets?.length ? { narrationAssets } : {}),
       });
       return this.#project(await this.#persist({ ...project, status: "succeeded", output }));
     } catch (error) {
@@ -583,11 +1117,16 @@ export class StandaloneProductionService implements ProductionService {
     });
   }
 
-  subscribe(projectId: string, listener: (event: ProductionEvent) => void | Promise<void>) {
-    const listeners = this.#listeners.get(projectId) ?? new Set();
-    listeners.add(listener);
+  // 双签名：既有调用方按 core 契约订阅 `ProductionEvent`；v4 调用方（阶段页）订阅
+  // `StandaloneProductionEvent` 才能收到逐句配音进度。窄监听器收到扩展事件时只是
+  // 不认识 `type` 而忽略，运行时安全，故断言后统一存储。
+  subscribe(projectId: string, listener: (event: StandaloneProductionEvent) => void | Promise<void>): () => void;
+  subscribe(projectId: string, listener: (event: ProductionEvent) => void | Promise<void>): () => void;
+  subscribe(projectId: string, listener: ((event: StandaloneProductionEvent) => void | Promise<void>) | ((event: ProductionEvent) => void | Promise<void>)) {
+    const listeners = this.#listeners.get(projectId) ?? new Set<(event: StandaloneProductionEvent) => void | Promise<void>>();
+    listeners.add(listener as (event: StandaloneProductionEvent) => void | Promise<void>);
     this.#listeners.set(projectId, listeners);
-    return () => { listeners.delete(listener); if (listeners.size === 0) this.#listeners.delete(projectId); };
+    return () => { listeners.delete(listener as (event: StandaloneProductionEvent) => void | Promise<void>); if (listeners.size === 0) this.#listeners.delete(projectId); };
   }
 
   async #track<T>(operation: RuntimeOperationIdentity, run: () => Promise<T>): Promise<T> {
@@ -685,7 +1224,7 @@ export class StandaloneProductionService implements ProductionService {
     return toProductionProjectRecord(project, this.#options.toDisplayUri);
   }
 
-  async #emit(projectId: string, event: ProductionEvent): Promise<void> {
+  async #emit(projectId: string, event: StandaloneProductionEvent): Promise<void> {
     await Promise.allSettled([...(this.#listeners.get(projectId) ?? [])].map(async (listener) => { await listener(event); }));
   }
 }

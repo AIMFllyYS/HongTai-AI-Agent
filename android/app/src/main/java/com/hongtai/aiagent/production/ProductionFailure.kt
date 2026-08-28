@@ -5,6 +5,10 @@ internal enum class ProductionFailureKind {
   MEDIA_SOURCE_INVALID,
   TTS_UNAVAILABLE,
   TTS_SYNTHESIS_FAILED,
+  /** Front-loaded stage: one sentence's synthesis failed; the other sentences are unaffected. */
+  TTS_SENTENCE_FAILED,
+  /** Front-loaded stage: the transcription endpoint failed or returned unusable word timings. */
+  TRANSCRIPTION_FAILED,
   MEDIA_RENDER_TIMEOUT,
   MEDIA_ENCODER_UNAVAILABLE,
   MEDIA_DECODE_FAILED,

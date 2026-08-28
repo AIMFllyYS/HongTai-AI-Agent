@@ -247,6 +247,24 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
     const connection = await getConnection();
     return connection?.ttsModel && connection.ttsTransport && connection.ttsVoice ? "provider" : "system";
   };
+  // v4 逐句配音的连接快照：没有已保存连接时返回 null，服务据此退回系统语音与句长比例字幕。
+  const narrationConnection = async (): Promise<{
+    readonly ttsTransport: string | null;
+    readonly ttsModel: string | null;
+    readonly ttsVoice: string | null;
+    readonly baseUrl: string;
+    readonly asrModel: string | null;
+  } | null> => {
+    const connection = await getConnection();
+    if (!connection) return null;
+    return {
+      ttsTransport: connection.ttsTransport,
+      ttsModel: connection.ttsModel,
+      ttsVoice: connection.ttsVoice,
+      baseUrl: connection.baseUrl,
+      asrModel: connection.asrModel,
+    };
+  };
 
   const ingestPorts = new NativeIngestPorts({
     network: options.plugins.nativeNetwork,
@@ -325,6 +343,7 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
     pickAssets: async () => { throw taskError("APP_RUNTIME_UNAVAILABLE", "本地制作插件尚未加载", "retry"); },
     consumeAssetOperation: async () => ({ status: "none" as const }),
     render: async () => { throw taskError("APP_RUNTIME_UNAVAILABLE", "本地制作插件尚未加载", "retry"); },
+    synthesizeNarration: async () => { throw taskError("APP_RUNTIME_UNAVAILABLE", "本地配音插件尚未加载", "retry"); },
     probeTts: async () => { throw taskError("APP_RUNTIME_UNAVAILABLE", "本地配音插件尚未加载", "retry"); },
   };
   const production = new StandaloneProductionService({
@@ -337,6 +356,7 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
     tasks,
     getProvider: requireProvider,
     getNarrationMode: narrationMode,
+    getNarrationConnection: narrationConnection,
     toDisplayUri: display,
     now,
     operations,

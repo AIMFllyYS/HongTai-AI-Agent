@@ -1,4 +1,4 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import test from "node:test";
 
 import { TaskError, type ContentAnalysisRecord, type TaskDetailRecord } from "@hongtai/core";
@@ -147,6 +147,7 @@ function harness(options: {
     render: async () => ({ uri: "file:///private/productions/project-1/output.mp4", mimeType: "video/mp4" as const, sizeBytes: 1_024, durationSeconds: 30 }),
     consumeAssetOperation: async () => ({ status: "none" as const }),
     probeTts: async () => undefined,
+    synthesizeNarration: async () => ({ sentences: [] }),
   };
 
   const analysisPort = {

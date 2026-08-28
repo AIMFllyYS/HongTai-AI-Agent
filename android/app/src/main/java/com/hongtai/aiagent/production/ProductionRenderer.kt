@@ -35,16 +35,39 @@ internal data class ProductionRenderResult(val uri: String, val sizeBytes: Long,
 
 @UnstableApi
 internal class ProductionRenderer(private val context: Context, private val store: ProductionMediaStore) {
+  /**
+   * @param narrationAssets sentenceId → project-relative audio path synthesized by the front-loaded
+   *   narration stage. When present (montage mode), rendering skips TTS entirely and consumes the
+   *   existing files in shot order; when null, the legacy render-time synthesis path runs unchanged.
+   */
   fun render(
     projectId: String,
     plan: NativeProductionPlan,
     narrationSynthesizer: NarrationSynthesizer = SystemNarrationSynthesizer(context, store),
+    narrationAssets: Map<String, String>? = null,
     onProgress: (Int, String) -> Unit,
   ): ProductionRenderResult {
     val progress = ProductionRenderProgressGate(onProgress)
-    progress.emit(5, if (plan.renderMode == ProductionRenderMode.AVATAR) ProductionRenderStage.VALIDATE_AVATAR_AUDIO.wireName else ProductionRenderStage.SYNTHESIZE_NARRATION.wireName)
-    val narration = if (plan.renderMode == ProductionRenderMode.MONTAGE) narrationSynthesizer.synthesize(projectId, plan) else emptyList()
-    progress.emit(25, ProductionRenderStage.COMPILE_SHOTS.wireName)
+    // Audio-ready montage renders never emit a synthesis stage: that work already happened in the
+    // front-loaded stage, and a fake synthesize_narration event would misreport real progress.
+    progress.emit(
+      5,
+      when {
+        plan.renderMode == ProductionRenderMode.AVATAR -> ProductionRenderStage.VALIDATE_AVATAR_AUDIO.wireName
+        narrationAssets != null -> ProductionRenderStage.COMPILE_SHOTS.wireName
+        else -> ProductionRenderStage.SYNTHESIZE_NARRATION.wireName
+      },
+    )
+    val narration = when {
+      plan.renderMode == ProductionRenderMode.AVATAR -> emptyList()
+      narrationAssets != null -> ProductionNarrationAssets.resolve(plan, narrationAssets) { path ->
+        store.resolveProjectRelative(projectId, path)
+      }
+      else -> narrationSynthesizer.synthesize(projectId, plan)
+    }
+    if (plan.renderMode == ProductionRenderMode.AVATAR || narrationAssets == null) {
+      progress.emit(25, ProductionRenderStage.COMPILE_SHOTS.wireName)
+    }
     val composition = compile(plan, narration)
     val (temporary, output) = store.outputTarget(projectId)
     progress.emit(35, ProductionRenderStage.EXPORT.wireName)

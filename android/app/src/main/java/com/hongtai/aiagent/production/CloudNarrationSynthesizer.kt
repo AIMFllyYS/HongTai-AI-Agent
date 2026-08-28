@@ -74,9 +74,20 @@ internal class CloudNarrationSynthesizer(
       throw ProductionException(ProductionFailureKind.TTS_UNAVAILABLE, "The protected cloud TTS credential is unavailable.")
     }
     return secrets.withActiveAiConnectionSecret { apiKey ->
-      plan.shots.map { shot -> synthesizeShot(projectId, shot, plan.speechRate, apiKey) to shot.durationMs }
+      plan.shots.map { shot ->
+        synthesizeSegment(store.audioDirectory(projectId), "narration-${shot.order}", shot.narration, plan.speechRate, apiKey) to shot.durationMs
+      }
     }
   }
+
+  /** Front-loaded stage: one sentence keyed by its stable id, synthesized under a caller-held key. */
+  fun synthesizeSentence(
+    projectId: String,
+    sentenceId: String,
+    speechText: String,
+    speechRate: Float,
+    apiKey: CharArray,
+  ): File = synthesizeSegment(store.audioDirectory(projectId), NarrationSentenceAssets.baseName(sentenceId), speechText, speechRate, apiKey)
 
   /** Executes the exact saved protocol with a non-personal short phrase, then deletes it. */
   fun probe() {
@@ -91,11 +102,11 @@ internal class CloudNarrationSynthesizer(
     }
   }
 
-  private fun synthesizeShot(projectId: String, shot: ProductionShot, speechRate: Float, apiKey: CharArray): File {
-    val output = File(store.audioDirectory(projectId), "narration-${shot.order}.wav")
-    val temporary = File(output.parentFile, ".narration-${shot.order}.part.wav")
+  private fun synthesizeSegment(directory: File, baseName: String, text: String, speechRate: Float, apiKey: CharArray): File {
+    val output = File(directory, "$baseName.wav")
+    val temporary = File(output.parentFile, ".$baseName.part.wav")
     try {
-      writeAudio(temporary, shot.narration, speechRate, apiKey)
+      writeAudio(temporary, text, speechRate, apiKey)
       finalizeNarrationSegment(temporary, output)
       return output
     } finally {
@@ -261,7 +272,7 @@ internal class CloudNarrationSynthesizer(
     }
   }
 
-  private companion object {
+  companion object {
     const val MAX_NARRATION_CHARACTERS = 1_000
     const val REQUEST_TIMEOUT_MS = 90_000
     const val MAX_AUDIO_BYTES = 12 * 1024 * 1024

@@ -230,6 +230,8 @@ test("video production returns stable safe errors and exports an AAC audio track
     "MEDIA_SOURCE_INVALID",
     "TTS_UNAVAILABLE",
     "TTS_SYNTHESIS_FAILED",
+    "TTS_SENTENCE_FAILED",
+    "TRANSCRIPTION_FAILED",
     "MEDIA_RENDER_TIMEOUT",
     "MEDIA_ENCODER_UNAVAILABLE",
     "MEDIA_DECODE_FAILED",
@@ -243,6 +245,8 @@ test("video production returns stable safe errors and exports an AAC audio track
     "MEDIA_SOURCE_INVALID",
     "TTS_UNAVAILABLE",
     "TTS_SYNTHESIS_FAILED",
+    "TTS_SENTENCE_FAILED",
+    "TRANSCRIPTION_FAILED",
     "MEDIA_RENDER_TIMEOUT",
     "MEDIA_ENCODER_UNAVAILABLE",
     "MEDIA_DECODE_FAILED",
@@ -258,6 +262,8 @@ test("video production returns stable safe errors and exports an AAC audio track
   assert.match(plugin, /ProductionFailureKind\.MEDIA_OUTPUT_INVALID -> NativeIssueCode\.MEDIA_OUTPUT_INVALID/);
   assert.match(plugin, /ProductionFailureKind\.OUTPUT_FINALIZATION_FAILED -> NativeIssueCode\.OUTPUT_FINALIZATION_FAILED/);
   assert.match(plugin, /ProductionFailureKind\.DECORATION_ASSET_MISSING -> NativeIssueCode\.DECORATION_ASSET_MISSING/);
+  assert.match(plugin, /ProductionFailureKind\.TTS_SENTENCE_FAILED -> NativeIssueCode\.TTS_SENTENCE_FAILED/);
+  assert.match(plugin, /ProductionFailureKind\.TRANSCRIPTION_FAILED -> NativeIssueCode\.TRANSCRIPTION_FAILED/);
   assert.match(plugin, /call\.reject\("Production asset selection was cancelled\."\s*,\s*NativeIssueCode\.MEDIA_SELECTION_CANCELLED\)/);
   assert.doesNotMatch(plugin, /call\.reject\([^\n]*,\s*error\)/);
   assert.match(renderer, /setAudioMimeType\(MimeTypes\.AUDIO_AAC\)/);
@@ -280,11 +286,13 @@ test("video production returns stable safe errors and exports an AAC audio track
   assert.match(renderer, /MimeTypes\.AUDIO_AAC !in mimes/);
   assert.match(renderer, /MEDIA_RENDER_TIMEOUT/);
   assert.match(plugin, /fun probeTts\(call: PluginCall\)/);
+  assert.match(plugin, /fun synthesizeNarration\(call: PluginCall\)/);
   assert.match(plugin, /CloudNarrationSynthesizer/);
   assert.match(cloudTts, /AndroidKeystoreSecretStore/);
   assert.match(cloudTts, /NativeNetworkPolicy/);
   assert.match(cloudTts, /temporary\.delete\(\)/);
-  const cloudSegment = cloudTts.slice(cloudTts.indexOf("private fun synthesizeShot"), cloudTts.indexOf("private fun writeAudio"));
+  assert.match(cloudTts, /fun synthesizeSentence\(/);
+  const cloudSegment = cloudTts.slice(cloudTts.indexOf("private fun synthesizeSegment"), cloudTts.indexOf("private fun writeAudio"));
   assert.match(cloudSegment, /finalizeNarrationSegment\(temporary, output\)/);
   assert.doesNotMatch(cloudSegment, /output\.exists\(\) && !output\.delete\(\)/);
   assert.doesNotMatch(cloudTts, /Log\.|notifyListeners\(/);

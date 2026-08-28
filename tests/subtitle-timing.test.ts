@@ -164,3 +164,120 @@ test("时间来源决定精度，精度不足的逐字模板降级为逐行", ()
   const unknown = resolveTemplateForPrecision({ requestedId: "", precision: "estimated" });
   assert.equal(unknown.template.id, "classic_line", "没有选择模板时回落到默认模板");
 });
+
+test("tts_duration 路径：句级实测时长驱动切分，非整秒时长也铺满且不越界", () => {
+  // 实测音频时长很少恰好落在整秒；比例铺法必须对任意毫秒值都成立。
+  const cues = buildShotCueTimeline({
+    text: "我们把服务过程完整拍下来，你可以先看清每一步再决定要不要到店。",
+    shotDurationMs: 4_321,
+    typography: classic.typography,
+  });
+
+  assert.ok(cues.length >= 1);
+  assert.equal(cues[0]?.startMs, 0, "第一条字幕必须从镜头起点开始");
+  assert.equal(cues.at(-1)?.endMs, 4_321, "最后一条字幕必须正好落在实测时长终点");
+  assert.equal(cues.every((cue) => cue.words === null), true, "只有句级实测时长时不能给出词级时间");
+});
+
+test("asr_word 路径：词级时间戳直接定界，首尾跟随真实语音", () => {
+  const words = [
+    { text: "到店", startMs: 120, endMs: 720 },
+    { text: "看过程", startMs: 720, endMs: 1_800 },
+    { text: "再决定", startMs: 2_100, endMs: 2_900 },
+    { text: "要不要来", startMs: 2_950, endMs: 4_600 },
+  ];
+  const cues = buildShotCueTimeline({
+    text: "到店看过程，再决定要不要来。",
+    shotDurationMs: 4_800,
+    typography: classic.typography,
+    words,
+  });
+
+  assert.ok(cues.length >= 1);
+  assert.equal(cues[0]?.startMs, 120, "首条字幕从首个词的真实起点开始，词前静音如实留空");
+  assert.equal(cues.at(-1)?.endMs, 4_600, "末条字幕在末个词的真实终点结束，词后静音如实留空");
+  assert.equal(
+    cues.map((cue) => cue.text).join(""),
+    words.map((word) => word.text).join(""),
+    "词级路径的字幕文本必须逐字来自词级时间戳的词文本",
+  );
+  assert.deepEqual(
+    cues.flatMap((cue) => [...(cue.words ?? [])]),
+    words,
+    "词级时间必须逐条保留，不得改写或丢词",
+  );
+
+  let previousEndMs = 0;
+  for (const cue of cues) {
+    assert.ok(cue.words !== null, "词级路径必须携带词级时间");
+    assert.ok(cue.startMs >= previousEndMs, "字幕之间不能重叠或倒序");
+    assert.ok(cue.endMs <= 4_800, "字幕不能超出本句实测时长");
+    assert.equal(cue.words.map((word) => word.text).join(""), cue.text, "词级时间拼接必须等于该条字幕文本");
+    previousEndMs = cue.endMs;
+  }
+});
+
+test("asr_word 分组只在词边界切分，并遵守模板行盒与字数预算", () => {
+  const budget = cueCharacterBudget(classic.typography);
+  const words = Array.from({ length: 20 }, (_, index) => ({
+    text: `词组${index}`,
+    startMs: index * 300,
+    endMs: index * 300 + 280,
+  }));
+  const cues = buildShotCueTimeline({
+    text: words.map((word) => word.text).join(""),
+    shotDurationMs: 20 * 300,
+    typography: classic.typography,
+    words,
+  });
+
+  assert.ok(cues.length >= 2, "超出单条预算的词必须分成多条字幕");
+  for (const cue of cues) {
+    assert.ok([...cue.text].length <= budget, `字幕「${cue.text}」超出模板预算 ${budget}`);
+    assert.ok(splitSubtitleLines(cue.text, classic.typography).length <= classic.typography.maxLines, "字幕不能超出模板行数");
+    assert.ok(cue.words !== null && cue.words.length >= 1);
+    for (const word of cue.words ?? []) {
+      assert.ok(cue.text.includes(word.text), "每个词都必须落在所属字幕文本内，切分不能拆开一个词");
+    }
+  }
+});
+
+test("无词级时间戳时回退比例路径，不伪造词级时间", () => {
+  const text = "我们把服务过程完整拍下来，你可以先看清每一步再决定要不要到店。";
+  for (const words of [undefined, null, []] as (readonly { text: string; startMs: number; endMs: number }[] | null | undefined)[]) {
+    const cues = buildShotCueTimeline({
+      text,
+      shotDurationMs: 12_000,
+      typography: classic.typography,
+      ...(words === undefined ? {} : { words }),
+    });
+
+    assert.ok(cues.length >= 1, `words=${String(JSON.stringify(words))} 应回退比例路径`);
+    assert.equal(cues.every((cue) => cue.words === null), true, "没有词级证据时不能伪造词级时间");
+    assert.equal(cues.map((cue) => cue.text).join(""), text, "回退路径的字幕必须逐字来自旁白");
+    assert.equal(cues.at(-1)?.endMs, 12_000, "回退路径仍必须铺满镜头");
+  }
+});
+
+test("词级时间戳取整到毫秒时钟后仍保持正区间与顺序", () => {
+  const cues = buildShotCueTimeline({
+    text: "到店看过程",
+    shotDurationMs: 2_000,
+    typography: classic.typography,
+    words: [
+      { text: "到店", startMs: 0.4, endMs: 800.2 },
+      { text: "看过程", startMs: 800.9, endMs: 1_999.6 },
+    ],
+  });
+
+  let previousEndMs = 0;
+  for (const cue of cues) {
+    assert.ok(Number.isInteger(cue.startMs) && Number.isInteger(cue.endMs), "字幕起止必须落在整数毫秒");
+    assert.ok(cue.startMs >= previousEndMs && cue.endMs > cue.startMs, "取整不能让字幕倒序或塌缩");
+    for (const word of cue.words ?? []) {
+      assert.ok(Number.isInteger(word.startMs) && Number.isInteger(word.endMs), "词级起止必须落在整数毫秒");
+      assert.ok(word.endMs > word.startMs, "取整不能让词级区间塌缩");
+    }
+    previousEndMs = cue.endMs;
+  }
+});

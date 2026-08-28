@@ -1,6 +1,8 @@
 import { productionPlanResultSchema, type ProductionPlanningAsset, type ProductionPlanResult } from "@hongtai/ai";
 import {
   MAX_SHOTS_PER_PRODUCTION,
+  parseScriptStoryboard,
+  parseTtsTimedTrack,
   PRODUCTION_TEXT_PRESET_VALUES,
   subtitleTemplateById,
   type ProductionAsset,
@@ -9,8 +11,10 @@ import {
   type ProductionProjectRecord,
   type ProductionTextPreset,
   type JsonObject,
+  type ScriptStoryboard,
   type TaskIssue,
   type TaskService,
+  type TtsTimedTrack,
 } from "@hongtai/core";
 
 import type { NativeProductionAsset, NativeProductionResult } from "./standalone-bridge.js";
@@ -47,6 +51,12 @@ export interface PersistedAsset extends NativeProductionAsset {
   readonly insight?: PersistedInsight;
 }
 
+/** v4 管线：一句分镜已合成的音频，`audioPath` 为项目内相对路径（native 回传）。 */
+export interface PersistedNarrationAsset {
+  readonly sentenceId: string;
+  readonly audioPath: string;
+}
+
 export interface PersistedProject {
   readonly projectId: string;
   readonly analysisTaskId: string;
@@ -64,10 +74,40 @@ export interface PersistedProject {
    */
   readonly pendingRequirementOrder?: number;
   readonly plan?: ProductionPlanResult;
+  /**
+   * v4（文稿先行）管线：已确认的分镜脚本。字段存在即表示该项目走 v4 路径——存量 v3
+   * 项目没有它，v3 行为不受影响。
+   */
+  readonly storyboard?: ScriptStoryboard;
+  /**
+   * v4 管线：逐句实测 TTS 音轨（时长证据）。与 `narrationAssets` 按 `sentenceId` 成对
+   * 写入：一句只有在两边都存在时才算「已就绪」，缺任何一半都需要重新合成该句。
+   */
+  readonly narrationTracks?: readonly TtsTimedTrack[];
+  /** v4 管线：逐句已合成音频文件（项目内相对路径），渲染的「音频已就绪」路径只消费它。 */
+  readonly narrationAssets?: readonly PersistedNarrationAsset[];
   readonly output?: NativeProductionResult;
   readonly issue?: TaskIssue;
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+/**
+ * 内连接 `narrationTracks` 与 `narrationAssets`：只保留音轨与音频文件同时存在的句子。
+ * 重复的句子 id 取先出现的一条（与就绪检查的「多余即异常」语义一致，这里不给重复
+ * 机会进入渲染）；一半存在一半缺失说明记录损坏，按「未就绪、可重试」处理。
+ */
+export function pairedNarration(project: PersistedProject): ReadonlyMap<string, { readonly track: TtsTimedTrack; readonly audioPath: string }> {
+  const assetsBySentence = new Map<string, string>();
+  for (const asset of project.narrationAssets ?? []) {
+    if (!assetsBySentence.has(asset.sentenceId)) assetsBySentence.set(asset.sentenceId, asset.audioPath);
+  }
+  const paired = new Map<string, { readonly track: TtsTimedTrack; readonly audioPath: string }>();
+  for (const track of project.narrationTracks ?? []) {
+    const audioPath = assetsBySentence.get(track.sentenceId);
+    if (audioPath !== undefined && !paired.has(track.sentenceId)) paired.set(track.sentenceId, { track, audioPath });
+  }
+  return paired;
 }
 
 export function defaultAssetRole(value: Pick<NativeProductionAsset, "kind">): ProductionAssetRole {
@@ -101,7 +141,7 @@ export function planningAsset(asset: PersistedAsset): ProductionPlanningAsset {
  * planning decision that must already be recorded in the plan the user approved.
  */
 export function subtitleTemplatePayload(plan: ProductionPlanResult): { readonly subtitleTemplateJson?: string } {
-  if (plan.schemaVersion !== "production-plan.v3") return {};
+  if (plan.schemaVersion !== "production-plan.v3" && plan.schemaVersion !== "production-plan.v4") return {};
   return { subtitleTemplateJson: JSON.stringify(subtitleTemplateById(plan.subtitle.templateId)) };
 }
 
@@ -178,6 +218,48 @@ export function assetPath(asset: NativeProductionAsset): string {
   return `inputs/${asset.id}.${extension}`;
 }
 
+/**
+ * v4 字段的降级读取：损坏的分镜脚本被丢弃而不是让整个项目打不开——脚本可以重新生成，
+ * 素材与成片不受影响。脚本丢弃后，挂在句子 id 上的配音记录也一并丢弃：没有脚本的
+ * 音轨无法对回任何句子，保留只会让就绪检查报出无法解释的 mismatch。单条损坏的音轨
+ * 同样只丢弃那一条，已成功的其余句子保持就绪，可单句重试补齐。
+ */
+function persistedStoryboardNarration(
+  storyboard: unknown,
+  narrationTracks: unknown,
+  narrationAssets: unknown,
+): { readonly storyboard?: ScriptStoryboard; readonly narrationTracks?: readonly TtsTimedTrack[]; readonly narrationAssets?: readonly PersistedNarrationAsset[] } {
+  const parsedStoryboard = storyboard ? parseScriptStoryboard(storyboard) : undefined;
+  if (!parsedStoryboard?.ok) return {};
+  const sentenceIds = new Set(parsedStoryboard.value.sentences.map((sentence) => sentence.id));
+
+  const tracks: TtsTimedTrack[] = [];
+  const seenTracks = new Set<string>();
+  for (const raw of Array.isArray(narrationTracks) ? narrationTracks : []) {
+    const parsedTrack = parseTtsTimedTrack(raw);
+    if (!parsedTrack.ok || !sentenceIds.has(parsedTrack.value.sentenceId) || seenTracks.has(parsedTrack.value.sentenceId)) continue;
+    seenTracks.add(parsedTrack.value.sentenceId);
+    tracks.push(parsedTrack.value);
+  }
+
+  const assets: PersistedNarrationAsset[] = [];
+  const seenAssets = new Set<string>();
+  for (const raw of Array.isArray(narrationAssets) ? narrationAssets : []) {
+    const candidate = raw as Partial<PersistedNarrationAsset>;
+    if (typeof candidate.sentenceId !== "string" || !candidate.sentenceId.trim()) continue;
+    if (typeof candidate.audioPath !== "string" || !candidate.audioPath.trim()) continue;
+    if (!sentenceIds.has(candidate.sentenceId) || seenAssets.has(candidate.sentenceId)) continue;
+    seenAssets.add(candidate.sentenceId);
+    assets.push({ sentenceId: candidate.sentenceId, audioPath: candidate.audioPath });
+  }
+
+  return {
+    storyboard: parsedStoryboard.value,
+    ...(tracks.length > 0 ? { narrationTracks: tracks } : {}),
+    ...(assets.length > 0 ? { narrationAssets: assets } : {}),
+  };
+}
+
 export function parseProject(value: string, projectId: string): PersistedProject | undefined {
   try {
     const parsed = JSON.parse(value) as PersistedProject;
@@ -199,11 +281,16 @@ export function parseProject(value: string, projectId: string): PersistedProject
     if (parsed.pendingRequirementOrder !== undefined && !isRequirementOrder(parsed.pendingRequirementOrder)) return undefined;
     const parsedPlan = parsed.plan ? productionPlanResultSchema.safeParse(parsed.plan) : undefined;
     const planUnreadable = Boolean(parsed.plan) && parsedPlan?.success !== true;
+    const narration = persistedStoryboardNarration(parsed.storyboard, parsed.narrationTracks, parsed.narrationAssets);
+    // 原始 v4 字段先剥掉再决定要不要放回校验后的版本：损坏值不能经 `...parsed` 漏回去。
+    const { storyboard: _rawStoryboard, narrationTracks: _rawTracks, narrationAssets: _rawAssets, ...rest } = parsed;
+    void _rawStoryboard; void _rawTracks; void _rawAssets;
     if (planUnreadable) {
-      const { plan: _unreadablePlan, ...rest } = parsed;
+      const { plan: _unreadablePlan, ...base } = rest;
       void _unreadablePlan;
       return {
-        ...rest,
+        ...base,
+        ...narration,
         mode,
         textPreset,
         ...(headlineText ? { headlineText } : {}),
@@ -214,7 +301,8 @@ export function parseProject(value: string, projectId: string): PersistedProject
       };
     }
     return {
-      ...parsed,
+      ...rest,
+      ...narration,
       mode,
       textPreset,
       ...(headlineText ? { headlineText } : {}),

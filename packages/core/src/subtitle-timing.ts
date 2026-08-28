@@ -172,6 +172,12 @@ export interface ShotCueTimelineInput {
   readonly typography: SubtitleTypography;
   /** Words the template may emphasise; each one attaches to the cue that contains it. */
   readonly emphasisWords?: readonly string[];
+  /**
+   * 词级实测时间戳（相对本句音频起点，来自 `TtsTimedTrack.words`）。提供且非空时走
+   * `asr_word` 路径：cue 边界直接取词级时间，`text` 不再参与定界；缺失或为空时保持
+   * 既有比例路径（`script_estimate` 与 `tts_duration` 共用），不伪造词级时间。
+   */
+  readonly words?: readonly SubtitleCueWordTiming[] | null;
 }
 
 /**
@@ -190,6 +196,89 @@ function emphasisFor(text: string, candidates: readonly string[]): readonly stri
 }
 
 /**
+ * Groups measured words into cues the template's line box can hold. Cut points only fall on word
+ * boundaries: a timestamp that splits a spoken word cannot be honoured honestly, so a word is never
+ * divided across cues even when it straddles the character budget.
+ */
+function wordCueGroups(
+  words: readonly SubtitleCueWordTiming[],
+  limit: number,
+  typography: SubtitleTypography,
+): readonly (readonly SubtitleCueWordTiming[])[] {
+  const groups: SubtitleCueWordTiming[][] = [];
+  let current: SubtitleCueWordTiming[] = [];
+  let currentText = "";
+  for (const word of words) {
+    const nextText = currentText + word.text;
+    if (current.length > 0 && ([...nextText].length > limit || !subtitleTextFits(nextText, typography))) {
+      groups.push(current);
+      current = [word];
+      currentText = word.text;
+    } else {
+      current = [...current, word];
+      currentText = nextText;
+    }
+  }
+  if (current.length > 0) groups.push(current);
+
+  // A one- or two-word tail flashes past as a fragment; fold it into the previous cue when the
+  // joined text still fits, mirroring `absorbShortTail` for the proportional path.
+  if (groups.length >= 2) {
+    const last = groups[groups.length - 1] ?? [];
+    const previous = groups[groups.length - 2] ?? [];
+    const lastText = last.map((word) => word.text).join("");
+    if ([...lastText].length < MIN_TAIL_CHARACTERS) {
+      const joined = [...previous, ...last].map((word) => word.text).join("");
+      if ([...joined].length <= MAX_CUE_CHARACTERS && subtitleTextFits(joined, typography)) {
+        groups.splice(groups.length - 2, 2, [...previous, ...last]);
+      }
+    }
+  }
+  return groups;
+}
+
+/**
+ * The `asr_word` tier: cue boundaries are the measured word boundaries themselves. The first cue
+ * starts when the first word starts and the last ends when the last word ends, so silences before,
+ * between and after speech show through instead of being papered over with proportional guesses.
+ *
+ * Word times are rounded onto the integer millisecond clock the renderer keeps; the sequential
+ * clamp only guards pathological fractional input, because real TTS/ASR timestamps arrive in whole
+ * milliseconds already.
+ */
+function cuesFromWordTimings(
+  words: readonly SubtitleCueWordTiming[],
+  durationMs: number,
+  typography: SubtitleTypography,
+  emphasis: readonly string[],
+): readonly SubtitleCueTiming[] {
+  const cues: SubtitleCueTiming[] = [];
+  for (const group of wordCueGroups(words, cueCharacterBudget(typography), typography)) {
+    const text = group.map((word) => word.text).join("");
+    if (!text.trim()) continue;
+    const clocked: SubtitleCueWordTiming[] = [];
+    let previousEndMs = 0;
+    for (const word of group) {
+      const startMs = Math.max(previousEndMs, Math.min(Math.round(word.startMs), Math.max(durationMs - 1, 0)));
+      const endMs = Math.max(startMs + 1, Math.min(Math.round(word.endMs), durationMs));
+      clocked.push({ text: word.text, startMs, endMs });
+      previousEndMs = endMs;
+    }
+    const first = clocked[0];
+    const last = clocked[clocked.length - 1];
+    if (!first || !last) continue;
+    cues.push({
+      startMs: first.startMs,
+      endMs: Math.max(first.startMs + 1, last.endMs),
+      text,
+      emphasisWords: emphasisFor(text, emphasis),
+      words: clocked,
+    });
+  }
+  return cues;
+}
+
+/**
  * Splits one shot's narration into readable cues and spreads the shot duration across them
  * by character count. This is the `script_estimate` and `tts_duration` tier: cue order and
  * length are real, but the boundaries are proportional rather than measured against speech.
@@ -201,6 +290,13 @@ function emphasisFor(text: string, candidates: readonly string[]): readonly stri
 export function buildShotCueTimeline(input: ShotCueTimelineInput): readonly SubtitleCueTiming[] {
   const durationMs = Math.round(input.shotDurationMs);
   if (durationMs <= 0) return [];
+
+  // 词级实测路径（asr_word）：定界失败（例如词文本全为空白）时退回比例路径，而不是产出空字幕。
+  if (input.words && input.words.length > 0) {
+    const measured = cuesFromWordTimings(input.words, durationMs, input.typography, input.emphasisWords ?? []);
+    if (measured.length > 0) return measured;
+  }
+
   const characters = [...input.text.replace(/\s+/gu, " ").trim()];
   if (characters.length === 0) return [];
 

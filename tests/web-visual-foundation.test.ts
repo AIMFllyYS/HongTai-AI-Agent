@@ -54,7 +54,6 @@ test("shared tabs stay in the components layer so segmented pills survive Androi
     "styles/pages/tasks-runtime.css",
     "styles/pages/creation.css",
     "styles/pages/production-runtime.css",
-    "styles/pages/production-edit.css",
     "styles/pages/replica-wizard.css",
     "styles/pages/library.css",
     "styles/pages/settings.css",

@@ -11,6 +11,10 @@ import { z } from "zod";
 import { toProviderJsonSchema } from "../structured-output/json-schema";
 import {
   decorationSelectionSchema,
+  MAX_MEASURED_SHOT_MS,
+  measuredProductionDecorationSchema,
+  measuredProductionSubtitleSettingsSchema,
+  measuredSubtitleCueSchema,
   productionDecorationSchema,
   productionSubtitleSettingsSchema,
   subtitleCueSchema,
@@ -99,17 +103,58 @@ export const productionPlanResultV3Schema = productionPlanBaseSchema.extend({
   grounding: productionGroundingSchema.optional(),
 });
 
+/**
+ * v4（文稿先行）的镜头：时长来自本镜口播句的实测 TTS 音频（`TtsTimedTrack.durationMs`），
+ * 没有目标时长。`sentenceId` 把镜头对回分镜脚本里的那句话（`ScriptSentence.id`），回改
+ * 文案、重新配音与重新渲染都以它定位受影响的句子。
+ */
+const measuredProductionShotSchema = productionShotBaseSchema.omit({ durationSeconds: true }).extend({
+  /** 实测 TTS 音频时长（毫秒）。渲染、总时长与字幕铺排都以它为准，不用字符估算。 */
+  durationMs: z.number().int().positive().max(MAX_MEASURED_SHOT_MS),
+  sentenceId: z.string().min(1),
+  cues: z.array(measuredSubtitleCueSchema).min(1).max(MAX_CUES_PER_SHOT),
+});
+
+/**
+ * v4（文稿先行）：由分镜脚本（`ScriptStoryboard`）与实测 TTS 音轨（`TtsTimedTrack`）在本地
+ * 组装，模型不再直出任何时长或时间戳。与 v3 的两点刻意差异：
+ *
+ * - 没有目标时长字段：v3 的 `settings.durationSeconds` 是预设目标且镜头总和必须精确等于
+ *   它；v4 的总时长是 Σ `shots[].durationMs` 的派生值，由界面求和展示，不再持久化第二
+ *   份副本——保留副本只会招致漂移，而且软边界计划（总时长出界、用户确认后继续）必须
+ *   可持久化，硬性 min/max 也不能放进 Schema。
+ * - `source.analysisTaskId` 允许 null：v4 起参考拆解是可选增强，null 如实表示「本次没有
+ *   参考拆解」。
+ *
+ * grounding、贴纸与字幕样式沿用 v3 字段惯例；`subtitle.timing` 的来源被限制为实测
+ * （`asr_word` / `tts_duration`）。
+ */
+export const productionPlanResultV4Schema = productionPlanBaseSchema.extend({
+  schemaVersion: z.literal("production-plan.v4"),
+  source: z.object({ analysisTaskId: z.string().min(1).nullable() }),
+  settings: productionPlanBaseSchema.shape.settings.omit({ durationSeconds: true }),
+  textOverlay: textOverlaySchema,
+  subtitle: measuredProductionSubtitleSettingsSchema,
+  shots: z.array(measuredProductionShotSchema).min(1).max(MAX_SHOTS_PER_PRODUCTION),
+  decorations: z.array(measuredProductionDecorationSchema).max(6),
+  grounding: productionGroundingSchema.optional(),
+});
+
 export const productionPlanResultSchema = z.union([
   productionPlanResultV1Schema,
   productionPlanResultV2Schema,
   productionPlanResultV3Schema,
+  productionPlanResultV4Schema,
 ]);
 
 export type ProductionPlanGrounding = z.infer<typeof productionGroundingSchema>;
 export type ProductionPlanResultV1 = z.infer<typeof productionPlanResultV1Schema>;
 export type ProductionPlanResultV2 = z.infer<typeof productionPlanResultV2Schema>;
 export type ProductionPlanResultV3 = z.infer<typeof productionPlanResultV3Schema>;
+export type ProductionPlanResultV4 = z.infer<typeof productionPlanResultV4Schema>;
 export type ProductionPlanResult = z.infer<typeof productionPlanResultSchema>;
+/** v1–v3 历史计划：仍走 `validateProductionPlan`，v4 走 `validateMeasuredProductionPlan`。 */
+export type LegacyProductionPlanResult = Exclude<ProductionPlanResult, ProductionPlanResultV4>;
 
 /**
  * Planner JSON is still a v2 plan plus decoration *choices*. Cue milliseconds for those stickers

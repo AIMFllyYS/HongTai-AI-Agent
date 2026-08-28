@@ -99,17 +99,18 @@ test("不够三项时不能开工，并说清还差几项", () => {
   assert.equal(MIN_BOUND_REQUIREMENTS, MIN_MONTAGE_VISUAL_ASSETS, "UI 的门槛必须就是合成端的门槛，不能各写一个数");
 });
 
-test("跳过清单项不会让成片变短，提示要说出时长去哪了", () => {
+test("跳过清单项不会留空镜头，提示要说出分镜和时长怎么定", () => {
   const view = readReplicaBlueprint(document([shot(1, 6), shot(2, 12), shot(3, 12), shot(4, 10)]));
   const bindings = requirementBindings(view.requirements, [asset("asset-a", 1), asset("asset-b", 2), asset("asset-c", 3)]);
 
-  const hint = skipEffectHint(bindings, 40);
-  assert.match(hint, /跳过的 1 项不会缩短成片/u);
-  assert.match(hint, /平均每个约 13\.3 秒/u);
+  const hint = skipEffectHint(bindings);
+  assert.match(hint, /跳过的 1 项不会留空镜头/u);
+  assert.match(hint, /分镜按已绑定的 3 个素材写/u);
+  assert.match(hint, /口播和时长由脚本与实测配音决定/u);
 
   const all = requirementBindings(view.requirements, [asset("asset-a", 1), asset("asset-b", 2), asset("asset-c", 3), asset("asset-d", 4)]);
-  assert.equal(skipEffectHint(all, 40), "", "一项都没跳过时不该提示");
-  assert.equal(skipEffectHint(bindings.map(({ requirement }) => ({ requirement })), 40), "", "还没开始绑定时不该提示");
+  assert.equal(skipEffectHint(all), "", "一项都没跳过时不该提示");
+  assert.equal(skipEffectHint(bindings.map(({ requirement }) => ({ requirement }))), "", "还没开始绑定时不该提示");
 });
 
 test("清单外导入的画面素材单独计数，不会被当成某一项", () => {

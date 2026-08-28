@@ -286,6 +286,9 @@ export function createBrowserStandalonePlugins(): StandaloneNativePlugins {
       render: async () => {
         throw Object.assign(new Error("浏览器端测不执行 Media3 导出"), { code: "ERR_MEDIA_ENCODER_UNAVAILABLE" });
       },
+      synthesizeNarration: async () => {
+        throw Object.assign(new Error("浏览器端测不执行逐句配音合成"), { code: "ERR_TTS_UNAVAILABLE" });
+      },
       probeTts: async () => {
         await browserIoRpc("http.probeTts", {});
       },

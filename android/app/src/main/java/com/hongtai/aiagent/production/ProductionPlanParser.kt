@@ -23,6 +23,8 @@ internal data class ProductionShot(
   val fit: String,
   /** Timed caption lines; empty on plans older than v3, which burn one static caption instead. */
   val cues: List<SubtitleCue> = emptyList(),
+  /** v4 only: the storyboard sentence whose measured TTS audio produced this shot's duration. */
+  val sentenceId: String? = null,
 )
 
 internal data class ProductionTextOverlay(
@@ -35,6 +37,7 @@ internal data class NativeProductionPlan(
   val width: Int,
   val height: Int,
   val fps: Int,
+  /** v1–v3: the declared target the shot sum must equal exactly. v4: the sum of measured shot durations. */
   val durationMs: Long,
   val voiceLocale: String,
   val speechRate: Float,
@@ -51,9 +54,21 @@ internal data class NativeProductionPlan(
 /** Strict parser for the small, versioned TypeScript-to-Kotlin render contract. */
 internal object ProductionPlanParser {
   /**
+   * Hard structural floor for a v4 measured shot. The 60 s ceiling mirrors the shared v4 schema's
+   * structural maximum (`MAX_MEASURED_SHOT_MS`); whether a shot or the total is too short/long for
+   * the product is a shared-layer soft business rule that is deliberately not mirrored here.
+   */
+  private fun measuredShotDurationMs(value: JSONObject): Long {
+    val durationMs = value.getLong("durationMs")
+    require(durationMs in 1..MAX_MEASURED_SHOT_MS) { "A production shot duration is invalid." }
+    return durationMs
+  }
+
+  /**
    * @param subtitleTemplateJson the `subtitle-template.v1` object the shared TypeScript layer
-   *   resolved for this plan. Required by v3 plans and rejected by older ones, because the template
-   *   is the only place a caption's look is decided and Kotlin must not carry a second copy of it.
+   *   resolved for this plan. Required by v3 and v4 plans and rejected by older ones, because the
+   *   template is the only place a caption's look is decided and Kotlin must not carry a second
+   *   copy of it.
    */
   fun parse(
     json: String,
@@ -66,15 +81,18 @@ internal object ProductionPlanParser {
     val root = JSONObject(json)
     val schemaVersion = root.getString("schemaVersion")
     require(schemaVersion in SUPPORTED_SCHEMA_VERSIONS) { "Unsupported production plan version." }
-    val timedCaptions = schemaVersion == "production-plan.v3"
-    require(timedCaptions == (subtitleTemplateJson != null)) { "A subtitle template is required by v3 plans only." }
+    val measuredShots = schemaVersion == "production-plan.v4"
+    val timedCaptions = schemaVersion == "production-plan.v3" || measuredShots
+    require(timedCaptions == (subtitleTemplateJson != null)) { "A subtitle template is required by v3 and v4 plans only." }
     val settings = root.getJSONObject("settings")
     val width = settings.getInt("width")
     val height = settings.getInt("height")
     val fps = settings.getInt("fps")
-    val durationMs = secondsToMs(settings.getDouble("durationSeconds"))
+    // v4 carries no target duration: the total is Σ per-shot measured durations, and the 15–60 s
+    // soft boundary stays a shared-layer business rule Kotlin must not duplicate.
+    val durationMs = if (measuredShots) 0L else secondsToMs(settings.getDouble("durationSeconds"))
     require(width == 720 && height == 1280 && fps == 30) { "Only the fixed portrait export profile is supported." }
-    require(durationMs in 15_000L..60_000L) { "The production duration is outside the supported range." }
+    if (!measuredShots) require(durationMs in 15_000L..60_000L) { "The production duration is outside the supported range." }
 
     val audio = root.getJSONObject("audio")
     val locale = audio.getString("voiceLocale")
@@ -88,14 +106,23 @@ internal object ProductionPlanParser {
 
     val jsonShots = root.getJSONArray("shots")
     require(jsonShots.length() in 1..12) { "The production shot count is outside the supported range." }
+    val seenSentenceIds = mutableSetOf<String>()
     val shots = (0 until jsonShots.length()).map { index ->
       val value = jsonShots.getJSONObject(index)
       val order = value.getInt("order")
       require(order == index + 1) { "Production shot order must be continuous." }
       val input = assets[value.getString("assetId")] ?: throw IllegalArgumentException("A production asset does not exist.")
       require(input.kind != ProductionAssetKind.AUDIO) { "A visual shot cannot use an audio asset." }
-      val shotDurationMs = secondsToMs(value.getDouble("durationSeconds"))
-      require(shotDurationMs in 1_000L..20_000L) { "A production shot duration is invalid." }
+      val shotDurationMs = if (measuredShots) measuredShotDurationMs(value) else secondsToMs(value.getDouble("durationSeconds"))
+      if (!measuredShots) require(shotDurationMs in 1_000L..20_000L) { "A production shot duration is invalid." }
+      val sentenceId = if (measuredShots) {
+        val id = value.getString("sentenceId").trim()
+        require(id.isNotEmpty() && id.length <= MAX_SENTENCE_ID_LENGTH) { "A production sentence reference is invalid." }
+        require(seenSentenceIds.add(id)) { "A production sentence reference is duplicated." }
+        id
+      } else {
+        null
+      }
       val narration = value.getString("narration").trim()
       val caption = value.getString("caption").trim()
       val fit = value.getString("fit")
@@ -107,9 +134,11 @@ internal object ProductionPlanParser {
       } else {
         emptyList()
       }
-      ProductionShot(order, input, shotDurationMs, narration, caption, fit, cues)
+      ProductionShot(order, input, shotDurationMs, narration, caption, fit, cues, sentenceId)
     }
-    require(shots.sumOf(ProductionShot::durationMs) == durationMs) { "Production shot durations do not match the total duration." }
+    // v1–v3: the shot sum must match the declared target exactly. v4 has no target to match.
+    if (!measuredShots) require(shots.sumOf(ProductionShot::durationMs) == durationMs) { "Production shot durations do not match the total duration." }
+    val totalDurationMs = if (measuredShots) shots.sumOf(ProductionShot::durationMs) else durationMs
     val textOverlay = if (schemaVersion != "production-plan.v1") {
       val value = root.getJSONObject("textOverlay")
       val primaryText = value.getString("primaryText").trim()
@@ -133,7 +162,7 @@ internal object ProductionPlanParser {
       emptyList()
     }
     return NativeProductionPlan(
-      width, height, fps, durationMs, locale, speechRate, music, musicVolume, shots, textOverlay, renderMode,
+      width, height, fps, totalDurationMs, locale, speechRate, music, musicVolume, shots, textOverlay, renderMode,
       template, decorations,
     )
   }
@@ -164,7 +193,11 @@ internal object ProductionPlanParser {
   }
 
   private val SUPPORTED_SCHEMA_VERSIONS =
-    setOf("production-plan.v1", "production-plan.v2", "production-plan.v3")
+    setOf("production-plan.v1", "production-plan.v2", "production-plan.v3", "production-plan.v4")
   private const val MAX_PLAN_BYTES = 128 * 1024
   private const val MAX_TEMPLATE_BYTES = 8 * 1024
+
+  /** Mirrors the shared v4 schema's structural shot maximum (`MAX_MEASURED_SHOT_MS`, 60 s). */
+  private const val MAX_MEASURED_SHOT_MS = 60_000L
+  private const val MAX_SENTENCE_ID_LENGTH = 128
 }

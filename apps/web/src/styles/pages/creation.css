@@ -300,16 +300,14 @@
   min-height: 15rem;
   place-items: center;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 74% 24%, rgba(16, 185, 129, 0.28), transparent 22%),
-    linear-gradient(135deg, #0e4138, #1d7668 55%, #aacdc3);
+  background: var(--surface-publish-canvas);
 }
 
 .planned-publish-preview__canvas::before,
 .planned-publish-preview__canvas::after {
   position: absolute;
   content: "";
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  border: 1px solid var(--media-line-soft);
   border-radius: 1rem;
 }
 
@@ -331,9 +329,9 @@
   width: 3.6rem;
   height: 3.6rem;
   place-items: center;
-  color: #fff;
-  background: rgba(0, 52, 43, 0.68);
-  border: 1px solid rgba(255, 255, 255, 0.46);
+  color: var(--palette-on-ink);
+  background: var(--media-chip-deep);
+  border: 1px solid var(--media-chip-border);
   border-radius: var(--radius-pill);
   backdrop-filter: blur(0.5rem);
 }
@@ -344,7 +342,7 @@
   bottom: 1.15rem;
   width: 4.6rem;
   height: 2.6rem;
-  border: 1px dashed rgba(255, 255, 255, 0.76);
+  border: 1px dashed var(--media-line-strong);
   border-radius: 0.5rem;
 }
 

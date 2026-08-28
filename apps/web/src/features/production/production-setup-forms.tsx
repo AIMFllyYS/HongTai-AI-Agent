@@ -6,8 +6,6 @@ import { EmptyState } from "../../components/StatePanels";
 import { Switch } from "../../components/Switch";
 import { platformLabel } from "../tasks/task-presenters";
 
-const AGENT_DURATION_OPTIONS = [15, 30, 45, 60] as const;
-
 export interface AnalysisSource {
   readonly task: AppTaskRecord;
   readonly title: string;
@@ -58,12 +56,10 @@ export function SourcePicker({
 export function AgentSetupForm({
   avatarScript,
   brief,
-  duration,
   headlineText,
   mode,
   onAvatarScript,
   onBrief,
-  onDuration,
   onGoAnalyze,
   onHeadlineText,
   onMode,
@@ -75,12 +71,10 @@ export function AgentSetupForm({
 }: {
   readonly avatarScript: string;
   readonly brief: string;
-  readonly duration: number;
   readonly headlineText: string;
   readonly mode: ProductionMode;
   readonly onAvatarScript: (value: string) => void;
   readonly onBrief: (value: string) => void;
-  readonly onDuration: (value: number) => void;
   readonly onGoAnalyze: () => void;
   readonly onHeadlineText: (value: string) => void;
   readonly onMode: (value: ProductionMode) => void;
@@ -91,19 +85,7 @@ export function AgentSetupForm({
   readonly textPreset: ProductionTextPreset;
 }) {
   const avatarOn = mode === "avatar";
-  const durationValue = (AGENT_DURATION_OPTIONS as readonly number[]).includes(duration) ? duration : 30;
   const presetLabel = textPreset === "clean_card" ? "简洁白底卡片" : textPreset === "aqua_accent" ? "青绿色强调" : "经典顶部白字";
-
-  if (sources.length === 0) {
-    return (
-      <EmptyState
-        action={<Button onClick={onGoAnalyze}>去拆解一条</Button>}
-        description="先完成一个采集任务，并在任务详情中手动运行 AI 自动拆解。"
-        icon="analytics"
-        title="还没有可用于制作的拆解"
-      />
-    );
-  }
 
   return (
     <section className="production-agent-form" data-production-form="agent">
@@ -119,7 +101,7 @@ export function AgentSetupForm({
       ) : (
         <p className="production-hint">
           <Icon name="info" size={16} />
-          这台安装不一定能看画面：看不到就按拆解结构写，能看到才会参考画面里看得见的内容。生成后微调页会告诉你是哪一种。两种情况都不会核对文字是否对得上每个镜头，需要你逐镜核对，看不清的素材要重拍。
+          这台安装不一定能看画面：看不到就按你的需求写，能看到才会参考画面里看得见的内容。两种情况都不会核对文字是否对得上每个镜头，需要你逐镜核对，看不清的素材要重拍。
         </p>
       )}
 
@@ -136,78 +118,75 @@ export function AgentSetupForm({
         <small className="production-field-help">{brief.length}/500</small>
       </label>
 
-      <SourcePicker onSourceId={onSourceId} sourceId={sourceId} sources={sources} />
-
       <div className={avatarOn ? "production-avatar-option is-selected" : "production-avatar-option"}>
         <span id="production-avatar-option-label">
-          <strong>数字人口播</strong>
-          <small>已录好原声的 MP4，只烧字幕、不配音</small>
+          <strong>口播切片</strong>
+          <small>使用你导入的口播视频与逐字稿切片，只烧字幕、不配音，不生成数字人形象</small>
         </span>
         <Switch checked={avatarOn} labelledBy="production-avatar-option-label" onChange={(checked) => onMode(checked ? "avatar" : "montage")} />
       </div>
 
-      <div className="production-field">
-        <label className="field-label" htmlFor="production-headline">主文字（可选）</label>
-        <input
-          id="production-headline"
-          maxLength={24}
-          onChange={(event) => onHeadlineText(event.target.value)}
-          placeholder="例如：你出时间，我出货"
-          value={headlineText}
-        />
-        <small className="production-field-help">留空由 AI 生成；填写后成片逐字使用</small>
-      </div>
-
-      <label className="production-preset-row" htmlFor="production-text-preset">
-        <span>文字预设</span>
-        <span className="production-preset-row__value">
-          <select
-            aria-label="文字预设"
-            id="production-text-preset"
-            onChange={(event) => onTextPreset(event.target.value as ProductionTextPreset)}
-            value={textPreset}
-          >
-            <option value="classic_top">经典顶部白字</option>
-            <option value="clean_card">简洁白底卡片</option>
-            <option value="aqua_accent">青绿色强调</option>
-          </select>
-          <em>{presetLabel}</em>
-          <Icon name="chevron_right" size={18} />
-        </span>
-      </label>
-
       {avatarOn ? (
         <div className="production-field">
-          <label className="field-label" htmlFor="production-avatar-script">数字人口播稿</label>
+          <label className="field-label" htmlFor="production-avatar-script">口播切片逐字稿</label>
           <textarea
             id="production-avatar-script"
             maxLength={360}
             onChange={(event) => onAvatarScript(event.target.value)}
-            placeholder="请粘贴与上传数字人视频原声一致的口播稿。它会在本地切分为短字幕，不会替换原视频声音。"
+            placeholder="请粘贴与上传口播视频原声一致的逐字稿。它会在本地切分为短字幕，不会替换原视频声音。"
             rows={5}
             value={avatarScript}
           />
         </div>
       ) : null}
 
-      <div className="production-field">
-        <span className="field-label" id="production-duration-label">目标时长</span>
-        <div aria-labelledby="production-duration-label" className="production-duration-segmented" role="radiogroup">
-          {AGENT_DURATION_OPTIONS.map((seconds) => (
-            <button
-              aria-checked={durationValue === seconds}
-              className={durationValue === seconds ? "is-selected" : undefined}
-              key={seconds}
-              onClick={() => onDuration(seconds)}
-              role="radio"
-              type="button"
-            >
-              {seconds} 秒
-            </button>
-          ))}
+      <details className="production-advanced">
+        <summary>高级选项（参考拆解、主文字、文字预设）</summary>
+        <div className="production-advanced__body">
+          {sources.length > 0 ? (
+            <SourcePicker onSourceId={onSourceId} sourceId={sourceId} sources={sources} />
+          ) : (
+            <div className="production-field">
+              <span className="field-label" id="production-source-label">参考哪条拆解</span>
+              <p className="production-hint">
+                <Icon name="info" size={16} />
+                还没有可参考的拆解。一句话需求也能直接开始；想让分镜更贴，可以先去拆解一条。
+              </p>
+              <Button onClick={onGoAnalyze} variant="secondary">去拆解一条</Button>
+            </div>
+          )}
+
+          <div className="production-field">
+            <label className="field-label" htmlFor="production-headline">主文字（可选）</label>
+            <input
+              id="production-headline"
+              maxLength={24}
+              onChange={(event) => onHeadlineText(event.target.value)}
+              placeholder="例如：你出时间，我出货"
+              value={headlineText}
+            />
+            <small className="production-field-help">留空由 AI 生成；填写后成片逐字使用</small>
+          </div>
+
+          <label className="production-preset-row" htmlFor="production-text-preset">
+            <span>文字预设</span>
+            <span className="production-preset-row__value">
+              <select
+                aria-label="文字预设"
+                id="production-text-preset"
+                onChange={(event) => onTextPreset(event.target.value as ProductionTextPreset)}
+                value={textPreset}
+              >
+                <option value="classic_top">经典顶部白字</option>
+                <option value="clean_card">简洁白底卡片</option>
+                <option value="aqua_accent">青绿色强调</option>
+              </select>
+              <em>{presetLabel}</em>
+              <Icon name="chevron_right" size={18} />
+            </span>
+          </label>
         </div>
-        {avatarOn ? <small className="production-field-help">口播视频时长不能短于这个目标。旁白语速和单镜时长之后也不能改。</small> : null}
-      </div>
+      </details>
     </section>
   );
 }
@@ -233,7 +212,7 @@ export function ReplicaSetupForm({
           <SourcePicker onSourceId={onSourceId} sourceId={sourceId} sources={sources} />
           <p className="production-hint">
             <Icon name="info" size={16} />
-            下一步会打开这条拆解的复刻向导，按清单逐项绑定素材。清单不代表画面里真的有这些内容；生成的是脚本和字幕，成片要回制作页合成。
+            下一步会打开这条拆解的复刻向导，按清单逐项绑定素材。清单不代表画面里真的有这些内容；生成的是分镜脚本和字幕，成片要回制作页合成。
           </p>
         </>
       ) : (

@@ -68,6 +68,18 @@ internal class ProductionMediaStore(context: Context) {
     return File(directory, ".output.part.mp4") to File(directory, "output.mp4")
   }
 
+  /**
+   * Resolves one bridge-supplied narration path inside this project's private directory. Canonical
+   * containment is enforced, so narration audio can never point at another project or at app
+   * storage outside `productions/<projectId>`.
+   */
+  fun resolveProjectRelative(projectId: String, relativePath: String): File {
+    val directory = projectDirectory(projectId)
+    val resolved = File(directory, relativePath).canonicalFile
+    require(resolved.path.startsWith("${directory.canonicalPath}${File.separator}")) { "Production path escaped private storage." }
+    return resolved
+  }
+
   fun audioDirectory(projectId: String): File = File(projectDirectory(projectId), "audio").also {
     if (!it.exists() && !it.mkdirs()) throw IllegalStateException("Could not create production audio storage.")
   }

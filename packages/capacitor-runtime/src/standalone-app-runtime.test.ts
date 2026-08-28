@@ -111,6 +111,7 @@ test("cloud TTS remains in the AI connection and probes through the native rende
         consumeAssetOperation: async () => ({ status: "none" as const }),
         render: async () => ({ uri: "file:///private/output.mp4", mimeType: "video/mp4", sizeBytes: 1, durationSeconds: 1 }),
         probeTts: async (options) => { ttsProbeCalls += 1; ttsProbeOptions = options; },
+        synthesizeNarration: async () => ({ sentences: [] }),
       },
     },
     convertFileSrc: (uri) => `capacitor://localhost/${uri.slice("file:///".length)}`,

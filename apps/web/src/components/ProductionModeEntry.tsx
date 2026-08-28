@@ -22,10 +22,10 @@ export function ProductionModeEntry({ onSelect }: ProductionModeEntryProps) {
           <strong>智能成片</strong>
           <Icon name="chevron_right" size={19} />
         </div>
-        <p>导入自己拍的照片或视频，选定目标时长。应用会写旁白和字幕；成片要导入素材后，在制作页再发起合成。</p>
-        <p className="production-entry-card__caveat">这台安装不一定能看画面：看不到就按拆解结构写，能看到才会参考画面里看得见的内容。生成后微调页会告诉你是哪一种。两种情况都不会核对文字是否对得上每个镜头，需要你逐镜核对。</p>
-        <small>默认这条路需要一份成功拆解，再准备至少 {MIN_MONTAGE_VISUAL_ASSETS} 张图片或视频。配音优先用 AI 连接里的云端旁白，没配才用系统语音。</small>
-        <small>数字人口播是下一步里的开关：一条已录好原声的 MP4 即可，只烧字幕、不配音，不需要 {MIN_MONTAGE_VISUAL_ASSETS} 份素材。</small>
+        <p>用一句话说明这次想讲什么，直接开始。应用会写旁白和字幕；成片要导入素材后，在制作页再发起合成。</p>
+        <p className="production-entry-card__caveat">这台安装不一定能看画面：看不到就按你的需求写，能看到才会参考画面里看得见的内容。无论哪种情况都不会核对文字是否对得上每个镜头，需要你逐镜核对。</p>
+        <small>一句话需求就能开始；准备至少 {MIN_MONTAGE_VISUAL_ASSETS} 张图片或视频再合成。配音优先用 AI 连接里的云端旁白，没配才用系统语音。</small>
+        <small>口播切片是下一步里的开关：一条已录好原声的 MP4 即可，只烧字幕、不配音，不需要 {MIN_MONTAGE_VISUAL_ASSETS} 份素材。</small>
       </GlassCard>
       <GlassCard className="production-entry-card" data-production-entry="replica" onClick={() => onSelect("replica")}>
         <div className="production-entry-card__head">
