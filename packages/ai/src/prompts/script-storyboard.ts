@@ -21,12 +21,8 @@ const RULES = `你是手机端短视频分镜脚本撰写助手，服务大健�
 function modeRules(input: ScriptGenerationInput): string {
   if (input.mode === "avatar") {
     const avatar = avatarAsset(input);
-    const seconds = avatar?.durationSeconds;
-    const bound = seconds === undefined
-      ? "不得超过该视频时长"
-      : `按每字约${SCRIPT_SENTENCE_MS_PER_CHARACTER / 1_000}秒估算，全部句子的估算总时长不得超过口播视频时长${seconds}秒`;
-    const binding = avatar ? `每一句的assetId都必须逐字等于该口播视频的素材id「${avatar.id}」` : "每一句的assetId都必须逐字等于该口播视频的素材id";
-    return `当前是口播切片模式：用户自带一段口播视频，分镜句数与时长上限受该视频约束——${bound}；${binding}。`;
+    const binding = avatar ? `每一句的assetId都必须逐字等于该数字人视频的素材id「${avatar.id}」` : "每一句的assetId都必须逐字等于该数字人视频的素材id";
+    return `当前是数字人模式：用户上传一段数字人出镜视频，配音、字幕与画面裁剪拼接全部由系统自动完成，口播时长不受该视频长度约束。按每字约${SCRIPT_SENTENCE_MS_PER_CHARACTER / 1_000}秒估算，全部句子的估算总时长建议落在${MIN_PRODUCTION_DURATION_SECONDS}到${MAX_PRODUCTION_DURATION_SECONDS}秒之间（软边界，允许就近），句数不超过${MAX_SHOTS_PER_PRODUCTION}句；${binding}。`;
   }
   return `当前是素材剪辑模式：按每字约${SCRIPT_SENTENCE_MS_PER_CHARACTER / 1_000}秒估算，全部句子的估算总时长建议落在${MIN_PRODUCTION_DURATION_SECONDS}到${MAX_PRODUCTION_DURATION_SECONDS}秒之间（软边界，允许就近），句数不超过${MAX_SHOTS_PER_PRODUCTION}句。`;
 }
@@ -53,7 +49,7 @@ function analysisRules(input: ScriptGenerationInput): string {
 function assetRules(input: ScriptGenerationInput): string {
   const assets = input.assets ?? [];
   if (input.mode === "avatar") {
-    return `素材清单：${JSON.stringify(assets.map((asset) => ({ id: asset.id, kind: asset.kind, role: asset.role })))}。口播切片模式下只引用口播视频素材。`;
+    return `素材清单：${JSON.stringify(assets.map((asset) => ({ id: asset.id, kind: asset.kind, role: asset.role })))}。数字人模式下只引用数字人视频素材。`;
   }
   if (assets.length === 0) {
     return "本次没有可用素材清单：sentences条目一律不写assetId字段，也不得描述任何具体画面内容。";

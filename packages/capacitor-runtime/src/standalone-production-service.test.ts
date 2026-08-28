@@ -68,6 +68,8 @@ interface InsightHarnessOptions {
 interface V4HarnessOptions {
   /** What the text model drafts for `script_storyboard_v1`. Absent yields two grounded sentences. */
   readonly scriptDraft?: () => Record<string, unknown>;
+  /** Duration of the single avatar video the picker returns; defaults to 20 s. */
+  readonly avatarDurationSeconds?: number;
   /**
    * Per-call sentence outcomes from the native synthesis stage; `call` counts native invocations
    * so a retry can be scripted to succeed. Absent succeeds for every sentence on every call.
@@ -152,7 +154,7 @@ function harness(narration: "system" | "provider" = "system", now?: () => Date, 
     pickAssets: async (options: { readonly projectId: string; readonly maxItems: number; readonly selection?: "visual" | "avatar" }) => {
       pickCalls.push(options);
       return { assets: options.selection === "avatar" ? [
-        { id: "avatar-1", uri: "file:///private/productions/project-1/inputs/avatar-1.mp4", role: "avatar" as const, kind: "video" as const, mimeType: "video/mp4", displayName: "数字人口播.mp4", sizeBytes: 200, durationSeconds: 20 },
+        { id: "avatar-1", uri: "file:///private/productions/project-1/inputs/avatar-1.mp4", role: "avatar" as const, kind: "video" as const, mimeType: "video/mp4", displayName: "数字人出镜.mp4", sizeBytes: 200, durationSeconds: v4?.avatarDurationSeconds ?? 20 },
       ] : [
       { id: "asset-1", uri: "file:///private/productions/project-1/inputs/asset-1.jpg", kind: "image" as const, mimeType: "image/jpeg", displayName: "门店.jpg", sizeBytes: 100 },
       { id: "asset-2", uri: "file:///private/productions/project-1/inputs/asset-2.mp4", kind: "video" as const, mimeType: "video/mp4", displayName: "服务.mp4", sizeBytes: 200, durationSeconds: 12 },
@@ -1092,14 +1094,15 @@ test("制作项目在规划或渲染中拒绝删除且同一项目只允许一�
   await original;
 });
 
-test("数字人口播项目要求口播稿、只导入一个视频，并在本地生成原声字幕计划", async () => {
+test("数字人项目不再要求口播稿；存量口播稿项目仍走 v3 原声字幕计划", async () => {
   const { create, pickCalls } = harness();
   const service = create();
 
-  await assert.rejects(
-    () => service.create({ analysisTaskId: "task-1", brief: "自然介绍门店", targetDurationSeconds: 20, mode: "avatar" }),
-    /口播稿/u,
-  );
+  // v4 语义：脚本由 AI 按需求生成，创建数字人项目不需要口播稿。
+  const scriptless = await service.create({ analysisTaskId: "task-1", brief: "自然介绍门店", targetDurationSeconds: 20, mode: "avatar" });
+  assert.equal(scriptless.mode, "avatar");
+  // 旧 v3 路径（逐字稿口播切片）没有脚本就不能生成计划——这是存量行为的边界，不是新项目的入口。
+  await assert.rejects(() => service.generatePlan(scriptless.projectId), /口播稿/u);
 
   const project = await service.create({
     analysisTaskId: "task-1",
@@ -1597,6 +1600,75 @@ test("配音未补齐不能组装计划；补齐后组装 v4 计划、渲染消�
   assert.equal(rendered.status, "succeeded");
   assert.equal(renderCalls[0]?.narrationAssets?.length, 2, "v4 渲染消费已持久化的逐句音频");
   assert.ok(renderCalls[0]?.narrationAssets?.every((asset) => asset.audioPath.startsWith("narration/")));
+});
+
+/** 走到「数字人 v4 已生成脚本」的公共前置：单段数字人视频，草稿两句都绑 avatar-1。 */
+async function avatarScriptedProject(v4?: V4HarnessOptions) {
+  const context = harness("system", undefined, undefined, {
+    scriptDraft: () => ({
+      purpose: "门店服务介绍",
+      sentences: [
+        { text: "先看看真实门店环境。", assetId: "avatar-1" },
+        { text: "再了解完整服务过程。", assetId: "avatar-1" },
+      ],
+    }),
+    ...v4,
+  });
+  const service = context.create();
+  await service.create({ analysisTaskId: "task-1", brief: "数字人介绍门店", targetDurationSeconds: 20, mode: "avatar" });
+  await service.importAssets("project-1");
+  const script = await service.generateScript("project-1");
+  return { ...context, service, script };
+}
+
+function avatarShotsOf(record: { readonly plan?: { readonly document: unknown } }) {
+  return (record.plan?.document as { readonly shots: readonly {
+    readonly durationMs: number;
+    readonly sourceWindows?: readonly { readonly startMs: number; readonly endMs: number }[];
+  }[] }).shots;
+}
+
+test("数字人 v4：单视频画面窗口按实测配音烘焙进计划并渲染", async () => {
+  const { service, renderCalls } = await avatarScriptedProject();
+  await service.synthesizeNarration("project-1");
+
+  const composed = await service.composeMeasuredPlan("project-1");
+
+  assert.equal(composed.project.plan?.schemaVersion, "production-plan.v4");
+  const shots = avatarShotsOf(composed.project);
+  assert.deepEqual(shots.map((shot) => shot.durationMs), [4_000, 5_000]);
+  // 20 秒源顺序消费：第一镜 [0,4000]，第二镜接着消费 [4000,9000]，不回绕。
+  assert.deepEqual(shots[0]?.sourceWindows, [{ startMs: 0, endMs: 4_000 }]);
+  assert.deepEqual(shots[1]?.sourceWindows, [{ startMs: 4_000, endMs: 9_000 }]);
+  assert.equal(composed.softViolations.some((violation) => violation.reason === "avatar-source-short"), false, "20 秒源不算偏短");
+
+  const rendered = await service.render("project-1");
+  assert.equal(rendered.status, "succeeded");
+  assert.equal(renderCalls[0]?.mode, "avatar");
+  assert.equal(renderCalls[0]?.narrationAssets?.length, 2, "数字人成片配音来自我们自己的逐句 TTS");
+  assert.match(renderCalls[0]?.planJson ?? "", /sourceWindows/u, "窗口随计划交给端侧渲染器消费");
+});
+
+test("数字人源视频短于配音也能组装：窗口回绕拼接并提示源偏短", async () => {
+  const { service } = await avatarScriptedProject({ avatarDurationSeconds: 4 });
+  await service.synthesizeNarration("project-1");
+
+  const composed = await service.composeMeasuredPlan("project-1");
+
+  const shots = avatarShotsOf(composed.project);
+  // 4 秒源 + 9 秒配音：第一镜吃满整段 [0,4000]；第二镜 5 秒回绕拼 [0,4000]+[0,1000]。
+  assert.deepEqual(shots[0]?.sourceWindows, [{ startMs: 0, endMs: 4_000 }]);
+  assert.deepEqual(shots[1]?.sourceWindows, [{ startMs: 0, endMs: 4_000 }, { startMs: 0, endMs: 1_000 }]);
+  const short = composed.softViolations.find((violation) => violation.reason === "avatar-source-short");
+  assert.equal(short?.sourceDurationMs, 4_000, "源偏短是软违规提示，不阻塞组装");
+});
+
+test("数字人源视频不足2秒直接拒绝组装", async () => {
+  const { service } = await avatarScriptedProject({ avatarDurationSeconds: 1.5 });
+  await service.synthesizeNarration("project-1");
+
+  await assert.rejects(() => service.composeMeasuredPlan("project-1"), /不足2秒/u);
+  assert.equal((await service.get("project-1"))?.status, "draft", "拒绝发生在写计划之前，项目状态不被污染");
 });
 
 test("v4 计划缺任何一句音频都拒绝渲染，且不先进入渲染中状态", async () => {

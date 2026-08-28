@@ -293,6 +293,12 @@ export function composeViolationItems(violations: readonly MeasuredDurationViola
 }
 
 function measuredViolationMessage(violation: MeasuredDurationViolation): string {
+  if (violation.reason === "avatar-source-short") {
+    return `数字人视频实测约 ${advisorySeconds(violation.sourceDurationMs ?? 0)} 秒偏短，画面会循环较多，建议更换更长的出镜视频。`;
+  }
+  if (violation.reason === "shot-too-short") {
+    return `第 ${violation.shotIndex} 句实测约 ${advisorySeconds(violation.durationMs ?? 0)} 秒偏短，建议合并或加长这句文案。`;
+  }
   if (violation.reason === "shot-too-long") {
     return `第 ${violation.shotIndex} 句实测约 ${advisorySeconds(violation.durationMs ?? 0)} 秒，超过单句 ${MAX_SHOT_DURATION_SECONDS} 秒，这句画面会停留偏久。`;
   }

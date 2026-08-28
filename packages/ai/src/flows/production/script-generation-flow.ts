@@ -7,6 +7,7 @@ import {
 } from "@hongtai/core";
 
 import type { ScriptGenerationAsset, ScriptGenerationFlowDependencies, ScriptGenerationInput } from "../../contracts/script-storyboard-generation";
+import { sharesVerbatimRun } from "../../originality";
 import { scriptStoryboardPrompt, scriptStoryboardRepairPrompt } from "../../prompts/script-storyboard";
 import { scriptStoryboardDraftJsonSchema, scriptStoryboardDraftSchema, type ScriptStoryboardDraft } from "../../schemas/script-storyboard";
 import { parseStructuredOutput } from "../../structured-output/parse-structured-output";
@@ -20,8 +21,9 @@ function invalidInput(message: string): TaskError {
 }
 
 /**
- * The avatar mode slices the user's own recording, so the source video has to be known before the
- * model is asked for anything: without its duration the sentence-count bound is unanswerable.
+ * Avatar mode renders ONE pre-processed presenter video behind our own TTS narration: the script
+ * is not bounded by that video's length (the segment planner cuts and loops it later), but the
+ * video itself must already be probed so compose-time window planning has a source duration.
  */
 function avatarVideoAsset(input: ScriptGenerationInput): ScriptGenerationAsset | undefined {
   return (input.assets ?? []).find((asset) => asset.role === "avatar" && asset.kind === "video");
@@ -31,9 +33,9 @@ function validateInput(input: ScriptGenerationInput): void {
   if (!input.brief.trim()) throw invalidInput("制作需求不能为空");
   if (input.mode === "avatar") {
     const avatars = (input.assets ?? []).filter((asset) => asset.role === "avatar" && asset.kind === "video");
-    if (avatars.length !== 1) throw invalidInput("口播切片模式需要且只能使用一个口播切片视频");
+    if (avatars.length !== 1) throw invalidInput("数字人模式需要且只能使用一个数字人视频");
     if (avatarVideoAsset(input)?.durationSeconds === undefined) {
-      throw invalidInput("口播切片视频缺少时长信息，无法约束分镜句数与时长上限");
+      throw invalidInput("数字人视频缺少时长信息，无法规划画面裁剪");
     }
   }
 }
@@ -49,14 +51,14 @@ function validateGrounding(draft: ScriptStoryboardDraft, input: ScriptGeneration
   const avatar = input.mode === "avatar" ? avatarVideoAsset(input) : undefined;
   for (const [index, sentence] of draft.sentences.entries()) {
     if (sentence.assetId === undefined) {
-      if (avatar) throw invalidScript(`第 ${index + 1} 句必须绑定口播切片视频「${avatar.id}」`);
+      if (avatar) throw invalidScript(`第 ${index + 1} 句必须绑定数字人视频「${avatar.id}」`);
       continue;
     }
     const asset = known.get(sentence.assetId);
     if (!asset) throw invalidScript(`第 ${index + 1} 句引用了不存在的素材「${sentence.assetId}」`);
     if (asset.kind === "audio") throw invalidScript(`第 ${index + 1} 句不能绑定音频素材`);
     if (avatar && sentence.assetId !== avatar.id) {
-      throw invalidScript(`第 ${index + 1} 句必须绑定口播切片视频「${avatar.id}」，不能引用其他素材`);
+      throw invalidScript(`第 ${index + 1} 句必须绑定数字人视频「${avatar.id}」，不能引用其他素材`);
     }
   }
 }
@@ -81,6 +83,18 @@ function assembleStoryboard(draft: ScriptStoryboardDraft): ScriptStoryboard {
   });
   if (!parsed.ok) throw invalidScript(parsed.message);
   return parsed.value;
+}
+
+/**
+ * 原创性校验的生成期执行点：montage 且带参考原文时，口播全文与原文出现连续重复即判
+ * 无效，由 run() 的修复轮自动重写。放在这里而不是合成期，用户不用等到配完音才发现。
+ */
+function assertOriginalStoryboard(storyboard: ScriptStoryboard, input: ScriptGenerationInput): void {
+  if (input.mode !== "montage" || !input.originalSourceText) return;
+  const narration = storyboard.sentences.map((sentence) => sentence.text).join("");
+  if (sharesVerbatimRun(narration, input.originalSourceText)) {
+    throw invalidScript("分镜口播与参考原文存在连续重复，请重新组织原创表达");
+  }
 }
 
 /**
@@ -110,14 +124,18 @@ export class ScriptGenerationFlow {
     try {
       const draft = parseStructuredOutput(initial.content, scriptStoryboardDraftSchema);
       validateGrounding(draft, input);
-      return assembleStoryboard(draft);
+      const storyboard = assembleStoryboard(draft);
+      assertOriginalStoryboard(storyboard, input);
+      return storyboard;
     } catch (error) {
       if (!(error instanceof TaskError) || error.code !== "AI_STRUCTURED_OUTPUT_INVALID") throw error;
       const repaired = await request(scriptStoryboardRepairPrompt(initial.content, input));
       try {
         const draft = parseStructuredOutput(repaired.content, scriptStoryboardDraftSchema);
         validateGrounding(draft, input);
-        return assembleStoryboard(draft);
+        const storyboard = assembleStoryboard(draft);
+        assertOriginalStoryboard(storyboard, input);
+        return storyboard;
       } catch (repairError) {
         throw new TaskError({
           code: "AI_FORMAT_REPAIR_FAILED",

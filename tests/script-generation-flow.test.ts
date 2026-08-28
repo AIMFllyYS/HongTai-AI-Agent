@@ -161,7 +161,36 @@ test("带参考拆解时只吸收结构，不照抄措辞", async () => {
   assert.match(prompt, /不得照抄或近似改写/u);
 });
 
-test("口播切片模式逐句必须绑定口播视频，漏绑走修复轮", async () => {
+test("口播照抄参考原文连续十二字时在生成期触发修复轮，不再等合成期", async () => {
+  const source = "这家推拿店的老师傅手法特别厉害，第一次来就感觉整个人都轻松了。";
+  const copied = { sentences: [{ text: "老师傅手法特别厉害，第一次来就感觉", assetId: "asset-image" }] };
+  const provider = new SequenceProvider([JSON.stringify(copied), JSON.stringify(draft())]);
+
+  const result = await new ScriptGenerationFlow({ provider }).run({ ...montageInput, originalSourceText: source });
+
+  assert.equal(provider.calls.length, 2, "照抄命中后走一次修复轮");
+  assert.deepEqual(
+    result.sentences.map((sentence) => sentence.text),
+    draft().sentences.map((sentence) => sentence.text),
+  );
+});
+
+test("修复轮仍照抄原文时如实失败；没有参考原文时不做原创性校验", async () => {
+  const source = "这家推拿店的老师傅手法特别厉害，第一次来就感觉整个人都轻松了。";
+  const copied = JSON.stringify({ sentences: [{ text: "老师傅手法特别厉害，第一次来就感觉", assetId: "asset-image" }] });
+  const provider = new SequenceProvider([copied, copied]);
+
+  await assert.rejects(
+    () => new ScriptGenerationFlow({ provider }).run({ ...montageInput, originalSourceText: source }),
+    /修复后仍不符合执行约束|连续重复/u,
+  );
+
+  const noReference = new SequenceProvider([copied]);
+  await new ScriptGenerationFlow({ provider: noReference }).run(montageInput);
+  assert.equal(noReference.calls.length, 1, "没有参考原文时同一草稿直接通过");
+});
+
+test("数字人模式逐句必须绑数字人视频，漏绑走修复轮；口播不受视频时长约束", async () => {
   const unbound = {
     sentences: [
       { text: "欢迎来到我们的门店。" },
@@ -174,13 +203,16 @@ test("口播切片模式逐句必须绑定口播视频，漏绑走修复轮", as
 
   assert.equal(provider.calls.length, 2);
   assert.equal(result.sentences.every((sentence) => sentence.assetId === "avatar-video"), true);
-  assert.match(String(provider.calls[0]?.messages[0]?.content), /口播切片模式/u);
+  const prompt = String(provider.calls[0]?.messages[0]?.content);
+  assert.match(prompt, /数字人模式/u);
+  assert.match(prompt, /口播时长不受该视频长度约束/u, "短数字人视频配长配音是常态，脚本不被源时长卡死");
+  assert.doesNotMatch(prompt, /不得超过口播视频时长/u);
 });
 
-test("口播切片模式缺视频或缺时长直接拒绝", async () => {
+test("数字人模式缺视频或缺时长直接拒绝", async () => {
   await assert.rejects(
     () => new ScriptGenerationFlow({ provider: new SequenceProvider([]) }).run({ ...avatarInput, assets: [] }),
-    /口播切片模式需要且只能使用一个口播切片视频/u,
+    /数字人模式需要且只能使用一个数字人视频/u,
   );
 
   const undated = new SequenceProvider([]);
@@ -189,7 +221,7 @@ test("口播切片模式缺视频或缺时长直接拒绝", async () => {
       ...avatarInput,
       assets: [{ id: "avatar-video", kind: "video", role: "avatar" }],
     }),
-    /缺少时长信息/u,
+    /数字人视频缺少时长信息/u,
   );
   assert.equal(undated.calls.length, 0);
 });

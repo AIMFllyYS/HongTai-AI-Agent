@@ -35,8 +35,10 @@ import {
   MAX_SCRIPT_SENTENCE_CHARACTERS,
   MIN_MONTAGE_VISUAL_ASSETS,
   MIN_PRODUCTION_DURATION_SECONDS,
+  planAvatarSourceWindows,
   PRODUCTION_TEXT_PRESET_VALUES,
   TaskError,
+  type MeasuredDurationViolation,
 } from "@hongtai/core";
 import type {
   AnalysisService,
@@ -169,7 +171,6 @@ export class StandaloneProductionService implements ProductionService {
     const headlineText = input.headlineText?.trim();
     const textPreset = input.textPreset ?? "classic_top";
     if (mode !== "montage" && mode !== "avatar") throw productionArtifactError("制作模式无效");
-    if (mode === "avatar" && !avatarScript) throw productionArtifactError("请填写与数字人口播视频一致的口播稿");
     if (input.headlineText !== undefined && (!headlineText || headlineText.length > 24)) throw productionArtifactError("主文字必须在1到24个字符之间");
     if (!PRODUCTION_TEXT_PRESET_VALUES.includes(textPreset)) throw productionArtifactError("文字预设无效");
     const projectId = this.#options.createProjectId?.() ?? createRuntimeId();
@@ -181,7 +182,8 @@ export class StandaloneProductionService implements ProductionService {
       mode,
       textPreset,
       ...(headlineText ? { headlineText } : {}),
-      ...(mode === "avatar" ? { avatarScript } : {}),
+      // v4 数字人项目：脚本由 AI 按需求生成，口播稿只是 v3 存量路径的兼容输入。
+      ...(mode === "avatar" && avatarScript ? { avatarScript } : {}),
       targetDurationSeconds: input.targetDurationSeconds,
       status: "draft",
       assets: [],
@@ -394,11 +396,14 @@ export class StandaloneProductionService implements ProductionService {
       if (project.mode === "montage") {
         project = await this.#describeAssets(project, project.assets.filter((asset) => isMontageVisualAsset({ role: asset.role ?? defaultAssetRole(asset), kind: asset.kind })));
       }
+      // 原创性校验前移到生成期：参考原文与 compose 路径同一来源，读不到则跳过。
+      const sourceText = originalSourceText(await this.#options.tasks.getDetail(project.analysisTaskId).catch(() => undefined));
       const storyboard = await new ScriptGenerationFlow({ provider: await this.#options.getProvider() }).run({
         brief,
         mode: project.mode,
         ...(parsed?.success ? { analysis: parsed.data } : {}),
         assets: project.assets.map(planningAsset),
+        ...(sourceText ? { originalSourceText: sourceText } : {}),
       });
       const saved = await this.#persist({ ...project, status: "draft", storyboard });
       const record = toScriptRecord(saved);
@@ -643,7 +648,7 @@ export class StandaloneProductionService implements ProductionService {
       .filter((asset) => isMontageVisualAsset({ role: asset.role ?? defaultAssetRole(asset), kind: asset.kind }))
       .map((asset) => asset.id);
     const avatarAsset = project.assets.find((asset) => isAvatarVideoAsset({ role: asset.role ?? defaultAssetRole(asset), kind: asset.kind }));
-    if (project.mode === "avatar" && !avatarAsset) throw productionArtifactError("请先上传口播切片视频", "select_media");
+    if (project.mode === "avatar" && !avatarAsset) throw productionArtifactError("请先上传数字人视频", "select_media");
     if (project.mode === "montage" && visualPool.length === 0) throw productionArtifactError("请先导入图片或视频素材", "select_media");
     const visualIds = new Set(visualPool);
     let unboundCursor = 0;
@@ -658,6 +663,33 @@ export class StandaloneProductionService implements ProductionService {
         fit: "cover" as const,
       };
     });
+
+    // 数字人单视频：画面时长由确定性规划器按实测配音烘焙——源视频从 0 顺序消费、到尾回绕，
+    // 每镜拿到一串显式窗口；10 秒素材配 30 秒配音也能规划成功，只有 <2 秒的源才硬拒绝。
+    // 软违规（源偏短循环频繁）沿用实测时长的软违规通道，提示不阻塞。
+    let shotDrafts = drafts;
+    const avatarSoftViolations: MeasuredDurationViolation[] = [];
+    if (project.mode === "avatar") {
+      const sourceDurationMs = avatarAsset!.durationSeconds !== undefined
+        ? Math.round(avatarAsset!.durationSeconds * 1_000)
+        : Number.NaN;
+      const windowPlan = planAvatarSourceWindows({
+        sourceDurationMs,
+        shotDurationMs: drafts.map((draft) => Math.round(paired.get(draft.sentenceId)!.track.durationMs)),
+      });
+      if (!windowPlan.ok) {
+        const reason = windowPlan.hardViolations[0]?.reason;
+        if (reason === "avatar-source-too-short") {
+          throw productionArtifactError("数字人视频不足2秒，画面无法自然循环，请更换更长的出镜视频", "select_media");
+        }
+        if (reason === "avatar-source-duration-invalid") {
+          throw productionArtifactError("无法读取数字人视频的时长，请重新选择完整视频", "select_media");
+        }
+        throw productionArtifactError("数字人画面规划失败，请重试");
+      }
+      shotDrafts = drafts.map((draft, index) => ({ ...draft, sourceWindows: windowPlan.shots[index]!.windows }));
+      avatarSoftViolations.push(...windowPlan.softViolations);
+    }
 
     // 分镜句的贴纸建议映射为装饰意图：落点窗口由字幕 cue 决定，这里只携带选择。
     const decorations: DecorationIntent[] = [];
@@ -682,7 +714,7 @@ export class StandaloneProductionService implements ProductionService {
       title,
       audio: { voiceLocale: "zh-CN", speechRate: 1, backgroundMusicAssetId: null, backgroundMusicVolume: 0 },
       textOverlay: { primaryText, secondaryText: null, preset: project.textPreset },
-      shots: drafts,
+      shots: shotDrafts,
       tracks: drafts.map((draft) => paired.get(draft.sentenceId)!.track),
       ...(input?.subtitleTemplateId ? { requestedTemplateId: input.subtitleTemplateId } : {}),
       ...(project.mode === "montage" && describedAssetIds.length > 0
@@ -726,7 +758,7 @@ export class StandaloneProductionService implements ProductionService {
     return {
       schemaVersion: PRODUCTION_MEASURED_PLAN_RESULT_VERSION,
       project: value,
-      softViolations,
+      softViolations: [...softViolations, ...avatarSoftViolations],
     };
   }
 
