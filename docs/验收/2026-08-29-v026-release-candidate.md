@@ -1,10 +1,10 @@
-# v0.1.26 Release 验收记录（本地打包归档完成，公网切换未开始）
+# v0.1.26 Release 验收记录（公网分发与下载页切换完成）
 
 ## 结论
 
 制作板块「一键全自动 + 数字人单视频」重定义（任务契约见[制作一键全自动与数字人重定义](../任务/2026-08-29-制作一键全自动与数字人重定义.md)）的源码已按任务周期完成 TypeScript 层实现、运行时边界和测试锁定；随后将 Android 源码推进到 `versionName=0.1.26` / `versionCode=34`，使用仓库外正式签名配置完成 Release 构建、签名后验和独立归档。
 
-本轮只完成本地打包与归档。`v0.1.26` 尚未上传公网，`download.html` 公开推荐仍为 `v0.1.25`；公网上传、下载页切换与回验是下一个独立步骤。主机/模拟器门禁不等于物理手机、真实 Provider 或最终成片全链路通过。
+`v0.1.26` 已上传公网（`https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.26.apk`），完整下载回验大小与 SHA-256 均与本地归档一致；`download.html` 公开推荐已切换为 `v0.1.26`，`v0.1.25` 降为历史版本。主机/模拟器门禁不等于物理手机、真实 Provider 或最终成片全链路通过。
 
 ## 版本与文件
 
@@ -14,10 +14,10 @@
 | versionName | `0.1.26` |
 | versionCode | `34` |
 | Release APK | `output/apk-archive/HongTai-AI-Agent-release-v0.1.26.apk` |
-| APK 大小 | `23,382,674` bytes（本地归档） |
-| APK SHA-256 | `1b01fd2a2708da3d4c7da9afdcb4f27e85dbcbc3c8f8e1ba0148945576fd8e11` |
+| APK 大小 | `23,382,674` bytes（本地归档与公网文件一致） |
+| APK SHA-256 | `1b01fd2a2708da3d4c7da9afdcb4f27e85dbcbc3c8f8e1ba0148945576fd8e11`（公网文件已下载回验一致） |
 | 证书 SHA-256 | `54df122cd4f99720c613737815385e771bfaeb17715c160aed178062ab5b2fde`（与历史发布一致） |
-| 公开推荐 | 仍为 `v0.1.25` / code33（`download.html` 未切换） |
+| 公开推荐 | `v0.1.26` / code34（`download.html` 已切换，回验完成） |
 
 ## 一键全自动管线的端侧保证链路
 
@@ -59,10 +59,9 @@ TypeScript 层验证：定向测试（含一键违规捕获、bypass 推导、�
 - 非 Debug 正式签名、v2/v3 签名、证书 SHA-256 锚定；
 - APK SHA-256 计算与 `output/apk-archive/` 独立版本归档。
 
-没有删除、覆盖或重命名历史 APK；`v0.1.25` 及更早归档保持原样。
+发布后验：公网文件已完整下载回验，大小 23,382,674 字节、SHA-256 `1b01fd2a...76fd8e11` 与本地归档一致；`download.html` 公开推荐已切换为 `v0.1.26` 并锁定在版本谱系测试中。没有删除、覆盖或重命名历史 APK；`v0.1.25` 及更早归档保持原样。
 
 ## 未覆盖边界
 
 - 本轮没有物理 Android 手机端测，因此不声称真实触控、OEM WebView、外部选择器、真实媒体 I/O 或升级链路在物理设备通过。
 - 本轮除数字人 harness 复现外没有新的真实 AI Provider 全链路请求；真实 Provider、物理真机和最终成片全链路仍需用户端测验收。
-- 公网上传、`download.html` 推荐切换与公网文件回验未完成，不得对外声称 `v0.1.26` 已发布。

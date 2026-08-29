@@ -25,8 +25,8 @@
 ### 发布边界
 
 - Android 源码版本推进为 `0.1.26` / `versionCode=34`；只生成 Release 产品并按 `HongTai-AI-Agent-release-v0.1.26.apk` 独立归档。
-- 本地归档 23,382,674 字节、SHA-256 `1b01fd2a2708da3d4c7da9afdcb4f27e85dbcbc3c8f8e1ba0148945576fd8e11`；Release 单测、lint、四 ABI assemble、16 KiB 对齐、v2/v3 签名、证书锚定（`54df122c...b5b2fde`，与历史发布一致）和包版本后验通过。
-- 公网上传、`download.html` 公开推荐切换与回验尚未完成；物理真机端测、真实 Provider 与最终成片全链路未验收。
+- 本地归档与公网文件均为 23,382,674 字节、SHA-256 `1b01fd2a2708da3d4c7da9afdcb4f27e85dbcbc3c8f8e1ba0148945576fd8e11`（公网文件已下载回验一致）；Release 单测、lint、四 ABI assemble、16 KiB 对齐、v2/v3 签名、证书锚定（`54df122c...b5b2fde`，与历史发布一致）和包版本后验通过。
+- `v0.1.26` 已上传公网并完成 `download.html` 公开推荐切换（`https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.26.apk`）。物理真机端测、真实 Provider 与最终成片全链路未验收。
 
 ## [0.1.25] - 2026-08-28
 
