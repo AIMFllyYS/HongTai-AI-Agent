@@ -151,3 +151,24 @@ test("加号入口通过 entry 查询参数直接打开 Agent 或复刻表单，
   assert.match(forms, /这次想讲什么？/u);
   assert.match(forms, /按哪条拆解复刻？/u);
 });
+
+test("数字人开关打开即出现上传卡片：先传视频，未上传时一键制作被拦", () => {
+  assert.match(forms, /data-avatar-upload/u);
+  assert.match(forms, /上传数字人预处理视频/u);
+  assert.match(forms, /上传后才能开始一键制作/u);
+  assert.match(forms, /onPickAvatar/u);
+  assert.match(forms, /onRemoveAvatar/u);
+  assert.match(page, /mode === "avatar" && !avatarAsset/u, "未上传数字人视频时一键制作按钮禁用");
+  assert.match(page, /先上传一段数字人预处理视频，再开始一键制作/u, "兜底提示指向真实缺口，不甩通用错误");
+  assert.match(page, /avatarDraft/u);
+  assert.match(page, /runtime\.production\.importAssets\(draft\.projectId\)/u, "数字人视频走同一素材导入权威端口");
+  assert.match(page, /mode === "avatar" && avatarDraft/u, "一键制作复用上传草稿，不二次创建项目");
+});
+
+test("新建编排不叠加旧项目：composer 期间不选中任何项目，失败兜底不刷错对象", () => {
+  assert.match(page, /composingNewRef\.current \|\| composeEntry \|\| requestedSourceId/u, "composer 模式下不得把列表第一条塞进选中态");
+  assert.match(page, /return composingNewRef\.current \? undefined : remaining\[0\]/u, "新建失败保持无选中，不拉旧项目顶包");
+  assert.match(page, /!composingNewRef\.current && project\?\.projectId/u, "失败兜底只刷新当前真实选中的项目");
+  const fresh = page.slice(page.indexOf("const startNewProduction ="));
+  assert.match(fresh, /setProject\(undefined\)/u, "再做一条必须清掉旧项目选中态");
+});

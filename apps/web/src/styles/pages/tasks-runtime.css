@@ -641,19 +641,6 @@
 .analysis-confirm-card strong { color: var(--color-primary); font-size: var(--text-label); }
 .analysis-confirm-card__actions { width: 100%; }
 
-.task-delete-confirm {
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  background: linear-gradient(135deg, var(--surface-warning), var(--color-surface-card));
-  border-color: rgba(186, 26, 26, 0.22);
-}
-
-.task-delete-confirm strong { color: var(--color-error); font-size: var(--text-label); }
-.task-delete-confirm p { color: var(--color-text-muted); font-size: var(--text-caption); line-height: 1.55; }
-.task-delete-confirm > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
-.task-delete-confirm .button { width: 100%; }
-
 .task-analysis-heading > span {
   display: inline-flex;
   align-items: center;
@@ -812,10 +799,6 @@
   }
 
   .task-page-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .task-delete-confirm > div {
     grid-template-columns: 1fr;
   }
 

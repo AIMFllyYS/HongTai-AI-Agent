@@ -591,7 +591,8 @@ test("完成态用共享 Tabs 恢复 URL 分栏，并按阶段给出底部主操
   const confirmCard = detail.slice(detail.indexOf("{confirmationOpen ?"), detail.indexOf("{activeTab !== \"analysis\""));
   assert.match(confirmCard, /暂不运行/);
   assert.doesNotMatch(confirmCard, /开始拆解/);
-  assert.match(detail, /variant="secondary"[^>]*>\{pendingAction === "delete"/);
+  assert.match(detail, /<ConfirmDeleteSheet/, "任务删除确认统一为底部上拉弹层");
+  assert.match(detail, /onConfirm=\{\(\) => void deleteTask\(\)\}/);
 });
 
 test("completed task detail always renders engagement cells without fabricated counts", () => {

@@ -327,10 +327,6 @@
 .template-card__open small { color: var(--color-text-muted); font-size: var(--text-meta); }
 .template-card > .button { align-self: start; justify-self: end; height: auto; max-height: var(--button-height-md); }
 
-.template-delete-confirm { display: grid; grid-column: 1 / -1; gap: var(--space-2); padding: var(--space-3); background: var(--surface-error); border: 1px solid rgba(186, 26, 26, 0.18); border-radius: var(--radius-control); }
-.template-delete-confirm strong { color: var(--color-error); font-size: var(--text-caption); }
-.template-delete-confirm p { color: var(--color-text-muted); font-size: var(--text-meta); line-height: 1.45; }
-
 .template-editor__rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .template-editor__rows label { display: grid; gap: var(--space-2); }
 .template-editor__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }

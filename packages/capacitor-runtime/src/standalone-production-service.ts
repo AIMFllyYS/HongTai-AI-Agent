@@ -767,7 +767,9 @@ export class StandaloneProductionService implements ProductionService {
     const primaryText = project.headlineText ?? [...project.brief.replace(/\s+/gu, "")].slice(0, 24).join("");
     const describedAssetIds = project.assets.filter((asset) => asset.insight?.usable === true).map((asset) => asset.id);
     const plan = withMeasuredSubtitleTimeline({
-      source: { analysisTaskId: project.analysisTaskId },
+      // v4 计划的 source 契约是「id 或 null」：一句话成片没有参考拆解时必须落 null，
+      // 空串既过不了 schema，也会让下游误以为存在一条可回溯的来源任务。
+      source: { analysisTaskId: project.analysisTaskId || null },
       title,
       audio: { voiceLocale: "zh-CN", speechRate: 1, backgroundMusicAssetId: null, backgroundMusicVolume: 0 },
       textOverlay: { primaryText, secondaryText: null, preset: project.textPreset },
@@ -782,7 +784,7 @@ export class StandaloneProductionService implements ProductionService {
     });
     const referenceText = originalSourceText(await this.#options.tasks.getDetail(project.analysisTaskId).catch(() => undefined));
     const softViolations = validateMeasuredProductionPlan(plan, {
-      analysisTaskId: project.analysisTaskId,
+      analysisTaskId: project.analysisTaskId || null,
       mode: project.mode,
       textPreset: project.textPreset,
       ...(project.headlineText ? { headlineText: project.headlineText } : {}),

@@ -81,6 +81,7 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   const [sources, setSources] = useState<readonly AnalysisSource[]>([]);
   const [projects, setProjects] = useState<readonly ProductionProjectRecord[]>([]);
   const [project, setProject] = useState<ProductionProjectRecord>();
+  const [avatarDraft, setAvatarDraft] = useState<ProductionProjectRecord>();
   const [composingNew, setComposingNew] = useState(false);
   const [composerFlow, setComposerFlow] = useState<ComposerFlow>("pick");
   const [sourceId, setSourceId] = useState("");
@@ -207,6 +208,10 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
       if (nextProject) {
         setComposingNew(false);
         setProject(nextProject);
+      } else if (composingNewRef.current || composeEntry || requestedSourceId) {
+        // 新建编排期间不选中任何项目：把列表第一条塞进选中态，会让旧项目的脚本/配音/报错
+        // 在新项目失败后混进新页面（新旧数据同屏）。新建就是新建，不叠加旧项目。
+        setProject(undefined);
       } else {
         setProject((current) => current
           ? savedProjects.find((candidate) => candidate.projectId === current.projectId) ?? savedProjects[0]
@@ -332,13 +337,88 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
       setIssue(issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "本地制作操作没有完成", action: "retry" }));
       const remaining = await runtime.production.list();
       setProjects(remaining);
-      setProject((current) => current
-        ? remaining.find((candidate) => candidate.projectId === current.projectId) ?? current
-        : remaining[0]);
-      if (project?.projectId) await refreshPipeline(project.projectId);
+      // 失败兜底不得拉别的项目顶包：新建流程失败保持无选中（停留 composer），已有项目
+      // 操作失败保持原项目；脚本/配音刷新只针对当前真实选中的项目，不刷错对象。
+      setProject((current) => {
+        if (current) return remaining.find((candidate) => candidate.projectId === current.projectId) ?? current;
+        return composingNewRef.current ? undefined : remaining[0];
+      });
+      if (!composingNewRef.current && project?.projectId) await refreshPipeline(project.projectId);
     } finally {
       setBusy(false);
       setNarrationProgress(undefined);
+    }
+  };
+
+  const avatarAsset = avatarDraft?.assets.find((asset) => asset.role === "avatar");
+
+  /**
+   * composer 数字人上传：素材必须挂在真实项目记录下（素材导入以 projectId 为权威），
+   * 所以第一次选取时先建 avatar 草稿项目再唤起系统选择器；草稿只承载这段视频，
+   * 「一键制作成片」直接复用它跑管线，不再二次创建。
+   */
+  const pickAvatarVideo = async () => {
+    if (busy) return;
+    if (!brief.trim()) {
+      setIssue(issueFromAppError(
+        new TaskError({ code: "INPUT_EMPTY", message: "先填写这次想讲什么，再上传数字人视频", action: "edit_input" }),
+        { code: "INPUT_EMPTY", message: "制作输入不完整", action: "edit_input" },
+      ));
+      focusProductionInput();
+      return;
+    }
+    setBusy(true);
+    setIssue(undefined);
+    try {
+      let draft = avatarDraft;
+      if (!draft) {
+        draft = await runtime.production.create({
+          analysisTaskId: sourceId,
+          brief,
+          // 与 createProject 相同：v4 管线时长由文稿与实测配音驱动，此处只是契约占位值。
+          targetDurationSeconds: 30,
+          mode: "avatar",
+          headlineText: headlineText || undefined,
+          textPreset,
+        });
+        setAvatarDraft(draft);
+        const created = draft;
+        setProjects((current) => [created, ...current.filter((item) => item.projectId !== created.projectId)]);
+      } else if (avatarAsset) {
+        // 更换视频：avatar 项目只允许一段数字人视频，先移除旧的再唤起选择器。
+        await runtime.production.removeAsset(draft.projectId, avatarAsset.id);
+      }
+      const updated = await runtime.production.importAssets(draft.projectId);
+      setAvatarDraft(updated);
+      setProjects((current) => [updated, ...current.filter((item) => item.projectId !== updated.projectId)]);
+    } catch (error) {
+      setIssue(issueFromAppError(error, { code: "TASK_INTERRUPTED", message: "数字人视频没有导入成功", action: "select_media" }));
+      // 失败可能与「先移除旧视频」交错：以磁盘权威记录刷新草稿，不留内存假象。
+      const draftId = avatarDraft?.projectId;
+      if (draftId) {
+        const refreshed = await runtime.production.get(draftId).catch(() => undefined);
+        if (refreshed) setAvatarDraft(refreshed);
+        setProjects(await runtime.production.list().catch(() => []));
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** 删除草稿项目本身：草稿只为承载这段视频存在，移除视频即移除草稿，不留「待准备」空壳。 */
+  const removeAvatarVideo = async () => {
+    const draft = avatarDraft;
+    if (!draft || busy) return;
+    setBusy(true);
+    setIssue(undefined);
+    try {
+      await runtime.production.delete(draft.projectId);
+      setAvatarDraft(undefined);
+      setProjects((current) => current.filter((item) => item.projectId !== draft.projectId));
+    } catch (error) {
+      setIssue(issueFromAppError(error, { code: "STORAGE_WRITE_FAILED", message: "数字人视频没有移除完成", action: "retry" }));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -347,19 +427,26 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
       setIssue(issueFromAppError(new TaskError({ code: "INPUT_EMPTY", message: "请填写制作需求", action: "edit_input" }), { code: "INPUT_EMPTY", message: "制作输入不完整", action: "edit_input" }));
       return;
     }
+    if (mode === "avatar" && !avatarAsset) {
+      setIssue(issueFromAppError(new TaskError({ code: "INPUT_EMPTY", message: "先上传一段数字人预处理视频，再开始一键制作", action: "select_media" }), { code: "INPUT_EMPTY", message: "制作输入不完整", action: "select_media" }));
+      return;
+    }
     await perform(async () => {
-      const created = await runtime.production.create({
-        analysisTaskId: sourceId,
-        brief,
-        // v4（文稿先行）管线时长由文稿与实测配音驱动；core 契约仍要求该字段，
-        // 传区间内的占位值，新链路创建后即走自动管线，不再消费它。
-        targetDurationSeconds: 30,
-        mode,
-        headlineText: headlineText || undefined,
-        textPreset,
-      });
+      const created = mode === "avatar" && avatarDraft
+        ? avatarDraft
+        : await runtime.production.create({
+          analysisTaskId: sourceId,
+          brief,
+          // v4（文稿先行）管线时长由文稿与实测配音驱动；core 契约仍要求该字段，
+          // 传区间内的占位值，新链路创建后即走自动管线，不再消费它。
+          targetDurationSeconds: 30,
+          mode,
+          headlineText: headlineText || undefined,
+          textPreset,
+        });
       // 创建成功即切到管线面板并启动一键全自动管线：脚本流式生长，配音、组装与
       // 渲染依次在同一页面上推进，用户无需再逐步点击。
+      setAvatarDraft(undefined);
       setComposingNew(false);
       setProject(created);
       setProjects((current) => [created, ...current.filter((item) => item.projectId !== created.projectId)]);
@@ -475,7 +562,7 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
     failed,
     busy,
   });
-  const createBlocked = busy || !brief.trim();
+  const createBlocked = busy || !brief.trim() || (mode === "avatar" && !avatarAsset);
   const showComposer = !activeProject;
   const replicaComposer = showComposer && composerFlow === "replica";
   const agentComposer = showComposer && composerFlow === "agent";
@@ -490,6 +577,7 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
     // A leftover Agent create failure must not follow the user onto the picker or into 复刻 —
     // retry on those screens would either rebuild the abandoned project or jump into the wizard.
     setIssue(undefined);
+    setProject(undefined);
     if (flow !== "agent") setMode("montage");
     if (flow === "replica") setSourceId((current) => current || sources[0]?.task.id || "");
     setComposerFlow(flow);
@@ -498,6 +586,8 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   const startNewProduction = () => {
     setComposingNew(true);
     setIssue(undefined);
+    setProject(undefined);
+    setAvatarDraft(undefined);
     setMode("montage");
     setBrief("");
     setHeadlineText("");
@@ -636,6 +726,8 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
 
         {showComposer ? (
           <ProductionComposerPanel
+            avatarAsset={avatarAsset}
+            avatarBusy={busy}
             brief={brief}
             flow={composerFlow}
             headlineText={headlineText}
@@ -644,6 +736,8 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
             onGoAnalyze={() => navigate(pathForRoute("home"))}
             onHeadlineText={setHeadlineText}
             onMode={setMode}
+            onPickAvatar={() => void pickAvatarVideo()}
+            onRemoveAvatar={() => void removeAvatarVideo()}
             onSelectEntry={enterComposer}
             onSourceId={setSourceId}
             onTextPreset={setTextPreset}

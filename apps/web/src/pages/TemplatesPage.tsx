@@ -4,6 +4,7 @@ import type { AppRuntime, AppTaskRecord, ContentTemplateInput, ContentTemplateRe
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
+import { ConfirmDeleteSheet } from "../components/ConfirmDeleteSheet";
 import { GlassCard } from "../components/GlassCard";
 import { HomeMastheadActions } from "../components/HomeMastheadActions";
 import { Icon } from "../components/Icon";
@@ -392,16 +393,21 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
             </div>
             <div className="template-editor__actions"><Button disabled={busy || !draft.name.trim()} icon={<Icon name="check_circle" size={17} />} onClick={() => void save()}>{busy ? "正在保存" : "保存修改"}</Button><Button disabled={busy} onClick={() => setEditingId(undefined)} variant="quiet">关闭编辑</Button></div>
             {editingId !== "new" ? (
-              deletingId === editingId ? (
-                <div className="template-delete-confirm" role="alert">
-                  <strong>确认删除模板“{editedTemplate?.name ?? "当前模板"}”？</strong>
-                  <p>只删除这份本地模板，不会级联删除来源任务。</p>
-                  <div className="mobile-action-group"><Button disabled={busy} onClick={() => void remove(editingId)}>确认删除模板</Button><Button disabled={busy} onClick={() => setDeletingId(undefined)} variant="quiet">取消</Button></div>
-                </div>
-              ) : <Button aria-label={`删除模板 ${editedTemplate?.name ?? ""}`} disabled={busy} onClick={() => setDeletingId(editingId)} variant="quiet"><Icon name="close" size={16} />删除</Button>
+              <Button aria-label={`删除模板 ${editedTemplate?.name ?? ""}`} disabled={busy} onClick={() => setDeletingId(editingId)} variant="quiet"><Icon name="close" size={16} />删除</Button>
             ) : null}
           </GlassCard>
         ) : null}
+
+        <ConfirmDeleteSheet
+          busy={busy}
+          confirmLabel="确认删除模板"
+          description="只删除这份本地模板，不会级联删除来源任务。"
+          heading={`确认删除模板“${editedTemplate?.name ?? "当前模板"}”？`}
+          onClose={() => setDeletingId(undefined)}
+          onConfirm={() => { if (editingId) void remove(editingId); }}
+          open={Boolean(editingId && editingId !== "new" && deletingId === editingId)}
+          title="确认删除模板"
+        />
       </div>
     </AppShell>
   );

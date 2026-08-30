@@ -4,6 +4,7 @@ import { issueFromAppError, safeUrlForDisplay } from "@hongtai/core";
 import type { AppRuntime, ContentAnalysisRecord, MediaReference, StructuredGenerationProgressV1, TaskDetailRecord, TaskIssue } from "@hongtai/core";
 
 import { Button } from "../components/Buttons";
+import { ConfirmDeleteSheet } from "../components/ConfirmDeleteSheet";
 import { GlassCard } from "../components/GlassCard";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
@@ -340,11 +341,16 @@ export function TaskDetailPage({
 
       {needsNewSubmission ? <GlassCard className="analysis-request-card"><Icon name="sync" size={22} /><p>本版本不会继续或复制旧任务。若需再次处理，请返回首页重新提交链接。</p><Button icon={<Icon name="arrow_back" size={18} />} onClick={() => navigate(pathForRoute("home"))} variant="secondary">重新提交链接</Button></GlassCard> : null}
       {deleteConfirmationOpen ? (
-        <GlassCard className="task-delete-confirm" role="alert">
-          <strong>确认删除这个任务{localVideo ? "及上传视频" : "及全部产物"}？</strong>
-          <p>将永久删除本机任务目录中的媒体、文稿、拆解与事件；已经复制保存的模板不会级联删除。</p>
-          <div className="mobile-action-group"><Button disabled={pendingAction !== undefined} onClick={() => void deleteTask()} variant="secondary">{pendingAction === "delete" ? "正在删除" : "确认删除任务"}</Button><Button disabled={pendingAction !== undefined} onClick={() => setDeleteConfirmationOpen(false)} variant="quiet">取消</Button></div>
-        </GlassCard>
+        <ConfirmDeleteSheet
+          busy={pendingAction !== undefined}
+          confirmLabel="确认删除任务"
+          description="将永久删除本机任务目录中的媒体、文稿、拆解与事件；已经复制保存的模板不会级联删除。"
+          heading={`确认删除这个任务${localVideo ? "及上传视频" : "及全部产物"}？`}
+          onClose={() => setDeleteConfirmationOpen(false)}
+          onConfirm={() => void deleteTask()}
+          open
+          title="确认删除任务"
+        />
       ) : null}
       {readIssue ? <Button icon={<Icon name="update" size={18} />} onClick={() => void onReload()} variant="quiet">重新读取任务详情</Button> : null}
 

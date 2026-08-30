@@ -263,7 +263,9 @@ function persistedStoryboardNarration(
 export function parseProject(value: string, projectId: string): PersistedProject | undefined {
   try {
     const parsed = JSON.parse(value) as PersistedProject;
-    if (parsed.projectId !== projectId || !parsed.analysisTaskId || !parsed.brief || !Array.isArray(parsed.assets)) return undefined;
+    // v4 一句话成片允许空 analysisTaskId（参考拆解是可选增强，生成期读不到就跳过）；
+    // 只有字段缺失或类型错误才把记录判为损坏。把空串当损坏会让新建项目一键管线必崩。
+    if (parsed.projectId !== projectId || typeof parsed.analysisTaskId !== "string" || !parsed.brief || !Array.isArray(parsed.assets)) return undefined;
     if (!Number.isFinite(parsed.targetDurationSeconds) || !["draft", "planning", "ready", "rendering", "succeeded", "failed"].includes(parsed.status)) return undefined;
     const mode = parsed.mode ?? "montage";
     if (mode !== "montage" && mode !== "avatar") return undefined;

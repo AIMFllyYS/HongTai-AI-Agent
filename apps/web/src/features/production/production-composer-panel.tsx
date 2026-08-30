@@ -1,4 +1,4 @@
-import type { ProductionMode, ProductionTextPreset } from "@hongtai/core";
+import type { ProductionAsset, ProductionMode, ProductionTextPreset } from "@hongtai/core";
 
 import { ProductionModeEntry, type ProductionEntryKind } from "../../components/ProductionModeEntry";
 import { AgentSetupForm, ReplicaSetupForm, type AnalysisSource } from "./production-setup-forms";
@@ -13,6 +13,8 @@ export interface ProductionComposerPanelProps {
   readonly mode: ProductionMode;
   readonly headlineText: string;
   readonly textPreset: ProductionTextPreset;
+  readonly avatarAsset?: ProductionAsset;
+  readonly avatarBusy?: boolean;
   readonly onSelectEntry: (flow: ComposerFlow) => void;
   readonly onSourceId: (id: string) => void;
   readonly onBrief: (value: string) => void;
@@ -20,6 +22,8 @@ export interface ProductionComposerPanelProps {
   readonly onHeadlineText: (value: string) => void;
   readonly onTextPreset: (value: ProductionTextPreset) => void;
   readonly onGoAnalyze: () => void;
+  readonly onPickAvatar: () => void;
+  readonly onRemoveAvatar: () => void;
 }
 
 export function ProductionComposerPanel({
@@ -30,6 +34,8 @@ export function ProductionComposerPanel({
   mode,
   headlineText,
   textPreset,
+  avatarAsset,
+  avatarBusy,
   onSelectEntry,
   onSourceId,
   onBrief,
@@ -37,6 +43,8 @@ export function ProductionComposerPanel({
   onHeadlineText,
   onTextPreset,
   onGoAnalyze,
+  onPickAvatar,
+  onRemoveAvatar,
 }: ProductionComposerPanelProps) {
   if (flow === "pick") {
     return (
@@ -53,6 +61,8 @@ export function ProductionComposerPanel({
   if (flow === "agent") {
     return (
       <AgentSetupForm
+        avatarAsset={avatarAsset}
+        avatarBusy={avatarBusy}
         brief={brief}
         headlineText={headlineText}
         mode={mode}
@@ -60,6 +70,8 @@ export function ProductionComposerPanel({
         onGoAnalyze={onGoAnalyze}
         onHeadlineText={onHeadlineText}
         onMode={onMode}
+        onPickAvatar={onPickAvatar}
+        onRemoveAvatar={onRemoveAvatar}
         onSourceId={onSourceId}
         onTextPreset={onTextPreset}
         sourceId={sourceId}

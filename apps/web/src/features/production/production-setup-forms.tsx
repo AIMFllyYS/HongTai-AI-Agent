@@ -1,4 +1,4 @@
-import type { AppTaskRecord, ProductionMode, ProductionTextPreset } from "@hongtai/core";
+import type { AppTaskRecord, ProductionAsset, ProductionMode, ProductionTextPreset } from "@hongtai/core";
 
 import { Button } from "../../components/Buttons";
 import { Icon } from "../../components/Icon";
@@ -54,6 +54,8 @@ export function SourcePicker({
 }
 
 export function AgentSetupForm({
+  avatarAsset,
+  avatarBusy,
   brief,
   headlineText,
   mode,
@@ -61,12 +63,16 @@ export function AgentSetupForm({
   onGoAnalyze,
   onHeadlineText,
   onMode,
+  onPickAvatar,
+  onRemoveAvatar,
   onSourceId,
   onTextPreset,
   sourceId,
   sources,
   textPreset,
 }: {
+  readonly avatarAsset?: ProductionAsset;
+  readonly avatarBusy?: boolean;
   readonly brief: string;
   readonly headlineText: string;
   readonly mode: ProductionMode;
@@ -74,6 +80,8 @@ export function AgentSetupForm({
   readonly onGoAnalyze: () => void;
   readonly onHeadlineText: (value: string) => void;
   readonly onMode: (value: ProductionMode) => void;
+  readonly onPickAvatar: () => void;
+  readonly onRemoveAvatar: () => void;
   readonly onSourceId: (id: string) => void;
   readonly onTextPreset: (value: ProductionTextPreset) => void;
   readonly sourceId: string;
@@ -121,6 +129,32 @@ export function AgentSetupForm({
         </span>
         <Switch checked={avatarOn} labelledBy="production-avatar-option-label" onChange={(checked) => onMode(checked ? "avatar" : "montage")} />
       </div>
+
+      {avatarOn ? (
+        <div className="production-avatar-upload" data-avatar-upload>
+          {avatarAsset ? (
+            <div className="production-avatar-upload__ready">
+              <Icon name="movie" size={20} />
+              <span className="production-avatar-upload__meta">
+                <strong>{avatarAsset.displayName}</strong>
+                <small>{avatarAsset.durationSeconds ? `约 ${Math.round(avatarAsset.durationSeconds)} 秒` : "已上传"}</small>
+              </span>
+              <span className="production-avatar-upload__actions">
+                <button disabled={avatarBusy} onClick={onPickAvatar} type="button">更换</button>
+                <button aria-label="删除数字人视频" className="is-danger" disabled={avatarBusy} onClick={onRemoveAvatar} type="button">
+                  <Icon name="trash_2" size={16} />
+                </button>
+              </span>
+            </div>
+          ) : (
+            <button className="production-avatar-upload__picker" disabled={avatarBusy} onClick={onPickAvatar} type="button">
+              <Icon name="upload" size={20} />
+              <strong>上传数字人预处理视频</strong>
+              <small>选一段 MP4；上传后才能开始一键制作</small>
+            </button>
+          )}
+        </div>
+      ) : null}
 
 
       <details className="production-advanced">

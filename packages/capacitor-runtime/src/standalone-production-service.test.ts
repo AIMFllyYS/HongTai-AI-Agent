@@ -1695,6 +1695,19 @@ test("一键全自动：从导入完素材直达成片，脚本→配音→组�
   assert.equal(result.narrationFailures, undefined);
 });
 
+test("一句话成片不选参考拆解：空 analysisTaskId 项目创建后可读且一键直达成片", async () => {
+  const context = harness("system", undefined, undefined, undefined);
+  const service = context.create();
+  await service.create({ analysisTaskId: "", brief: "介绍一下门店的新服务", targetDurationSeconds: 30 });
+  await service.importAssets("project-1");
+
+  const result = await service.runAutomaticPipeline("project-1");
+
+  assert.equal(result.project.status, "succeeded", "空 analysisTaskId 不得让一键管线报「制作项目不存在或已损坏」");
+  assert.equal((await service.get("project-1"))?.analysisTaskId, "");
+  assert.ok((await service.list()).some((item) => item.projectId === "project-1"), "空 analysisTaskId 项目必须留在制作记录里");
+});
+
 test("一键重试复用已生成的文稿：配音失败停在配音阶段，重试从配音续跑", async () => {
   const { service, scriptPrompts, renderCalls } = await importedProject({
     narrationOutcomes: (request, call) => request.sentences.map((sentence, index) => call === 0 && index === 0

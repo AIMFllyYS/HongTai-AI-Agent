@@ -101,11 +101,35 @@ test("template cards keep a two-column layout and do not stretch the delete pill
   assert.match(library, /\.template-card\s*>\s*\.button\s*\{[^}]*align-self:\s*start/s);
   assert.match(library, /\.template-card\s*>\s*\.button\s*\{[^}]*height:\s*auto/s);
   assert.match(library, /\.template-card\s*>\s*\.button\s*\{[^}]*max-height:\s*var\(--button-height-md\)/s);
-  assert.match(library, /\.template-delete-confirm\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s);
-  assert.match(templates, /className="template-delete-confirm"[\s\S]*className="mobile-action-group"[\s\S]*确认删除模板/);
+  assert.doesNotMatch(library, /\.template-delete-confirm/s, "模板删除确认不再内嵌进编辑器网格");
+  assert.match(templates, /<ConfirmDeleteSheet/s, "模板删除确认统一为底部上拉弹层");
+  assert.match(templates, /确认删除模板/s);
 
   const mobile = library.match(/@media\s*\(max-width:\s*26\.875rem\)\s*\{[\s\S]*$/);
   assert.ok(mobile, "library.css should keep a 390px breakpoint");
   assert.doesNotMatch(mobile[0], /\.template-card\s*\{[^}]*grid-template-columns:\s*1fr/);
   assert.match(mobile[0], /\.template-card__open\s*\{[^}]*grid-template-columns:\s*auto\s+minmax\(0,\s*1fr\)/);
+});
+
+test("all destructive confirmations use the shared bottom ConfirmDeleteSheet", () => {
+  const component = read("components/ConfirmDeleteSheet.tsx");
+  const components = read("styles/components.css");
+  const panel = read("features/production/production-pipeline-panel.tsx");
+  const taskDetail = read("pages/TaskDetailPage.tsx");
+  const templates = read("pages/TemplatesPage.tsx");
+  const productionCss = read("styles/pages/production-runtime.css");
+  const tasksCss = read("styles/pages/tasks-runtime.css");
+  const library = read("styles/pages/library.css");
+
+  assert.match(component, /<Sheet/u, "删除确认必须落在底部上拉 Sheet 上");
+  assert.match(component, /role="alert"/u);
+  assert.match(components, /\.confirm-delete-sheet__body/u);
+  assert.match(components, /\.confirm-delete-sheet__actions[^}]*grid-template-columns:\s*1fr 1fr/su);
+
+  for (const [name, source] of [["pipeline panel", panel], ["task detail", taskDetail], ["templates", templates]] as const) {
+    assert.match(source, /<ConfirmDeleteSheet/u, `${name} 的删除确认必须走统一弹层`);
+  }
+  assert.doesNotMatch(productionCss, /\.production-delete-confirm/u);
+  assert.doesNotMatch(tasksCss, /\.task-delete-confirm/u);
+  assert.doesNotMatch(library, /\.template-delete-confirm/u);
 });

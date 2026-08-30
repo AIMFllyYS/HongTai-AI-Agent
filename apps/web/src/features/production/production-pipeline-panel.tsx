@@ -12,6 +12,7 @@ import {
 import type { ProductionNarrationRecord, ProductionScriptRecord } from "@hongtai/capacitor-runtime";
 
 import { Button } from "../../components/Buttons";
+import { ConfirmDeleteSheet } from "../../components/ConfirmDeleteSheet";
 import { DeepThinkingPanel } from "../../components/DeepThinkingPanel";
 import { GlassCard } from "../../components/GlassCard";
 import { Icon, type IconName } from "../../components/Icon";
@@ -287,16 +288,16 @@ export function ProductionPipelinePanel({
       ) : null}
 
       {confirmation ? (
-        <div className="production-delete-confirm" role="alert">
-          <div>
-            <strong>{confirmation.kind === "asset" ? `确认删除素材“${confirmation.label}”？` : confirmation.kind === "output" ? "确认删除成片？" : "确认删除项目？"}</strong>
-            <p>{confirmation.kind === "asset" ? "绑定了这句的分镜会改用其他素材。" : confirmation.kind === "output" ? "计划会保留，可以稍后重新合成。" : "项目内素材、脚本、配音、计划与成片都会从本机删除。"}</p>
-          </div>
-          <div className="mobile-action-group">
-            <Button disabled={busy} onClick={confirmDelete}>{confirmation.kind === "asset" ? "确认删除素材" : confirmation.kind === "output" ? "确认删除成片" : "确认删除项目"}</Button>
-            <Button disabled={busy} onClick={() => setConfirmation(undefined)} variant="quiet">取消</Button>
-          </div>
-        </div>
+        <ConfirmDeleteSheet
+          busy={busy}
+          confirmLabel={confirmation.kind === "asset" ? "确认删除素材" : confirmation.kind === "output" ? "确认删除成片" : "确认删除项目"}
+          description={confirmation.kind === "asset" ? "绑定了这句的分镜会改用其他素材。" : confirmation.kind === "output" ? "计划会保留，可以稍后重新合成。" : "项目内素材、脚本、配音、计划与成片都会从本机删除。"}
+          heading={confirmation.kind === "asset" ? `确认删除素材“${confirmation.label}”？` : confirmation.kind === "output" ? "确认删除成片？" : "确认删除项目？"}
+          onClose={() => setConfirmation(undefined)}
+          onConfirm={confirmDelete}
+          open
+          title={confirmation.kind === "asset" ? "确认删除素材" : confirmation.kind === "output" ? "确认删除成片" : "确认删除项目"}
+        />
       ) : null}
 
       {stage !== "output" ? (
