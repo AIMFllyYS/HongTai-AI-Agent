@@ -23,9 +23,11 @@
 ### 发布边界
 
 - Android 源码版本推进为 `0.1.28` / `versionCode=36`；只生成 Release 产品并按 `HongTai-AI-Agent-release-v0.1.28.apk` 独立归档。
+- 本地归档与公网文件均为 23,387,559 字节、SHA-256 `9f2a9c608ace3df4655e5ff75d599487f3784ff2e4ba06bb0c07d57d9d3f5a3a`（公网文件已下载回验一致）；Release 单测、lint、四 ABI assemble、16 KiB 对齐、v2/v3 签名、证书锚定（`54df122c...b5b2fde`，与历史发布一致）通过。
 - 新增 4 个 normal 级权限（`FOREGROUND_SERVICE`、`FOREGROUND_SERVICE_SPECIAL_USE`、`POST_NOTIFICATIONS`、`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`）；不申请相机、相册类或存储管理宽泛权限。
 - 实测状态只展示电池优化豁免、通知权限、活跃护持计数三项，不承诺「保证后台运行」；长时间熄屏静置（Deep Doze）与部分国产 ROM 的激进省电策略仍可能暂停任务，长任务建议保持充电。
 - `pnpm check`（typecheck + lint + 167 runtime 测试）与 web build 通过；浏览器环境后台运行区不显示（能力未接入时不画成已接通）。**熄屏/切后台续跑、电池优化三级引导、FGS 通知点击回应用等真机行为待物理设备验收。**
+- `v0.1.28` 已上传公网并完成 `download.html` 公开推荐切换（`https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.28.apk`），`v0.1.27` 降为历史版本。
 
 ## [0.1.27] - 2026-08-30
 

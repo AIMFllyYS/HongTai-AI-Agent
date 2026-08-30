@@ -11,7 +11,7 @@ function requireMatch(value: string, pattern: RegExp, label: string): string {
   return matched;
 }
 
-test("the v0.1.27/code 35 source and published download stay aligned", () => {
+test("the v0.1.28/code 36 source and published download stay aligned", () => {
   const gradle = readFileSync(join(root, "android", "app", "build.gradle.kts"), "utf8");
   const downloadPage = readFileSync(join(root, "download.html"), "utf8");
   const sourceCode = Number(requireMatch(gradle, /versionCode\s*=\s*(\d+)/u, "Android versionCode"));
@@ -19,23 +19,23 @@ test("the v0.1.27/code 35 source and published download stay aligned", () => {
   const publishedCode = Number(requireMatch(downloadPage, /"versionCode":\s*"(\d+)"/u, "published download versionCode"));
   const publishedName = requireMatch(downloadPage, /aria-label="当前推荐版本 v([0-9.]+)"/u, "published download version");
 
-  assert.equal(sourceCode, 35);
-  assert.equal(sourceName, "0.1.27");
-  assert.equal(publishedCode, 35);
-  assert.equal(publishedName, "0.1.27");
+  assert.equal(sourceCode, 36);
+  assert.equal(sourceName, "0.1.28");
+  assert.equal(publishedCode, 36);
+  assert.equal(publishedName, "0.1.28");
   assert.equal(sourceCode, publishedCode);
-  assert.match(downloadPage, /23,384,347 bytes/u);
-  assert.match(downloadPage, /2A5A3A27EB5DF11876A7A84F2A26AA2E4116BC4D3D4AA208208D6A4C8361192C/iu);
+  assert.match(downloadPage, /23,387,559 bytes/u);
+  assert.match(downloadPage, /9F2A9C608ACE3DF4655E5FF75D599487F3784FF2E4BA06BB0C07D57D9D3F5A3A/iu);
+  assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.28\.apk/u);
+  assert.match(downloadPage, /后台持续运行：制作、采集、拆解、观察任务熄屏或切后台继续推进/u);
+  assert.match(downloadPage, /"version":\s*"v0\.1\.27"[\s\S]*?"recommended":\s*false/u);
   assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.27\.apk/u);
-  assert.match(downloadPage, /智能成片链路修复：一句话需求不再误报/u);
   assert.match(downloadPage, /"version":\s*"v0\.1\.26"[\s\S]*?"recommended":\s*false/u);
   assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.26\.apk/u);
   assert.match(downloadPage, /"version":\s*"v0\.1\.25"[\s\S]*?"recommended":\s*false/u);
   assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.25\.apk/u);
   assert.match(downloadPage, /"version":\s*"v0\.1\.24"[\s\S]*?"recommended":\s*false/u);
   assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.24\.apk/u);
-  assert.match(downloadPage, /"version":\s*"v0\.1\.23"[\s\S]*?"recommended":\s*false/u);
-  assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.23\.apk/u);
 });
 
 test("the superseded v0.1.21/code 29 release stays archived instead of being overwritten", () => {
