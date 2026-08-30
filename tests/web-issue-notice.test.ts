@@ -83,6 +83,12 @@ test("edit_input stays inline and focuses the page-owned input without a top not
   }
 });
 
+test("顶部通知的生命周期跟着页面 issue 走，不得赖在下一屏", () => {
+  const source = read("components/IssueNotice.tsx");
+  assert.match(source, /const id = show\(\{/s, "show 返回的 id 必须被接住");
+  assert.match(source, /return \(\) => dismiss\(id\);/s, "effect 清理必须按 id 撤掉本条通知");
+});
+
 test("IssueNotice combines the stable application code with a safe native code", () => {
   assert.equal(issueTechnicalCode({ code: "STORAGE_WRITE_FAILED" }), "STORAGE_WRITE_FAILED");
   assert.equal(

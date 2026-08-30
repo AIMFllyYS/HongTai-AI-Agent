@@ -1645,6 +1645,11 @@
   width: 100%;
 }
 
+/* 删除是不可逆操作：确认按钮用警示色，与常规主操作（品牌绿）拉开语义距离。 */
+.confirm-delete-sheet__actions .button.is-danger {
+  background: var(--color-error);
+}
+
 /* Shared Tabs must live only in this layer. A later layer(pages) `.tabs` rule
    beats `.tabs--segmented` regardless of specificity; combined with a 2rem
    clipped track, Android WebView UA button min-height hides the labels. */

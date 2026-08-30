@@ -288,9 +288,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
             </label>
             <span className="templates-section-hint">本机精选 · 滑动查看</span>
           </div>
-          {templatesPending ? <PageSkeleton layout="templates-list" /> : templates?.length === 0 ? (
-            <EmptyState description="保存本机公式后，会在这里横向滑动查看。" icon="layout_template" title="还没有可滑动的本机模板" />
-          ) : featured.length === 0 ? (
+          {templatesPending ? <PageSkeleton layout="templates-list" /> : templates?.length === 0 ? null : featured.length === 0 ? (
             <EmptyState description="搜索只匹配本机模板的名称、摘要或公式，不会编造结果。" icon="filter" title="未解析到这类模板" />
           ) : (
             <>
@@ -400,13 +398,13 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
 
         <ConfirmDeleteSheet
           busy={busy}
-          confirmLabel="确认删除模板"
-          description="只删除这份本地模板，不会级联删除来源任务。"
+          confirmLabel="确认删除"
+          description="只删除这份模板，不可恢复；来源拆解和它的视频都会保留，不受影响。"
           heading={`确认删除模板“${editedTemplate?.name ?? "当前模板"}”？`}
           onClose={() => setDeletingId(undefined)}
           onConfirm={() => { if (editingId) void remove(editingId); }}
           open={Boolean(editingId && editingId !== "new" && deletingId === editingId)}
-          title="确认删除模板"
+          title="删除模板"
         />
       </div>
     </AppShell>

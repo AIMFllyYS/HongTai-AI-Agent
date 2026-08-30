@@ -98,8 +98,8 @@ test("production runtime uses capability-gated shells while fixtures stay explic
 test("production deletion requires named confirmation controls", () => {
   const panel = read("features/production/production-pipeline-panel.tsx");
   assert.match(panel, /aria-label=\{`删除素材/);
-  assert.match(panel, /确认删除成片/);
-  assert.match(panel, /确认删除项目/);
+  assert.match(panel, /确认删除这条成片/);
+  assert.match(panel, /确认删除整个项目/);
   assert.match(panel, /onRemoveAsset/);
   assert.match(panel, /onRemoveOutput/);
   assert.match(panel, /onDeleteProject/);

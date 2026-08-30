@@ -241,6 +241,12 @@
   padding-top: calc(var(--header-height) + max(env(safe-area-inset-top), var(--native-status-bar-inset)) + var(--space-4));
 }
 
+.app-content--with-contextual-action {
+  /* 悬浮主操作按钮（.contextual-action）固定在底栏上方，内容底部必须让出它的
+     高度，否则列表最后一行永远被按钮盖住。 */
+  padding-bottom: calc(var(--space-8) + var(--nav-height) + var(--safe-bottom) + 4rem);
+}
+
 .page-masthead {
   display: flex;
   align-items: flex-start;

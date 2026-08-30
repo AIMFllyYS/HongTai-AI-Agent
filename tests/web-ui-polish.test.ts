@@ -73,10 +73,10 @@ test("Android device settings bridge exposes build identity without creating a s
 test("application information explains recent improvements in product language", () => {
   const page = read("apps/web/src/pages/ApplicationInfoPage.tsx");
 
-  assert.match(page, /制作支持一键全自动：智能成片、爆款复刻、数字人三种方式都只需要上传素材/u);
-  assert.match(page, /分镜脚本更好用了：AI 会自动配置字幕强调词并在字幕里正确应用/u);
-  assert.match(page, /数字人模式更简单：只需上传一个预处理好的数字人视频/u);
-  assert.match(page, /合成更稳了：修复了多个合成失败的问题/u);
-  assert.match(page, /问题不再被藏起来：一键流程中出错会明确显示原因和软违规提示/u);
+  assert.match(page, /智能成片修好了：一句话需求直接开始，不再误报/u);
+  assert.match(page, /数字人先传视频再制作：打开「数字人出镜」就能直接上传数字人视频/u);
+  assert.match(page, /看得见 AI 在想什么：分镜脚本生成时实时流出 AI 的深度思考过程/u);
+  assert.match(page, /删除确认统一了：项目、素材、成片、任务、模板的删除都从底部弹出确认层/u);
+  assert.match(page, /错误不再重复刷屏：同一错误只在一个地方说清楚/u);
   assert.doesNotMatch(page, /紧凑结构化生成|字段校验|整文校正|半截 JSON|私有地址|pathname|查询串/u);
 });

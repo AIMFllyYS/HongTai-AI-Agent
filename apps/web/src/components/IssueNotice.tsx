@@ -216,6 +216,8 @@ const issueTitles: Partial<Readonly<Record<TaskIssue["code"], string>>> = {
   MEDIA_EXPORT_FAILED: "本地导出没有完成",
   TASK_ARTIFACT_MISSING: "所需内容不完整",
   TASK_INTERRUPTED: "上次处理已中断",
+  TTS_SYNTHESIS_FAILED: "配音没有完成",
+  TTS_UNAVAILABLE: "视频配音暂不可用",
   PRODUCTION_PLAN_EDIT_INVALID: "这次微调不能这样保存",
   PRODUCTION_PLAN_VERSION_STALE: "制作计划已经变了",
   PRODUCTION_PLAN_UNREADABLE: "制作计划无法读取",
@@ -246,7 +248,7 @@ export function IssueNotice({ issue, actions }: IssueNoticeProps) {
       return;
     }
     const next = issueActionPresentation(issue.action, actionsRef.current);
-    show({
+    const id = show({
       level: issue.severity === "error" ? "error" : "warning",
       title: issueTitle(issue),
       message: diagnosticSummary ? `${next.guidance}\n${diagnosticSummary}` : next.guidance,
@@ -254,6 +256,9 @@ export function IssueNotice({ issue, actions }: IssueNoticeProps) {
         ? { action: { label: next.label, onPress: next.onAction } }
         : {}),
     });
+    // 通知的生命周期跟着页面 issue 走：页面清掉 issue（重试成功、换上下文、离开页面）
+    // 时本条必须同步消失，不得赖在下一屏上。dismiss 按 id 匹配，不会误伤更新后的通知。
+    return () => dismiss(id);
   }, [diagnosticSummary, dismiss, inline, issue.action, issue.code, issue.severity, issue.userMessage, show]);
 
   if (!inline) return null;

@@ -38,7 +38,7 @@ export function ConfirmDeleteSheet({
         <p>{description}</p>
         <div className="confirm-delete-sheet__actions">
           <Button disabled={busy} onClick={onClose} variant="quiet">取消</Button>
-          <Button className={busy ? "is-busy" : ""} disabled={busy} onClick={onConfirm} variant="primary">{busy ? "正在删除" : confirmLabel}</Button>
+          <Button className={busy ? "is-danger is-busy" : "is-danger"} disabled={busy} onClick={onConfirm} variant="primary">{busy ? "正在删除" : confirmLabel}</Button>
         </div>
       </div>
     </Sheet>

@@ -205,8 +205,8 @@ test("制作页用 contextualAction 单主按钮、五阶段时间线与 9:16 �
   assert.match(panel, /PRODUCTION_PIPELINE_STAGE_LABELS/);
   assert.match(panel, /project\.issue/);
   assert.match(panel, /production-render-progress/);
-  assert.match(panel, /确认删除成片/);
-  assert.match(panel, /确认删除项目/);
+  assert.match(panel, /确认删除这条成片/);
+  assert.match(panel, /确认删除整个项目/);
   assert.match(panel, /重新生成分镜/);
   assert.match(panel, /onUpdateStoryboard/);
   assert.match(panel, /onSynthesizeSentence/);

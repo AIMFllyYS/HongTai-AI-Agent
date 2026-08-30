@@ -69,7 +69,7 @@ export function AppShell({
           <div className="app-header__action">{headerAction}</div>
         </header>
       ) : null}
-      <main className="app-content">
+      <main className={`app-content${contextualAction ? " app-content--with-contextual-action" : ""}`}>
         {!isDetailHeader && !hideHeader ? (
           <header className="page-masthead">
             <div className="page-masthead__titles">

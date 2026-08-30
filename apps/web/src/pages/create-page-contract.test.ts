@@ -127,8 +127,8 @@ test("离开 Agent 会清掉失败，重试不会在选择屏上重建项目", (
   assert.match(page, /if \(composerFlow === "pick"\) return/u);
   assert.match(page, /startNewProduction/u);
   assert.match(page, /换一种做法/u);
-  assert.match(page, /issue && !\(showComposer && issue\.action === "none"\)/u);
   assert.match(page, /issue && showComposer && issue\.action === "none"/u);
+  assert.match(page, /issue && showComposer && issue\.action !== "none"/u, "工作台错误由内联横幅承载，顶部通知只在 composer 出现");
 });
 
 test("用它做视频会跳过两张卡，直接进入 Agent 表单", () => {
@@ -169,6 +169,8 @@ test("新建编排不叠加旧项目：composer 期间不选中任何项目，�
   assert.match(page, /composingNewRef\.current \|\| composeEntry \|\| requestedSourceId/u, "composer 模式下不得把列表第一条塞进选中态");
   assert.match(page, /return composingNewRef\.current \? undefined : remaining\[0\]/u, "新建失败保持无选中，不拉旧项目顶包");
   assert.match(page, /!composingNewRef\.current && project\?\.projectId/u, "失败兜底只刷新当前真实选中的项目");
+  assert.match(page, /if \(contextGenerationRef\.current === generation && !composingNewRef\.current\) \{\s*setIssue/u, "已离开原上下文的迟到失败不得补写错误提示");
+  assert.match(page, /contextGenerationRef\.current \+= 1/u, "进入 composer 必须同步递增上下文代际");
   const fresh = page.slice(page.indexOf("const startNewProduction ="));
   assert.match(fresh, /setProject\(undefined\)/u, "再做一条必须清掉旧项目选中态");
 });

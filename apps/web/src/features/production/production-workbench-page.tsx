@@ -104,6 +104,12 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   const [subtitleTemplateId, setSubtitleTemplateId] = useState<SubtitleTemplateId>(DEFAULT_SUBTITLE_TEMPLATE_ID);
   const composingNewRef = useRef(composingNew);
   composingNewRef.current = composingNew;
+  /**
+   * 上下文代际：进入 composer（再做一条/换做法）时同步 +1。perform 的 catch 若在用户
+   * 离开原上下文后才落地（微任务晚于事件处理器、早于重渲染，state/ref 都来不及更新），
+   * 凭代际差异识别"这是上一个上下文的失败"，不再把旧项目的错误写到新页面上。
+   */
+  const contextGenerationRef = useRef(0);
 
   const refreshPipeline = useCallback(async (projectId: string): Promise<void> => {
     const [nextScript, nextNarration] = await Promise.all([
@@ -317,6 +323,7 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
 
   /** 执行一个管线动作：成功后刷新项目列表与脚本/配音记录；失败进入 issue 而不是假成功。 */
   const perform = async (action: () => Promise<ProductionProjectRecord | ProductionScriptRecord | ProductionNarrationRecord | MeasuredPlanComposeResult | AutomaticPipelineResult>) => {
+    const generation = contextGenerationRef.current;
     setBusy(true);
     setIssue(undefined);
     setNarrationProgress(undefined);
@@ -327,14 +334,19 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
         : "projectId" in record && record.projectId ? next as unknown as ProductionProjectRecord
         : undefined;
       const projectId = nextProject?.projectId ?? project?.projectId;
-      if (projectId) {
+      // 成功也不得把已离开的用户拽回去：代际变了说明他已在别的上下文，只刷新列表。
+      if (projectId && contextGenerationRef.current === generation) {
         setComposingNew(false);
         await refreshPipeline(projectId);
         setProject((await runtime.production.get(projectId)) ?? nextProject ?? project);
       }
       setProjects(await runtime.production.list());
     } catch (error) {
-      setIssue(issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "本地制作操作没有完成", action: "retry" }));
+      // 用户已离开发起时的上下文（再做一条/换做法/选中别的项目）时，不得把这次失败
+      // 甩到新页面上：失败项目自身落盘了 project.issue，历史记录与工作台里依然可见。
+      if (contextGenerationRef.current === generation && !composingNewRef.current) {
+        setIssue(issueFromAppError(error, { code: "INTERNAL_UNKNOWN_ERROR", message: "本地制作操作没有完成", action: "retry" }));
+      }
       const remaining = await runtime.production.list();
       setProjects(remaining);
       // 失败兜底不得拉别的项目顶包：新建流程失败保持无选中（停留 composer），已有项目
@@ -576,6 +588,7 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   const enterComposer = (flow: ComposerFlow) => {
     // A leftover Agent create failure must not follow the user onto the picker or into 复刻 —
     // retry on those screens would either rebuild the abandoned project or jump into the wizard.
+    contextGenerationRef.current += 1;
     setIssue(undefined);
     setProject(undefined);
     if (flow !== "agent") setMode("montage");
@@ -584,6 +597,7 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   };
 
   const startNewProduction = () => {
+    contextGenerationRef.current += 1;
     setComposingNew(true);
     setIssue(undefined);
     setProject(undefined);
@@ -681,9 +695,11 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
 
   const primaryLabel = rendering
     ? `${progressMessage || primary.label} ${progress}%`
-    : stage === "compose" && composeViolations.length > 0
-      ? "了解提示，继续合成"
-      : primary.label;
+    : scriptGenerating || scriptGeneratingInProject
+      ? "正在生成分镜脚本…"
+      : stage === "compose" && composeViolations.length > 0
+        ? "了解提示，继续合成"
+        : primary.label;
 
   const contextualAction = !showComposer || composerPrimaryVisible
     ? (
@@ -716,7 +732,10 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
       title={shellTitle}
     >
       <div className="page-stack page-create production-workbench" data-composer-flow={showComposer ? composerFlow : "project"} data-pipeline-stage={stage}>
-        {issue && !(showComposer && issue.action === "none") ? <IssueNotice actions={issueActions} issue={issue} /> : null}
+        {/* 工作台里同一 issue 已由管线面板的内联横幅承载（重试走底部主按钮），
+            不再额外弹顶部通知，避免同一句话一屏出现两遍。composer 没有内联横幅，
+            仍走顶部通知。 */}
+        {issue && showComposer && issue.action !== "none" ? <IssueNotice actions={issueActions} issue={issue} /> : null}
         {issue && showComposer && issue.action === "none" ? (
           <aside className={`issue-notice issue-notice--${issue.severity}`} role={issue.severity === "error" ? "alert" : "status"}>
             <strong>{issueTitle(issue)}</strong>
@@ -789,6 +808,7 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
             composingNew={composingNew}
             onSelect={(item) => {
               if (!composingNew && item.projectId === project?.projectId) return;
+              contextGenerationRef.current += 1;
               setProgress(0);
               setProgressMessage("");
               setComposingNew(false);

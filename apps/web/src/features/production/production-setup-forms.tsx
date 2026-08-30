@@ -115,7 +115,7 @@ export function AgentSetupForm({
           id="production-brief"
           maxLength={500}
           onChange={(event) => onBrief(event.target.value)}
-          placeholder={avatarOn ? "例如：介绍门店的新服务，语气自然可信，不夸大承诺。" : "面向附近上班族，突出真实环境、服务过程和到店体验，不夸大承诺。"}
+          placeholder={avatarOn ? "例如：介绍门店的新服务，语气自然可信，不夸大承诺。" : "例如：面向附近上班族，突出真实环境、服务过程和到店体验，不夸大承诺。"}
           rows={4}
           value={brief}
         />
@@ -150,7 +150,7 @@ export function AgentSetupForm({
             <button className="production-avatar-upload__picker" disabled={avatarBusy} onClick={onPickAvatar} type="button">
               <Icon name="upload" size={20} />
               <strong>上传数字人预处理视频</strong>
-              <small>选一段 MP4；上传后才能开始一键制作</small>
+              <small>选一段其他工具做好的数字人口播 MP4；上传后才能开始一键制作</small>
             </button>
           )}
         </div>
