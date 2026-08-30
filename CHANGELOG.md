@@ -26,9 +26,9 @@
 ### 发布边界
 
 - Android 源码版本推进为 `0.1.27` / `versionCode=35`；只生成 Release 产品并按 `HongTai-AI-Agent-release-v0.1.27.apk` 独立归档。
-- 本地归档 23,384,347 字节、SHA-256 `2a5a3a27eb5df11876a7a84f2a26aa2e4116bc4d3d4aa208208d6a4c8361192c`；Release 单测、lint、四 ABI assemble、16 KiB 对齐、v2/v3 签名、证书锚定（`54df122c...b5b2fde`，与历史发布一致）通过。
+- 本地归档与公网文件均为 23,384,347 字节、SHA-256 `2a5a3a27eb5df11876a7a84f2a26aa2e4116bc4d3d4aa208208d6a4c8361192c`（公网文件已下载回验一致）；Release 单测、lint、四 ABI assemble、16 KiB 对齐、v2/v3 签名、证书锚定（`54df122c...b5b2fde`，与历史发布一致）通过。
 - 浏览器真实端测（真实 AI 连接 + 真实 MP4）跑通：一句话/数字人两条一键路径进入流式生成且零「损坏」误报，16/16 功能断言通过、console 零错误；浏览器配音与 Media3 渲染边界如实为错误展示，**物理真机端测仍未完成**。
-- 公网上传与 `download.html` 公开推荐切换**未完成**：公开推荐仍为 `v0.1.26`/code34，上传完成后需切换并回填验收文档与版本谱系测试。
+- `v0.1.27` 已上传公网并完成 `download.html` 公开推荐切换（`https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.27.apk`），`v0.1.26` 降为历史版本。
 
 ## [0.1.26] - 2026-08-29
 
