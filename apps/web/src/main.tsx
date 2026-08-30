@@ -15,6 +15,7 @@ import { installAppLifecycleCoordinator } from "./runtime/app-lifecycle";
 import { useBrandSplashReady } from "./runtime/brand-splash";
 import { installVisualViewportInset } from "./runtime/visual-viewport-inset";
 import { applyStoredAppearancePreferences } from "./runtime/appearance-preferences";
+import { readBackgroundRunPreferences } from "./runtime/background-run-preferences";
 import "./styles/tokens.css";
 import "./styles/global.css";
 
@@ -43,7 +44,11 @@ function initializeRuntime(): Promise<AppRuntime> {
     const convertFileSrc = native
       ? Capacitor.convertFileSrc
       : (await import("./runtime/browser-native/create-browser-plugins")).browserConvertFileSrc;
-    const runtime = await createStandaloneAppRuntime({ plugins, convertFileSrc });
+    const runtime = await createStandaloneAppRuntime({
+      plugins,
+      convertFileSrc,
+      backgroundRunEnabled: readBackgroundRunPreferences().enabled,
+    });
     await runtime.recovery.recoverInterruptedWork();
     await installAppLifecycleCoordinator({
       subscribe: async (listener) => {

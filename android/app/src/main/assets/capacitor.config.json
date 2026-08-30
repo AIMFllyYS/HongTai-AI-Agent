@@ -11,7 +11,8 @@
 		"minWebViewVersion": 89,
 		"minHuaweiWebViewVersion": 10,
 		"includePlugins": [
-			"@capacitor/app"
+			"@capacitor/app",
+			"@capawesome-team/capacitor-android-foreground-service"
 		]
 	}
 }

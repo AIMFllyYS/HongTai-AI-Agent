@@ -4,3 +4,6 @@ project(':capacitor-android').projectDir = new File('../node_modules/.pnpm/@capa
 
 include ':capacitor-app'
 project(':capacitor-app').projectDir = new File('../node_modules/.pnpm/@capacitor+app@8.0.0_@capacitor+core@8.0.0/node_modules/@capacitor/app/android')
+
+include ':capawesome-team-capacitor-android-foreground-service'
+project(':capawesome-team-capacitor-android-foreground-service').projectDir = new File('../node_modules/.pnpm/@capawesome-team+capacitor-_095659e5db23e83f1445b6a1f87c3b6c/node_modules/@capawesome-team/capacitor-android-foreground-service/android')

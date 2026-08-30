@@ -38,6 +38,8 @@ export const settingsRowGlyphs = {
   cache: "trash_2",
   about: "info",
   privacy: "shield",
+  backgroundRun: "zap",
+  battery: "shield_check",
 } as const satisfies Record<string, IconName>;
 
 export type ObservationRecommendationCategory = "daily_care" | "diet_lifestyle" | "monitoring";

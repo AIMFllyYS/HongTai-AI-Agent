@@ -2,5 +2,9 @@
 	{
 		"pkg": "@capacitor/app",
 		"classpath": "com.capacitorjs.plugins.app.AppPlugin"
+	},
+	{
+		"pkg": "@capawesome-team/capacitor-android-foreground-service",
+		"classpath": "io.capawesome.capacitorjs.plugins.foregroundservice.ForegroundServicePlugin"
 	}
 ]

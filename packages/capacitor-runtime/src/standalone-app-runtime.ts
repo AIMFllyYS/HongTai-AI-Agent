@@ -8,6 +8,8 @@ import type {
   AiTtsTransport,
   AppBuildInfo,
   AppRuntime,
+  BackgroundRunNotificationPermission,
+  BackgroundRunStatusV1,
   FeatureCapabilityRegistry,
   LocalProfile,
   MediaReference,
@@ -25,6 +27,7 @@ import { StandaloneDiagnosisService } from "./standalone-diagnosis-service.js";
 import { StandaloneProductionService } from "./standalone-production-service.js";
 import { StandaloneReplicaService } from "./standalone-replica-service.js";
 import { RuntimeOperationRegistry } from "./runtime-operation-registry.js";
+import { TaskGuardClient } from "./task-guard-client.js";
 import { StandaloneRuntimeRecovery } from "./standalone-runtime-recovery.js";
 import { NativeIngestPorts } from "./thin-ingest-ports.js";
 import { StandaloneTaskService } from "./standalone-task-service.js";
@@ -43,6 +46,8 @@ const FEATURES: FeatureCapabilityRegistry = Object.freeze({
   create: "available",
   templates: "available",
   publish: "planned",
+  // Upgraded to "available" at composition time when the native guard exists.
+  backgroundRun: "planned",
 });
 const PROBE_ORDER: readonly AiCapability[] = ["text", "vision", "asr", "tts"];
 /** 512px synthetic JPEG with no personal data; accepted by the configured vision provider. */
@@ -62,6 +67,11 @@ export interface CreateStandaloneAppRuntimeOptions {
   readonly now?: () => Date;
   readonly createTaskId?: () => string;
   readonly createSessionId?: () => string;
+  /**
+   * Initial background-run preference (defaults to enabled). Persistence is
+   * owned by the presentation layer; this is only the runtime's live copy.
+   */
+  readonly backgroundRunEnabled?: boolean;
 }
 
 function nowIso(now: () => Date): string {
@@ -204,7 +214,16 @@ function safeDisplayUri(convertFileSrc: (uri: string) => string, uri: string): s
  */
 export async function createStandaloneAppRuntime(options: CreateStandaloneAppRuntimeOptions): Promise<AppRuntime> {
   const now = options.now ?? (() => new Date());
-  const operations = new RuntimeOperationRegistry();
+  const backgroundRunEnabled = options.backgroundRunEnabled ?? true;
+  const taskGuard = new TaskGuardClient({
+    taskGuard: options.plugins.taskGuard,
+    foregroundService: options.plugins.foregroundService,
+    enabled: backgroundRunEnabled,
+  });
+  // Mirror the initial preference into the native screen-stay policy before any
+  // long task can start, so background run on ⇒ the screen may turn off.
+  if (options.plugins.taskGuard) await taskGuard.setEnabled(backgroundRunEnabled);
+  const operations = new RuntimeOperationRegistry({ taskGuard });
   const display = (uri: string) => safeDisplayUri(options.convertFileSrc, uri);
   // FileMedia returns an app-private URI; React only gets its display form.
   // Keep this tiny in-memory correspondence so save never persists a WebView URL.
@@ -530,6 +549,14 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
     replica,
     recovery,
     templates,
-    features: FEATURES,
+    backgroundRun: {
+      getStatus: (): Promise<BackgroundRunStatusV1> => taskGuard.getStatus(),
+      setEnabled: (enabled: boolean): Promise<void> => taskGuard.setEnabled(enabled),
+      requestIgnoreBatteryOptimizations: () => taskGuard.requestIgnoreBatteryOptimizations(),
+      requestNotificationPermission: (): Promise<BackgroundRunNotificationPermission> => taskGuard.requestNotificationPermission(),
+    },
+    features: options.plugins.taskGuard && options.plugins.foregroundService
+      ? Object.freeze({ ...FEATURES, backgroundRun: "available" })
+      : FEATURES,
   };
 }

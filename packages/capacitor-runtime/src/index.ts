@@ -1,5 +1,6 @@
 export * from "./capacitor-ai-transport.js";
 export * from "./standalone-bridge.js";
+export * from "./task-guard-client.js";
 export * from "./thin-task-files.js";
 export * from "./thin-ingest-ports.js";
 export * from "./standalone-task-service.js";

@@ -391,6 +391,45 @@ export type NativePhotoOperationResult =
 
 export type StandaloneMediaRuntimePlugin = NativeMediaPort;
 
+/**
+ * Minimal projection of `@capawesome-team/capacitor-android-foreground-service`
+ * (plugin name "ForegroundService"). Declared locally so this package keeps a
+ * narrow, version-stable contract instead of importing the vendor types.
+ */
+export interface StandaloneForegroundServicePlugin {
+  startForegroundService(options: {
+    readonly id: number;
+    readonly title: string;
+    readonly body: string;
+    /** Drawable resource name for the status bar icon. */
+    readonly smallIcon: string;
+    readonly notificationChannelId?: string;
+    /** Matches the plugin's Importance enum (1–5). */
+    readonly importance?: number;
+  }): Promise<void>;
+  stopForegroundService(): Promise<void>;
+  createNotificationChannel(options: {
+    readonly id: string;
+    readonly name: string;
+    readonly description?: string;
+    readonly importance?: number;
+  }): Promise<void>;
+  checkPermissions(): Promise<{ readonly display: string }>;
+  requestPermissions(): Promise<{ readonly display: string }>;
+}
+
+/** Self-written minimal bridge for wake-lock counting and battery guidance. */
+export interface StandaloneTaskGuardPlugin {
+  setBackgroundRunEnabled(options: { readonly enabled: boolean }): Promise<void>;
+  holdWakeLock(options: { readonly kind: string }): Promise<{ readonly totalHolds: number }>;
+  releaseWakeLock(options: { readonly kind: string }): Promise<{ readonly totalHolds: number }>;
+  getBackgroundRunStatus(): Promise<{
+    readonly batteryOptimizationIgnored: boolean;
+    readonly wakeLockHolds: number;
+  }>;
+  requestIgnoreBatteryOptimizations(): Promise<{ readonly opened: string }>;
+}
+
 export interface StandaloneNativePlugins {
   readonly secureSettings: StandaloneSecureSettingsPlugin;
   readonly deviceSettings?: StandaloneDeviceSettingsPlugin;
@@ -401,6 +440,8 @@ export interface StandaloneNativePlugins {
   readonly fileMedia: StandaloneFileMediaPlugin;
   readonly mediaRuntime: StandaloneMediaRuntimePlugin;
   readonly productionRuntime?: StandaloneProductionRuntimePlugin;
+  readonly taskGuard?: StandaloneTaskGuardPlugin;
+  readonly foregroundService?: StandaloneForegroundServicePlugin;
 }
 
 export function registerStandaloneNativePlugins(registerPlugin: NativePluginRegistrar): StandaloneNativePlugins {
@@ -414,5 +455,7 @@ export function registerStandaloneNativePlugins(registerPlugin: NativePluginRegi
     fileMedia: registerPlugin<StandaloneFileMediaPlugin>("FileMedia"),
     mediaRuntime: registerPlugin<StandaloneMediaRuntimePlugin>("MediaRuntime"),
     productionRuntime: registerPlugin<StandaloneProductionRuntimePlugin>("ProductionRuntime"),
+    taskGuard: registerPlugin<StandaloneTaskGuardPlugin>("TaskGuard"),
+    foregroundService: registerPlugin<StandaloneForegroundServicePlugin>("ForegroundService"),
   };
 }

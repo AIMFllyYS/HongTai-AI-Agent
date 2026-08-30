@@ -1,5 +1,7 @@
 import type { RuntimeUnfinishedWork, RuntimeWorkExecution, RuntimeWorkKind } from "@hongtai/core";
 
+import type { TaskGuardPort } from "./task-guard-client.js";
+
 export interface RuntimeOperationIdentity {
   readonly kind: RuntimeWorkKind;
   readonly id: string;
@@ -18,9 +20,16 @@ function operationKey(operation: RuntimeOperationIdentity): string {
 /**
  * Process-local evidence of work that still depends on the current WebView.
  * Persisted business status remains owned by the standalone domain services.
+ * Long-task kinds are wrapped in the TaskGuard (foreground service + wake lock)
+ * so they survive screen-off and backgrounding; `transient-operation` never is.
  */
 export class RuntimeOperationRegistry {
   readonly #active = new Map<string, ActiveOperation>();
+  readonly #taskGuard?: TaskGuardPort;
+
+  constructor(options?: { readonly taskGuard?: TaskGuardPort }) {
+    this.#taskGuard = options?.taskGuard;
+  }
 
   begin(operation: RuntimeOperationIdentity): () => void {
     const key = operationKey(operation);
@@ -46,8 +55,11 @@ export class RuntimeOperationRegistry {
 
   async track<T>(operation: RuntimeOperationIdentity, run: () => Promise<T>): Promise<T> {
     const finish = this.begin(operation);
+    const guarded = this.#taskGuard && operation.kind !== "transient-operation"
+      ? this.#taskGuard.withTaskGuard(operation.kind, run)
+      : run();
     try {
-      return await run();
+      return await guarded;
     } finally {
       finish();
     }

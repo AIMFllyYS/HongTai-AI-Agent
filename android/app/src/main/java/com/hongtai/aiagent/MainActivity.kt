@@ -15,6 +15,7 @@ import com.hongtai.aiagent.bridge.MediaRuntimePlugin
 import com.hongtai.aiagent.bridge.NativeNetworkPlugin
 import com.hongtai.aiagent.bridge.ProductionRuntimePlugin
 import com.hongtai.aiagent.bridge.SecureSettingsPlugin
+import com.hongtai.aiagent.bridge.TaskGuardPlugin
 
 class MainActivity : BridgeActivity() {
   @UnstableApi
@@ -28,6 +29,7 @@ class MainActivity : BridgeActivity() {
     registerPlugin(FileMediaPlugin::class.java)
     registerPlugin(MediaRuntimePlugin::class.java)
     registerPlugin(ProductionRuntimePlugin::class.java)
+    registerPlugin(TaskGuardPlugin::class.java)
     super.onCreate(savedInstanceState)
 
     // Screen-on is acquired only while import or render work is in flight.

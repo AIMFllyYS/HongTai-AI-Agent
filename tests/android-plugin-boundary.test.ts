@@ -18,12 +18,12 @@ test("the standalone APK registers only its explicit custom plugins and official
 
   assert.match(
     config,
-    /android:\s*\{[\s\S]*?includePlugins:\s*\[\s*"@capacitor\/app"\s*\]/,
-    "the Android plugin allowlist must include only the official lifecycle plugin",
+    /android:\s*\{[\s\S]*?includePlugins:\s*\[\s*"@capacitor\/app"\s*,\s*"@capawesome-team\/capacitor-android-foreground-service"\s*\]/,
+    "the Android plugin allowlist must include only the official lifecycle plugin and the TaskGuard foreground-service carrier",
   );
   assert.match(
     config,
-    /android:\s*\{[\s\S]*?minWebViewVersion:\s*89[\s\S]*?minHuaweiWebViewVersion:\s*10[\s\S]*?includePlugins:\s*\[\s*"@capacitor\/app"\s*\]/,
+    /android:\s*\{[\s\S]*?minWebViewVersion:\s*89[\s\S]*?minHuaweiWebViewVersion:\s*10[\s\S]*?includePlugins:\s*\[\s*"@capacitor\/app"\s*,\s*"@capawesome-team\/capacitor-android-foreground-service"\s*\]/,
     "WebView compatibility floors and lifecycle plugin discovery must coexist in one Android config",
   );
   assert.doesNotMatch(
@@ -40,10 +40,13 @@ test("the standalone APK registers only its explicit custom plugins and official
   );
   assert.deepEqual(
     generatedRegistry,
-    [{ pkg: "@capacitor/app", classpath: "com.capacitorjs.plugins.app.AppPlugin" }],
-    "the generated registry must expose only the official App lifecycle plugin",
+    [
+      { pkg: "@capacitor/app", classpath: "com.capacitorjs.plugins.app.AppPlugin" },
+      { pkg: "@capawesome-team/capacitor-android-foreground-service", classpath: "io.capawesome.capacitorjs.plugins.foregroundservice.ForegroundServicePlugin" },
+    ],
+    "the generated registry must expose only the official App lifecycle plugin and the TaskGuard foreground-service carrier",
   );
-  for (const plugin of ["SecureSettingsPlugin", "LocalDataPlugin", "LocalFilesPlugin", "NativeNetworkPlugin", "FileMediaPlugin", "MediaRuntimePlugin", "ProductionRuntimePlugin"]) {
+  for (const plugin of ["SecureSettingsPlugin", "LocalDataPlugin", "LocalFilesPlugin", "NativeNetworkPlugin", "FileMediaPlugin", "MediaRuntimePlugin", "ProductionRuntimePlugin", "TaskGuardPlugin"]) {
     assert.match(mainActivity, new RegExp(`registerPlugin\\(${plugin}::class\\.java\\)`));
   }
   assert.match(mainActivity, /import androidx\.media3\.common\.util\.UnstableApi/);

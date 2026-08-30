@@ -81,6 +81,9 @@ importers:
       '@capacitor/core':
         specifier: 8.0.0
         version: 8.0.0
+      '@capawesome-team/capacitor-android-foreground-service':
+        specifier: 8.1.0
+        version: 8.1.0(@capacitor/core@8.0.0)
       '@hongtai/capacitor-runtime':
         specifier: workspace:*
         version: link:../../packages/capacitor-runtime
@@ -281,6 +284,11 @@ packages:
 
   '@capacitor/core@8.0.0':
     resolution: {integrity: sha512-250HTVd/W/KdMygoqaedisvNbHbpbQTN2Hy/8ZYGm1nAqE0Fx7sGss4l0nDg33STxEdDhtVRoL2fIaaiukKseA==}
+
+  '@capawesome-team/capacitor-android-foreground-service@8.1.0':
+    resolution: {integrity: sha512-q1LaZQ5K2cu2IXjbabwssF+RpUBikLxkOHYS69ahXz6a1kIsr2jC4RU1bwAEBTopRz0ccgfai0dSSTdqbtEwhw==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
 
   '@emnapi/runtime@1.11.3':
     resolution: {integrity: sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==}
@@ -2065,6 +2073,10 @@ snapshots:
   '@capacitor/core@8.0.0':
     dependencies:
       tslib: 2.8.1
+
+  '@capawesome-team/capacitor-android-foreground-service@8.1.0(@capacitor/core@8.0.0)':
+    dependencies:
+      '@capacitor/core': 8.0.0
 
   '@emnapi/runtime@1.11.3':
     dependencies:

@@ -1,10 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
   <queries>
     <intent>
       <action android:name="android.media.action.IMAGE_CAPTURE" />
+    </intent>
+    <intent>
+      <action android:name="android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    </intent>
+    <intent>
+      <action android:name="android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS" />
+    </intent>
+    <intent>
+      <action android:name="android.settings.APPLICATION_DETAILS_SETTINGS" />
     </intent>
   </queries>
 
@@ -35,5 +49,16 @@
         android:name="android.support.FILE_PROVIDER_PATHS"
         android:resource="@xml/private_capture_paths" />
     </provider>
+    <receiver
+      android:name="io.capawesome.capacitorjs.plugins.foregroundservice.NotificationActionBroadcastReceiver"
+      android:exported="false" />
+    <service
+      android:name="io.capawesome.capacitorjs.plugins.foregroundservice.AndroidForegroundService"
+      android:exported="false"
+      android:foregroundServiceType="specialUse">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="Continues user-initiated local AI content production, media import, and public link collection tasks in this single-session app while the screen is off or the app is backgrounded." />
+    </service>
   </application>
 </manifest>

@@ -773,8 +773,38 @@ export type AppFeature =
   | "diagnosis"
   | "create"
   | "templates"
-  | "publish";
+  | "publish"
+  | "backgroundRun";
 export type FeatureCapabilityRegistry = Readonly<Record<AppFeature, FeatureCapability>>;
+
+export type BackgroundRunNotificationPermission = "granted" | "denied" | "prompt" | "unknown";
+
+/**
+ * Versioned, measured-only status of the background-run guard. Every field is
+ * read from the platform at call time; nothing here asserts that background
+ * execution is guaranteed — only what the system currently reports.
+ */
+export interface BackgroundRunStatusV1 {
+  readonly schemaVersion: "background-run-status.v1";
+  /** Whether long tasks currently hold the guard (user preference, runtime copy). */
+  readonly enabled: boolean;
+  /** False on platforms without the native guard (browser preview). */
+  readonly supported: boolean;
+  readonly batteryOptimizationIgnored: boolean;
+  readonly notificationPermission: BackgroundRunNotificationPermission;
+  /** Count of task kinds currently holding the guard (process-local fact). */
+  readonly activeGuards: number;
+}
+
+export interface BackgroundRunService {
+  getStatus(): Promise<BackgroundRunStatusV1>;
+  /** Persists nothing itself; the presentation layer owns preference storage. */
+  setEnabled(enabled: boolean): Promise<void>;
+  /** Opens the system battery-optimization surface; reports which one opened. */
+  requestIgnoreBatteryOptimizations(): Promise<{ readonly opened: "request" | "optimization-list" | "app-details" }>;
+  /** Requests POST_NOTIFICATIONS on Android 13+; a denial keeps the guard running. */
+  requestNotificationPermission(): Promise<BackgroundRunNotificationPermission>;
+}
 
 export interface AppRuntime {
   readonly profile: ProfileService;
@@ -788,6 +818,7 @@ export interface AppRuntime {
   readonly replica: ReplicaService;
   readonly recovery: RuntimeRecoveryService;
   readonly templates: TemplateService;
+  readonly backgroundRun: BackgroundRunService;
   readonly features: FeatureCapabilityRegistry;
 }
 

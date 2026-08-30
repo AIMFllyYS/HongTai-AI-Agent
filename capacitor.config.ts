@@ -23,8 +23,9 @@ const config: CapacitorConfig = {
     // documented independent baseline instead of treating it as Chromium.
     minHuaweiWebViewVersion: 10,
     // Custom native plugins stay explicitly registered from MainActivity;
-    // package discovery is restricted to the official lifecycle bridge.
-    includePlugins: ["@capacitor/app"],
+    // package discovery is restricted to the official lifecycle bridge plus
+    // the foreground-service carrier used by TaskGuard background running.
+    includePlugins: ["@capacitor/app", "@capawesome-team/capacitor-android-foreground-service"],
   },
 };
 

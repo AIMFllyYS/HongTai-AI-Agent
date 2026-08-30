@@ -57,6 +57,11 @@ internal object ActiveWorkScreenStay {
     val keepOn = action == ActiveWorkScreenStayAction.KEEP_ON
     val update = Runnable {
       if (host.isDestroyed) return@Runnable
+      // While background running is enabled, guarded work must survive with
+      // the screen off (foreground service + partial wake lock), so the
+      // screen-stay flag is skipped on acquire. Clearing on release stays
+      // unconditional and is harmless when the flag was never added.
+      if (keepOn && BackgroundRunPolicy.isEnabled()) return@Runnable
       if (keepOn) {
         host.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
       } else {

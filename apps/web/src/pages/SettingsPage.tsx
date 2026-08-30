@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useSkeletonHold } from "../motion/skeleton-hold";
+import { useAppResume } from "../hooks/useAppResume";
 
 import { issueFromAppError } from "@hongtai/core";
-import type { AppRuntime, LocalProfile, PublicAiConnectionConfig, TaskIssue } from "@hongtai/core";
+import type { AppRuntime, BackgroundRunStatusV1, LocalProfile, PublicAiConnectionConfig, TaskIssue } from "@hongtai/core";
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
@@ -12,6 +13,7 @@ import { PageSkeleton } from "../components/PageSkeleton";
 import { Sheet } from "../components/Sheet";
 import { Switch } from "../components/Switch";
 import { type ColorSchemePreference, applyStoredAppearancePreferences, colorSchemeLabel, readAppearancePreferences, writeAppearancePreferences } from "../runtime/appearance-preferences";
+import { readBackgroundRunPreferences, writeBackgroundRunPreferences } from "../runtime/background-run-preferences";
 import { aiSettingsPath, appInfoSettingsPath, profileSettingsPath, storageAnalysisPath } from "../router";
 import { settingsRowGlyphs } from "../playbook/document-sections";
 
@@ -38,6 +40,19 @@ function aiServiceDetail(connection: PublicAiConnectionConfig | undefined): stri
   return connection?.hasApiKey ? `${model} · 已连接` : `${model} · 尚未写入密钥`;
 }
 
+function batteryOptimizationDetail(status: BackgroundRunStatusV1 | undefined): string {
+  if (!status) return "读取中";
+  return status.batteryOptimizationIgnored ? "已豁免省电限制" : "受系统省电限制";
+}
+
+function notificationPermissionDetail(status: BackgroundRunStatusV1 | undefined): string {
+  const permission = status?.notificationPermission;
+  if (permission === "granted") return "已授权";
+  if (permission === "denied") return "已拒绝，去系统设置开启";
+  if (permission === "prompt") return "未授权";
+  return "未知";
+}
+
 function Avatar({ profile, size }: { readonly profile: LocalProfile | undefined; readonly size: "masthead" | "row" }) {
   const name = profile?.displayName?.trim();
   const initial = name ? Array.from(name)[0] ?? "宏" : "宏";
@@ -53,17 +68,19 @@ function SettingsRow({
   value,
   onClick,
   trailing,
+  titleId,
 }: {
   readonly icon: IconName;
   readonly title: string;
   readonly value?: string;
   readonly onClick?: () => void;
   readonly trailing?: ReactNode;
+  readonly titleId?: string;
 }) {
   const content = (
     <>
       <Icon className="settings-row__glyph" name={icon} size={19} />
-      <span className="settings-row__title" id={title === "通知提醒" ? "settings-alerts" : undefined}>{title}</span>
+      <span className="settings-row__title" id={titleId}>{title}</span>
       {value ? <span className="settings-row__value">{value}</span> : null}
       {trailing ?? <Icon className="settings-row__chevron" name="chevron_right" size={16} />}
     </>
@@ -79,6 +96,9 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
   const [issue, setIssue] = useState<TaskIssue>();
   const [prefs, setPrefs] = useState(readAppearancePreferences);
   const [sheet, setSheet] = useState<SettingsSheet>();
+  const [backgroundRunEnabled, setBackgroundRunEnabled] = useState(readBackgroundRunPreferences().enabled);
+  const [backgroundRunStatus, setBackgroundRunStatus] = useState<BackgroundRunStatusV1>();
+  const backgroundRunAvailable = runtime.features.backgroundRun === "available";
 
   const load = useCallback(async () => {
     setIssue(undefined);
@@ -98,9 +118,25 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
     }
   }, [runtime]);
 
+  const refreshBackgroundRunStatus = useCallback(async () => {
+    if (!backgroundRunAvailable) return;
+    try {
+      setBackgroundRunStatus(await runtime.backgroundRun.getStatus());
+    } catch {
+      // 实测状态读取失败时保留上次值；不阻塞设置页其他资料。
+    }
+  }, [backgroundRunAvailable, runtime]);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void refreshBackgroundRunStatus();
+  }, [refreshBackgroundRunStatus]);
+
+  // 电池优化跳转的是系统设置页：返回本应用后在此重读实测状态。
+  useAppResume(() => { void refreshBackgroundRunStatus(); });
 
   useEffect(() => {
     applyStoredAppearancePreferences();
@@ -108,6 +144,35 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
 
   const setAlertsEnabled = (alertsEnabled: boolean) => {
     setPrefs(writeAppearancePreferences({ ...prefs, alertsEnabled }));
+  };
+
+  const toggleBackgroundRun = (enabled: boolean) => {
+    setBackgroundRunEnabled(writeBackgroundRunPreferences({ enabled }).enabled);
+    void runtime.backgroundRun.setEnabled(enabled).then(refreshBackgroundRunStatus);
+  };
+
+  const openBatteryOptimizationSettings = () => {
+    void runtime.backgroundRun.requestIgnoreBatteryOptimizations()
+      .then(refreshBackgroundRunStatus)
+      .catch((error: unknown) => {
+        setIssue(issueFromAppError(error, {
+          code: "APP_RUNTIME_UNAVAILABLE",
+          message: "未能打开电池优化设置",
+          action: "none",
+        }));
+      });
+  };
+
+  const requestNotificationPermission = () => {
+    void runtime.backgroundRun.requestNotificationPermission()
+      .then(refreshBackgroundRunStatus)
+      .catch((error: unknown) => {
+        setIssue(issueFromAppError(error, {
+          code: "APP_RUNTIME_UNAVAILABLE",
+          message: "未能请求通知权限",
+          action: "none",
+        }));
+      });
   };
 
   const setColorScheme = (colorScheme: ColorSchemePreference) => {
@@ -151,10 +216,41 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
             <SettingsRow
               icon={settingsRowGlyphs.alerts}
               title="通知提醒"
+              titleId="settings-alerts"
               trailing={<Switch checked={prefs.alertsEnabled} labelledBy="settings-alerts" onChange={setAlertsEnabled} />}
             />
           </div>
         </section>
+
+        {backgroundRunAvailable ? (
+          <section className="settings-section">
+            <p className="settings-group-label">运行</p>
+            <div className="settings-list">
+              <SettingsRow
+                icon={settingsRowGlyphs.backgroundRun}
+                title="后台运行"
+                titleId="settings-background-run"
+                trailing={<Switch checked={backgroundRunEnabled} labelledBy="settings-background-run" onChange={toggleBackgroundRun} />}
+              />
+              <SettingsRow
+                icon={settingsRowGlyphs.battery}
+                onClick={openBatteryOptimizationSettings}
+                title="电池优化"
+                value={batteryOptimizationDetail(backgroundRunStatus)}
+              />
+              <SettingsRow
+                icon={settingsRowGlyphs.alerts}
+                onClick={requestNotificationPermission}
+                title="后台运行通知"
+                value={notificationPermissionDetail(backgroundRunStatus)}
+              />
+            </div>
+            <p className="settings-footnote">
+              开启后，制作、采集、拆解与观察任务在熄屏或切后台时继续运行；关闭则保持屏幕常亮推进任务。
+              长时间熄屏静置或部分手机的省电策略仍可能暂停任务，长任务建议保持充电。
+            </p>
+          </section>
+        ) : null}
 
         <section className="settings-section">
           <p className="settings-group-label">外观</p>
