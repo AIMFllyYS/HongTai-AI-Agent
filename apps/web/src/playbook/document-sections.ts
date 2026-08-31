@@ -36,6 +36,7 @@ export const settingsRowGlyphs = {
   scheme: "moon",
   theme: "palette",
   cache: "trash_2",
+  storage: "hard_drive",
   about: "info",
   privacy: "shield",
   backgroundRun: "zap",

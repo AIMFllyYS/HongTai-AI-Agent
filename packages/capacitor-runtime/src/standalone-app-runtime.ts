@@ -390,9 +390,25 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
   });
   const recovery = new StandaloneRuntimeRecovery({ operations, sources: [tasks, analysis, diagnosis, production] });
   const templates = new StandaloneTemplateService({ files: options.plugins.localFiles, analysis, now });
+  const emptyStorageAreas = (["tasks", "observations", "productions", "templates", "cache", "app-data"] as const)
+    .map((area) => ({ area, byteLength: 0, itemCount: 0, deletableByteLength: 0, protectedByteLength: 0 }));
   const unavailableStorage = {
-    inspect: async () => ({ schemaVersion: "native-storage.v1" as const, generatedAtEpochMs: now().getTime(), items: [] }),
+    inspect: async () => ({
+      schemaVersion: "native-storage.v2" as const,
+      generatedAtEpochMs: now().getTime(),
+      device: { totalBytes: 0, freeBytes: 0 },
+      areas: emptyStorageAreas,
+      appDataGroups: [],
+    }),
+    listAreaItems: async ({ area }: { readonly area: "tasks" | "observations" | "productions" | "templates" | "cache" | "app-data" }) => ({
+      schemaVersion: "native-storage.v2" as const,
+      area,
+      generatedAtEpochMs: now().getTime(),
+      items: [],
+    }),
     deleteItem: async () => { throw taskError("APP_RUNTIME_UNAVAILABLE", "本地存储插件尚未加载", "retry"); },
+    clearCache: async () => { throw taskError("APP_RUNTIME_UNAVAILABLE", "本地存储插件尚未加载", "retry"); },
+    exportReport: async () => { throw taskError("APP_RUNTIME_UNAVAILABLE", "本地存储插件尚未加载", "retry"); },
   };
   const storage = new StandaloneStorageService({ native: options.plugins.localStorage ?? unavailableStorage, now });
 

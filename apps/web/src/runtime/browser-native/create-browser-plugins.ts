@@ -2,7 +2,9 @@ import type {
   NativeAiRequestEvent,
   NativeDownloadProgressEvent,
   NativeProductionAsset,
-  NativeStorageItem,
+  NativeStorageAreaItems,
+  NativeStorageCacheClearResult,
+  NativeStorageSnapshot,
   StandaloneNativePlugins,
   StandaloneLocalStoragePlugin,
 } from "@hongtai/capacitor-runtime";
@@ -44,12 +46,11 @@ export function createBrowserStandalonePlugins(): StandaloneNativePlugins {
   const aiEvents = createEmitter<NativeAiRequestEvent>();
   const downloadEvents = createEmitter<NativeDownloadProgressEvent>();
   const localStorage: StandaloneLocalStoragePlugin = {
-    inspect: async () => browserIoRpc<{
-      readonly schemaVersion: "native-storage.v1";
-      readonly generatedAtEpochMs: number;
-      readonly items: readonly NativeStorageItem[];
-    }>("storage.inspect"),
+    inspect: async () => browserIoRpc<NativeStorageSnapshot>("storage.inspect"),
+    listAreaItems: async (options) => browserIoRpc<NativeStorageAreaItems>("storage.listAreaItems", options),
     deleteItem: async ({ itemId }) => { await browserIoRpc("storage.deleteItem", { itemId }); },
+    clearCache: async () => browserIoRpc<NativeStorageCacheClearResult>("storage.clearCache"),
+    exportReport: async (options) => { await browserIoRpc("storage.exportReport", options); },
   };
 
   return {

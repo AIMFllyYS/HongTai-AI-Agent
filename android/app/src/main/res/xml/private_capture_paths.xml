@@ -2,4 +2,6 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
   <!-- Only the one-use system-camera staging directory is shareable. -->
   <cache-path name="camera_capture" path="media/capture/" />
+  <!-- Storage report exports are shared from the cache root via ACTION_SEND. -->
+  <cache-path name="storage_reports" path="." />
 </paths>

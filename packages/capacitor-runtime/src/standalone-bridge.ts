@@ -195,10 +195,38 @@ export type NativeStorageRole =
   | "protected-other";
 export type NativeStorageProtectionCode = "data" | "active" | "unknown";
 
+export interface NativeStorageAreaSummary {
+  readonly area: NativeStorageArea;
+  readonly byteLength: number;
+  readonly itemCount: number;
+  readonly deletableByteLength: number;
+  readonly protectedByteLength: number;
+}
+
+export interface NativeStorageAppDataGroup {
+  readonly key: string;
+  readonly byteLength: number;
+}
+
 /**
- * Native storage inspection deliberately returns opaque delete handles rather
- * than paths.  The Android implementation keeps the handle-to-file mapping
- * in memory for one inspection snapshot and rejects protected documents.
+ * Aggregated v2 inspection: per-area statistics plus app-data directory
+ * groups, without any per-file detail.  Items are listed on demand through
+ * `listAreaItems`.
+ */
+export interface NativeStorageSnapshot {
+  readonly schemaVersion: "native-storage.v2";
+  readonly generatedAtEpochMs: number;
+  readonly device: { readonly totalBytes: number; readonly freeBytes: number };
+  readonly areas: readonly NativeStorageAreaSummary[];
+  readonly appDataGroups: readonly NativeStorageAppDataGroup[];
+}
+
+/**
+ * Native item listings deliberately return opaque delete handles rather than
+ * usable paths.  The Android implementation keeps the handle-to-file mapping
+ * in memory for one listing snapshot and rejects protected documents.
+ * `relativePath` is display-only and `title` carries task metadata (possibly
+ * empty); `group` only appears for observation items ("tongue" | "face").
  */
 export interface NativeStorageItem {
   readonly id: string;
@@ -208,15 +236,32 @@ export interface NativeStorageItem {
   readonly byteLength: number;
   readonly deletable: boolean;
   readonly protectionCode?: NativeStorageProtectionCode;
+  readonly title?: string;
+  readonly group?: string;
+  readonly relativePath: string;
+}
+
+export interface NativeStorageAreaItems {
+  readonly schemaVersion: "native-storage.v2";
+  readonly area: NativeStorageArea;
+  readonly generatedAtEpochMs: number;
+  readonly items: readonly NativeStorageItem[];
+}
+
+export interface NativeStorageCacheClearResult {
+  readonly deletedCount: number;
+  readonly failedCount: number;
+  readonly freedBytes: number;
 }
 
 export interface StandaloneLocalStoragePlugin {
-  inspect(): Promise<{
-    readonly schemaVersion: "native-storage.v1";
-    readonly generatedAtEpochMs: number;
-    readonly items: readonly NativeStorageItem[];
-  }>;
+  inspect(): Promise<NativeStorageSnapshot>;
+  /** The native side rejects `app-data`; its groups only appear in `inspect()`. */
+  listAreaItems(options: { readonly area: NativeStorageArea }): Promise<NativeStorageAreaItems>;
   deleteItem(options: { readonly itemId: string }): Promise<void>;
+  clearCache(): Promise<NativeStorageCacheClearResult>;
+  /** Writes the report text to a file and opens the system share sheet. */
+  exportReport(options: { readonly text: string }): Promise<void>;
 }
 
 export interface NativeProductionAsset {

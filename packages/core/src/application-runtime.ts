@@ -134,10 +134,23 @@ export interface DeviceSettingsService {
 export type StorageArea = "tasks" | "observations" | "productions" | "templates" | "cache" | "app-data";
 export type StorageItemKind = "video" | "image" | "audio" | "document" | "temporary" | "other";
 
+/** Whole-device storage context shown alongside the app-private usage. */
+export interface StorageDeviceInfo {
+  readonly totalByteLength: number;
+  readonly freeByteLength: number;
+}
+
+/** One aggregated native app-data directory (shared_prefs, databases, ...). */
+export interface StorageAppDataGroup {
+  readonly key: string;
+  readonly byteLength: number;
+}
+
 /**
  * A safe projection of one app-private file.  The opaque id is valid only for
- * the current inspection snapshot; filesystem paths and native URIs never
- * cross this boundary.
+ * the current listing snapshot; filesystem paths and native URIs never cross
+ * this boundary except `relativePath`, a display-only forward-slash path
+ * relative to the app-private directory with no `..` segments.
  */
 export interface StorageItem {
   readonly id: string;
@@ -147,6 +160,9 @@ export interface StorageItem {
   readonly byteLength: number;
   readonly deletable: boolean;
   readonly protectionReason?: string;
+  readonly relativePath: string;
+  /** Observation modality ("tongue" | "face"); only present for observation items. */
+  readonly group?: string;
 }
 
 export interface StorageAreaSummary {
@@ -158,19 +174,36 @@ export interface StorageAreaSummary {
 }
 
 export interface StorageAnalysisRecord {
-  readonly schemaVersion: "storage-analysis.v1";
+  readonly schemaVersion: "storage-analysis.v2";
   readonly generatedAt: string;
+  readonly device: StorageDeviceInfo;
   readonly totalByteLength: number;
   readonly deletableByteLength: number;
   readonly protectedByteLength: number;
   readonly areas: readonly StorageAreaSummary[];
-  readonly items: readonly StorageItem[];
+  readonly appDataGroups: readonly StorageAppDataGroup[];
+}
+
+export interface StorageCacheClearResult {
+  readonly deletedCount: number;
+  readonly failedCount: number;
+  readonly freedByteLength: number;
 }
 
 export interface StorageService {
   inspect(): Promise<StorageAnalysisRecord>;
+  /**
+   * Lists the itemized files of one area.  `app-data` has no per-item listing;
+   * the native layer rejects it and its composition is only available through
+   * `StorageAnalysisRecord.appDataGroups`.
+   */
+  listAreaItems(area: StorageArea): Promise<readonly StorageItem[]>;
   /** Deletes one explicitly deletable item, then returns a fresh snapshot. */
   deleteItem(itemId: string): Promise<StorageAnalysisRecord>;
+  /** Clears the cache area, then returns the clear result with a fresh snapshot. */
+  clearCache(): Promise<{ readonly result: StorageCacheClearResult; readonly analysis: StorageAnalysisRecord }>;
+  /** Renders a text report from a fresh inspection and hands it to the native share/export flow. */
+  exportReport(): Promise<void>;
 }
 
 export type AiCapability = "text" | "vision" | "asr" | "tts";

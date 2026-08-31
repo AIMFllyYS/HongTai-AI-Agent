@@ -24,6 +24,7 @@ const ObservationStartPage = lazy(() => import("./pages/ObservationStartPage").t
 const TaskPage = lazy(() => import("./pages/TaskPage").then(({ TaskPage: page }) => ({ default: page })));
 const AiSettingsPage = lazy(() => import("./pages/AiSettingsPage").then(({ AiSettingsPage: page }) => ({ default: page })));
 const StorageAnalysisPage = lazy(() => import("./pages/StorageAnalysisPage").then(({ StorageAnalysisPage: page }) => ({ default: page })));
+const StorageAreaPage = lazy(() => import("./pages/StorageAreaPage").then(({ StorageAreaPage: page }) => ({ default: page })));
 const ApplicationInfoPage = lazy(() => import("./pages/ApplicationInfoPage").then(({ ApplicationInfoPage: page }) => ({ default: page })));
 const UpdateLogPage = lazy(() => import("./pages/UpdateLogPage").then(({ UpdateLogPage: page }) => ({ default: page })));
 const ProfileSettingsPage = lazy(() => import("./pages/ProfileSettingsPage").then(({ ProfileSettingsPage: page }) => ({ default: page })));
@@ -69,7 +70,13 @@ export function App({ runtime, visualData }: AppProps = {}) {
     if (renderedRoute.key === "settings-storage") {
       return runtime
         ? <StorageAnalysisPage navigate={navigate} runtime={runtime} />
-        : <RuntimePendingPage description="本地存储暂时无法读取，请重新打开应用。" navigate={navigate} title="存储分析暂时不可用" />;
+        : <RuntimePendingPage description="本地存储暂时无法读取，请重新打开应用。" navigate={navigate} title="存储管理暂时不可用" />;
+    }
+    if (renderedRoute.key === "settings-storage-area") {
+      const area = renderedRoute.params.area;
+      return runtime && area
+        ? <StorageAreaPage area={area} key={area} navigate={navigate} runtime={runtime} />
+        : <RuntimePendingPage description="本地存储暂时无法读取，请重新打开应用。" navigate={navigate} title="存储管理暂时不可用" />;
     }
     if (renderedRoute.key === "settings-app-info") {
       return runtime

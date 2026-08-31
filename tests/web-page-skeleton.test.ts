@@ -25,6 +25,7 @@ test("route paths pick an honest skeleton layout without fake copy", () => {
   assert.equal(pageSkeletonLayoutForPath("/templates"), "templates");
   assert.equal(pageSkeletonLayoutForPath("/settings/ai"), "settings");
   assert.equal(pageSkeletonLayoutForPath("/settings/storage"), "settings");
+  assert.equal(pageSkeletonLayoutForPath("/settings/storage/observations"), "settings");
   assert.equal(pageSkeletonLayoutForPath("/tasks/abc"), "task");
   assert.equal(pageSkeletonLayoutForPath("/observation/sid"), "report");
   assert.equal(pageSkeletonLayoutForPath("/create/p1/edit"), "create");
@@ -52,6 +53,7 @@ test("product pages no longer render the fullscreen spinner loading panel", () =
     "pages/ProfileSettingsPage.tsx",
     "pages/AiSettingsPage.tsx",
     "pages/StorageAnalysisPage.tsx",
+    "pages/StorageAreaPage.tsx",
     "pages/ApplicationInfoPage.tsx",
     "pages/UpdateLogPage.tsx",
   ];

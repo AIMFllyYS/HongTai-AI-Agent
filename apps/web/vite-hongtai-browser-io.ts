@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { isIP } from "node:net";
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile, copyFile, appendFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, stat, statfs, writeFile, copyFile, appendFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -224,8 +224,15 @@ async function dispatch(op: string, payload: unknown): Promise<Json> {
     }
     case "storage.inspect":
       return await inspectBrowserStorage();
+    case "storage.listAreaItems":
+      return await listBrowserStorageItems(stringValue(input.area));
     case "storage.deleteItem":
       await deleteBrowserStorageItem(stringValue(input.itemId));
+      return {};
+    case "storage.clearCache":
+      return await clearBrowserCache();
+    case "storage.exportReport":
+      await exportBrowserStorageReport(stringValue(input.text));
       return {};
     case "http.fetchText":
       return await fetchText(input);
@@ -358,7 +365,9 @@ async function download(input: Json, emit: (event: Json) => void): Promise<void>
   }
 }
 
-async function inspectBrowserStorage(): Promise<Json> {
+const BROWSER_STORAGE_AREAS = ["tasks", "observations", "productions", "templates", "cache", "app-data"] as const;
+
+async function collectBrowserStorageItems(): Promise<Json[]> {
   storageEntries.clear();
   const files = await collectFiles(rootDir);
   const items: Json[] = [];
@@ -375,9 +384,74 @@ async function inspectBrowserStorage(): Promise<Json> {
       byteLength: (await stat(file)).size,
       deletable: classification.deletable,
       ...(classification.protectionCode ? { protectionCode: classification.protectionCode } : {}),
+      relativePath,
     });
   }
-  return { schemaVersion: "native-storage.v1", generatedAtEpochMs: Date.now(), items };
+  return items;
+}
+
+async function inspectBrowserStorage(): Promise<Json> {
+  const items = await collectBrowserStorageItems();
+  const areas = BROWSER_STORAGE_AREAS.map((area) => {
+    const members = items.filter((item) => item.area === area);
+    const byteLength = members.reduce((sum, item) => sum + (item.byteLength as number), 0);
+    const deletableByteLength = members.filter((item) => item.deletable === true).reduce((sum, item) => sum + (item.byteLength as number), 0);
+    return { area, byteLength, itemCount: members.length, deletableByteLength, protectedByteLength: byteLength - deletableByteLength };
+  });
+  const groupTotals = new Map<string, number>();
+  for (const item of items.filter((entry) => entry.area === "app-data")) {
+    const key = (stringValue(item.relativePath).split("/")[0] ?? "") || "other";
+    groupTotals.set(key, (groupTotals.get(key) ?? 0) + (item.byteLength as number));
+  }
+  let device = { totalBytes: 0, freeBytes: 0 };
+  try {
+    const stats = await statfs(rootDir);
+    device = { totalBytes: Number(stats.blocks) * Number(stats.bsize), freeBytes: Number(stats.bavail) * Number(stats.bsize) };
+  } catch {
+    // 开发预览拿不到磁盘统计时保持 0，不编造容量。
+  }
+  return {
+    schemaVersion: "native-storage.v2",
+    generatedAtEpochMs: Date.now(),
+    device,
+    areas,
+    appDataGroups: [...groupTotals.entries()].map(([key, byteLength]) => ({ key, byteLength })),
+  };
+}
+
+async function listBrowserStorageItems(area: string): Promise<Json> {
+  if (!(BROWSER_STORAGE_AREAS as readonly string[]).includes(area)) {
+    throw codedError("ERR_STORAGE_AREA_UNKNOWN", "未知的存储分区");
+  }
+  if (area === "app-data") throw codedError("ERR_STORAGE_AREA_NOT_LISTABLE", "应用配置不提供逐项列表");
+  const items = await collectBrowserStorageItems();
+  return { schemaVersion: "native-storage.v2", area, generatedAtEpochMs: Date.now(), items: items.filter((item) => item.area === area) };
+}
+
+async function clearBrowserCache(): Promise<Json> {
+  const items = await collectBrowserStorageItems();
+  let deletedCount = 0;
+  let failedCount = 0;
+  let freedBytes = 0;
+  for (const item of items.filter((entry) => entry.area === "cache")) {
+    const entry = storageEntries.get(stringValue(item.id));
+    if (!entry) { failedCount += 1; continue; }
+    try {
+      await rm(entry.file, { force: true });
+      storageEntries.delete(stringValue(item.id));
+      deletedCount += 1;
+      freedBytes += item.byteLength as number;
+    } catch {
+      failedCount += 1;
+    }
+  }
+  return { deletedCount, failedCount, freedBytes };
+}
+
+async function exportBrowserStorageReport(text: string): Promise<void> {
+  const directory = join(rootDir, "exports");
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, `storage-report-${Date.now()}.txt`), text, "utf8");
 }
 
 async function deleteBrowserStorageItem(itemId: string): Promise<void> {

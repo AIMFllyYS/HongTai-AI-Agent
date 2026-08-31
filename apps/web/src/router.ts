@@ -14,6 +14,7 @@ export type ActiveRouteKey =
   | "settings-profile"
   | "settings-ai"
   | "settings-storage"
+  | "settings-storage-area"
   | "settings-app-info"
   | "settings-update-log"
   | "observation-new"
@@ -84,6 +85,7 @@ export const appRoutes: readonly AppRoute[] = [
   { path: "/settings/profile", key: "settings-profile", navKey: "settings" },
   { path: "/settings/ai", key: "settings-ai", navKey: "settings" },
   { path: "/settings/storage", key: "settings-storage", navKey: "settings", showNav: false },
+  { path: "/settings/storage/:area", key: "settings-storage-area", navKey: "settings", showNav: false },
   { path: "/settings/app-info", key: "settings-app-info", navKey: "settings" },
   { path: "/settings/app-info/updates", key: "settings-update-log", navKey: "settings" },
   { path: "/observation/new", key: "observation-new", navKey: "ai" },
@@ -94,14 +96,21 @@ export const appRoutes: readonly AppRoute[] = [
 const EMPTY_ROUTE_PARAMS: RouteParams = Object.freeze({});
 
 interface DynamicRouteDefinition {
-  readonly key: Extract<ActiveRouteKey, "task-processing" | "task-detail" | "task-analysis" | "observation-report" | "production-edit" | "replica-wizard" | "playbook">;
+  readonly key: Extract<ActiveRouteKey, "task-processing" | "task-detail" | "task-analysis" | "observation-report" | "production-edit" | "replica-wizard" | "playbook" | "settings-storage-area">;
   readonly pattern: string;
   readonly navKey?: PrimaryNavKey;
   readonly matcher: RegExp;
-  readonly paramName: "taskId" | "sessionId" | "projectId" | "sectionId";
+  readonly paramName: "taskId" | "sessionId" | "projectId" | "sectionId" | "area";
 }
 
 const dynamicRoutes: readonly DynamicRouteDefinition[] = [
+  {
+    key: "settings-storage-area",
+    pattern: "/settings/storage/:area",
+    navKey: "settings",
+    matcher: /^\/settings\/storage\/([^/]+)$/u,
+    paramName: "area",
+  },
   {
     key: "playbook",
     pattern: "/playbook/:sectionId",
@@ -284,6 +293,10 @@ export function appInfoSettingsPath(): string {
 
 export function storageAnalysisPath(): string {
   return "/settings/storage";
+}
+
+export function storageAreaPath(area: string): string {
+  return `/settings/storage/${encodedPathSegment(area)}`;
 }
 
 export function updateLogSettingsPath(): string {

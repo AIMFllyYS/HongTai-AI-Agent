@@ -32,14 +32,17 @@ test("settings routes are rendered from the shared runtime and do not expose dir
   const profile = "pages/ProfileSettingsPage.tsx";
   const ai = "pages/AiSettingsPage.tsx";
   const storage = "pages/StorageAnalysisPage.tsx";
+  const storageArea = "pages/StorageAreaPage.tsx";
 
   assert.match(app, /settings-profile/);
   assert.match(app, /settings-ai/);
   assert.match(app, /settings-storage/);
+  assert.match(app, /settings-storage-area/);
   assert.equal(existsSync(join(root, profile)), true);
   assert.equal(existsSync(join(root, ai)), true);
   assert.equal(existsSync(join(root, storage)), true);
-  for (const page of [settings, read(profile), read(ai), read(storage)]) {
+  assert.equal(existsSync(join(root, storageArea)), true);
+  for (const page of [settings, read(profile), read(ai), read(storage), read(storageArea)]) {
     assert.match(page, /AppRuntime/);
     assert.doesNotMatch(page, /@capacitor\/core/);
     assert.doesNotMatch(page, /registerPlugin/);
@@ -83,13 +86,15 @@ test("UI copy describes local app storage and Keystore without promising an encr
   assert.match(settings, /Android Keystore/);
   assert.match(settings, /深色模式/);
   assert.match(settings, /通知提醒/);
-  assert.match(settings, /清理缓存/);
+  assert.match(settings, /存储管理/);
+  assert.match(settings, /查看存储占用/);
   assert.match(settings, /storageAnalysisPath/);
   const storage = read("pages/StorageAnalysisPage.tsx");
   assert.match(storage, /runtime\.storage\.inspect/);
-  assert.match(storage, /runtime\.storage\.deleteItem/);
-  assert.match(storage, /数据文件无法删除/);
-  assert.match(storage, /确认删除/);
+  assert.match(storage, /runtime\.storage\.clearCache/);
+  assert.match(storage, /runtime\.storage\.exportReport/);
+  assert.match(storage, /占用分布/);
+  assert.doesNotMatch(storage, /storage-delete-confirm/);
   assert.doesNotMatch(settings, /检查更新|用户协议/);
 });
 
@@ -150,7 +155,7 @@ test("settings keep cloud TTS inside AI connection and expose app information th
   assert.match(settings, /appInfoSettingsPath/);
   assert.match(settings, /关于/);
   assert.match(settings, /深色模式/);
-  assert.match(settings, /清理缓存/);
+  assert.match(settings, /存储管理/);
   assert.match(settings, /通知提醒/);
   assert.match(settings, /主题色/);
   assert.match(settings, /隐私说明/);

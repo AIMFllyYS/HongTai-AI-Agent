@@ -233,7 +233,7 @@ export function PlaybookSettingsSpecimen() {
     { icon: settingsRowGlyphs.alerts, title: "通知提醒", value: "本机开关" },
     { icon: settingsRowGlyphs.scheme, title: "深色模式", value: "跟随系统" },
     { icon: settingsRowGlyphs.theme, title: "主题色", value: "品牌绿" },
-    { icon: settingsRowGlyphs.cache, title: "清理缓存", value: "真实估算，不写死体积" },
+    { icon: settingsRowGlyphs.storage, title: "存储管理", value: "真实估算，不写死体积" },
     { icon: settingsRowGlyphs.about, title: "关于", value: "运行中版本号" },
     { icon: settingsRowGlyphs.privacy, title: "隐私说明", value: "" },
   ] as const;

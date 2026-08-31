@@ -25,6 +25,7 @@ test("cache and stored media sizes stay honest when the runtime has no number", 
   assert.equal(formatByteSize(512), "512 B");
   assert.equal(formatByteSize(2048), "2 KB");
   assert.equal(formatByteSize(12 * 1024 * 1024), "12 MB");
+  assert.equal(formatByteSize(1.5 * 1024 * 1024 * 1024), "1.5 GB");
   assert.equal(formatStoredSize(undefined), "未解析到");
   assert.equal(totalMediaByteLength([]), undefined);
   assert.equal(totalMediaByteLength([{ byteLength: 128 }, { }]), 128);

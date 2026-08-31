@@ -268,7 +268,7 @@ export function SettingsPage({ runtime, navigate }: SettingsPageProps) {
         <section className="settings-section">
           <p className="settings-group-label">数据</p>
           <div className="settings-list">
-            <SettingsRow icon={settingsRowGlyphs.cache} onClick={() => navigate(storageAnalysisPath())} title="清理缓存" value="查看全部占用" />
+            <SettingsRow icon={settingsRowGlyphs.storage} onClick={() => navigate(storageAnalysisPath())} title="存储管理" value="查看存储占用" />
           </div>
         </section>
 

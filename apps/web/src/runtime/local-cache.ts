@@ -4,7 +4,9 @@ export function formatByteSize(bytes: number | undefined, emptyLabel = "可清�
   const kb = bytes / 1024;
   if (kb < 1024) return `${Math.max(1, Math.round(kb))} KB`;
   const mb = kb / 1024;
-  return `${mb >= 10 ? mb.toFixed(0) : mb.toFixed(1)} MB`;
+  if (mb < 1024) return `${mb >= 10 ? mb.toFixed(0) : mb.toFixed(1)} MB`;
+  const gb = mb / 1024;
+  return `${gb >= 10 ? gb.toFixed(0) : gb.toFixed(1)} GB`;
 }
 
 export function formatStoredSize(bytes: number | undefined): string {

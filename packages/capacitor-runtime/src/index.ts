@@ -11,3 +11,4 @@ export * from "./standalone-production-service.js";
 export * from "./standalone-replica-service.js";
 export * from "./standalone-template-service.js";
 export * from "./standalone-app-runtime.js";
+export { appDataGroupLabelFor } from "./standalone-storage-service.js";
