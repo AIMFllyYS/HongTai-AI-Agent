@@ -24,7 +24,8 @@
 
 - Android 源码版本推进为 `0.1.30` / `versionCode=38`；只生成 Release 产品并按 `HongTai-AI-Agent-release-v0.1.30.apk` 独立归档。该版本从未公开上传，本轮修复在候选期内替换同版本归档件，不递增版本号。
 - 候选归档 23,388,459 字节、SHA-256 `c32476e44a9850485f3c960ee36fbaab94af5305b5edeb8f42ca6967540167b0`；Release 单测、lint、四 ABI assemble、16 KiB 对齐、v2/v3 签名、证书锚定（`54df122c…b5b2fde`，与历史发布一致）通过。
-- `pnpm check`（typecheck + lint + 全部测试）与 web build 通过；390px 与桌面视口的真实渲染测量（Playwright 注入观察中页结构）确认扫描卡、深度思考面板、模块列表三者左右边界一致，已完成模块在页面层渲染内容预览。公网上传与 `download.html` 切换本次未执行。
+- `pnpm check`（typecheck + lint + 全部测试）与 web build 通过；390px 与桌面视口的真实渲染测量（Playwright 注入观察中页结构）确认扫描卡、深度思考面板、模块列表三者左右边界一致，已完成模块在页面层渲染内容预览。
+- 已上传公网并切换 `download.html`：当前推荐指向 `HongTai-AI-Agent-release-v0.1.30.apk`（versionCode 38），v0.1.29 退为历史版本；版本世系契约测试相应更新为「源码与公网推荐一致推进到 0.1.30/code 38」。
 
 ## [0.1.29] - 2026-08-31
 
