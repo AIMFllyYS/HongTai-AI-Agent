@@ -872,7 +872,9 @@
   margin-top: 0.08rem;
 }
 
-.deep-thinking-panel--observation {
+/* 观察页变体与同屏扫描卡、模块列表同宽：双类提升特异性，
+   避免窄屏媒体查询里 .deep-thinking-panel 的 margin-inline 覆盖 margin: 0。 */
+.deep-thinking-panel.deep-thinking-panel--observation {
   margin: 0;
   background: var(--palette-mint-whisper);
   border: 0;
