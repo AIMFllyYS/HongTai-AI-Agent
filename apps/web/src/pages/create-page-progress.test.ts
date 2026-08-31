@@ -138,9 +138,10 @@ test("一键管线的软违规不丢：页面捕获结果展示，向导路径�
   // 向导一键跳转后页面没有组装结果：面板从项目记录旁路推导 avatar-source-short，并与真实结果去重。
   assert.match(panel, /avatarSourceShortViolation\(project\)/u);
   assert.match(panel, /violation\.reason === "avatar-source-short"/u, "真实组装结果已含该提示时不再重复推导");
-  // 已出片后的提示是信息性的：不能再说「确认后继续合成」。
-  assert.match(panel, /project\.output\s*\?/u);
-  assert.match(panel, /成片已按当前素材产出/u);
+  // 软违规解释段并入违规列表尾部一句（不阻塞、可回改），不再单独成段；
+  // 确认动作只看主按钮文案（「了解提示，继续合成」）。
+  assert.match(panel, /回改文稿可以修正/u);
+  assert.doesNotMatch(panel, /确认后继续合成/u);
 });
 
 test("失败主按钮只按 TaskIssue.action 分支，重试操作不解析中文", () => {
@@ -201,25 +202,48 @@ test("制作页用 contextualAction 单主按钮、五阶段时间线与 9:16 �
   assert.doesNotMatch(page, />01</);
   assert.doesNotMatch(page, /发布/);
 
+  // 时间线是可点击步骤导航：button + aria-current="step"，按 visibleStage 单选渲染
   assert.match(panel, /production-pipeline-timeline/);
+  assert.match(panel, /aria-current=\{item === visibleStage \? "step" : undefined\}/);
+  assert.match(panel, /onPinStage/);
+  assert.match(panel, /visibleStage/);
   assert.match(panel, /PRODUCTION_PIPELINE_STAGE_LABELS/);
   assert.match(panel, /project\.issue/);
   assert.match(panel, /production-render-progress/);
   assert.match(panel, /确认删除这条成片/);
-  assert.match(panel, /确认删除整个项目/);
   assert.match(panel, /重新生成分镜/);
   assert.match(panel, /onUpdateStoryboard/);
   assert.match(panel, /onSynthesizeSentence/);
+  // 流式生成上屏的是已点亮句卡 + 骨架占位，原始 JSON 不再上屏；订阅器节流计数
+  assert.match(panel, /sentenceCount/);
+  assert.match(panel, /production-script-stream__sentences/);
+  assert.doesNotMatch(panel, /production-script-stream__text/);
+  assert.match(page, /countCompletedStreamSentences/);
+  assert.match(page, /SCRIPT_STREAM_FLUSH_MS/);
+  // 句卡不随 script.updatedAt 整棵重挂载：本地草稿按字段内容比对同步，不丢焦点
+  assert.doesNotMatch(panel, /key=\{script\.updatedAt\}/);
+  assert.match(panel, /syncedSentenceRef/);
+  // 字幕/贴纸分工说明只保留一处（合成阶段字幕模板旁）
+  assert.equal([...panel.matchAll(/贴纸与浮字是画面上额外/gu)].length, 1);
   assert.doesNotMatch(panel, /本地合成视频/);
   assert.doesNotMatch(panel, /production-actions/);
   assert.doesNotMatch(panel, /发布/);
+  // 删除项目入口移到页面头部更多菜单，面板不再裸露红字按钮
+  assert.doesNotMatch(panel, /production-delete-project/);
+  assert.match(page, /确认删除整个项目/);
+  assert.match(page, /pinnedStage/);
+  assert.match(page, /visibleStage/);
 
   assert.match(css, /aspect-ratio:\s*9\s*\/\s*16/);
   assert.match(css, /max-width:\s*17\.5rem/);
   assert.match(css, /padding-bottom:\s*calc\(/);
   assert.match(css, /\.production-pipeline-timeline/);
   assert.match(css, /\.production-pipeline-sentence/);
-  assert.match(css, /\.production-pipeline-narration-list/);
+  assert.match(css, /\.production-script-stream \.deep-thinking-panel \{\s*margin-inline:\s*0/, "制作页内深度思考面板与脚本流同宽");
+  assert.match(css, /\.production-script-stream__sentences/);
+  assert.doesNotMatch(panel, /production-pipeline-narration-list/, "逐句配音状态已在句卡头部，配音区不再重复列句子");
+  assert.doesNotMatch(css, /\.production-pipeline-narration-list/);
+  assert.match(panel, /重试这句/, "配音失败重试列表保留");
   assert.doesNotMatch(surface, /时间轴|逐帧|转场编辑/);
 });
 

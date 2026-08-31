@@ -13,10 +13,12 @@ import type { AutomaticPipelineResult, MeasuredPlanComposeResult, ProductionNarr
 
 import { AppShell } from "../../components/AppShell";
 import { Button } from "../../components/Buttons";
+import { ConfirmDeleteSheet } from "../../components/ConfirmDeleteSheet";
 import { MaterialLibraryHeaderAction } from "../../components/MaterialLibraryHeaderAction";
 import { Icon, type IconName } from "../../components/Icon";
 import { IssueNotice, issueTitle } from "../../components/IssueNotice";
 import { PageSkeleton } from "../../components/PageSkeleton";
+import { TaskMoreActionsSheet } from "../../components/TaskMoreActionsSheet";
 import { useSkeletonHold } from "../../motion/skeleton-hold";
 import { useAppResume } from "../../hooks/useAppResume";
 import { composeEntryFromSearch, consumeComposeEntryFromSearch } from "../../navigation/compose-actions";
@@ -34,6 +36,7 @@ import {
   resolveProductionRetryKind,
   resolveProductionRetryOperation,
   scriptProductionService,
+  type ProductionPipelineStage,
 } from "./production-workbench-model";
 
 function focusProductionInput(): void {
@@ -43,6 +46,19 @@ function focusProductionInput(): void {
 
 /** 流式文本的界面累积上限：截头保尾，界面只做有界展示，绝不无限增长。 */
 const SCRIPT_STREAM_MAX_CHARACTERS = 4_000;
+
+/** 界面投影的节流间隔：trailing 节流，文案仍是真实累积值，只是降低重渲染频率。 */
+const SCRIPT_STREAM_FLUSH_MS = 150;
+
+/**
+ * 已完成分镜句的稳定字段名计数：在截断前的完整累积流上数 `"text": "…"` 闭合对。
+ * 绝不 JSON.parse 半截流；正则不匹配（含还没闭合的半截句）退化为 0，界面落到骨架。
+ */
+const STREAM_SENTENCE_PATTERN = /"text"\s*:\s*"(?:[^"\\]|\\.)*"/g;
+
+export function countCompletedStreamSentences(content: string): number {
+  return content.match(STREAM_SENTENCE_PATTERN)?.length ?? 0;
+}
 
 function appendScriptStreamText(current: string, delta: string): string {
   const next = current + delta;
@@ -56,9 +72,7 @@ interface ScriptStreamState extends ProductionScriptStream {
 
 function shellTitleFor(flow: ComposerFlow, showComposer: boolean): string {
   if (!showComposer) return "制作";
-  if (flow === "agent") return "智能成片";
-  if (flow === "replica") return "爆款复刻";
-  return "制作";
+  return flow === "replica" ? "爆款复刻" : "智能成片";
 }
 
 /** 旧「微调」路由重定向携带的 ?project= 参数：选中后即从地址栏消费，避免刷新反复触发。 */
@@ -83,7 +97,7 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   const [project, setProject] = useState<ProductionProjectRecord>();
   const [avatarDraft, setAvatarDraft] = useState<ProductionProjectRecord>();
   const [composingNew, setComposingNew] = useState(false);
-  const [composerFlow, setComposerFlow] = useState<ComposerFlow>("pick");
+  const [composerFlow, setComposerFlow] = useState<ComposerFlow>("agent");
   const [sourceId, setSourceId] = useState("");
   const [brief, setBrief] = useState("");
   const [mode, setMode] = useState<ProductionMode>("montage");
@@ -102,6 +116,10 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   const [narrationProgress, setNarrationProgress] = useState<{ readonly index: number; readonly total: number }>();
   const [composeViolations, setComposeViolations] = useState<readonly MeasuredDurationViolation[]>([]);
   const [subtitleTemplateId, setSubtitleTemplateId] = useState<SubtitleTemplateId>(DEFAULT_SUBTITLE_TEMPLATE_ID);
+  /** 步骤导航钉选：仅用户视图；管线运行中强制跟随推导阶段。仅存于本页。 */
+  const [pinnedStage, setPinnedStage] = useState<ProductionPipelineStage>();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [deleteProjectConfirmOpen, setDeleteProjectConfirmOpen] = useState(false);
   const composingNewRef = useRef(composingNew);
   composingNewRef.current = composingNew;
   /**
@@ -124,25 +142,40 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
    * 分镜脚本生成期间的专用订阅：在调用 generateScript 之前挂上（新建项目时通用订阅
    * 还没切到新项目），把 script-progress 增量累积成有界流文本。订阅失败只损失流式
    * 展示，退化为骨架等待，生成本身不受影响。
+   * 增量先进闭包累积（句数在截断前的完整流上计数、单调递增），再以 ~150ms trailing
+   * 节流投影到 state——界面句卡跟着真实生成节奏点亮，但不随每个 delta 重渲染。
    */
   const startScriptStream = useCallback((projectId: string): (() => void) => {
     scriptStreamStopRef.current?.();
     scriptStreamStopRef.current = undefined;
-    setScriptStream({ projectId, phase: "generating", content: "", reasoning: "", receivedCharacters: 0 });
+    setScriptStream({ projectId, phase: "generating", content: "", reasoning: "", receivedCharacters: 0, sentenceCount: 0 });
     let stopped = false;
     let unsubscribe: (() => void) | undefined;
+    let phase: ProductionScriptStream["phase"] = "generating";
+    let content = "";
+    let fullContent = "";
+    let reasoning = "";
+    let receivedCharacters = 0;
+    let sentenceCount = 0;
+    let flushTimer: ReturnType<typeof setTimeout> | undefined;
+    const flush = () => {
+      flushTimer = undefined;
+      setScriptStream({ projectId, phase, content, reasoning, receivedCharacters, sentenceCount });
+    };
     try {
       unsubscribe = service.subscribe(projectId, (event: StandaloneProductionEvent) => {
         if (stopped || event.type !== "script-progress" || event.projectId !== projectId) return;
-        setScriptStream((current) => current?.projectId === projectId
-          ? {
-            projectId,
-            phase: event.phase,
-            content: event.contentDelta === undefined ? current.content : appendScriptStreamText(current.content, event.contentDelta),
-            reasoning: event.reasoningDelta === undefined ? current.reasoning : appendScriptStreamText(current.reasoning, event.reasoningDelta),
-            receivedCharacters: event.receivedCharacters,
-          }
-          : current);
+        phase = event.phase;
+        receivedCharacters = event.receivedCharacters;
+        if (event.contentDelta !== undefined) {
+          fullContent += event.contentDelta;
+          content = appendScriptStreamText(content, event.contentDelta);
+          sentenceCount = Math.max(sentenceCount, countCompletedStreamSentences(fullContent));
+        }
+        if (event.reasoningDelta !== undefined) {
+          reasoning = appendScriptStreamText(reasoning, event.reasoningDelta);
+        }
+        if (flushTimer === undefined) flushTimer = setTimeout(flush, SCRIPT_STREAM_FLUSH_MS);
       });
     } catch {
       setScriptStream(undefined);
@@ -150,6 +183,10 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
     }
     const stop = () => {
       stopped = true;
+      if (flushTimer !== undefined) {
+        clearTimeout(flushTimer);
+        flushTimer = undefined;
+      }
       unsubscribe?.();
     };
     scriptStreamStopRef.current = stop;
@@ -264,8 +301,12 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   // 活跃项目切换（含刚创建）时刷新脚本与配音记录；v3 存量项目两者都是 undefined。
   // 流式状态不在这里重置：新建项目时本 effect 会在 startScriptStream 之后运行，
   // 清掉会把刚挂上的流清空；流的生命周期由 startScriptStream/stop 自管。
+  // 步骤导航钉选随项目切换清空（覆盖历史选择、startNewProduction、enterComposer 等路径）。
   useEffect(() => {
     const projectId = project?.projectId;
+    setPinnedStage(undefined);
+    setMoreOpen(false);
+    setDeleteProjectConfirmOpen(false);
     setScript(undefined);
     setNarration(undefined);
     setComposeViolations([]);
@@ -532,7 +573,7 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
       setProjects(remaining);
       setProject(remaining[0]);
       setComposingNew(remaining.length === 0);
-      if (remaining.length === 0) setComposerFlow("pick");
+      if (remaining.length === 0) setComposerFlow("agent");
       setProgress(0);
       setProgressMessage("");
     } catch (error) {
@@ -566,6 +607,10 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   const planComposed = activeProject?.plan?.schemaVersion === "production-plan.v4";
   const rendering = activeProject?.status === "rendering";
   const failed = activeProject?.status === "failed";
+  // 双状态模型：stage 是权威推导（驱动主按钮），visibleStage 是用户视图；管线运行中
+  // 强制跟随推导态（否则用户在旧步骤看不到流式进度），空闲时钉选完全粘住。
+  const pipelineRunning = scriptGenerating || Boolean(scriptGeneratingInProject) || busy || Boolean(rendering);
+  const visibleStage: ProductionPipelineStage = pipelineRunning ? stage : pinnedStage ?? stage;
   const primary = resolvePipelinePrimaryAction(stage, {
     storyboardReady,
     planComposed,
@@ -605,14 +650,13 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
     setMode("montage");
     setBrief("");
     setHeadlineText("");
-    setComposerFlow("pick");
+    setComposerFlow("agent");
     setProgress(0);
     setProgressMessage("");
   };
 
   const retryCurrent = () => {
     if (!activeProject) {
-      if (composerFlow === "pick") return;
       if (composerFlow === "replica") {
         if (sourceId) navigate(replicaWizardPath(sourceId));
         return;
@@ -709,9 +753,25 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
     )
     : undefined;
 
-  const headerAction = agentComposer || replicaComposer
-    ? <button className="production-header-switch" onClick={() => enterComposer("pick")} type="button">更换</button>
-    : <MaterialLibraryHeaderAction />;
+  // composer 的做法切换在表单顶部分段控件里（智能成片/爆款复刻），头部不再放「更换」入口。
+  const headerAction = (
+    <div className="production-header-actions">
+      <MaterialLibraryHeaderAction />
+      {activeProject ? (
+        <button
+          aria-expanded={moreOpen}
+          aria-haspopup="dialog"
+          aria-label="更多操作"
+          className="icon-button"
+          disabled={busy}
+          onClick={() => setMoreOpen(true)}
+          type="button"
+        >
+          <Icon name="more_horiz" size={20} />
+        </button>
+      ) : null}
+    </div>
+  );
 
   const showSkeleton = useSkeletonHold(loading);
   if (showSkeleton) {
@@ -727,7 +787,7 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
       activeNav="create"
       contextualAction={contextualAction}
       headerAction={headerAction}
-      leadingAction={showComposer && composerFlow !== "pick" ? undefined : <span className="page-header-icon"><Icon name="movie_edit" size={24} /></span>}
+      leadingAction={showComposer ? undefined : <span className="page-header-icon"><Icon name="movie_edit" size={24} /></span>}
       navigate={navigate}
       title={shellTitle}
     >
@@ -772,8 +832,8 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
             narration={narration}
             narrationProgress={narrationProgress}
             onConfigureAi={() => navigate(aiSettingsPath())}
-            onDeleteProject={() => void deleteProject(activeProject.projectId)}
             onImport={() => void perform(() => runtime.production.importAssets(activeProject.projectId))}
+            onPinStage={setPinnedStage}
             onRegenerateScript={() => void generateScript()}
             onRemoveAsset={(assetId) => void perform(() => runtime.production.removeAsset(activeProject.projectId, assetId))}
             onRemoveOutput={() => void perform(() => runtime.production.removeOutput(activeProject.projectId))}
@@ -787,10 +847,41 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
             script={script}
             scriptGenerating={scriptGenerating || Boolean(scriptGeneratingInProject)}
             scriptStream={scriptStream && scriptStream.projectId === activeProject.projectId
-              ? { phase: scriptStream.phase, content: scriptStream.content, reasoning: scriptStream.reasoning, receivedCharacters: scriptStream.receivedCharacters }
+              ? { phase: scriptStream.phase, content: scriptStream.content, reasoning: scriptStream.reasoning, receivedCharacters: scriptStream.receivedCharacters, sentenceCount: scriptStream.sentenceCount }
               : undefined}
             stage={stage}
             subtitleTemplateId={subtitleTemplateId}
+            visibleStage={visibleStage}
+          />
+        ) : null}
+
+        {activeProject ? (
+          <TaskMoreActionsSheet
+            items={[{
+              id: "delete-project",
+              title: "删除项目",
+              description: "素材、脚本、配音、计划与成片都会从本机删除",
+              icon: "error",
+              onSelect: () => setDeleteProjectConfirmOpen(true),
+            }]}
+            onClose={() => setMoreOpen(false)}
+            open={moreOpen}
+          />
+        ) : null}
+
+        {activeProject && deleteProjectConfirmOpen ? (
+          <ConfirmDeleteSheet
+            busy={busy}
+            confirmLabel="确认删除"
+            description="项目内素材、脚本、配音、计划与成片都会从本机删除，不可恢复。"
+            heading="确认删除整个项目？"
+            onClose={() => setDeleteProjectConfirmOpen(false)}
+            onConfirm={() => {
+              setDeleteProjectConfirmOpen(false);
+              void deleteProject(activeProject.projectId);
+            }}
+            open
+            title="删除项目"
           />
         ) : null}
 

@@ -97,10 +97,16 @@ test("production runtime uses capability-gated shells while fixtures stay explic
 
 test("production deletion requires named confirmation controls", () => {
   const panel = read("features/production/production-pipeline-panel.tsx");
+  const workbench = read("features/production/production-workbench-page.tsx");
   assert.match(panel, /aria-label=\{`删除素材/);
   assert.match(panel, /确认删除这条成片/);
-  assert.match(panel, /确认删除整个项目/);
   assert.match(panel, /onRemoveAsset/);
   assert.match(panel, /onRemoveOutput/);
-  assert.match(panel, /onDeleteProject/);
+  // 删除项目入口在页面头部更多菜单（more_horiz + TaskMoreActionsSheet），确认仍走 ConfirmDeleteSheet
+  assert.doesNotMatch(panel, /删除整个项目/);
+  assert.doesNotMatch(panel, /onDeleteProject/);
+  assert.match(workbench, /TaskMoreActionsSheet/);
+  assert.match(workbench, /more_horiz/);
+  assert.match(workbench, /确认删除整个项目/);
+  assert.match(workbench, /<ConfirmDeleteSheet/);
 });

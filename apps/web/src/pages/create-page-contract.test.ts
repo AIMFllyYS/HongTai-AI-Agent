@@ -15,31 +15,32 @@ const page = `${shell}\n${workbench}`;
 const forms = read("features/production/production-setup-forms.tsx");
 const composer = read("features/production/production-composer-panel.tsx");
 const history = read("features/production/production-history-list.tsx");
-const entry = read("components/ProductionModeEntry.tsx");
 const css = read("styles/pages/production-runtime.css");
-const surface = `${page}\n${entry}\n${forms}\n${composer}`;
+const surface = `${page}\n${forms}\n${composer}`;
 
-test("制作首页拆成入口 / Agent 表单 / 历史列表子模块，路由仍挂 CreatePage", () => {
+test("制作首页拆成 composer / Agent 表单 / 历史列表子模块，路由仍挂 CreatePage", () => {
   assert.match(shell, /from "\.\.\/features\/production\/production-workbench-page"/u);
   assert.match(workbench, /from "\.\/production-composer-panel"/u);
   assert.match(workbench, /from "\.\/production-history-list"/u);
   assert.match(workbench, /from "\.\/production-setup-forms"/u);
   assert.match(page, /<ProductionComposerPanel/u);
   assert.match(page, /<ProductionHistoryList/u);
-  assert.match(composer, /<ProductionModeEntry /u);
+  assert.match(composer, /production-flow-switch/u);
+  assert.match(composer, /aria-pressed/u);
   assert.match(composer, /<AgentSetupForm/u);
   assert.match(composer, /<ReplicaSetupForm/u);
   assert.match(history, /本地制作记录/u);
+  assert.match(history, /展开全部/u);
+  assert.match(history, /slice\(0, HISTORY_VISIBLE_COUNT\)/u);
 });
 
-test("制作首页只有两张顶层入口卡，数字人不是第三张", () => {
-  assert.equal([...entry.matchAll(/data-production-entry="/gu)].length, 2, "第一屏只能有两张入口卡");
-  assert.match(entry, /data-production-entry="agent"/u);
-  assert.match(entry, /data-production-entry="replica"/u);
-  assert.doesNotMatch(entry, /data-production-entry="avatar"/u);
-  assert.match(entry, /<strong>智能成片<\/strong>/u);
-  assert.match(entry, /<strong>爆款复刻<\/strong>/u);
-  assert.match(composer, /flow === "pick"/u);
+test("composer 没有独立 pick 屏：默认直接进 Agent 表单，顶部分段切换两条做法", () => {
+  assert.doesNotMatch(composer, /"pick"/u, "pick 屏已合并：composer 只有 agent / replica 两种做法");
+  assert.match(workbench, /useState<ComposerFlow>\("agent"\)/u, "默认直接进智能成片表单");
+  assert.match(composer, /智能成片/u);
+  assert.match(composer, /爆款复刻/u);
+  assert.match(composer, /aria-label="制作方式"/u);
+  assert.match(composer, /role="group"/u);
   assert.match(page, /composerFlow/u);
 });
 
@@ -49,20 +50,20 @@ test("数字人出镜只作为 Agent 流程里的二次选项，不改服务契�
   assert.match(forms, /onMode\(checked \? "avatar" : "montage"\)/u);
   assert.doesNotMatch(page, /avatarScript/u, "新项目不再提交逐字稿：脚本由 AI 按需求生成，配音由应用完成");
   assert.doesNotMatch(page, /production-mode-grid/u, "不再用两列顶层单选把数字人和素材剪辑并列");
-  assert.match(entry, /数字人出镜是下一步里的开关/u, "入口卡只提示下一步有这个选项，本身不是第三张卡");
+  assert.match(forms, /<strong>数字人出镜<\/strong>/u, "数字人只是 Agent 表单里的开关，不是独立做法");
   assert.match(forms, /上传一段数字人预处理视频，配音、字幕与画面裁剪拼接全部自动完成/u, "开关说明要讲清全自动范围");
 });
 
 test("Agent 文案不声称看懂或理解素材，并要求逐镜核对", () => {
-  const caveat = entry.slice(entry.indexOf("production-entry-card__caveat"));
+  // 原入口卡 caveat 已迁移进 Agent 表单提示行，顺序约束不变。
+  const caveat = forms.slice(forms.indexOf("这台安装不一定能看画面"));
   const fallbackAt = caveat.indexOf("看不到就按你的需求写");
   const referenceAt = caveat.indexOf("参考画面里看得见的内容");
   assert.ok(fallbackAt >= 0 && referenceAt >= 0 && fallbackAt < referenceAt, "盲配回退必须写在「会参考画面」前面");
-  assert.match(entry, /不会核对文字是否对得上每个镜头/u);
-  assert.match(entry, /逐镜核对/u);
   assert.match(forms, /不会核对文字是否对得上每个镜头/u);
+  assert.match(forms, /逐镜核对/u);
   assert.match(forms, /这台安装不一定能看画面/u);
-  assert.doesNotMatch(entry, /并在本地合成/u);
+  assert.match(forms, /云端旁白，没配才用系统语音/u, "配音来源回退说明随入口卡文案一并迁移");
   assert.doesNotMatch(surface, /看懂/u);
   assert.doesNotMatch(surface, /理解你的素材/u);
   assert.doesNotMatch(surface, /智能识别并匹配/u);
@@ -78,8 +79,9 @@ test("爆款复刻走既有向导，没有拆解时说明下一步并导向拆�
   assert.doesNotMatch(page, /runtime\.replica/u, "制作首页只负责选来源并跳转，不复制向导");
   assert.match(forms, /去拆解一条/u);
   assert.match(page, /navigate\(pathForRoute\("home"\)\)/u);
-  assert.match(entry, /不代表画面里真的有这些内容/u);
-  assert.match(entry, /成片仍要回制作页合成/u);
+  assert.match(forms, /不代表画面里真的有这些内容/u);
+  assert.match(forms, /绑错文件也不会被拦住/u, "入口卡 caveat 迁移进复刻表单提示，不丢失");
+  assert.match(forms, /成片要回制作页合成/u);
 });
 
 test("数字人出镜如实描述能力：预处理视频加自动配音，不声称照片生成数字人", () => {
@@ -90,17 +92,14 @@ test("数字人出镜如实描述能力：预处理视频加自动配音，不�
   assert.doesNotMatch(surface, /照片生成数字人/u);
   assert.doesNotMatch(page, /数字人口播[\s\S]{0,80}TTS/u);
   assert.doesNotMatch(page, /数字人口播[\s\S]{0,80}至少 3/u);
-  assert.doesNotMatch(entry, /数字人口播[\s\S]{0,80}至少 3/u);
-  assert.match(entry, /不需要 \{MIN_MONTAGE_VISUAL_ASSETS\} 份素材/u);
+  assert.match(forms, /不需要 \{MIN_MONTAGE_VISUAL_ASSETS\} 份素材/u, "数字人路径不需要凑素材数量的说明随入口卡迁入表单");
 });
 
-test("入口卡与二次选项的触达高度不小于 44px，高级项折叠可展开", () => {
-  assert.match(css, /\.production-entry-card \{[^}]*min-height: 44px/u);
-  assert.match(css, /\.production-entry-card:focus-visible/u);
+test("做法分段切换与二次选项的触达高度不小于 44px，高级项折叠可展开", () => {
+  assert.match(css, /\.production-flow-switch button \{[^}]*min-height: 3rem/u, "做法分段切换升到 48px 触控目标");
   assert.match(css, /\.production-entry-switch[\s\S]*min-height: 44px/u);
   assert.match(css, /\.production-avatar-option \{[^}]*min-height: 44px/u);
-  assert.match(css, /\.production-entry-grid \{[^}]*grid/u);
-  assert.doesNotMatch(css, /\.production-entry-grid \{[^}]*grid-template-columns:\s*repeat\(2/u, "390px 下两张长文案卡必须上下排，不能挤成两列");
+  assert.doesNotMatch(css, /\.production-entry-grid/u, "入口卡网格随 pick 屏一并移除");
   assert.doesNotMatch(forms, /production-duration-segmented/u, "时长四选一已移除：时长由文稿与实测配音驱动");
   assert.doesNotMatch(forms, /\[15, 30, 45, 60\]/u);
   assert.doesNotMatch(css, /\.production-duration-segmented/u);
@@ -124,7 +123,7 @@ test("离开 Agent 会清掉失败，重试不会在选择屏上重建项目", (
   const enter = page.slice(page.indexOf("const enterComposer ="), page.indexOf("const startNewProduction"));
   assert.match(enter, /setIssue\(undefined\)/u);
   assert.match(enter, /if \(flow !== "agent"\) setMode\("montage"\)/u);
-  assert.match(page, /if \(composerFlow === "pick"\) return/u);
+  assert.match(page, /if \(composerFlow === "replica"\)/u);
   assert.match(page, /startNewProduction/u);
   assert.match(page, /换一种做法/u);
   assert.match(page, /issue && showComposer && issue\.action === "none"/u);
@@ -146,8 +145,8 @@ test("加号入口通过 entry 查询参数直接打开 Agent 或复刻表单，
   assert.ok(load.indexOf("requestedSourceId") < load.indexOf("composeEntry"), "拆解详情的 sourceId 优先于加号 entry");
   assert.match(page, /智能成片/u);
   assert.match(page, /爆款复刻/u);
-  assert.match(page, /production-header-switch/u);
-  assert.match(page, />更换</u);
+  assert.match(composer, /production-flow-switch/u, "做法切换在表单顶部分段控件，头部不再放「更换」");
+  assert.doesNotMatch(page, /production-header-switch/u);
   assert.match(forms, /这次想讲什么？/u);
   assert.match(forms, /按哪条拆解复刻？/u);
 });

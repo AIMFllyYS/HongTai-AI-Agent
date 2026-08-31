@@ -757,7 +757,8 @@ export class StandaloneProductionService implements ProductionService {
         assetRef: sentence.stickerId,
         text: null,
         shotOrder: index + 1,
-        anchor: "above_caption",
+        // 默认锚点落顶部角落安全区（M3 贴纸水印惯例）；above_caption 仍是 AI 可选枚举值。
+        anchor: "top_right",
         scale: 1,
         animation: "fade",
       });

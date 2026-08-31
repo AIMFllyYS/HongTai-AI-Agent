@@ -41,17 +41,24 @@ export interface PipelineStoryboardEdit {
 export interface ProductionScriptStream {
   /** 初稿 generating；格式修复轮 repairing。 */
   readonly phase: "generating" | "repairing";
-  /** 累积的正文流（原始 JSON 文本，未完成不猜结构）。 */
+  /** 累积的正文流（原始 JSON 文本，未完成不猜结构；界面不上屏，仅供计数与调试）。 */
   readonly content: string;
   /** 累积的推理文本；供应商不返回推理时恒为空串。 */
   readonly reasoning: string;
   /** 累计接收的正文（content delta）字符数。 */
   readonly receivedCharacters: number;
+  /** 已完成的分镜句数：在截断前的完整流上按稳定字段名计数，单调递增；无法计数时为 0（骨架）。 */
+  readonly sentenceCount: number;
 }
 
 export interface ProductionPipelinePanelProps {
   readonly project: ProductionProjectRecord;
+  /** 权威推导阶段（resolveProductionPipelineStage）：驱动主按钮与未就绪锁定，不随钉选改变。 */
   readonly stage: ProductionPipelineStage;
+  /** 用户实际查看的阶段：管线运行中恒等于 stage，空闲时可被钉选粘住。 */
+  readonly visibleStage: ProductionPipelineStage;
+  /** 步骤导航钉选：用户点击某个阶段步骤时调用（页面侧负责清 pin 时机）。 */
+  readonly onPinStage: (stage: ProductionPipelineStage) => void;
   /** v4 分镜脚本记录；v3 存量项目与「脚本尚未生成」的 v4 项目没有。 */
   readonly script?: ProductionScriptRecord;
   readonly scriptGenerating: boolean;
@@ -75,14 +82,12 @@ export interface ProductionPipelinePanelProps {
   readonly onUpdateStoryboard: (sentences: readonly PipelineStoryboardEdit[]) => Promise<void>;
   readonly onSynthesizeSentence: (sentenceId: string) => void;
   readonly onRemoveOutput: () => void;
-  readonly onDeleteProject: () => void;
   readonly onConfigureAi?: () => void;
 }
 
 type DeleteConfirmation =
   | { readonly kind: "asset"; readonly assetId: string; readonly label: string }
-  | { readonly kind: "output" }
-  | { readonly kind: "project" };
+  | { readonly kind: "output" };
 
 const STAGE_ORDER: readonly ProductionPipelineStage[] = ["requirement", "script", "narration", "compose", "output"];
 
@@ -94,6 +99,14 @@ const STAGE_ICONS: Readonly<Record<ProductionPipelineStage, IconName>> = {
   output: "play",
 };
 
+/** 未就绪阶段（无产物且在推导阶段之后）禁用步骤导航时给出的原因文案。 */
+const STAGE_LOCKED_REASON: Readonly<Partial<Record<ProductionPipelineStage, string>>> = {
+  script: "完成需求与素材后解锁",
+  narration: "完成文稿后解锁",
+  compose: "完成配音后解锁",
+  output: "完成合成后解锁",
+};
+
 function secondsLabel(durationMs: number): string {
   const seconds = durationMs / 1_000;
   return Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(1);
@@ -102,13 +115,16 @@ function secondsLabel(durationMs: number): string {
 /**
  * 五阶段会话面板（需求 → 分镜文稿 → 配音 → 合成 → 成片）。
  *
- * 每个阶段一个区块：已完成阶段的产物保持可见、可回改；当前阶段展开完整操作；未来
- * 阶段只给一句话预告。主按钮始终在页面头部（contextualAction），面板只承载各阶段的
- * 次级操作（逐句编辑、单句补配音、删除等）。
+ * 顶部时间线是可点击的步骤导航（`aria-current="step"`）：面板按 `visibleStage` 单选渲染
+ * 当前阶段区块，已完成阶段的产物可回改；未就绪阶段（无产物且在推导阶段之后）禁用并给出
+ * 解锁原因。主按钮始终在页面头部（contextualAction），由权威推导阶段驱动；删除项目入口
+ * 在页面头部更多菜单，面板只承载素材/成片的次级删除确认。
  */
 export function ProductionPipelinePanel({
   project,
   stage,
+  visibleStage,
+  onPinStage,
   script,
   scriptGenerating,
   scriptStream,
@@ -128,11 +144,12 @@ export function ProductionPipelinePanel({
   onUpdateStoryboard,
   onSynthesizeSentence,
   onRemoveOutput,
-  onDeleteProject,
   onConfigureAi,
 }: ProductionPipelinePanelProps) {
   const [confirmation, setConfirmation] = useState<DeleteConfirmation>();
   const [confirmingRegenerate, setConfirmingRegenerate] = useState(false);
+  const stageRegionRef = useRef<HTMLDivElement>(null);
+  const previousVisibleStageRef = useRef(visibleStage);
   const rendering = project.status === "rendering";
   const changing = busy || rendering;
   const storyboard = script ? parseScriptStoryboard(script.storyboard.document) : undefined;
@@ -166,12 +183,26 @@ export function ProductionPipelinePanel({
     ];
   const hasWordTiming = Boolean(narration?.sentences.some((sentence) => sentence.status === "ready" && sentence.alignmentSource));
   const stageIndex = STAGE_ORDER.indexOf(stage);
+  /** 各阶段是否已有产物：推导阶段之后的阶段凭产物解锁步骤导航。 */
+  const stageHasArtifacts: Readonly<Record<ProductionPipelineStage, boolean>> = {
+    requirement: true,
+    script: Boolean(script),
+    narration: Boolean(narration && narration.sentences.length > 0),
+    compose: narrationAllReady || project.plan?.schemaVersion === "production-plan.v4",
+    output: Boolean(project.output) || rendering,
+  };
+
+  // 步骤切换后把焦点落到阶段标题（仅钉选切换时，挂载与运行中跟随不打断用户）。
+  useEffect(() => {
+    if (previousVisibleStageRef.current === visibleStage) return;
+    previousVisibleStageRef.current = visibleStage;
+    stageRegionRef.current?.querySelector<HTMLElement>("h3, summary")?.focus();
+  }, [visibleStage]);
 
   const confirmDelete = () => {
     if (!confirmation) return;
     if (confirmation.kind === "asset") onRemoveAsset(confirmation.assetId);
-    else if (confirmation.kind === "output") onRemoveOutput();
-    else onDeleteProject();
+    else onRemoveOutput();
     setConfirmation(undefined);
   };
 
@@ -179,17 +210,25 @@ export function ProductionPipelinePanel({
     <GlassCard className="production-pipeline" data-pipeline-stage={stage}>
       <ol aria-label="制作阶段" className="production-pipeline-timeline">
         {STAGE_ORDER.map((item, index) => {
-          const state = legacyPipeline && (item === "script" || item === "narration")
-            ? "skipped"
-            : index < stageIndex || item === "requirement" && stage !== "requirement"
-              ? "done"
-              : index === stageIndex
-                ? "current"
-                : "todo";
+          const skipped = legacyPipeline && (item === "script" || item === "narration");
+          const done = index < stageIndex;
+          const state = skipped ? "skipped" : item === visibleStage ? "current" : done ? "done" : "todo";
+          // 未就绪阶段（无产物且在推导阶段之后）禁用，title 给出解锁原因；旧版项目不走
+          // 分镜/配音/合成步骤，一并禁用并说明。
+          const legacyOnly = legacyPipeline && item !== "requirement" && item !== "output";
+          const locked = legacyOnly || (index > stageIndex && !stageHasArtifacts[item]);
           return (
             <li className={`production-pipeline-timeline__item is-${state}`} key={item}>
-              <Icon name={state === "done" ? "circle_check" : STAGE_ICONS[item]} size={18} />
-              <span>{PRODUCTION_PIPELINE_STAGE_LABELS[item].title}</span>
+              <button
+                aria-current={item === visibleStage ? "step" : undefined}
+                disabled={locked}
+                onClick={() => onPinStage(item)}
+                title={legacyOnly ? "旧版项目按当时计划只读渲染，不走这一步" : locked ? STAGE_LOCKED_REASON[item] : undefined}
+                type="button"
+              >
+                <Icon name={!skipped && done ? "circle_check" : STAGE_ICONS[item]} size={18} />
+                <span>{PRODUCTION_PIPELINE_STAGE_LABELS[item].title}</span>
+              </button>
             </li>
           );
         })}
@@ -203,107 +242,102 @@ export function ProductionPipelinePanel({
         </p>
       ) : null}
 
-      <RequirementSection project={project} busy={changing} onImport={onImport} onRemoveAsset={(assetId, label) => setConfirmation({ kind: "asset", assetId, label })} />
+      {/* 按 visibleStage 单选渲染当前阶段区块；确认弹层在面板根级，不随切换卸载。 */}
+      <div aria-live="polite" className="production-pipeline-stage" ref={stageRegionRef}>
+        {visibleStage === "requirement" ? (
+          <RequirementSection project={project} busy={changing} onImport={onImport} onRemoveAsset={(assetId, label) => setConfirmation({ kind: "asset", assetId, label })} />
+        ) : null}
 
-      {scriptGenerating ? (
-        <PipelineSection description="正在按你的需求逐句生成分镜脚本，完成后可以逐句修改。" stageState="current" title="分镜文稿">
-          <ScriptGeneratingSection stream={scriptStream} />
-        </PipelineSection>
-      ) : script ? (
-        <ScriptSection
-          busy={changing}
-          estimatedTotalMs={script.estimatedTotalMs}
-          key={script.updatedAt}
-          narrationBySentence={narrationBySentence}
-          onRegenerateScript={() => {
-            if (confirmingRegenerate) {
-              setConfirmingRegenerate(false);
-              onRegenerateScript();
-              return;
-            }
-            setConfirmingRegenerate(true);
-          }}
-          onSynthesizeSentence={onSynthesizeSentence}
-          onUpdateStoryboard={onUpdateStoryboard}
-          project={project}
-          regenerateConfirming={confirmingRegenerate}
-          sentences={storyboardSentences}
-          stageActive={stage === "script"}
-          onCancelRegenerate={() => setConfirmingRegenerate(false)}
-        />
-      ) : stage === "script" ? (
-        <PipelineSection description={PRODUCTION_PIPELINE_STAGE_LABELS.script.description} stageState="current" title="分镜文稿">
-          <p className="production-pipeline-hint"><Icon name="info" size={16} />还没有分镜脚本。用底部主按钮开始生成；生成失败时会在这里给出原因。</p>
-        </PipelineSection>
-      ) : null}
+        {visibleStage === "script" ? (
+          scriptGenerating ? (
+            <PipelineSection description="正在按你的需求逐句生成分镜脚本，完成后可以逐句修改。" stageState="current" title="分镜文稿">
+              <ScriptGeneratingSection stream={scriptStream} />
+            </PipelineSection>
+          ) : script ? (
+            <ScriptSection
+              busy={changing}
+              estimatedTotalMs={script.estimatedTotalMs}
+              narrationBySentence={narrationBySentence}
+              onRegenerateScript={() => {
+                if (confirmingRegenerate) {
+                  setConfirmingRegenerate(false);
+                  onRegenerateScript();
+                  return;
+                }
+                setConfirmingRegenerate(true);
+              }}
+              onSynthesizeSentence={onSynthesizeSentence}
+              onUpdateStoryboard={onUpdateStoryboard}
+              project={project}
+              regenerateConfirming={confirmingRegenerate}
+              sentences={storyboardSentences}
+              stageActive={visibleStage === "script"}
+              onCancelRegenerate={() => setConfirmingRegenerate(false)}
+            />
+          ) : (
+            <PipelineSection description={PRODUCTION_PIPELINE_STAGE_LABELS.script.description} stageState="current" title="分镜文稿">
+              <p className="production-pipeline-hint"><Icon name="info" size={16} />还没有分镜脚本。用底部主按钮开始生成；生成失败时会在这里给出原因。</p>
+            </PipelineSection>
+          )
+        ) : null}
 
-      {narration && !legacyPipeline ? (
-        <NarrationSection
-          busy={changing}
-          narration={narration}
-          narrationAllReady={narrationAllReady}
-          narrationProgress={narrationProgress}
-          onSynthesizeSentence={onSynthesizeSentence}
-          sentences={storyboardSentences}
-          stageActive={stage === "narration"}
-        />
-      ) : null}
-
-      {stage === "compose" || stage === "output" && !legacyPipeline ? (
-        <PipelineSection description={PRODUCTION_PIPELINE_STAGE_LABELS.compose.description} stageState={stage === "compose" ? "current" : "done"} title="合成">
-          <SubtitleTemplatePicker
-            disabled={changing}
-            hasWordTiming={hasWordTiming}
-            labelId="production-subtitle-template-label"
-            onChange={onSubtitleTemplate}
-            value={subtitleTemplateId}
+        {visibleStage === "narration" && narration && !legacyPipeline ? (
+          <NarrationSection
+            busy={changing}
+            narration={narration}
+            narrationAllReady={narrationAllReady}
+            narrationProgress={narrationProgress}
+            onSynthesizeSentence={onSynthesizeSentence}
+            sentences={storyboardSentences}
+            stageActive
           />
-          <p className="production-pipeline-hint"><Icon name="info" size={16} />字幕分两层：口播字幕逐句全量、自动生成不丢字；强调词在字幕内放大，贴纸与浮字是画面上额外的文字提示。</p>
-          {violationItems.length > 0 ? (
-            <ul className="production-pipeline-violations">
-              {violationItems.map((item, index) => <li key={index}><Icon name="info" size={15} />{item.message}</li>)}
-            </ul>
-          ) : null}
-          {composeViolations.length > 0 ? (
-            <p className="production-pipeline-hint">
-              <Icon name="info" size={16} />{project.output
-                ? "成片已按当前素材产出。上面的提示是软边界：回改文稿、更换更长的出镜视频后可重新合成。"
-                : "已按实测配音组装镜头。上面的提示是软边界：回改文稿可以修正，或用底部主按钮确认后继续合成。"}
-            </p>
-          ) : null}
-        </PipelineSection>
-      ) : null}
+        ) : null}
 
-      {stage === "output" || rendering || project.output ? (
-        <OutputSection
-          busy={busy}
-          legacyPipeline={legacyPipeline}
-          preview={preview}
-          progress={progress}
-          progressMessage={progressMessage}
-          project={project}
-          stageActive={stage === "output"}
-          onRemoveOutput={() => setConfirmation({ kind: "output" })}
-        />
-      ) : null}
+        {visibleStage === "compose" && !legacyPipeline ? (
+          <PipelineSection description={PRODUCTION_PIPELINE_STAGE_LABELS.compose.description} stageState="current" title="合成">
+            <SubtitleTemplatePicker
+              disabled={changing}
+              hasWordTiming={hasWordTiming}
+              labelId="production-subtitle-template-label"
+              onChange={onSubtitleTemplate}
+              value={subtitleTemplateId}
+            />
+            <p className="production-pipeline-hint"><Icon name="info" size={16} />字幕分两层：口播字幕逐句全量、自动生成不丢字；AI 会在每句里挑最多两个关键词在字幕内放大强调，贴纸与浮字是画面上额外的文字提示。</p>
+            {violationItems.length > 0 ? (
+              <ul className="production-pipeline-violations">
+                {violationItems.map((item, index) => <li key={index}><Icon name="info" size={15} />{item.message}</li>)}
+                {/* 软边界不阻塞合成：可回改文稿修正后重新合成，或用底部主按钮确认继续。 */}
+                <li><Icon name="info" size={15} />以上是软边界提示，不阻塞合成：回改文稿可以修正。</li>
+              </ul>
+            ) : null}
+          </PipelineSection>
+        ) : null}
+
+        {visibleStage === "output" ? (
+          <OutputSection
+            busy={busy}
+            legacyPipeline={legacyPipeline}
+            preview={preview}
+            progress={progress}
+            progressMessage={progressMessage}
+            project={project}
+            stageActive
+            onRemoveOutput={() => setConfirmation({ kind: "output" })}
+          />
+        ) : null}
+      </div>
 
       {confirmation ? (
         <ConfirmDeleteSheet
           busy={busy}
           confirmLabel="确认删除"
-          description={confirmation.kind === "asset" ? "绑定了这句的分镜会改用其他素材。" : confirmation.kind === "output" ? "计划会保留，可以稍后重新合成。" : "项目内素材、脚本、配音、计划与成片都会从本机删除，不可恢复。"}
-          heading={confirmation.kind === "asset" ? `确认删除素材“${confirmation.label}”？` : confirmation.kind === "output" ? "确认删除这条成片？" : "确认删除整个项目？"}
+          description={confirmation.kind === "asset" ? "绑定了这句的分镜会改用其他素材。" : "计划会保留，可以稍后重新合成。"}
+          heading={confirmation.kind === "asset" ? `确认删除素材“${confirmation.label}”？` : "确认删除这条成片？"}
           onClose={() => setConfirmation(undefined)}
           onConfirm={confirmDelete}
           open
-          title={confirmation.kind === "asset" ? "删除素材" : confirmation.kind === "output" ? "删除成片" : "删除项目"}
+          title={confirmation.kind === "asset" ? "删除素材" : "删除成片"}
         />
-      ) : null}
-
-      {stage !== "output" ? (
-        <Button className="production-delete-project" disabled={changing} onClick={() => setConfirmation({ kind: "project" })} variant="quiet">
-          <Icon name="x" size={16} />删除整个项目
-        </Button>
       ) : null}
     </GlassCard>
   );
@@ -318,7 +352,7 @@ function PipelineSection({ title, description, stageState, children }: {
   return (
     <section className={`production-pipeline-section is-${stageState}`}>
       <header>
-        <h3>{title}</h3>
+        <h3 tabIndex={-1}>{title}</h3>
         <p>{description}</p>
       </header>
       {children}
@@ -327,25 +361,36 @@ function PipelineSection({ title, description, stageState, children }: {
 }
 
 /**
- * 分镜脚本生成中的实时区块：骨架句卡占位 + 流水文本自动滚底 + 深度思考面板。
- * JSON 没输出完的板块不猜、不渲染半截结构——等脚本记录落地后整块切换为句卡编辑。
+ * 分镜脚本生成中的实时区块：已生成句数点亮句卡 + 1 张 pulsing 占位卡 + 深度思考面板。
+ * 原始 JSON 流不上屏；JSON 没输出完的板块不猜、不渲染半截结构——等脚本记录落地后
+ * 整块切换为句卡编辑。句数在订阅器里按稳定字段名计数（单调递增），无法计数时退化为骨架。
  */
 function ScriptGeneratingSection({ stream }: { readonly stream?: ProductionScriptStream }) {
-  const textRef = useRef<HTMLPreElement>(null);
   const phase = stream?.phase ?? "generating";
-
-  useEffect(() => {
-    if (textRef.current) textRef.current.scrollTop = textRef.current.scrollHeight;
-  }, [stream?.content]);
+  const sentenceCount = stream?.sentenceCount ?? 0;
 
   return (
     <div className="production-script-stream" data-script-phase={phase}>
+      {sentenceCount > 0 ? (
+        <ol aria-label="已生成分镜句" className="production-script-stream__sentences">
+          {Array.from({ length: sentenceCount }, (_, index) => (
+            <li key={index}>
+              <em>{String(index + 1).padStart(2, "0")}</em>
+              <Icon name="circle_check" size={14} />
+              <span>第 {index + 1} 句已生成</span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
       <div aria-hidden="true" className="production-script-stream__skeleton">
-        <span />
-        <span />
-        <span />
+        {sentenceCount > 0 ? <span /> : (
+          <>
+            <span />
+            <span />
+            <span />
+          </>
+        )}
       </div>
-      <pre aria-live="polite" className="production-script-stream__text" ref={textRef}>{stream?.content || "正在生成分镜脚本…"}</pre>
       <p className="production-script-stream__meta">
         <Icon name="sync" size={15} />
         {phase === "repairing"
@@ -432,7 +477,7 @@ function ScriptSection({ sentences, estimatedTotalMs, narrationBySentence, busy,
       <p className="production-pipeline-duration">
         <Icon name="video" size={16} />预估总时长约 <strong>{secondsLabel(estimatedTotalMs)}</strong> 秒（按文案字数估算，配音后以实测为准）
       </p>
-      <p className="production-pipeline-hint"><Icon name="info" size={16} />口播字幕逐句全量、自动生成；AI 会自动在本句里挑最多两个关键词在字幕中放大强调，贴纸与浮字则是画面上额外的提示文字。</p>
+      {/* 字幕/贴纸分工说明只保留一处：合成阶段字幕模板旁的提示（见 compose 区块）。 */}
       <div className="production-pipeline-sentences">
         {sentences.map((sentence, index) => (
           <SentenceEditor
@@ -481,6 +526,19 @@ function SentenceEditor({ sentence, index, narration, busy, assetOptions, onUpda
   const textChanged = text.trim() !== sentence.text.trim();
   const overLimit = [...text].length > MAX_SCRIPT_SENTENCE_CHARACTERS;
   const canSave = dirty && !busy && !saving && text.trim().length > 0 && !overLimit;
+
+  // 句卡不再随 script.updatedAt 整棵重挂载（会重置其他句的未保存输入并丢焦点）；
+  // 改为引用变化时按字段内容比对同步：权威句内容真变了（保存成功、重新生成）才覆盖
+  // 本地草稿；别的句保存引发的整体刷新里本句内容没变，本地输入原样保留。
+  const syncedSentenceRef = useRef(sentence);
+  useEffect(() => {
+    const previous = syncedSentenceRef.current;
+    syncedSentenceRef.current = sentence;
+    if (previous === sentence) return;
+    if (previous.text !== sentence.text) setText(sentence.text);
+    if ((previous.assetId ?? "") !== (sentence.assetId ?? "")) setAssetId(sentence.assetId ?? "");
+    if ((previous.stickerId ?? "") !== (sentence.stickerId ?? "")) setStickerId(sentence.stickerId ?? "");
+  }, [sentence]);
 
   const save = async () => {
     if (!canSave) return;
@@ -566,21 +624,8 @@ function NarrationSection({ sentences, narration, narrationProgress, narrationAl
           <progress max={narrationProgress.total} value={narrationProgress.index} />
         </div>
       ) : null}
-      <ul className="production-pipeline-narration-list">
-        {narration.sentences.map((sentence, index) => (
-          <li className={`is-${sentence.status}`} key={sentence.sentenceId}>
-            <em>{String(index + 1).padStart(2, "0")}</em>
-            <p>{textById.get(sentence.sentenceId) ?? "（文案已更新）"}</p>
-            {sentence.status === "ready" ? (
-              <small><Icon name="circle_check" size={14} />{secondsLabel(sentence.durationMs ?? 0)} 秒</small>
-            ) : (
-              <button disabled={busy} onClick={() => onSynthesizeSentence(sentence.sentenceId)} type="button">
-                <Icon name="record_voice_over" size={14} />补配音
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
+      {/* 逐句配音状态已在分镜句卡头部呈现，这里只保留配音区独有的信息：
+          就绪计数/总时长、进度条、失败重试与 whisper fallback 提示。 */}
       {failures.length > 0 ? (
         <ul className="production-pipeline-violations">
           {failures.map((failure) => (

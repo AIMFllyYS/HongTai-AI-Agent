@@ -22,7 +22,9 @@ function emptyCopy(status: StructuredGenerationThinkingV1["status"]): string {
 }
 
 export function DeepThinkingPanel({ thinking, variant = "analysis" }: DeepThinkingPanelProps) {
-  const [open, setOpen] = useState(thinking.status === "streaming");
+  // 分析变体（含制作页脚本流）默认折叠，由用户决定要不要看推理细节；
+  // 观察页变体沿用原行为：思考流开始时自动展开、完成后收起。
+  const [open, setOpen] = useState(variant === "observation" && thinking.status === "streaming");
   const contentRef = useRef<HTMLPreElement>(null);
   const observation = variant === "observation";
   const footnote = observation
@@ -30,9 +32,9 @@ export function DeepThinkingPanel({ thinking, variant = "analysis" }: DeepThinki
     : "推理内容仅在本次生成期间显示，不会保存到任务或历史。";
 
   useEffect(() => {
-    if (thinking.status === "streaming") setOpen(true);
+    if (observation && thinking.status === "streaming") setOpen(true);
     if (thinking.status === "completed") setOpen(false);
-  }, [thinking.status]);
+  }, [observation, thinking.status]);
 
   useEffect(() => {
     if (!open || !contentRef.current) return;

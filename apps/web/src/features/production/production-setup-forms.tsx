@@ -1,4 +1,4 @@
-import type { AppTaskRecord, ProductionAsset, ProductionMode, ProductionTextPreset } from "@hongtai/core";
+import { MIN_MONTAGE_VISUAL_ASSETS, type AppTaskRecord, type ProductionAsset, type ProductionMode, type ProductionTextPreset } from "@hongtai/core";
 
 import { Button } from "../../components/Buttons";
 import { Icon } from "../../components/Icon";
@@ -105,7 +105,7 @@ export function AgentSetupForm({
       ) : (
         <p className="production-hint">
           <Icon name="info" size={16} />
-          这台安装不一定能看画面：看不到就按你的需求写，能看到才会参考画面里看得见的内容。两种情况都不会核对文字是否对得上每个镜头，需要你逐镜核对，看不清的素材要重拍。
+          这台安装不一定能看画面：看不到就按你的需求写，能看到才会参考画面里看得见的内容。两种情况都不会核对文字是否对得上每个镜头，需要你逐镜核对，看不清的素材要重拍。配音优先用 AI 连接里的云端旁白，没配才用系统语音。
         </p>
       )}
 
@@ -125,7 +125,7 @@ export function AgentSetupForm({
       <div className={avatarOn ? "production-avatar-option is-selected" : "production-avatar-option"}>
         <span id="production-avatar-option-label">
           <strong>数字人出镜</strong>
-          <small>上传一段数字人预处理视频，配音、字幕与画面裁剪拼接全部自动完成</small>
+          <small>上传一段数字人预处理视频，配音、字幕与画面裁剪拼接全部自动完成，不需要 {MIN_MONTAGE_VISUAL_ASSETS} 份素材</small>
         </span>
         <Switch checked={avatarOn} labelledBy="production-avatar-option-label" onChange={(checked) => onMode(checked ? "avatar" : "montage")} />
       </div>
@@ -229,7 +229,7 @@ export function ReplicaSetupForm({
           <SourcePicker onSourceId={onSourceId} sourceId={sourceId} sources={sources} />
           <p className="production-hint">
             <Icon name="info" size={16} />
-            下一步会打开这条拆解的复刻向导，按清单逐项绑定素材。清单不代表画面里真的有这些内容；生成的是分镜脚本和字幕，成片要回制作页合成。
+            下一步会打开这条拆解的复刻向导，按清单逐项绑定素材。清单只说该拍什么，不代表画面里真的有这些内容；绑错文件也不会被拦住。生成的是分镜脚本和字幕，成片要回制作页合成。
           </p>
         </>
       ) : (

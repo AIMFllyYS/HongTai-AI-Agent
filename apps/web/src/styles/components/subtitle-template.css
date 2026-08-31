@@ -105,15 +105,17 @@
   gap: var(--space-2);
   width: 100%;
   padding: var(--space-2);
-  border: 1px solid var(--color-outline-soft);
+  border: 0;
   border-radius: var(--radius-card);
   background: var(--color-surface-card);
   color: var(--color-text-primary);
   text-align: left;
 }
 
+/* 选中态用品牌色 tonal fill + 细 ring 双重表达，不再依赖 1px 描边；半透明 fill
+   叠在白底（复刻向导）与 brand-tint 区块（合成阶段 is-current）上都保持可辨。 */
 .subtitle-template-option.is-selected {
-  border-color: var(--color-action-secondary);
+  background: rgba(16, 185, 129, 0.14);
   box-shadow: 0 0 0 1px var(--color-action-secondary);
 }
 
