@@ -1682,6 +1682,98 @@
 .observation-observing-module__skeleton span:nth-child(1) { width: 88%; }
 .observation-observing-module__skeleton span:nth-child(2) { width: 64%; }
 
+/* 模块完成后的内容预览：与骨架同缩进（对齐标题列），逐块揭示。 */
+.observation-observing-module__content {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.55rem 0 0 1.9rem;
+  animation: observation-observing-reveal 0.42s var(--motion-ease-standard) both;
+}
+
+.observation-observing-module__lead {
+  margin: 0;
+  color: var(--palette-ink-600);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+
+.observation-observing-module__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.85rem;
+  margin: 0;
+}
+
+.observation-observing-module__facts > div {
+  display: inline-flex;
+  gap: 0.32rem;
+  align-items: baseline;
+}
+
+.observation-observing-module__facts dt {
+  color: var(--palette-ink-400);
+  font-size: var(--text-caption);
+}
+
+.observation-observing-module__facts dd {
+  margin: 0;
+  color: var(--palette-ink-600);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+.observation-observing-module__group > strong {
+  color: var(--palette-ink-400);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+.observation-observing-module__group ul {
+  display: grid;
+  gap: 0.32rem;
+  margin: 0.32rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.observation-observing-module__group li {
+  position: relative;
+  padding-left: 0.85rem;
+  color: var(--palette-ink-600);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+
+.observation-observing-module__group li::before {
+  position: absolute;
+  top: 0.55em;
+  left: 0;
+  width: 0.3rem;
+  height: 0.3rem;
+  content: "";
+  background: var(--palette-brand);
+  border-radius: var(--radius-pill);
+  opacity: 0.5;
+}
+
+.observation-observing-module__note {
+  margin: 0;
+  color: var(--palette-ink-400);
+  font-size: var(--text-caption);
+  line-height: var(--text-caption-line);
+}
+
+@keyframes observation-observing-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(0.45rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes observation-observing-shimmer {
   from { background-position: 100% 0; }
   to { background-position: -100% 0; }
@@ -1705,6 +1797,10 @@
 @media (prefers-reduced-motion: reduce) {
   .observation-observing-module__skeleton span {
     background: rgba(126, 189, 172, 0.2);
+    animation: none;
+  }
+
+  .observation-observing-module__content {
     animation: none;
   }
 }

@@ -881,6 +881,15 @@
   border-radius: 1rem;
 }
 
+/* 视频拆解等内容整理卡（ValidatedModuleProgress）内的深度思考面板
+   与头部、模块列表、页脚同宽：做成与页脚一致的通栏色带。
+   后代选择器特异性压过基础外边距与窄屏媒体查询。 */
+.validated-module-progress .deep-thinking-panel {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
 .deep-thinking-panel--observation summary {
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   padding: 0.75rem 0.9rem;

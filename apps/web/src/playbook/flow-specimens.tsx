@@ -194,7 +194,17 @@ const PLAYBOOK_OBSERVING_PROGRESS: StructuredGenerationProgressV1 = {
     text: "标本推理文案，仅用于对照设计稿，不是真实观察。",
   },
   modules: [
-    { moduleId: "visual-observations", status: "succeeded" },
+    {
+      moduleId: "visual-observations",
+      status: "succeeded",
+      // 标本结果：演示模块完成后的页面层内容预览，不是真实观察结论。
+      result: {
+        imageQuality: { usable: true, overallQuality: "limited" },
+        observations: [
+          { region: "标本区域", description: "标本观察文案，仅用于对照设计稿，不是真实观察结论。" },
+        ],
+      },
+    },
     { moduleId: "observation-summary", status: "running" },
     { moduleId: "wellness-recommendations", status: "pending" },
     { moduleId: "safety-limitations", status: "pending" },

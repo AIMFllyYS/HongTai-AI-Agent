@@ -325,7 +325,14 @@ test("observation in-progress page follows unarchived S9b without vitals HUD or 
   assert.match(observing, /取消本次观察/);
   assert.match(observing, /图片与报告只保存在本机；结果仅供日常参考/);
   assert.doesNotMatch(observing, /项已完成|正在生成真实观察报告|ValidatedModuleProgress/);
-  assert.doesNotMatch(observing, /row\.content|BPM|SpO2|Wellness|健康评分|已停止 AI|停止生成/);
+  // 观察中屏从 v0.1.30 起允许 row.content：模块完成后在页面层揭示内容预览；
+  // 其余禁止项仍是医疗真实性红线（生命体征、健康评分、停止按钮）。
+  assert.doesNotMatch(observing, /BPM|SpO2|Wellness|健康评分|已停止 AI|停止生成/);
+  assert.match(observing, /ObservationModuleContent/);
+  assert.match(observing, /row\.content \? <ObservationModuleContent content=\{row\.content\} \/> : null/);
+  assert.match(observing, /observation-observing-module__content/);
+  assert.match(observing, /content\.lead \? <p className="observation-observing-module__lead">/);
+  assert.match(observing, /content\.groups\?\.map/);
   assert.match(css, /observation-laser-scan/);
   assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.observation-capture-card__laser::after[\s\S]*animation:\s*none/);
   assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.observation-observing-module__skeleton span[\s\S]*animation:\s*none/);
@@ -339,6 +346,10 @@ test("observation in-progress page follows unarchived S9b without vitals HUD or 
     /\.deep-thinking-panel\.deep-thinking-panel--observation \{[^}]*margin:\s*0/s,
     "观察页变体需要双类特异性压过窄屏 .deep-thinking-panel 的 margin-inline",
   );
+  // 模块内容预览的样式契约：与骨架同缩进、揭示动画、减少动态时降级。
+  assert.match(css, /\.observation-observing-module__content \{[^}]*margin:\s*0\.55rem 0 0 1\.9rem/s);
+  assert.match(css, /\.observation-observing-module__group li \{[^}]*color:\s*var\(--palette-ink-600\)/s);
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.observation-observing-module__content[\s\S]*animation:\s*none/);
 
   assert.match(report, /autoStartedFor/);
   assert.match(report, /onCancel=\{\(\) => navigate\(observationNewPath\(\)\)\}/);

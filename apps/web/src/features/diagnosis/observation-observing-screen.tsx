@@ -13,6 +13,7 @@ import { IssueNotice, type TaskIssueActionHandlers } from "../../components/Issu
 import { RuntimeMediaFrame } from "../../components/RuntimeMediaFrame";
 import {
   buildValidatedModuleRows,
+  type ValidatedModuleContent,
   type ValidatedModuleRow,
 } from "../generation/validated-module-progress";
 import { diagnosisModuleDefinitions } from "./diagnosis-module-progress";
@@ -20,6 +21,28 @@ import { diagnosisModuleDefinitions } from "./diagnosis-module-progress";
 export const OBSERVATION_OBSERVING_DISCLAIMER = "图片与报告只保存在本机；结果仅供日常参考";
 
 const waitingThinking = { status: "waiting", text: "" } as const;
+
+/** 模块完成后的页面层内容预览：深度思考结束后逐块揭示，
+ * 内容模型复用 generation 层的 ValidatedModuleContent，视觉走观察页的墨色语言。 */
+function ObservationModuleContent({ content }: { readonly content: ValidatedModuleContent }) {
+  return (
+    <div className="observation-observing-module__content">
+      {content.lead ? <p className="observation-observing-module__lead">{content.lead}</p> : null}
+      {content.facts?.length ? (
+        <dl className="observation-observing-module__facts">
+          {content.facts.map((fact) => <div key={`${fact.label}:${fact.value}`}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}
+        </dl>
+      ) : null}
+      {content.groups?.map((group) => group.items.length ? (
+        <section className="observation-observing-module__group" key={group.title}>
+          <strong>{group.title}</strong>
+          <ul>{group.items.map((item, index) => <li key={`${index}:${item}`}>{item}</li>)}</ul>
+        </section>
+      ) : null)}
+      {content.note ? <p className="observation-observing-module__note">{content.note}</p> : null}
+    </div>
+  );
+}
 
 export function isObservationObservingView(reportStatus: string | undefined, canShowReport: boolean): boolean {
   return !canShowReport && reportStatus !== "succeeded";
@@ -128,6 +151,7 @@ export function ObservationObservingScreen({
                   <span />
                 </div>
               ) : null}
+              {row.content ? <ObservationModuleContent content={row.content} /> : null}
             </li>
           ))}
         </ol>

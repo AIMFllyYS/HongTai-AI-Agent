@@ -30,6 +30,10 @@ test("playbook route is a catalog, not a product tab, and does not call AppRunti
   assert.match(specimens, /设计稿标本 · 不是真实观察会话/);
   assert.match(specimens, /标本推理文案，仅用于对照设计稿，不是真实观察/);
   assert.equal(playbookSections.find((section) => section.id === "observing")?.title, "S9b 观察中");
+  // 观察中标本与产品页共用 ObservationObservingScreen：标本带一份已完成模块的
+  // 标本结果，覆盖模块完成后页面层内容预览的新状态。
+  assert.match(specimens, /moduleId: "visual-observations",\s*\n\s*status: "succeeded",/);
+  assert.match(specimens, /标本观察文案，仅用于对照设计稿，不是真实观察结论/);
   assert.equal(playbookSections.find((section) => section.id === "recent-record-actions")?.title, "M/最近记录操作");
   assert.match(specimens, /长按最近记录打开/);
 });

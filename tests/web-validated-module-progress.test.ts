@@ -261,6 +261,14 @@ test("live generation renders runtime-only deep thinking and keeps busy primary 
   assert.match(css, /\.deep-thinking-panel\s*\{[^}]*overflow:\s*visible/s);
   assert.doesNotMatch(css, /\.deep-thinking-panel\s*\{[^}]*margin:\s*var\(--space-3\)\s+var\(--space-4\)\s+0/s);
   assert.doesNotMatch(css, /\.validated-module-progress\s*\{[^}]*gap:\s*0\s*;/s);
+  // 卡内深度思考面板与头部、模块列表、页脚同宽（通栏色带）：
+  // 后代选择器特异性压过基础外边距与窄屏媒体查询里的 margin-inline，
+  // 否则面板比上下区块左右各窄 1rem/0.75rem。
+  assert.match(
+    css,
+    /\.validated-module-progress \.deep-thinking-panel\s*\{[^}]*margin:\s*0[^}]*border:\s*0[^}]*border-radius:\s*0/s,
+    "内容整理卡内的深度思考面板需要通栏对齐规则",
+  );
   assert.match(css, /\.button--primary\.is-busy:disabled[\s\S]*color:\s*var\(--color-text-on-primary\)[\s\S]*opacity:\s*1/);
   assert.match(observationPanels, /className=\{confirming \? "is-busy" : ""\}/);
   assert.match(detail, /className=\{pendingAction === "analysis" \? "is-busy" : ""\}/);
