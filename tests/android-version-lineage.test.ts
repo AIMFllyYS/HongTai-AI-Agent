@@ -11,7 +11,7 @@ function requireMatch(value: string, pattern: RegExp, label: string): string {
   return matched;
 }
 
-test("the v0.1.29/code 37 candidate stays ahead of the published v0.1.28 download", () => {
+test("the published v0.1.29/code 37 download stays aligned with the source version", () => {
   const gradle = readFileSync(join(root, "android", "app", "build.gradle.kts"), "utf8");
   const downloadPage = readFileSync(join(root, "download.html"), "utf8");
   const sourceCode = Number(requireMatch(gradle, /versionCode\s*=\s*(\d+)/u, "Android versionCode"));
@@ -19,17 +19,17 @@ test("the v0.1.29/code 37 candidate stays ahead of the published v0.1.28 downloa
   const publishedCode = Number(requireMatch(downloadPage, /"versionCode":\s*"(\d+)"/u, "published download versionCode"));
   const publishedName = requireMatch(downloadPage, /aria-label="当前推荐版本 v([0-9.]+)"/u, "published download version");
 
-  // 候选验收期间允许源码版本领先于已发布下载；发布验收通过、公网切换后恢复对齐断言。
+  // 公网已切换：下载页推荐版本必须与源码版本对齐。
   assert.equal(sourceCode, 37);
   assert.equal(sourceName, "0.1.29");
-  assert.equal(publishedCode, 36);
-  assert.equal(publishedName, "0.1.28");
-  assert.ok(sourceCode > publishedCode, "candidate versionCode must stay monotonic above the published download");
-  assert.match(downloadPage, /23,387,559 bytes/u);
-  assert.match(downloadPage, /9F2A9C608ACE3DF4655E5FF75D599487F3784FF2E4BA06BB0C07D57D9D3F5A3A/iu);
+  assert.equal(publishedCode, 37);
+  assert.equal(publishedName, "0.1.29");
+  assert.match(downloadPage, /23,387,907 bytes/u);
+  assert.match(downloadPage, /261B85AB54940864F74509ED544E78325EB2C7B6F93C2B4D3F0BE69DDCAC71EF/iu);
+  assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.29\.apk/u);
+  assert.match(downloadPage, /制作页 UI\/UX 系统性重构：五阶段长页改为可点击步骤导航/u);
+  assert.match(downloadPage, /"version":\s*"v0\.1\.28"[\s\S]*?"recommended":\s*false/u);
   assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.28\.apk/u);
-  assert.match(downloadPage, /后台持续运行：制作、采集、拆解、观察任务熄屏或切后台继续推进/u);
-  assert.doesNotMatch(downloadPage, /HongTai-AI-Agent-release-v0\.1\.29\.apk/u);
   assert.match(downloadPage, /"version":\s*"v0\.1\.27"[\s\S]*?"recommended":\s*false/u);
   assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.27\.apk/u);
   assert.match(downloadPage, /"version":\s*"v0\.1\.26"[\s\S]*?"recommended":\s*false/u);

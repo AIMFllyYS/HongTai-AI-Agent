@@ -31,7 +31,7 @@
 
 - Android 源码版本推进为 `0.1.29` / `versionCode=37`；只生成 Release 产品并按 `HongTai-AI-Agent-release-v0.1.29.apk` 独立归档。
 - 本地归档 23,387,907 字节、SHA-256 `261b85ab54940864f74509ed544e78325eb2c7b6f93c2b4d3f0be69ddcac71ef`；Release 单测、lint、四 ABI assemble、16 KiB 对齐、v2/v3 签名、证书锚定（`54df122c…b5b2fde`，与历史发布一致）通过。
-- `pnpm check`（typecheck + lint + 全部测试）与 web build 通过；390px 与桌面截图端测验收通过（`output/browser-e2e/uiux-after/acceptance.md`）。**真机走查、公网上传与 `download.html` 切换未做，公开推荐仍为 `v0.1.28`。**
+- `pnpm check`（typecheck + lint + 全部测试）与 web build 通过；390px 与桌面截图端测验收通过（`output/browser-e2e/uiux-after/acceptance.md`）。公网上传与 `download.html` 切换已完成（同日），公开推荐为 `v0.1.29`；真机走查未做。
 
 ## [0.1.28] - 2026-08-31
 
