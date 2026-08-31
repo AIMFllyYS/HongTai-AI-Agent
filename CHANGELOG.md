@@ -29,7 +29,8 @@
 - Android 源码版本推进为 `0.1.31` / `versionCode=39`；只生成 Release 产品并按 `HongTai-AI-Agent-release-v0.1.31.apk` 独立归档，不覆盖历史版本。
 - 候选归档 23,409,168 字节、SHA-256 `e02bbe610e13c04fc7f59f44a2aa765d8eee082de55d552f40bb5161a249650c`；Release 单测（含新增 `StorageScannerTest` 10 项）、lint、四 ABI assemble、16 KiB 对齐、v2/v3 签名、证书锚定（`54df122c…b5b2fde`，与历史发布一致）通过。
 - `pnpm check`（typecheck + lint + 全部测试）与 web build 通过；存储管理页桌面与 390px 视口截图核对（`output/storage-v2-ui/`）。
-- 真机验证未做：StatFs 读数、定向删除与缓存在真机上的行为待本候选真机验收；通过前不切换 `download.html`。
+- 真机验证未做：StatFs 读数、定向删除与缓存在真机上的行为待真机走查。
+- 已上传公网并切换 `download.html`：当前推荐指向 `HongTai-AI-Agent-release-v0.1.31.apk`（versionCode 39），v0.1.30 退为历史版本；版本世系契约测试相应更新为「源码与公网推荐一致推进到 0.1.31/code 39」。
 
 ## [0.1.30] - 2026-08-31
 

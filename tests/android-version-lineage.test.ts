@@ -11,7 +11,7 @@ function requireMatch(value: string, pattern: RegExp, label: string): string {
   return matched;
 }
 
-test("the v0.1.31 candidate advances source while the published v0.1.30 download stays recommended", () => {
+test("the published v0.1.31 download becomes recommended while v0.1.30 stays archived", () => {
   const gradle = readFileSync(join(root, "android", "app", "build.gradle.kts"), "utf8");
   const downloadPage = readFileSync(join(root, "download.html"), "utf8");
   const sourceCode = Number(requireMatch(gradle, /versionCode\s*=\s*(\d+)/u, "Android versionCode"));
@@ -19,18 +19,21 @@ test("the v0.1.31 candidate advances source while the published v0.1.30 download
   const publishedCode = Number(requireMatch(downloadPage, /"versionCode":\s*"(\d+)"/u, "published download versionCode"));
   const publishedName = requireMatch(downloadPage, /aria-label="当前推荐版本 v([0-9.]+)"/u, "published download version");
 
-  // 发布状态：源码推进到 0.1.31/code 39 候选；公网推荐仍是已验收的 0.1.30/code 38，
-  // v0.1.31 真机验收通过前不切换下载页。
+  // 发布状态：源码与公网推荐一致推进到 0.1.31/code 39，v0.1.30/code 38 退回历史版本。
   assert.equal(sourceCode, 39);
   assert.equal(sourceName, "0.1.31");
-  assert.equal(publishedCode, 38);
-  assert.equal(publishedName, "0.1.30");
-  assert.match(downloadPage, /HongTai-AI-Agent-release-v0\.1\.30\.apk/u);
+  assert.equal(publishedCode, 39);
+  assert.equal(publishedName, "0.1.31");
+  assert.match(downloadPage, /HongTai-AI-Agent-release-v0\.1\.31\.apk/u);
+  assert.match(downloadPage, /23,409,168 bytes/u);
+  assert.match(downloadPage, /E02BBE610E13C04FC7F59F44A2AA765D8EEE082DE55D552F40BB5161A249650C/iu);
+  assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.31\.apk/u);
+  // v0.1.31 作为当前推荐，v0.1.30 及更早版本归档为历史版本。
+  assert.match(downloadPage, /"version":\s*"v0\.1\.31"[\s\S]*?"recommended":\s*true/u);
+  assert.match(downloadPage, /"version":\s*"v0\.1\.30"[\s\S]*?"recommended":\s*false/u);
+  assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.30\.apk/u);
   assert.match(downloadPage, /23,388,459 bytes/u);
   assert.match(downloadPage, /C32476E44A9850485F3C960EE36FBAA94AF5305B5EDEB8F42CA6967540167B0/iu);
-  assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.30\.apk/u);
-  // v0.1.30 作为当前推荐，v0.1.29 及更早版本归档为历史版本。
-  assert.match(downloadPage, /"version":\s*"v0\.1\.30"[\s\S]*?"recommended":\s*true/u);
   assert.match(downloadPage, /"version":\s*"v0\.1\.29"[\s\S]*?"recommended":\s*false/u);
   assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.29\.apk/u);
   assert.match(downloadPage, /23,387,907 bytes/u);
