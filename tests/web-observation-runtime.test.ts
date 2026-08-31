@@ -331,6 +331,14 @@ test("observation in-progress page follows unarchived S9b without vitals HUD or 
   assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.observation-observing-module__skeleton span[\s\S]*animation:\s*none/);
   assert.match(css, /\.observation-observing-scan__brackets i\s*\{[^}]*border:\s*0\.125rem solid var\(--palette-brand\)/s);
   assert.match(css, /\.observation-observing-scan__live\s*\{[^}]*background:\s*var\(--palette-brand-tint\)/s);
+  // 深度思考面板与同屏扫描卡、模块列表同宽：双类特异性压过窄屏媒体查询里
+  // .deep-thinking-panel 的 margin-inline，否则面板比上下卡片左右各窄 0.75rem。
+  const componentsCss = read("styles/components.css");
+  assert.match(
+    componentsCss,
+    /\.deep-thinking-panel\.deep-thinking-panel--observation \{[^}]*margin:\s*0/s,
+    "观察页变体需要双类特异性压过窄屏 .deep-thinking-panel 的 margin-inline",
+  );
 
   assert.match(report, /autoStartedFor/);
   assert.match(report, /onCancel=\{\(\) => navigate\(observationNewPath\(\)\)\}/);

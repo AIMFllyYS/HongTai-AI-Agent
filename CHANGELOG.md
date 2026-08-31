@@ -12,6 +12,18 @@
 
 ## [未发布]
 
+## [0.1.30] - 2026-08-31
+
+### 修复
+
+- **舌诊/面诊观察中页 AI 深度思考卡片宽度不对齐**：窄屏（<430px，覆盖全部手机 WebView）下，媒体查询里 `.deep-thinking-panel` 的 `margin-inline` 会按源顺序覆盖观察页变体的 `margin: 0`，使深度思考卡片比上方的图片扫描卡与下方的报告模块列表左右各窄 0.75rem，视觉突兀。改用双类选择器 `.deep-thinking-panel.deep-thinking-panel--observation` 提升特异性后，三个区块在 390px 与桌面视口下左右边界完全一致；观察页契约测试已锁定该层叠关系防止回归。
+
+### 发布边界
+
+- Android 源码版本推进为 `0.1.30` / `versionCode=38`；只生成 Release 产品并按 `HongTai-AI-Agent-release-v0.1.30.apk` 独立归档。
+- 本地归档 23,387,931 字节、SHA-256 `18922a0ff5a152c032467d0004e0aaa499ee9c0d561e46042c37d47a82dd48df`；Release 单测、lint、四 ABI assemble、16 KiB 对齐、v2/v3 签名、证书锚定（`54df122c…b5b2fde`，与历史发布一致）通过。
+- `pnpm check`（typecheck + lint + 全部测试）与 web build 通过；390px 与桌面视口的真实渲染测量（Playwright 注入观察中页结构）确认扫描卡、深度思考面板、模块列表三者左右边界一致。公网上传与 `download.html` 切换本次未执行。
+
 ## [0.1.29] - 2026-08-31
 
 ### 重构

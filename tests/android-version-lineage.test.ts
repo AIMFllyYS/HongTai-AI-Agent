@@ -11,7 +11,7 @@ function requireMatch(value: string, pattern: RegExp, label: string): string {
   return matched;
 }
 
-test("the published v0.1.29/code 37 download stays aligned with the source version", () => {
+test("the published v0.1.29 download stays archived while the v0.1.30 candidate advances the source", () => {
   const gradle = readFileSync(join(root, "android", "app", "build.gradle.kts"), "utf8");
   const downloadPage = readFileSync(join(root, "download.html"), "utf8");
   const sourceCode = Number(requireMatch(gradle, /versionCode\s*=\s*(\d+)/u, "Android versionCode"));
@@ -19,11 +19,13 @@ test("the published v0.1.29/code 37 download stays aligned with the source versi
   const publishedCode = Number(requireMatch(downloadPage, /"versionCode":\s*"(\d+)"/u, "published download versionCode"));
   const publishedName = requireMatch(downloadPage, /aria-label="当前推荐版本 v([0-9.]+)"/u, "published download version");
 
-  // 公网已切换：下载页推荐版本必须与源码版本对齐。
-  assert.equal(sourceCode, 37);
-  assert.equal(sourceName, "0.1.29");
+  // 候选验收期：源码已推进到 0.1.30/code 38，公网推荐仍是已发布的 0.1.29/code 37，
+  // 两者暂时允许不同；下载页不得把未发布验收的候选画成推荐版本。
+  assert.equal(sourceCode, 38);
+  assert.equal(sourceName, "0.1.30");
   assert.equal(publishedCode, 37);
   assert.equal(publishedName, "0.1.29");
+  assert.doesNotMatch(downloadPage, /HongTai-AI-Agent-release-v0\.1\.30\.apk/u);
   assert.match(downloadPage, /23,387,907 bytes/u);
   assert.match(downloadPage, /261B85AB54940864F74509ED544E78325EB2C7B6F93C2B4D3F0BE69DDCAC71EF/iu);
   assert.match(downloadPage, /https:\/\/husteread\.com\/storage\/public\/HongTai-AI-Agent-release-v0\.1\.29\.apk/u);
