@@ -214,9 +214,11 @@ test("制作页用 contextualAction 单主按钮、五阶段时间线与 9:16 �
   assert.match(panel, /重新生成分镜/);
   assert.match(panel, /onUpdateStoryboard/);
   assert.match(panel, /onSynthesizeSentence/);
-  // 流式生成上屏的是已点亮句卡 + 骨架占位，原始 JSON 不再上屏；订阅器节流计数
+  // 流式生成上屏的是已闭合句子的真实句卡 + 骨架占位，原始 JSON 不上屏；订阅器节流计数
   assert.match(panel, /sentenceCount/);
   assert.match(panel, /production-script-stream__sentences/);
+  assert.match(panel, /extractClosedStreamSentences/, "流式句卡只渲染闭合且校验通过的句子");
+  assert.match(panel, /按已生成文案字数估算/, "流式总时长标注估算口径");
   assert.doesNotMatch(panel, /production-script-stream__text/);
   assert.match(page, /countCompletedStreamSentences/);
   assert.match(page, /SCRIPT_STREAM_FLUSH_MS/);
@@ -233,6 +235,21 @@ test("制作页用 contextualAction 单主按钮、五阶段时间线与 9:16 �
   assert.match(page, /确认删除整个项目/);
   assert.match(page, /pinnedStage/);
   assert.match(page, /visibleStage/);
+  // 钉选是 toggle：点击已钉选的阶段取消钉选；面板呈现钉选态（aria-pressed + is-pinned）
+  assert.match(page, /current === item \? undefined : item/, "点击已钉选阶段要取消钉选");
+  assert.match(panel, /aria-pressed=\{pinned \|\| undefined\}/);
+  assert.match(panel, /is-pinned/);
+  assert.match(css, /\.production-pipeline-timeline__item\.is-pinned/);
+  // 页头动作组：素材库与更多按钮必须横排，不允许垂直堆叠溢出页头
+  assert.match(page, /production-header-actions/);
+  assert.match(css, /\.production-header-actions\s*\{[^}]*display:\s*flex/s, "页头动作组必须 flex 横排");
+  assert.match(css, /\.production-header-actions\s*\{[^}]*flex-wrap:\s*nowrap/s, "页头动作组不换行");
+  // 死代码清理：headerAction 恒存在时 leadingAction 永不渲染，不再传
+  assert.doesNotMatch(read("features/production/production-workbench-page.tsx"), /leadingAction=/, "headerAction 恒存在，leadingAction 是死代码");
+  // 阶段自动跟随：scriptGenerating 只覆盖脚本生成——脚本落盘或首个配音进度事件即释放
+  assert.match(page, /if \(script\) setScriptGenerating\(false\)/, "脚本落盘即释放 scriptGenerating");
+  assert.match(page, /event\.type === "narration-progress"[\s\S]*?setScriptGenerating\(false\)/, "首个配音进度事件即释放 scriptGenerating");
+  assert.match(page, /narrationRunning/, "配音进行中的事件信号进入阶段推导");
 
   assert.match(css, /aspect-ratio:\s*9\s*\/\s*16/);
   assert.match(css, /max-width:\s*17\.5rem/);
@@ -241,8 +258,15 @@ test("制作页用 contextualAction 单主按钮、五阶段时间线与 9:16 �
   assert.match(css, /\.production-pipeline-sentence/);
   assert.match(css, /\.production-script-stream \.deep-thinking-panel \{\s*margin-inline:\s*0/, "制作页内深度思考面板与脚本流同宽");
   assert.match(css, /\.production-script-stream__sentences/);
-  assert.doesNotMatch(panel, /production-pipeline-narration-list/, "逐句配音状态已在句卡头部，配音区不再重复列句子");
+  assert.doesNotMatch(panel, /production-pipeline-narration-list/, "旧的配音区重复列表类名不再使用");
+  // 配音阶段逐句状态列表：配音中由 narration-progress 的 sentenceId 驱动，ready 以落盘记录为准
+  assert.match(panel, /production-pipeline-narration-sentences/);
+  assert.match(panel, /narrationProgress\?\.sentenceId === sentence\.id/);
+  assert.match(panel, /production-pipeline-sentence__narrating/, "分镜句卡右下角有配音中徽标");
+  assert.match(page, /sentenceId: event\.sentenceId/, "页面保留配音事件的 sentenceId");
   assert.doesNotMatch(css, /\.production-pipeline-narration-list/);
+  assert.match(css, /\.production-pipeline-narration-sentences/);
+  assert.match(css, /\.production-pipeline-sentence__narrating/);
   assert.match(panel, /重试这句/, "配音失败重试列表保留");
   assert.doesNotMatch(surface, /时间轴|逐帧|转场编辑/);
 });
@@ -473,6 +497,23 @@ test("五阶段推导：脚本生成中归分镜文稿，无 storyboard 的 v3 �
   assert.equal(resolveProductionPipelineStage({
     project: { status: "draft", storyboard: {}, narration: { ready: 2, total: 3 } },
   }), "narration");
+  // 配音进行中（narration-progress 在飞）：配音记录整批结束才落盘，期间由事件信号归「配音」，
+  // 不再从脚本直接跳到合成；全部就绪落盘后信号解除，回到句级推导。
+  assert.equal(resolveProductionPipelineStage({
+    narrationRunning: true,
+    project: { status: "draft", storyboard: {} },
+  }), "narration", "配音进行中但记录未落盘时归配音，不归脚本");
+  assert.equal(resolveProductionPipelineStage({
+    narrationRunning: true,
+    project: { status: "draft", storyboard: {}, narration: { ready: 0, total: 3 } },
+  }), "narration");
+  assert.equal(resolveProductionPipelineStage({
+    narrationRunning: true,
+    project: { status: "rendering", storyboard: {}, narration: { ready: 3, total: 3 } },
+  }), "output", "渲染中优先归成片，残留的配音进度信号不得盖过渲染");
+  assert.equal(resolveProductionPipelineStage({
+    narrationRunning: true,
+  }), "requirement", "无项目时会话入口仍停在需求");
   // 全部就绪 → 合成（是否组装过 v4 计划只影响按钮文案，不影响阶段）。
   assert.equal(resolveProductionPipelineStage({
     project: { status: "draft", storyboard: {}, narration: { ready: 3, total: 3 } },

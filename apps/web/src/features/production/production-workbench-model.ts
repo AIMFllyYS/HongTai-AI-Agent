@@ -143,6 +143,11 @@ export interface ProductionPipelineStageInput {
   /** `generateScript` 调用进行中（含创建后的自动首次生成）；脚本落盘前只有页面知道。 */
   readonly scriptGenerating?: boolean;
   /**
+   * 逐句配音进行中（`narration-progress` 在飞且尚有未就绪句）：配音记录整批结束才
+   * 落盘，期间只有事件可判，避免阶段从脚本直接跳到合成、配音视图从不出现。
+   */
+  readonly narrationRunning?: boolean;
+  /**
    * v3 存量判据：项目带着 v3 时代生成的旧计划（`plan.schemaVersion` 非
    * `production-plan.v4`）且没有分镜脚本。v4 管线只会写 v4 计划，所以该组合只可能
    * 属于 v3 项目；缺省按 v4 处理（新项目与脚本生成失败的项目都从「分镜文稿」起步）。
@@ -164,6 +169,7 @@ export interface ProductionPipelineStageInput {
  * - `generateScript` 进行中 → `script`：脚本字段尚未落盘，只有页面的在飞标志可判。
  * - 无项目 → `requirement`。
  * - `rendering` / `succeeded` → `output`：沿用现有渲染/输出按钮语义。
+ * - 逐句配音进行中 → `narration`：脚本已落盘、配音记录未落盘的窗口期由事件信号接管。
  * - 无 `storyboard` 字段 → `legacyPipeline` 为真（v3 存量项目）时 `output`：直接呈现
  *   成片/渲染区，由页面另行标注旧版；否则是 v4 新项目或脚本生成失败的项目 → `script`，
  *   失败重试入口就在分镜文稿阶段。
@@ -176,6 +182,8 @@ export function resolveProductionPipelineStage(input: ProductionPipelineStageInp
   const project = input.project;
   if (!project) return "requirement";
   if (project.status === "rendering" || project.status === "succeeded") return "output";
+  // 配音进行中的事件信号优先于句级就绪推导：配音记录整批结束才落盘，期间 ready 恒为旧值。
+  if (input.narrationRunning) return "narration";
   if (!project.storyboard) return input.legacyPipeline ? "output" : "script";
   const ready = project.narration?.ready ?? 0;
   const total = project.narration?.total ?? 0;

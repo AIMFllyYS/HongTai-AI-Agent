@@ -113,10 +113,10 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   const [scriptGenerating, setScriptGenerating] = useState(false);
   const [scriptStream, setScriptStream] = useState<ScriptStreamState>();
   const scriptStreamStopRef = useRef<(() => void) | undefined>(undefined);
-  const [narrationProgress, setNarrationProgress] = useState<{ readonly index: number; readonly total: number }>();
+  const [narrationProgress, setNarrationProgress] = useState<{ readonly index: number; readonly total: number; readonly sentenceId?: string }>();
   const [composeViolations, setComposeViolations] = useState<readonly MeasuredDurationViolation[]>([]);
   const [subtitleTemplateId, setSubtitleTemplateId] = useState<SubtitleTemplateId>(DEFAULT_SUBTITLE_TEMPLATE_ID);
-  /** 步骤导航钉选：仅用户视图；管线运行中强制跟随推导阶段。仅存于本页。 */
+  /** 步骤导航钉选：仅用户视图；管线运行中强制跟随推导阶段。点已钉选的阶段即取消钉选。仅存于本页。 */
   const [pinnedStage, setPinnedStage] = useState<ProductionPipelineStage>();
   const [moreOpen, setMoreOpen] = useState(false);
   const [deleteProjectConfirmOpen, setDeleteProjectConfirmOpen] = useState(false);
@@ -341,7 +341,14 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
         if (event.type === "narration-progress") {
           if (event.projectId !== projectId) return;
           if (typeof event.sentenceIndex === "number" && typeof event.total === "number") {
-            setNarrationProgress({ index: event.sentenceIndex + 1, total: event.total });
+            // 首个配音进度事件 = 脚本阶段已结束的真实信号：放开 scriptGenerating，
+            // 阶段推导随即走向配音（scriptGenerating 只覆盖脚本生成，不钉住整条管线）。
+            setScriptGenerating(false);
+            setNarrationProgress({
+              index: event.sentenceIndex + 1,
+              total: event.total,
+              ...(typeof event.sentenceId === "string" && event.sentenceId ? { sentenceId: event.sentenceId } : {}),
+            });
           }
           return;
         }
@@ -361,6 +368,12 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
       unsubscribe?.();
     };
   }, [composingNew, project?.projectId, refreshPipeline, service]);
+
+  // 脚本落盘即结束「文稿生成中」覆盖：一键管线里 state 事件触发 refreshPipeline 后 script
+  // 就位，阶段推导走向配音/合成；不再由 runAutomaticPipeline 整段 finally 才释放。
+  useEffect(() => {
+    if (script) setScriptGenerating(false);
+  }, [script]);
 
   /** 执行一个管线动作：成功后刷新项目列表与脚本/配音记录；失败进入 issue 而不是假成功。 */
   const perform = async (action: () => Promise<ProductionProjectRecord | ProductionScriptRecord | ProductionNarrationRecord | MeasuredPlanComposeResult | AutomaticPipelineResult>) => {
@@ -504,6 +517,8 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
       setProject(created);
       setProjects((current) => [created, ...current.filter((item) => item.projectId !== created.projectId)]);
       const stopStream = startScriptStream(created.projectId);
+      // scriptGenerating 只覆盖脚本生成阶段：脚本落盘（state → refreshPipeline）或首个
+      // narration-progress 到达即提前释放（见上方订阅与 effect），这里 finally 是失败兜底。
       setScriptGenerating(true);
       try {
         const pipeline = await service.runAutomaticPipeline(created.projectId, { brief, subtitleTemplateId });
@@ -592,8 +607,13 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
   // planning（脚本生成中）可能发生在别的页面（向导一键跳转过来）：面板要按生成中展示，
   // 而不是摆一个「还没有分镜脚本」的空脚本区。本地发起的生成由 scriptGenerating 覆盖。
   const scriptGeneratingInProject = activeProject?.status === "planning";
+  // 配音进行中：事件在飞且尚有未就绪句。总数取落盘句数与事件 total 的较大者——逐句重试
+  // 时事件 total 只是本次子集，落盘记录才是全量；批末失败句要等 failures 揭晓，既有逻辑不变。
+  const narrationRunning = Boolean(narrationProgress)
+    && narrationReady < Math.max(narrationTotal, narrationProgress?.total ?? 0);
   const stage = resolveProductionPipelineStage({
     scriptGenerating: scriptGenerating || scriptGeneratingInProject || busy && !activeProject && composerFlow === "agent",
+    narrationRunning,
     legacyPipeline,
     project: activeProject
       ? {
@@ -787,7 +807,6 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
       activeNav="create"
       contextualAction={contextualAction}
       headerAction={headerAction}
-      leadingAction={showComposer ? undefined : <span className="page-header-icon"><Icon name="movie_edit" size={24} /></span>}
       navigate={navigate}
       title={shellTitle}
     >
@@ -833,7 +852,7 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
             narrationProgress={narrationProgress}
             onConfigureAi={() => navigate(aiSettingsPath())}
             onImport={() => void perform(() => runtime.production.importAssets(activeProject.projectId))}
-            onPinStage={setPinnedStage}
+            onPinStage={(item) => setPinnedStage((current) => current === item ? undefined : item)}
             onRegenerateScript={() => void generateScript()}
             onRemoveAsset={(assetId) => void perform(() => runtime.production.removeAsset(activeProject.projectId, assetId))}
             onRemoveOutput={() => void perform(() => runtime.production.removeOutput(activeProject.projectId))}
@@ -841,6 +860,7 @@ export function ProductionWorkbenchPage({ runtime, navigate, searchEpoch }: { re
             onSynthesizeSentence={(sentenceId) => void synthesizeNarration([sentenceId])}
             onUpdateStoryboard={updateStoryboard}
             pageIssue={issue}
+            pinnedStage={pinnedStage}
             progress={progress}
             progressMessage={progressMessage}
             project={activeProject}

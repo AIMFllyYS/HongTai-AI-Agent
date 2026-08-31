@@ -19,6 +19,7 @@ import { Icon, type IconName } from "../../components/Icon";
 import { issueActionPresentation, issueTitle, type TaskIssueActionHandlers } from "../../components/IssueNotice";
 import { SubtitleTemplatePicker } from "../../components/SubtitleTemplatePicker";
 import { PRODUCTION_TEXT_PRESET_LABELS, productionPreviewSource } from "./production-workbench-model";
+import { extractClosedStreamSentences } from "./script-stream-sentences";
 import {
   avatarSourceShortViolation,
   composeViolationItems,
@@ -57,6 +58,8 @@ export interface ProductionPipelinePanelProps {
   readonly stage: ProductionPipelineStage;
   /** 用户实际查看的阶段：管线运行中恒等于 stage，空闲时可被钉选粘住。 */
   readonly visibleStage: ProductionPipelineStage;
+  /** 当前钉选的阶段；点击已钉选阶段由页面侧取消钉选（toggle），这里只负责呈现钉选态。 */
+  readonly pinnedStage?: ProductionPipelineStage;
   /** 步骤导航钉选：用户点击某个阶段步骤时调用（页面侧负责清 pin 时机）。 */
   readonly onPinStage: (stage: ProductionPipelineStage) => void;
   /** v4 分镜脚本记录；v3 存量项目与「脚本尚未生成」的 v4 项目没有。 */
@@ -64,9 +67,10 @@ export interface ProductionPipelinePanelProps {
   readonly scriptGenerating: boolean;
   /** 生成中的流式投影；订阅不可用或尚未收到事件时为 undefined（退化为骨架等待）。 */
   readonly scriptStream?: ProductionScriptStream;
-  /** 逐句配音记录；有任何一句就绪或经历过配音调用后可用。 */
+  /** 逐句配音记录；有任何一句就绪或经历过配音调用后可用。配音批进行中可能尚未落盘（undefined）。 */
   readonly narration?: ProductionNarrationRecord;
-  readonly narrationProgress?: { readonly index: number; readonly total: number };
+  /** 逐句配音进度事件投影；sentenceId 是正在合成的那句（供句卡右下角「配音中」徽标）。 */
+  readonly narrationProgress?: { readonly index: number; readonly total: number; readonly sentenceId?: string };
   /** 最近一次组装返回的软违规（页面在确认放行前保留展示）。 */
   readonly composeViolations: readonly MeasuredDurationViolation[];
   readonly legacyPipeline: boolean;
@@ -124,6 +128,7 @@ export function ProductionPipelinePanel({
   project,
   stage,
   visibleStage,
+  pinnedStage,
   onPinStage,
   script,
   scriptGenerating,
@@ -217,13 +222,15 @@ export function ProductionPipelinePanel({
           // 分镜/配音/合成步骤，一并禁用并说明。
           const legacyOnly = legacyPipeline && item !== "requirement" && item !== "output";
           const locked = legacyOnly || (index > stageIndex && !stageHasArtifacts[item]);
+          const pinned = pinnedStage === item;
           return (
-            <li className={`production-pipeline-timeline__item is-${state}`} key={item}>
+            <li className={`production-pipeline-timeline__item is-${state}${pinned ? " is-pinned" : ""}`} key={item}>
               <button
                 aria-current={item === visibleStage ? "step" : undefined}
+                aria-pressed={pinned || undefined}
                 disabled={locked}
                 onClick={() => onPinStage(item)}
-                title={legacyOnly ? "旧版项目按当时计划只读渲染，不走这一步" : locked ? STAGE_LOCKED_REASON[item] : undefined}
+                title={legacyOnly ? "旧版项目按当时计划只读渲染，不走这一步" : locked ? STAGE_LOCKED_REASON[item] : pinned ? "已钉住这个阶段，再点一次取消钉选" : undefined}
                 type="button"
               >
                 <Icon name={!skipped && done ? "circle_check" : STAGE_ICONS[item]} size={18} />
@@ -258,6 +265,7 @@ export function ProductionPipelinePanel({
               busy={changing}
               estimatedTotalMs={script.estimatedTotalMs}
               narrationBySentence={narrationBySentence}
+              narrationProgress={narrationProgress}
               onRegenerateScript={() => {
                 if (confirmingRegenerate) {
                   setConfirmingRegenerate(false);
@@ -281,7 +289,7 @@ export function ProductionPipelinePanel({
           )
         ) : null}
 
-        {visibleStage === "narration" && narration && !legacyPipeline ? (
+        {visibleStage === "narration" && !legacyPipeline && (narration || narrationProgress) ? (
           <NarrationSection
             busy={changing}
             narration={narration}
@@ -361,29 +369,51 @@ function PipelineSection({ title, description, stageState, children }: {
 }
 
 /**
- * 分镜脚本生成中的实时区块：已生成句数点亮句卡 + 1 张 pulsing 占位卡 + 深度思考面板。
- * 原始 JSON 流不上屏；JSON 没输出完的板块不猜、不渲染半截结构——等脚本记录落地后
- * 整块切换为句卡编辑。句数在订阅器里按稳定字段名计数（单调递增），无法计数时退化为骨架。
+ * 分镜脚本生成中的实时区块：已闭合的句子渲染为真实句卡（序号/正文/贴纸/估算秒数），
+ * 未闭合的下一句继续显示 pulsing 占位骨架 + 深度思考面板。原始 JSON 流不上屏；句子
+ * 只从累积流里括号配对完整闭合、字段校验通过的对象提取（见 script-stream-sentences），
+ * 解析失败或半截一律跳过，不猜。估算时长标注估算口径，配音后以实测为准。
  */
 function ScriptGeneratingSection({ stream }: { readonly stream?: ProductionScriptStream }) {
   const phase = stream?.phase ?? "generating";
   const sentenceCount = stream?.sentenceCount ?? 0;
+  const sentences = extractClosedStreamSentences(stream?.content ?? "");
+  const totalMs = sentences.reduce((sum, sentence) => sum + sentence.estimatedMs, 0);
+  // 4000 字符截头保尾后窗口里可能只有后段句子：按完整流句数推算起始序号，不重新从 01 编。
+  const firstNumber = Math.max(1, sentenceCount - sentences.length + 1);
 
   return (
     <div className="production-script-stream" data-script-phase={phase}>
-      {sentenceCount > 0 ? (
+      {sentences.length > 0 ? (
+        <p className="production-pipeline-duration">
+          <Icon name="video" size={16} />预估总时长约 <strong>{secondsLabel(totalMs)}</strong> 秒（按已生成文案字数估算，以配音实测为准）
+        </p>
+      ) : null}
+      {sentences.length > 0 ? (
         <ol aria-label="已生成分镜句" className="production-script-stream__sentences">
-          {Array.from({ length: sentenceCount }, (_, index) => (
-            <li key={index}>
-              <em>{String(index + 1).padStart(2, "0")}</em>
-              <Icon name="circle_check" size={14} />
-              <span>第 {index + 1} 句已生成</span>
-            </li>
-          ))}
+          {sentences.map((sentence, offset) => {
+            const sticker = sentence.stickerId
+              ? DECORATION_CATALOGUE.find((item) => item.id === sentence.stickerId)
+              : undefined;
+            return (
+              <li className="production-script-stream__sentence" key={firstNumber + offset}>
+                <header>
+                  <em>{String(firstNumber + offset).padStart(2, "0")}</em>
+                  <Icon name="circle_check" size={14} />
+                  <small>约 {secondsLabel(sentence.estimatedMs)} 秒</small>
+                </header>
+                <p>{sentence.text}</p>
+                <footer>
+                  <Icon name="sparkle" size={13} />
+                  <span>{sticker ? `贴纸：${sticker.label}` : "无贴纸"}</span>
+                </footer>
+              </li>
+            );
+          })}
         </ol>
       ) : null}
       <div aria-hidden="true" className="production-script-stream__skeleton">
-        {sentenceCount > 0 ? <span /> : (
+        {sentences.length > 0 ? <span /> : (
           <>
             <span />
             <span />
@@ -457,10 +487,11 @@ function RequirementSection({ project, busy, onImport, onRemoveAsset }: {
   );
 }
 
-function ScriptSection({ sentences, estimatedTotalMs, narrationBySentence, busy, stageActive, regenerateConfirming, onRegenerateScript, onCancelRegenerate, onUpdateStoryboard, onSynthesizeSentence, project }: {
+function ScriptSection({ sentences, estimatedTotalMs, narrationBySentence, narrationProgress, busy, stageActive, regenerateConfirming, onRegenerateScript, onCancelRegenerate, onUpdateStoryboard, onSynthesizeSentence, project }: {
   readonly sentences: readonly ScriptSentence[];
   readonly estimatedTotalMs: number;
   readonly narrationBySentence: ReadonlyMap<string, { readonly status: "ready" | "missing"; readonly durationMs?: number }>;
+  readonly narrationProgress?: { readonly index: number; readonly total: number; readonly sentenceId?: string };
   readonly busy: boolean;
   readonly stageActive: boolean;
   readonly regenerateConfirming: boolean;
@@ -485,6 +516,9 @@ function ScriptSection({ sentences, estimatedTotalMs, narrationBySentence, busy,
             busy={busy}
             index={index}
             key={sentence.id}
+            narrating={busy && narrationProgress?.sentenceId === sentence.id
+              ? { index: narrationProgress.index, total: narrationProgress.total }
+              : undefined}
             narration={narrationBySentence.get(sentence.id)}
             onSynthesizeSentence={onSynthesizeSentence}
             onUpdateStoryboard={onUpdateStoryboard}
@@ -509,10 +543,12 @@ function ScriptSection({ sentences, estimatedTotalMs, narrationBySentence, busy,
   );
 }
 
-function SentenceEditor({ sentence, index, narration, busy, assetOptions, onUpdateStoryboard, onSynthesizeSentence }: {
+function SentenceEditor({ sentence, index, narration, narrating, busy, assetOptions, onUpdateStoryboard, onSynthesizeSentence }: {
   readonly sentence: ScriptSentence;
   readonly index: number;
   readonly narration?: { readonly status: "ready" | "missing"; readonly durationMs?: number };
+  /** 该句正在被合成（narration-progress 事件的 sentenceId 命中）：卡片右下角给「配音中」徽标。 */
+  readonly narrating?: { readonly index: number; readonly total: number };
   readonly busy: boolean;
   readonly assetOptions: readonly { readonly id: string; readonly displayName?: string }[];
   readonly onUpdateStoryboard: (sentences: readonly PipelineStoryboardEdit[]) => Promise<void>;
@@ -592,6 +628,13 @@ function SentenceEditor({ sentence, index, narration, busy, assetOptions, onUpda
           </select>
         </label>
         <small>约 {secondsLabel(sentence.estimatedMs)} 秒{dirty && textChanged ? "（保存后重估）" : ""}</small>
+        {/* 配音中徽标由真实 narration-progress 事件驱动；未确认的句子不标「已配音」。 */}
+        {narrating ? (
+          <span className="production-pipeline-sentence__narrating">
+            <Icon name="sync" size={13} />配音中（{narrating.index}/{narrating.total}）
+            <progress aria-label={`第 ${index + 1} 句配音进度`} max={narrating.total} value={narrating.index} />
+          </span>
+        ) : null}
         {dirty ? <Button disabled={!canSave} onClick={() => void save()} variant="secondary">{saving ? "保存中…" : "保存修改"}</Button> : null}
       </footer>
       {overLimit ? <p className="production-pipeline-sentence__error">这句超过 {MAX_SCRIPT_SENTENCE_CHARACTERS} 字上限，请精简。</p> : null}
@@ -601,22 +644,26 @@ function SentenceEditor({ sentence, index, narration, busy, assetOptions, onUpda
 
 function NarrationSection({ sentences, narration, narrationProgress, narrationAllReady, busy, stageActive, onSynthesizeSentence }: {
   readonly sentences: readonly ScriptSentence[];
-  readonly narration: ProductionNarrationRecord;
-  readonly narrationProgress?: { readonly index: number; readonly total: number };
+  /** 配音记录；批进行中尚未落盘时为 undefined，逐句状态退化为「待配音/配音中」。 */
+  readonly narration?: ProductionNarrationRecord;
+  readonly narrationProgress?: { readonly index: number; readonly total: number; readonly sentenceId?: string };
   readonly narrationAllReady: boolean;
   readonly busy: boolean;
   readonly stageActive: boolean;
   readonly onSynthesizeSentence: (sentenceId: string) => void;
 }) {
   const textById = new Map(sentences.map((sentence) => [sentence.id, sentence.text]));
-  const failures = narration.failures;
-  const hasWhisperFallback = narration.sentences.some((sentence) => sentence.status === "ready" && sentence.alignmentSource === "whisper_fallback");
+  const stateBySentence = new Map((narration?.sentences ?? []).map((sentence) => [sentence.sentenceId, sentence]));
+  const failures = narration?.failures ?? [];
+  const readyCount = narration?.sentences.filter((sentence) => sentence.status === "ready").length ?? 0;
+  const totalCount = narration?.sentences.length ?? sentences.length;
+  const hasWhisperFallback = Boolean(narration?.sentences.some((sentence) => sentence.status === "ready" && sentence.alignmentSource === "whisper_fallback"));
   return (
     <PipelineSection description={PRODUCTION_PIPELINE_STAGE_LABELS.narration.description} stageState={stageActive ? "current" : "done"} title="配音">
       <p className="production-pipeline-duration">
         <Icon name="record_voice_over" size={16} />
-        已就绪 <strong>{narration.sentences.filter((sentence) => sentence.status === "ready").length}</strong>/{narration.sentences.length} 句
-        {narration.totalDurationMs > 0 ? <> · 实测总时长约 <strong>{secondsLabel(narration.totalDurationMs)}</strong> 秒</> : null}
+        已就绪 <strong>{readyCount}</strong>/{totalCount} 句
+        {narration && narration.totalDurationMs > 0 ? <> · 实测总时长约 <strong>{secondsLabel(narration.totalDurationMs)}</strong> 秒</> : null}
       </p>
       {narrationProgress && busy ? (
         <div className="production-render-progress">
@@ -624,8 +671,35 @@ function NarrationSection({ sentences, narration, narrationProgress, narrationAl
           <progress max={narrationProgress.total} value={narrationProgress.index} />
         </div>
       ) : null}
-      {/* 逐句配音状态已在分镜句卡头部呈现，这里只保留配音区独有的信息：
-          就绪计数/总时长、进度条、失败重试与 whisper fallback 提示。 */}
+      {/* 逐句状态：配音中由 narration-progress 的 sentenceId 驱动，ready/missing 以落盘记录为准；
+          未确认的句子不标「已配音」（失败句在批末 failures 才揭晓）。 */}
+      {sentences.length > 0 ? (
+        <ol aria-label="逐句配音状态" className="production-pipeline-narration-sentences">
+          {sentences.map((sentence, index) => {
+            const state = stateBySentence.get(sentence.id);
+            const narrating = busy && narrationProgress?.sentenceId === sentence.id;
+            return (
+              <li key={sentence.id}>
+                <em>{String(index + 1).padStart(2, "0")}</em>
+                <span className="production-pipeline-narration-sentences__text">{sentence.text}</span>
+                {narrating ? (
+                  <span className="production-pipeline-narration-sentences__status is-narrating">
+                    <Icon name="sync" size={13} />配音中（{narrationProgress.index}/{narrationProgress.total}）
+                  </span>
+                ) : state?.status === "ready" ? (
+                  <span className="production-pipeline-narration-sentences__status is-ready">
+                    <Icon name="circle_check" size={13} />已配音 · 实测 {secondsLabel(state.durationMs ?? 0)} 秒
+                  </span>
+                ) : (
+                  <span className="production-pipeline-narration-sentences__status is-missing">
+                    <Icon name="record_voice_over" size={13} />待配音
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      ) : null}
       {failures.length > 0 ? (
         <ul className="production-pipeline-violations">
           {failures.map((failure) => (
