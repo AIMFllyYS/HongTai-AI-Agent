@@ -27,7 +27,7 @@
 - 候选归档 23,410,224 字节、SHA-256 `9ced370391ef49420bfb940b66d21306c0bf6eefdad287e5a05789abe7d6797a`；Release 单测、lint、四 ABI assemble、16 KiB 对齐、v2/v3 签名、证书锚定（`54df122c…b5b2fde`，与历史发布一致）通过。
 - `pnpm check`（typecheck + lint + 全部测试）与 web build 通过；页头修复经真实 dev server 390px 截图核对（`output/production-fix-ui/`）。
 - 流式句卡与配音中状态以纯函数单测 + 源码契约断言 + 真实 CSS 静态 harness 截图组合验证；真实 AI 管线端到端与真机行为未验证。
-- 本候选未上传公网，`download.html` 推荐仍为 v0.1.31。
+- 本候选已上传公网并切换 `download.html`：当前推荐指向 `HongTai-AI-Agent-release-v0.1.32.apk`（versionCode 40），v0.1.31 退为历史版本；版本世系契约测试相应更新为「源码与公网推荐一致推进到 0.1.32/code 40」。
 
 ## [0.1.31] - 2026-09-01
 
