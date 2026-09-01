@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { issueFromAppError, safeUrlForDisplay } from "@hongtai/core";
-import type { AppRuntime, AppTaskRecord, InputInspection, StructuredGenerationProgressV1, TaskChangeEventV1, TaskIssue } from "@hongtai/core";
+import type { AppRuntime, AppTaskRecord, ContentTemplateRecord, InputInspection, StructuredGenerationProgressV1, TaskChangeEventV1, TaskIssue } from "@hongtai/core";
 
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/Buttons";
@@ -15,6 +15,7 @@ import { TaskCapabilityNotice } from "../components/TaskCapabilityNotice";
 import { ValidatedModuleProgress } from "../components/ValidatedModuleProgress";
 import { LiveListReadReconciler } from "../features/generation/live-list-read-reconciler";
 import { contentAnalysisModuleDefinitions } from "../features/tasks/content-analysis-module-progress";
+import { readContentAnalysis } from "../features/tasks/content-analysis-presenters";
 import { TaskHistory } from "../features/tasks/TaskHistory";
 import { platformLabel } from "../features/tasks/task-presenters";
 import { useAppResume } from "../hooks/useAppResume";
@@ -80,6 +81,42 @@ function focusTaskShareInput(): void {
   if (typeof document !== "undefined") document.getElementById("task-share-input")?.focus();
 }
 
+export interface TaskHistoryNameMaps {
+  /** taskId → 展示名称，层级：对应模板名称 → 拆解主题 → 详情标题。 */
+  readonly recordNames: ReadonlyMap<string, string>;
+  /** taskId → 该拆解对应的第一份模板（重命名/级联提示用）。 */
+  readonly templatesByTask: ReadonlyMap<string, ContentTemplateRecord>;
+}
+
+/**
+ * 为任务历史并行补齐展示名称与联动模板。单个任务的分析/详情读取失败只影响
+ * 自己的名称回退，不拖垮整个历史列表；模板列表读取失败时退化为无模板视图。
+ */
+async function loadHistoryNameMaps(runtime: AppRuntime, tasks: readonly AppTaskRecord[]): Promise<TaskHistoryNameMaps> {
+  const templates = await runtime.templates.list().catch(() => [] as readonly ContentTemplateRecord[]);
+  const templatesByTask = new Map<string, ContentTemplateRecord>();
+  for (const template of templates) {
+    if (template.sourceTaskId && !templatesByTask.has(template.sourceTaskId)) templatesByTask.set(template.sourceTaskId, template);
+  }
+  const recordNames = new Map<string, string>();
+  for (const [taskId, template] of templatesByTask) {
+    if (template.name) recordNames.set(taskId, template.name);
+  }
+  await Promise.all(tasks.map(async (task) => {
+    if (recordNames.has(task.id)) return;
+    const analysis = await runtime.analysis.get(task.id).catch(() => undefined);
+    const theme = analysis ? readContentAnalysis(analysis).overview?.theme : undefined;
+    if (theme) {
+      recordNames.set(task.id, theme);
+      return;
+    }
+    const detail = await runtime.tasks.getDetail(task.id).catch(() => undefined);
+    const title = detail?.content.title?.trim();
+    if (title) recordNames.set(task.id, title);
+  }));
+  return { recordNames, templatesByTask };
+}
+
 function inspectionFor(runtime: AppRuntime, input: string): InputInspection | undefined {
   if (!input.trim()) return undefined;
   try {
@@ -96,6 +133,8 @@ export function TaskHomePage({ runtime, navigate, searchEpoch = 0 }: TaskHomePag
   const [input, setInput] = useState("");
   const [inspection, setInspection] = useState<InputInspection>();
   const [tasks, setTasks] = useState<readonly AppTaskRecord[]>();
+  const [recordNames, setRecordNames] = useState<ReadonlyMap<string, string>>(new Map());
+  const [templatesByTask, setTemplatesByTask] = useState<ReadonlyMap<string, ContentTemplateRecord>>(new Map());
   const [historyIssue, setHistoryIssue] = useState<TaskIssue>();
   const [submitIssue, setSubmitIssue] = useState<TaskIssue>();
   const [submitting, setSubmitting] = useState(false);
@@ -107,6 +146,9 @@ export function TaskHomePage({ runtime, navigate, searchEpoch = 0 }: TaskHomePag
     try {
       setHistoryIssue(undefined);
       const loaded = await runtime.tasks.list({ limit: 12 });
+      // 名称扇出在读令牌失效前完成：中途到达的任务事件仍由 reconcile 应用到列表，
+      // 新增任务短暂退回链接展示，下一次 loadHistory 自愈。
+      const nameMaps = await loadHistoryNameMaps(runtime, loaded);
       const reconciled = taskHistoryReads.current.reconcile(
         read,
         loaded,
@@ -114,6 +156,8 @@ export function TaskHomePage({ runtime, navigate, searchEpoch = 0 }: TaskHomePag
       );
       if (reconciled === undefined) return;
       setTasks(reconciled);
+      setRecordNames(nameMaps.recordNames);
+      setTemplatesByTask(nameMaps.templatesByTask);
     } catch (error) {
       if (!taskHistoryReads.current.abandon(read)) return;
       setHistoryIssue(issueFromAppError(error, { code: "APP_RUNTIME_UNAVAILABLE", message: "本地任务历史暂时无法读取", action: "none" }));
@@ -313,7 +357,7 @@ export function TaskHomePage({ runtime, navigate, searchEpoch = 0 }: TaskHomePag
         <section className="page-section">
           <div className="section-heading"><h3>最近拆解</h3>{historyIssue ? <Button onClick={() => void loadHistory()} variant="quiet">重新读取</Button> : null}</div>
           {historyIssue ? <IssueNotice actions={{ configureAi: () => navigate(aiSettingsPath()), editInput: focusTaskShareInput }} issue={historyIssue} /> : null}
-          {historyIssue && tasks === undefined ? <ErrorState description={historyIssue.userMessage} title="任务历史无法读取" /> : historyPending ? <PageSkeleton layout="home-list" /> : <TaskHistory navigate={navigate} onDeleted={(taskId) => setTasks((current) => (current ?? []).filter((task) => task.id !== taskId))} runtime={runtime} tasks={tasks ?? []} />}
+          {historyIssue && tasks === undefined ? <ErrorState description={historyIssue.userMessage} title="任务历史无法读取" /> : historyPending ? <PageSkeleton layout="home-list" /> : <TaskHistory navigate={navigate} onDeleted={(taskId) => { setTasks((current) => (current ?? []).filter((task) => task.id !== taskId)); void loadHistory(); }} onRecordsChanged={() => void loadHistory()} recordNames={recordNames} runtime={runtime} tasks={tasks ?? []} templatesByTask={templatesByTask} />}
         </section>
       </div>
     </AppShell>

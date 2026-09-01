@@ -122,7 +122,9 @@ export function projectTaskDetail(
   const description = contentString(details.description);
   const author = contentString(details.author);
   const canonicalUrl = contentString(details.canonicalUrl);
-  const cover = media.find((item) => item.kind === "video") ?? coverReference(details);
+  // For a video task the first image media is the persisted first frame, so it
+  // wins over the video element itself; the remote cover is the last resort.
+  const cover = media.find((item) => item.kind === "image") ?? media.find((item) => item.kind === "video") ?? coverReference(details);
   const durationSeconds = typeof details.durationSeconds === "number" && Number.isFinite(details.durationSeconds)
     ? details.durationSeconds
     : undefined;
@@ -183,6 +185,7 @@ export async function projectTaskMedia(
 ): Promise<readonly MediaReference[]> {
   const media: MediaReference[] = [];
   if (task.contentType === "video") {
+    const origin = task.sourceKind === "local_video" ? "imported" as const : "downloaded" as const;
     const video = await mediaReference(
       files,
       toDisplayUri,
@@ -190,9 +193,13 @@ export async function projectTaskMedia(
       "media/video.mp4",
       "video",
       task.sourceKind === "local_video" ? "本地上传视频" : "下载的视频",
-      task.sourceKind === "local_video" ? "imported" : "downloaded",
+      origin,
     );
     if (video) media.push(video);
+    // The only image a video task can hold: the persisted first frame, written
+    // on demand by the native captureFrame port and lazily backfilled on read.
+    const thumbnail = await mediaReference(files, toDisplayUri, task.id, "media/thumbnail.jpg", "image", "视频首帧", origin);
+    if (thumbnail) media.push(thumbnail);
   }
   if (task.contentType === "image_text") {
     const metadata = asRecord(await readJson(task.id, "metadata.json"));

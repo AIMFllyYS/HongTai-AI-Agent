@@ -78,7 +78,10 @@ class LocalFilesPlugin : Plugin() {
 
   @PluginMethod
   fun deleteTask(call: PluginCall) = execute(call) {
-    tasks.deleteTask(call.requiredTaskId())
+    val keep = call.getArray("keepRelativePaths")?.let { array ->
+      (0 until array.length()).mapNotNull { index -> array.optString(index, null) }
+    }?.toSet() ?: emptySet()
+    tasks.deleteTask(call.requiredTaskId(), keep)
     call.resolve()
   }
 

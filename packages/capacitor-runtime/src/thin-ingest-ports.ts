@@ -105,6 +105,15 @@ export interface NativeMediaPort {
       readonly channelCount: number;
     }[];
   }>;
+  /**
+   * Captures the task video's first frame into its private `media/thumbnail.jpg`
+   * slot. Optional because the browser dev runtime has no native frame decoder.
+   */
+  captureFrame?(options: { readonly taskId: string }): Promise<{
+    readonly uri: string;
+    readonly sizeBytes: number;
+    readonly mimeType: string;
+  }>;
 }
 
 export interface NativeIngestPortsOptions {

@@ -186,6 +186,24 @@ class StorageScannerTest {
   }
 
   @Test
+  fun `task video first frame is a deletable derived artifact`() {
+    writeData("files/tasks/task-1/media/video.mp4", "video-bytes")
+    writeData("files/tasks/task-1/media/thumbnail.jpg", "jpeg-bytes")
+    writeData("files/tasks/task-1/task.json", """{"status":"done"}""")
+
+    val items = scanner().listAreaItems("tasks")
+    val thumbnail = items.single { it.relativePath == "files/tasks/task-1/media/thumbnail.jpg" }
+    assertEquals("image", thumbnail.kind)
+    assertEquals("derived-frame", thumbnail.role)
+    // Safe to delete: the media bridge recaptures the frame lazily on the next read.
+    assertTrue(thumbnail.deletable)
+    assertNull(thumbnail.protectionCode)
+
+    val tasks = scanner().inspect().areas.single { it.area == "tasks" }
+    assertEquals("video-bytes".length + "jpeg-bytes".length.toLong(), tasks.deletableByteLength)
+  }
+
+  @Test
   fun `snapshot always reports all six areas`() {
     val areas = scanner().inspect().areas.map { it.area }
     assertEquals(listOf("tasks", "observations", "productions", "templates", "cache", "app-data"), areas)

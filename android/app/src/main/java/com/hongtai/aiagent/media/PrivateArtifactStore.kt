@@ -205,11 +205,28 @@ class PrivateArtifactStore(context: Context) {
     }
   }
 
-  fun deleteTask(taskId: String) {
+  fun deleteTask(taskId: String, keepRelativePaths: Set<String> = emptySet()) {
     val directory = File(taskRoot, PrivateArtifactPolicy.taskDirectoryName(taskId)).canonicalFile
     requirePrivateTaskFile(directory)
-    if (directory.exists() && (!directory.deleteRecursively() || directory.exists())) {
-      throw IllegalStateException("Could not delete the private task directory.")
+    if (!directory.exists()) return
+    if (keepRelativePaths.isEmpty()) {
+      if (!directory.deleteRecursively() || directory.exists()) {
+        throw IllegalStateException("Could not delete the private task directory.")
+      }
+      return
+    }
+    val kept = keepRelativePaths.map { relativePath ->
+      File(directory, PrivateArtifactPolicy.normalizeRelativePath(relativePath)).canonicalFile.also { requirePrivateTaskFile(it) }
+    }.toSet()
+    // Bottom-up: files first, then directories that became empty. Ancestors of a
+    // kept file still contain it and survive; everything else is removed.
+    directory.walkBottomUp().forEach { file ->
+      if (file == directory) return@forEach
+      if (file.isFile) {
+        if (file !in kept && !file.delete()) throw IllegalStateException("Could not delete the private task artifact.")
+      } else if (file.isDirectory && file.listFiles()?.isEmpty() == true && !file.delete()) {
+        throw IllegalStateException("Could not delete the private task directory.")
+      }
     }
   }
 

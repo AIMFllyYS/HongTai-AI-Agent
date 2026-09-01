@@ -128,7 +128,7 @@ export interface StandaloneLocalFilesPlugin extends LocalTaskFilesPlugin, Native
   readText(options: { readonly taskId: string; readonly relativePath: string }): Promise<{ readonly value?: string }>;
   exists(options: { readonly taskId: string; readonly relativePath: string }): Promise<{ readonly exists: boolean }>;
   listTaskIds(): Promise<{ readonly taskIds: readonly string[] }>;
-  deleteTask(options: { readonly taskId: string }): Promise<void>;
+  deleteTask(options: { readonly taskId: string; readonly keepRelativePaths?: readonly string[] }): Promise<void>;
   getUri(options: { readonly taskId: string; readonly relativePath: string }): Promise<{
     readonly uri?: NativeUri;
     readonly sizeBytes?: number;

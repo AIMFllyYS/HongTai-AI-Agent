@@ -1573,52 +1573,6 @@
   white-space: nowrap;
 }
 
-.recent-record-actions-sheet__confirm {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.recent-record-actions-sheet__confirm-icon {
-  display: grid;
-  width: 2.5rem;
-  height: 2.5rem;
-  place-items: center;
-  color: var(--color-error);
-  background: var(--color-error-soft);
-  border-radius: 50%;
-}
-
-.recent-record-actions-sheet__confirm strong {
-  color: var(--color-text-primary);
-  font-size: var(--text-label);
-}
-
-.recent-record-actions-sheet__confirm p {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-caption);
-  line-height: 1.55;
-}
-
-.recent-record-actions-sheet__confirm p span {
-  color: var(--color-text-subtle);
-  font-weight: 600;
-}
-
-.recent-record-actions-sheet__confirm .recent-record-actions-sheet__issue {
-  color: var(--color-error);
-}
-
-.recent-record-actions-sheet__confirm-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-2);
-}
-
-.recent-record-actions-sheet__confirm-actions .button {
-  width: 100%;
-}
-
 .confirm-delete-sheet__body {
   display: grid;
   gap: var(--space-3);
@@ -1646,6 +1600,50 @@
   line-height: 1.55;
 }
 
+/* 级联删除等不可逆连带后果：红色警示块，让用户在勾选前看清代价。 */
+.confirm-delete-sheet__danger {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-error);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  line-height: 1.5;
+  background: var(--color-error-soft);
+  border-radius: var(--radius-control);
+}
+
+.confirm-delete-sheet__danger .playbook-icon {
+  flex: none;
+  margin-top: 0.0625rem;
+}
+
+.confirm-delete-sheet__checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-primary);
+  font-size: var(--text-caption);
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.confirm-delete-sheet__checkbox input {
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  accent-color: var(--color-error);
+}
+
+.confirm-delete-sheet__issue {
+  margin: 0;
+  color: var(--color-error);
+  font-size: var(--text-caption);
+  line-height: 1.55;
+}
+
 .confirm-delete-sheet__actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1659,6 +1657,28 @@
 /* 删除是不可逆操作：确认按钮用警示色，与常规主操作（品牌绿）拉开语义距离。 */
 .confirm-delete-sheet__actions .button.is-danger {
   background: var(--color-error);
+}
+
+.rename-sheet__body {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.rename-sheet__issue {
+  margin: 0;
+  color: var(--color-error);
+  font-size: var(--text-caption);
+  line-height: 1.55;
+}
+
+.rename-sheet__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.rename-sheet__actions .button {
+  width: 100%;
 }
 
 /* Shared Tabs must live only in this layer. A later layer(pages) `.tabs` rule

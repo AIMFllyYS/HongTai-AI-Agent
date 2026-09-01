@@ -8,6 +8,7 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.hongtai.aiagent.media.AndroidMediaRuntime
 import com.hongtai.aiagent.media.MediaDecodeException
+import com.hongtai.aiagent.media.MediaFrameCaptureException
 import com.hongtai.aiagent.media.MediaProbeException
 import com.hongtai.aiagent.media.MediaRemuxException
 import com.hongtai.aiagent.media.PcmWavSegmentationException
@@ -154,6 +155,33 @@ class MediaRuntimePlugin : Plugin() {
         call.reject("The private media files could not be remuxed safely.", NativeIssueCode.MEDIA_MERGE_FAILED, error)
       } catch (error: Exception) {
         call.reject("The private media files could not be remuxed safely.", NativeIssueCode.MEDIA_MERGE_FAILED, error)
+      }
+    }
+  }
+
+  /** Writes the task video's first frame into its fixed private `media/thumbnail.jpg` slot. */
+  @PluginMethod
+  fun captureFrame(call: PluginCall) {
+    val taskId = call.getString("taskId")
+    if (taskId.isNullOrBlank()) {
+      call.reject("taskId is required.", NativeIssueCode.INVALID_ARGUMENT)
+      return
+    }
+    runMediaOperation(call) {
+      try {
+        val output = mediaRuntime.captureFrameNow(taskId)
+        call.resolve(
+          JSObject()
+            .put("uri", output.uri)
+            .put("sizeBytes", output.sizeBytes)
+            .put("mimeType", output.mimeType),
+        )
+      } catch (error: IllegalArgumentException) {
+        call.reject("The task media is not an available task-private file.", NativeIssueCode.PRIVATE_FILE_IMPORT_FAILED, error)
+      } catch (error: MediaFrameCaptureException) {
+        call.reject("The task video frame could not be captured.", NativeIssueCode.MEDIA_PROBE_FAILED, error)
+      } catch (error: Exception) {
+        call.reject("The task video frame could not be captured.", NativeIssueCode.MEDIA_PROBE_FAILED, error)
       }
     }
   }

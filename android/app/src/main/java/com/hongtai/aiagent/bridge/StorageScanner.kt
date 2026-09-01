@@ -307,6 +307,9 @@ class StorageScanner(dataDir: File, filesDir: File, cacheDir: File, externalCach
   }
 
   private fun mediaRole(area: String, path: String, guard: File?): String = when {
+    // The persisted first frame is a regenerable derivative: deleting it is safe
+    // because the media bridge recaptures it lazily the next time the task is read.
+    area == "tasks" && path.endsWith("/media/thumbnail.jpg") -> "derived-frame"
     area == "tasks" && path.contains("/media/video") -> if (readJsonString(guard, "sourceKind") == "local_video") "user-video" else "parsed-video"
     area == "tasks" && path.contains("/media/audio") -> "parsed-audio"
     area == "tasks" && path.contains("/media/image") -> "parsed-image"

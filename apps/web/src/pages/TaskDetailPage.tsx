@@ -102,6 +102,8 @@ export function TaskDetailPage({
 }: TaskDetailPageProps) {
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
+  const [deleteKeepLocalVideo, setDeleteKeepLocalVideo] = useState(true);
+  const [linkedTemplateName, setLinkedTemplateName] = useState<string>();
   const [moreOpen, setMoreOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<"analysis" | "delete" | "template">();
   const [localIssue, setLocalIssue] = useState<TaskIssue>();
@@ -119,11 +121,24 @@ export function TaskDetailPage({
     }
   };
 
+  const openDeleteConfirmation = () => {
+    setConfirmationOpen(false);
+    setDeleteKeepLocalVideo(true);
+    setLinkedTemplateName(undefined);
+    setLocalIssue(undefined);
+    setDeleteConfirmationOpen(true);
+    // 级联提示需要知道这条拆解有没有派生模板；读取失败只是不显示警示，不阻塞删除。
+    void runtime.templates.list().then((templates) => {
+      const linked = templates.find((template) => template.sourceTaskId === detail.task.id);
+      if (linked) setLinkedTemplateName(linked.name);
+    }).catch(() => undefined);
+  };
+
   const deleteTask = async () => {
     setPendingAction("delete");
     setLocalIssue(undefined);
     try {
-      await runtime.tasks.delete(detail.task.id);
+      await runtime.tasks.delete(detail.task.id, { keepLocalVideo: deleteKeepLocalVideo });
       navigate(pathForRoute("home"));
     } catch (error) {
       setLocalIssue(issueFromAppError(error, { code: "STORAGE_WRITE_FAILED", message: "任务和视频没有删除完成", action: "retry" }));
@@ -222,9 +237,9 @@ export function TaskDetailPage({
       ? [{
         id: "delete",
         title: "删除",
-        description: localVideo ? "永久删除本机任务和上传视频" : "永久删除本机任务及全部产物",
+        description: "永久删除本机任务、对应模板与产物，本机视频可选择保留",
         icon: "error" as const,
-        onSelect: () => { setConfirmationOpen(false); setDeleteConfirmationOpen(true); },
+        onSelect: openDeleteConfirmation,
       }]
       : []),
   ];
@@ -343,9 +358,12 @@ export function TaskDetailPage({
       {deleteConfirmationOpen ? (
         <ConfirmDeleteSheet
           busy={pendingAction !== undefined}
+          checkbox={task.contentType === "video" ? { label: localVideo ? "同时删除本机保存的视频副本" : "同时删除已下载到本机的视频", checked: !deleteKeepLocalVideo, onChange: (checked) => setDeleteKeepLocalVideo(!checked) } : undefined}
           confirmLabel="确认删除"
-          description="将永久删除本机任务目录中的媒体、文稿、拆解与事件，不可恢复；已经复制保存的模板不受影响。"
-          heading={`确认删除这个任务${localVideo ? "及上传视频" : "及全部产物"}？`}
+          dangerNote={linkedTemplateName ? `将同时彻底删除模板「${linkedTemplateName}」，无法恢复。` : undefined}
+          description={task.contentType === "video" ? "将永久删除这条拆解的文稿、拆解结果与事件，不可恢复；本机视频是否一并删除由下方选项决定。" : "将永久删除本机任务目录中的图片、文稿、拆解与事件，不可恢复。"}
+          heading="确认删除这个任务？"
+          issue={localIssue}
           onClose={() => setDeleteConfirmationOpen(false)}
           onConfirm={() => void deleteTask()}
           open

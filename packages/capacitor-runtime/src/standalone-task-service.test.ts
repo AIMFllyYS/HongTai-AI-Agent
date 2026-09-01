@@ -178,6 +178,72 @@ test("StandaloneTaskService emits finite task changes only after the persisted p
   ]);
 });
 
+test("StandaloneTaskService delete cascades to derived templates and keeps the local video on demand", async () => {
+  const native = memoryFiles();
+  const deletedTemplates: string[] = [];
+  const capturedKeeps: (readonly string[] | undefined)[] = [];
+  const service = new StandaloneTaskService({
+    files: {
+      ...native.plugin,
+      deleteTask: async ({ taskId, keepRelativePaths }: { readonly taskId: string; readonly keepRelativePaths?: readonly string[] }) => {
+        capturedKeeps.push(keepRelativePaths);
+        await native.plugin.deleteTask({ taskId });
+      },
+    },
+    adapters: [imageTextAdapter()],
+    http: {
+      get: async () => ({ url: "", status: 200, headers: {}, body: "" }),
+      post: async () => ({ url: "", status: 200, headers: {}, body: "" }),
+    },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 0, extractAudio: async () => undefined, splitAudio: async () => [] },
+    createTaskId: () => "task-cascade-1",
+    toDisplayUri: (value) => value,
+  });
+  service.attachLinkedDeletion({
+    listForTask: async (taskId) => (taskId === "task-cascade-1" ? ["template-a", "template-b"] : []),
+    deleteRecord: async (templateId) => { deletedTemplates.push(templateId); },
+  });
+
+  const queued = await service.create({ input: "https://www.xiaohongshu.com/discovery/item/abc123" });
+  await (await service.start(queued.id)).completion;
+  await service.delete(queued.id, { keepLocalVideo: true });
+
+  assert.deepEqual(capturedKeeps, [["media/video.mp4"]]);
+  assert.deepEqual(deletedTemplates, ["template-a", "template-b"]);
+  assert.equal(await service.get(queued.id), undefined);
+});
+
+test("StandaloneTaskService delete without options keeps nothing and cascades nothing when unattached", async () => {
+  const native = memoryFiles();
+  const capturedKeeps: (readonly string[] | undefined)[] = [];
+  const service = new StandaloneTaskService({
+    files: {
+      ...native.plugin,
+      deleteTask: async ({ taskId, keepRelativePaths }: { readonly taskId: string; readonly keepRelativePaths?: readonly string[] }) => {
+        capturedKeeps.push(keepRelativePaths);
+        await native.plugin.deleteTask({ taskId });
+      },
+    },
+    adapters: [imageTextAdapter()],
+    http: {
+      get: async () => ({ url: "", status: 200, headers: {}, body: "" }),
+      post: async () => ({ url: "", status: 200, headers: {}, body: "" }),
+    },
+    downloader: { download: async () => undefined },
+    mediaTools: { merge: async () => undefined, probeDuration: async () => 0, extractAudio: async () => undefined, splitAudio: async () => [] },
+    createTaskId: () => "task-plain-delete",
+    toDisplayUri: (value) => value,
+  });
+
+  const queued = await service.create({ input: "https://www.xiaohongshu.com/discovery/item/abc123" });
+  await (await service.start(queued.id)).completion;
+  await service.delete(queued.id);
+
+  assert.deepEqual(capturedKeeps, [undefined]);
+  assert.equal(await service.get(queued.id), undefined);
+});
+
 test("StandaloneTaskService isolates page listener failures from persisted task outcomes", async () => {
   const native = memoryFiles();
   const service = new StandaloneTaskService({

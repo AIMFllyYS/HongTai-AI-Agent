@@ -1,6 +1,7 @@
 package com.hongtai.aiagent.media
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.media.AudioFormat
 import android.media.MediaCodec
 import android.media.MediaExtractor
@@ -8,6 +9,7 @@ import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.media.MediaMuxer
 import android.net.Uri
+import android.os.Build
 import android.os.SystemClock
 import java.io.File
 import java.io.FileOutputStream
@@ -22,6 +24,7 @@ class MediaProbeException(message: String, cause: Throwable? = null) : IllegalSt
 class MediaDecodeException(message: String, cause: Throwable? = null) : IllegalStateException(message, cause)
 class MediaRemuxException(message: String, cause: Throwable? = null) : IllegalStateException(message, cause)
 class PcmWavSegmentationException(message: String, cause: Throwable? = null) : IllegalStateException(message, cause)
+class MediaFrameCaptureException(message: String, cause: Throwable? = null) : IllegalStateException(message, cause)
 private class MediaOperationTimeoutException(message: String) : IllegalStateException(message)
 
 /**
@@ -76,6 +79,80 @@ class AndroidMediaRuntime(context: Context) : MediaRuntime {
     } catch (error: Exception) {
       throw MediaProbeException("The private media file could not be probed.", error)
     }
+  }
+
+  /**
+   * Captures the task video's first frame into the fixed, regenerable
+   * `media/thumbnail.jpg` slot. The WebView names only the task; the path, the
+   * 720px bound and the JPEG quality are decided here. Failing loudly is
+   * deliberate: a caller must not treat a missing frame as a written thumbnail.
+   */
+  fun captureFrameNow(taskId: String): PrivateArtifactFile {
+    val normalizedTaskId = PrivateArtifactPolicy.taskDirectoryName(taskId)
+    val mediaDirectory = taskMediaDirectory(normalizedTaskId)
+    val video = File(mediaDirectory, TASK_VIDEO_FILE_NAME)
+    if (!video.isFile) throw MediaFrameCaptureException("The task video is unavailable.")
+    // The fixed path still passes the full task-media input policy, so this
+    // method can never read outside the requesting task's private media tree.
+    val source = requireTaskOwnedMediaInput(normalizedTaskId, Uri.fromFile(video).toString())
+    val destination = File(mediaDirectory, TASK_THUMBNAIL_FILE_NAME)
+    val retriever = MediaMetadataRetriever()
+    var frame: Bitmap? = null
+    var scaled: Bitmap? = null
+    try {
+      retriever.setDataSource(source.absolutePath)
+      frame = decodeFirstFrame(retriever)
+        ?: throw MediaFrameCaptureException("The task video has no decodable first frame.")
+      scaled = scaleToFit(frame, THUMBNAIL_MAX_EDGE_PIXELS)
+      if (!FrameJpegWriter.writeAtomically(scaled, destination, THUMBNAIL_JPEG_QUALITY, MAX_THUMBNAIL_BYTES)) {
+        throw MediaFrameCaptureException("The task video frame could not be written.")
+      }
+      if (!FrameJpegWriter.isJpeg(destination)) {
+        deleteQuietly(destination)
+        throw MediaFrameCaptureException("The task video frame could not be verified.")
+      }
+      return PrivateArtifactFile(Uri.fromFile(destination).toString(), destination.length(), THUMBNAIL_MIME_TYPE)
+    } catch (error: MediaFrameCaptureException) {
+      throw error
+    } catch (error: Exception) {
+      throw MediaFrameCaptureException("The task video frame could not be captured.", error)
+    } finally {
+      runCatching { retriever.release() }
+      listOf(scaled, frame).distinct().forEach { bitmap ->
+        if (bitmap != null && !bitmap.isRecycled) bitmap.recycle()
+      }
+    }
+  }
+
+  /** `getScaledFrameAtTime` decodes into the target size and only exists from API 27. */
+  private fun decodeFirstFrame(retriever: MediaMetadataRetriever): Bitmap? =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+      retriever.getScaledFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, THUMBNAIL_MAX_EDGE_PIXELS, THUMBNAIL_MAX_EDGE_PIXELS)
+    } else {
+      retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+    }
+
+  private fun scaleToFit(bitmap: Bitmap, maxEdge: Int): Bitmap {
+    val edge = maxOf(bitmap.width, bitmap.height)
+    if (edge <= maxEdge) return bitmap
+    val scale = maxEdge.toFloat() / edge.toFloat()
+    return Bitmap.createScaledBitmap(
+      bitmap,
+      (bitmap.width * scale).toInt().coerceAtLeast(1),
+      (bitmap.height * scale).toInt().coerceAtLeast(1),
+      true,
+    )
+  }
+
+  /** The task's canonical `media` directory; the taskId policy already excludes traversal. */
+  private fun taskMediaDirectory(taskId: String): File {
+    val taskDirectoryName = PrivateArtifactPolicy.taskDirectoryName(taskId)
+    val root = appContext.filesDir.canonicalFile
+    val expected = File(root, "tasks/$taskDirectoryName/media").canonicalFile
+    require(expected.path.startsWith("${root.path}${File.separator}")) {
+      "Private task media storage is outside the application files directory."
+    }
+    return expected
   }
 
   override suspend fun extractPcmWav(taskId: String, sourceUri: String): PcmWavOutput = extractPcmWavNow(taskId, sourceUri)
@@ -678,6 +755,12 @@ class AndroidMediaRuntime(context: Context) : MediaRuntime {
     const val ASR_DIRECTORY_NAME = "asr"
     const val REMUX_DIRECTORY_NAME = "remux"
     const val REMUX_MIME_TYPE = "video/mp4"
+    const val TASK_VIDEO_FILE_NAME = "video.mp4"
+    const val TASK_THUMBNAIL_FILE_NAME = "thumbnail.jpg"
+    const val THUMBNAIL_MAX_EDGE_PIXELS = 720
+    const val THUMBNAIL_JPEG_QUALITY = 85
+    const val THUMBNAIL_MIME_TYPE = "image/jpeg"
+    const val MAX_THUMBNAIL_BYTES = 2L * 1_024L * 1_024L
     const val DEQUEUE_TIMEOUT_US = 10_000L
     const val MAX_SOURCE_BYTES = 1_024L * 1_024L * 1_024L
     const val MAX_DECODE_WALL_CLOCK_MS = 15L * 60L * 1_000L

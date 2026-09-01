@@ -4,6 +4,7 @@ import type {
   CancellableTask,
   HttpClient,
   IngestPipelineDependencies,
+  LinkedRecordDeleteOptions,
   MediaDownloader,
   MediaReference,
   MediaTools,
@@ -80,12 +81,17 @@ export interface StandaloneTaskFilesPlugin extends LocalTaskFilesPlugin {
   readText(options: { readonly taskId: string; readonly relativePath: string }): Promise<{ readonly value?: string }>;
   exists(options: { readonly taskId: string; readonly relativePath: string }): Promise<{ readonly exists: boolean }>;
   listTaskIds(): Promise<{ readonly taskIds: readonly string[] }>;
-  deleteTask(options: { readonly taskId: string }): Promise<void>;
+  deleteTask(options: { readonly taskId: string; readonly keepRelativePaths?: readonly string[] }): Promise<void>;
   getUri(options: { readonly taskId: string; readonly relativePath: string }): Promise<{
     readonly uri?: string;
     readonly sizeBytes?: number;
     readonly mimeType?: string;
   }>;
+}
+
+/** Optional native frame capture used to backfill a video task's persisted first frame. */
+export interface StandaloneTaskMediaCapturePort {
+  captureFrame?(options: { readonly taskId: string }): Promise<unknown>;
 }
 
 export interface StandaloneTaskServiceOptions {
@@ -95,6 +101,7 @@ export interface StandaloneTaskServiceOptions {
   readonly http: HttpClient;
   readonly downloader: MediaDownloader;
   readonly mediaTools: MediaTools;
+  readonly media?: StandaloneTaskMediaCapturePort;
   readonly transcriber?: IngestPipelineDependencies["transcriber"];
   readonly rewriter?: IngestPipelineDependencies["rewriter"];
   readonly toDisplayUri: (nativeUri: string) => string;
@@ -139,6 +146,15 @@ function issueForInterrupted(sourceKind: TaskRecord["sourceKind"]): TaskIssue {
 }
 
 /**
+ * 组合根注入的模板级联端：拆解与模板是同一内容，删除任务必须联动删除其派生模板。
+ * deleteRecord 只删模板记录，不再次触发任务侧级联，避免双向递归。
+ */
+export interface LinkedTemplateDeletion {
+  listForTask(taskId: string): Promise<readonly string[]>;
+  deleteRecord(templateId: string): Promise<void>;
+}
+
+/**
  * File-backed UI service. It delegates execution entirely to the existing
  * IngestPipeline; this class only persists/reads safe task projections and
  * fans out pipeline progress to the current page.
@@ -151,6 +167,7 @@ export class StandaloneTaskService implements TaskService {
   readonly #http: HttpClient;
   readonly #downloader: MediaDownloader;
   readonly #mediaTools: MediaTools;
+  readonly #media: StandaloneTaskMediaCapturePort | undefined;
   readonly #transcriber: IngestPipelineDependencies["transcriber"];
   readonly #rewriter: IngestPipelineDependencies["rewriter"];
   readonly #toDisplayUri: (nativeUri: string) => string;
@@ -161,6 +178,9 @@ export class StandaloneTaskService implements TaskService {
   readonly #deletions = new Map<string, Promise<void>>();
   readonly #listeners = new Map<string, Set<TaskEventListener>>();
   readonly #changeListeners = new Set<TaskChangeListener>();
+  readonly #thumbnailCaptures = new Map<string, Promise<void>>();
+  readonly #thumbnailFailures = new Set<string>();
+  #linkedTemplates?: LinkedTemplateDeletion;
 
   constructor(options: StandaloneTaskServiceOptions) {
     this.#files = options.files;
@@ -170,6 +190,7 @@ export class StandaloneTaskService implements TaskService {
     this.#http = options.http;
     this.#downloader = options.downloader;
     this.#mediaTools = options.mediaTools;
+    this.#media = options.media;
     this.#transcriber = options.transcriber;
     this.#rewriter = options.rewriter;
     this.#toDisplayUri = options.toDisplayUri;
@@ -385,12 +406,17 @@ export class StandaloneTaskService implements TaskService {
     throw taskError("TASK_INTERRUPTED", "请返回首页重新提交链接；首版不会复制或覆盖旧任务。", "edit_input");
   }
 
-  async delete(taskId: string): Promise<void> {
+  async delete(taskId: string, options?: LinkedRecordDeleteOptions): Promise<void> {
     const existing = this.#deletions.get(taskId);
     if (existing) return existing;
-    const operation = this.#deleteTerminalTask(taskId).finally(() => this.#deletions.delete(taskId));
+    const operation = this.#deleteTerminalTask(taskId, options).finally(() => this.#deletions.delete(taskId));
     this.#deletions.set(taskId, operation);
     return operation;
+  }
+
+  /** 组合根装配后注入模板级联端；拆解与模板是同一内容，删除必须双向联动。 */
+  attachLinkedDeletion(linked: LinkedTemplateDeletion): void {
+    this.#linkedTemplates = linked;
   }
 
   async #startIngest(taskId: string): Promise<AppTaskRecord> {
@@ -522,17 +548,60 @@ export class StandaloneTaskService implements TaskService {
   }
 
   async #taskMedia(task: TaskRecord): Promise<readonly MediaReference[]> {
+    const media = await projectTaskMedia(task, this.#files, this.#toDisplayUri, (taskId, relativePath) => this.#readJson(taskId, relativePath));
+    return this.#backfillVideoThumbnail(task, media);
+  }
+
+  /**
+   * The persisted first frame is a regenerable derivative. When a video task
+   * has its video but no `media/thumbnail.jpg` yet, one single-flight native
+   * capture runs on the read path and the media is resolved once more. A
+   * failure is remembered for this process and never retried; reading always
+   * falls back to the un-thumbnailed media and never throws.
+   */
+  async #backfillVideoThumbnail(task: TaskRecord, media: readonly MediaReference[]): Promise<readonly MediaReference[]> {
+    const captureFrame = this.#media?.captureFrame;
+    if (!captureFrame || task.contentType !== "video") return media;
+    if (!media.some((item) => item.kind === "video") || media.some((item) => item.kind === "image")) return media;
+    if (this.#thumbnailFailures.has(task.id)) return media;
+    const inFlight = this.#thumbnailCaptures.get(task.id) ?? this.#captureThumbnail(captureFrame, task.id);
+    await inFlight;
+    if (this.#thumbnailFailures.has(task.id)) return media;
     return projectTaskMedia(task, this.#files, this.#toDisplayUri, (taskId, relativePath) => this.#readJson(taskId, relativePath));
   }
 
-  async #deleteTerminalTask(taskId: string): Promise<void> {
+  #captureThumbnail(captureFrame: (options: { readonly taskId: string }) => Promise<unknown>, taskId: string): Promise<void> {
+    const capture = (async () => {
+      try {
+        await captureFrame({ taskId });
+      } catch {
+        this.#thumbnailFailures.add(taskId);
+      }
+    })();
+    this.#thumbnailCaptures.set(taskId, capture);
+    void capture.finally(() => {
+      if (this.#thumbnailCaptures.get(taskId) === capture) this.#thumbnailCaptures.delete(taskId);
+    });
+    return capture;
+  }
+
+  async #deleteTerminalTask(taskId: string, options?: LinkedRecordDeleteOptions): Promise<void> {
     if (this.#active.has(taskId)) throw taskError("TASK_INTERRUPTED", "任务正在处理中，尚未完成，不能删除", "wait_and_retry");
     const task = await this.#readTask(taskId);
     if (!task) throw taskError("TASK_ARTIFACT_MISSING", "未找到要删除的本地任务", "none");
     if (!isTerminalTaskStatus(task.status)) {
       throw taskError("TASK_INTERRUPTED", "任务尚未完成，不能删除", "wait_and_retry");
     }
-    await this.#files.deleteTask({ taskId });
+    // 双向联动：先删任务文件，再删全部派生模板；模板侧失败会留下可重试的悬挂模板，不伪造成功。
+    // keepLocalVideo 只保留 media/video.mp4，任务记录与其余产物一并移除，列表自然不再出现该任务。
+    const linkedTemplateIds = this.#linkedTemplates ? await this.#linkedTemplates.listForTask(taskId) : [];
+    await this.#files.deleteTask({
+      taskId,
+      ...(options?.keepLocalVideo ? { keepRelativePaths: ["media/video.mp4"] as const } : {}),
+    });
+    for (const templateId of linkedTemplateIds) {
+      await this.#linkedTemplates?.deleteRecord(templateId);
+    }
     this.#listeners.delete(taskId);
     await this.#emitChange({ schemaVersion: "task-change.v1", type: "deleted", taskId });
   }

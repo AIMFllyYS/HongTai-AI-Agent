@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { ContentAnalysisRecord } from "@hongtai/core";
+import { TaskError } from "@hongtai/core";
+import type { ContentAnalysisRecord, LinkedRecordDeleteOptions } from "@hongtai/core";
 
 import { StandaloneTemplateService } from "./standalone-template-service.js";
 
@@ -39,11 +40,14 @@ function harness() {
       for (const path of [...values.keys()]) if (path.startsWith(`${templateId}/`)) values.delete(path);
     },
   };
-  const create = () => new StandaloneTemplateService({
+  const create = (extra?: {
+    readonly deleteTaskCascade?: (taskId: string, options?: LinkedRecordDeleteOptions) => Promise<void>;
+  }) => new StandaloneTemplateService({
     files,
     analysis: { get: async () => analysis },
     createTemplateId: () => `template-${++nextTemplateId}`,
     now: () => new Date("2026-08-08T00:00:00.000Z"),
+    ...extra,
   });
   return { create, values };
 }
@@ -76,4 +80,58 @@ test("模板支持纯自定义并拒绝越界内容", async () => {
   assert.equal(custom.sourceTaskId, undefined);
   await assert.rejects(() => service.update(custom.templateId, { name: "x".repeat(81), summary: "", formula: "", steps: [], variableSlots: [] }), /80/u);
   await assert.rejects(() => service.create({ name: "越界", summary: "", formula: "", steps: Array.from({ length: 41 }, () => "步骤"), variableSlots: [] }), /40/u);
+});
+
+test("有来源任务的模板删除委托组合根级联，不自行删除记录", async () => {
+  const { create } = harness();
+  const cascades: string[] = [];
+  const service = create({
+    deleteTaskCascade: async (taskId, options) => { cascades.push(`${taskId}:${options?.keepLocalVideo === true}`); },
+  });
+  const imported = await service.createFromAnalysis("task-1");
+  assert.equal(imported.sourceTaskId, "task-1");
+
+  await service.delete(imported.templateId, { keepLocalVideo: true });
+  assert.deepEqual(cascades, ["task-1:true"]);
+  // 记录级删除由任务侧级联回调完成；纯服务单测没有装配该回路，记录仍在。
+  assert.notEqual(await service.get(imported.templateId), undefined);
+});
+
+test("来源任务已缺失的悬挂模板删除退化为只删记录", async () => {
+  const { create } = harness();
+  const service = create({
+    deleteTaskCascade: async () => {
+      throw new TaskError({ code: "TASK_ARTIFACT_MISSING", message: "未找到要删除的本地任务", action: "none" });
+    },
+  });
+  const imported = await service.createFromAnalysis("task-1");
+
+  await service.delete(imported.templateId);
+  assert.equal(await service.get(imported.templateId), undefined);
+});
+
+test("级联删除的其它失败原样透出且模板保留", async () => {
+  const { create } = harness();
+  const service = create({
+    deleteTaskCascade: async () => {
+      throw new TaskError({ code: "TASK_INTERRUPTED", message: "任务尚未完成，不能删除", action: "wait_and_retry" });
+    },
+  });
+  const imported = await service.createFromAnalysis("task-1");
+
+  await assert.rejects(() => service.delete(imported.templateId), /尚未完成/u);
+  assert.notEqual(await service.get(imported.templateId), undefined);
+});
+
+test("无来源任务的模板删除不触发级联", async () => {
+  const { create } = harness();
+  let cascadeCalls = 0;
+  const service = create({
+    deleteTaskCascade: async () => { cascadeCalls += 1; },
+  });
+  const custom = await service.create({ name: "自定义", summary: "", formula: "", steps: [], variableSlots: [] });
+
+  await service.delete(custom.templateId);
+  assert.equal(cascadeCalls, 0);
+  assert.equal(await service.get(custom.templateId), undefined);
 });

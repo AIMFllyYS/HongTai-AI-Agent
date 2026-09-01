@@ -4,6 +4,7 @@ import type {
   AnalysisService,
   ContentTemplateInput,
   ContentTemplateRecord,
+  LinkedRecordDeleteOptions,
   TemplateService,
 } from "@hongtai/core";
 
@@ -23,6 +24,12 @@ export interface StandaloneTemplateServiceOptions {
   readonly analysis: Pick<AnalysisService, "get">;
   readonly createTemplateId?: () => string;
   readonly now?: () => Date;
+  /**
+   * 级联删除入口，由组合根注入：删除模板的来源任务及其全部派生模板。
+   * 拆解与模板是同一内容，删除必须双向联动；仅在未装配的组合根（如纯服务单测）
+   * 缺失，此时 delete 退化为只删模板记录。
+   */
+  readonly deleteTaskCascade?: (taskId: string, options?: LinkedRecordDeleteOptions) => Promise<void>;
 }
 
 function templateError(message: string, action: "edit_input" | "retry" = "edit_input"): TaskError {
@@ -133,7 +140,23 @@ export class StandaloneTemplateService implements TemplateService {
     });
   }
 
-  async delete(templateId: string): Promise<void> {
+  async delete(templateId: string, options?: LinkedRecordDeleteOptions): Promise<void> {
+    const existing = await this.get(templateId);
+    if (!existing) throw templateError("要删除的模板不存在");
+    if (existing.sourceTaskId && this.#options.deleteTaskCascade) {
+      try {
+        await this.#options.deleteTaskCascade(existing.sourceTaskId, options);
+        return;
+      } catch (error) {
+        // 来源任务已不存在时退化为只删模板记录，悬挂模板仍可删除。
+        if (!(error instanceof TaskError && error.code === "TASK_ARTIFACT_MISSING")) throw error;
+      }
+    }
+    await this.deleteRecord(templateId);
+  }
+
+  /** 只删除模板记录，不触发与来源任务的联动；供组合根的级联编排调用。 */
+  async deleteRecord(templateId: string): Promise<void> {
     return this.#exclusive(templateId, async () => {
       if (!await this.get(templateId)) throw templateError("要删除的模板不存在");
       await this.#options.files.deleteTemplate({ templateId });

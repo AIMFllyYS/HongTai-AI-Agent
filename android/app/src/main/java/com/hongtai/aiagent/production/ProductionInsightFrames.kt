@@ -3,11 +3,10 @@ package com.hongtai.aiagent.production
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.os.Build
+import com.hongtai.aiagent.media.FrameJpegWriter
 import com.hongtai.aiagent.media.ImageFormatProbe
 import com.hongtai.aiagent.media.PrivateObservationImageNormalizer
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.util.UUID
 
 internal data class ProductionInsightFrame(val uri: String, val mimeType: String)
@@ -75,23 +74,16 @@ internal class ProductionInsightFrames(private val store: ProductionMediaStore) 
     var frame: Bitmap? = null
     var scaled: Bitmap? = null
     val destination = File(directory, ProductionInsightFramePolicy.frameFileName(assetId, index))
-    val temporary = File(directory, ".${destination.name}.${UUID.randomUUID()}.part")
     try {
       frame = decodeFrame(retriever, millis * 1_000L) ?: return null
       scaled = scaleToFit(frame, ProductionInsightFramePolicy.MAX_EDGE_PIXELS)
-      FileOutputStream(temporary).use { output ->
-        if (!scaled.compress(Bitmap.CompressFormat.JPEG, ProductionInsightFramePolicy.JPEG_QUALITY, output)) return null
-        output.fd.sync()
-      }
-      if (temporary.length() <= 0L || temporary.length() > ProductionInsightFramePolicy.MAX_FRAME_BYTES) return null
-      if (!temporary.renameTo(destination)) return null
+      if (!FrameJpegWriter.writeAtomically(scaled, destination, ProductionInsightFramePolicy.JPEG_QUALITY, ProductionInsightFramePolicy.MAX_FRAME_BYTES)) return null
       return publishable(destination).firstOrNull()
     } catch (_: Exception) {
       return null
     } catch (_: OutOfMemoryError) {
       return null
     } finally {
-      if (temporary.exists()) temporary.delete()
       listOf(scaled, frame).distinct().forEach { bitmap ->
         if (bitmap != null && !bitmap.isRecycled) bitmap.recycle()
       }
@@ -123,20 +115,11 @@ internal class ProductionInsightFrames(private val store: ProductionMediaStore) 
     // A truncated or half-written file still has bytes, and handing it over would let the model
     // describe noise while the app reports the asset as described. Declaring it undescribed is the
     // honest outcome.
-    if (!isJpeg(destination)) {
+    if (!FrameJpegWriter.isJpeg(destination)) {
       destination.delete()
       return emptyList()
     }
     return listOf(ProductionInsightFrame(uri = "file://${destination.absolutePath}", mimeType = "image/jpeg"))
-  }
-
-  private fun isJpeg(file: File): Boolean = try {
-    FileInputStream(file).use { input ->
-      val header = ByteArray(2)
-      input.read(header) == 2 && header[0] == 0xFF.toByte() && header[1] == 0xD8.toByte()
-    }
-  } catch (_: Exception) {
-    false
   }
 
   private fun clearStale(directory: File, assetId: String) {

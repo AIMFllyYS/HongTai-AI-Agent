@@ -3,7 +3,7 @@ import test from "node:test";
 
 import type { MediaReference, TaskRecord } from "@hongtai/core";
 
-import { projectTaskDetail } from "./standalone-task-detail-projection.js";
+import { projectTaskDetail, projectTaskMedia } from "./standalone-task-detail-projection.js";
 
 function task(overrides: Partial<TaskRecord> = {}): TaskRecord {
   return {
@@ -66,14 +66,22 @@ test("projectTaskDetail leaves local-upload metadata without engagement counts",
   assert.equal(detail.content.playCount, undefined);
 });
 
-test("projectTaskDetail prefers the stored video over the remote cover for downloaded tasks", () => {
+test("projectTaskDetail prefers the persisted first frame over the stored video and the remote cover", () => {
+  const video: MediaReference = { uri: "capacitor://localhost/private/tasks/task-1/media/video.mp4", kind: "video", origin: "downloaded", displayName: "下载的视频" };
+  const thumbnail: MediaReference = { uri: "capacitor://localhost/private/tasks/task-1/media/thumbnail.jpg", kind: "image", origin: "downloaded", mimeType: "image/jpeg", displayName: "视频首帧" };
+  const detail = projectTaskDetail(task(), [video, thumbnail], { coverUrl: "https://cdn.example/cover.jpg?signature=secret#frame" }, undefined, undefined, undefined);
+  assert.equal(detail.content.cover?.uri, thumbnail.uri);
+  assert.equal(detail.content.cover?.kind, "image");
+});
+
+test("projectTaskDetail prefers the stored video over the remote cover when no first frame exists", () => {
   const video: MediaReference = { uri: "capacitor://localhost/private/tasks/task-1/media/video.mp4", kind: "video", origin: "downloaded", displayName: "解析视频" };
   const detail = projectTaskDetail(task(), [video], { coverUrl: "https://cdn.example/cover.jpg?signature=secret#frame" }, undefined, undefined, undefined);
   assert.equal(detail.content.cover?.uri, video.uri);
   assert.equal(detail.content.cover?.kind, "video");
 });
 
-test("projectTaskDetail falls back to a safe remote cover only when the stored video is missing", () => {
+test("projectTaskDetail falls back to a safe remote cover only when neither the first frame nor the stored video exists", () => {
   const remote = projectTaskDetail(task(), [], { coverUrl: "https://cdn.example/cover.jpg?signature=secret#frame" }, undefined, undefined, undefined);
   assert.deepEqual(remote.content.cover, {
     uri: "https://cdn.example/cover.jpg",
@@ -82,4 +90,44 @@ test("projectTaskDetail falls back to a safe remote cover only when the stored v
     mimeType: "image/jpeg",
     displayName: "视频封面",
   });
+});
+
+test("projectTaskMedia resolves the persisted first frame after the stored video", async () => {
+  const files = {
+    getUri: async ({ relativePath }: { readonly taskId: string; readonly relativePath: string }) => {
+      if (relativePath === "media/video.mp4") return { uri: "file:///private/tasks/task-1/media/video.mp4", sizeBytes: 128, mimeType: "video/mp4" };
+      if (relativePath === "media/thumbnail.jpg") return { uri: "file:///private/tasks/task-1/media/thumbnail.jpg", sizeBytes: 16, mimeType: "image/jpeg" };
+      return {};
+    },
+  };
+  const media = await projectTaskMedia(task(), files, (uri) => `display:${uri}`, async () => undefined);
+  assert.deepEqual(media.map((item) => [item.kind, item.displayName]), [["video", "下载的视频"], ["image", "视频首帧"]]);
+  assert.equal(media[1]?.uri, "display:file:///private/tasks/task-1/media/thumbnail.jpg");
+  assert.equal(media[1]?.origin, "downloaded");
+  assert.equal(media[1]?.mimeType, "image/jpeg");
+});
+
+test("projectTaskMedia keeps the imported origin on a local video's first frame and skips a missing one", async () => {
+  const files = {
+    getUri: async ({ relativePath }: { readonly taskId: string; readonly relativePath: string }) => {
+      if (relativePath === "media/video.mp4") return { uri: "file:///private/tasks/task-1/media/video.mp4", sizeBytes: 128, mimeType: "video/mp4" };
+      return {};
+    },
+  };
+  const withThumbnail = await projectTaskMedia(
+    task({ sourceKind: "local_video", sourceUrl: "", platform: undefined }),
+    {
+      getUri: async ({ relativePath }) => {
+        if (relativePath === "media/video.mp4") return { uri: "file:///private/tasks/task-1/media/video.mp4", sizeBytes: 128, mimeType: "video/mp4" };
+        if (relativePath === "media/thumbnail.jpg") return { uri: "file:///private/tasks/task-1/media/thumbnail.jpg", sizeBytes: 16 };
+        return {};
+      },
+    },
+    (uri) => uri,
+    async () => undefined,
+  );
+  assert.deepEqual(withThumbnail.map((item) => [item.kind, item.origin]), [["video", "imported"], ["image", "imported"]]);
+
+  const withoutThumbnail = await projectTaskMedia(task(), files, (uri) => uri, async () => undefined);
+  assert.deepEqual(withoutThumbnail.map((item) => item.kind), ["video"]);
 });

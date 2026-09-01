@@ -142,6 +142,21 @@ function authorized(req: IncomingMessage, url: URL): boolean {
   return req.headers["x-hongtai-browser-io"] === token || url.searchParams.get("t") === token;
 }
 
+/** 删除目录内除保留相对路径之外的全部内容；保留文件的祖先目录随之保留。 */
+async function pruneExcept(directory: string, keepRelativePaths: ReadonlySet<string>, prefix = ""): Promise<void> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  for (const entry of entries) {
+    const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+    const fullPath = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      await pruneExcept(fullPath, keepRelativePaths, relativePath);
+      if ((await readdir(fullPath)).length === 0) await rm(fullPath, { recursive: true, force: true });
+    } else if (!keepRelativePaths.has(relativePath)) {
+      await rm(fullPath, { force: true });
+    }
+  }
+}
+
 async function dispatch(op: string, payload: unknown): Promise<Json> {
   const input = asRecord(payload);
   const id = entityId(input);
@@ -201,9 +216,15 @@ async function dispatch(op: string, payload: unknown): Promise<Json> {
       return { exists: await exists(diskPath(stringValue(input.area), id, stringValue(input.relativePath))) };
     case "files.listIds":
       return { ids: await listIds(stringValue(input.area)) };
-    case "files.delete":
-      await rm(areaDir(stringValue(input.area), id), { recursive: true, force: true });
+    case "files.delete": {
+      const target = areaDir(stringValue(input.area), id);
+      const keep = new Set(
+        Array.isArray(input.keepRelativePaths) ? (input.keepRelativePaths as unknown[]).map((value) => String(value)) : [],
+      );
+      if (keep.size === 0) await rm(target, { recursive: true, force: true });
+      else if (await exists(target)) await pruneExcept(target, keep);
       return {};
+    }
     case "files.deleteFile":
       await rm(diskPath(stringValue(input.area), id, stringValue(input.relativePath)), { force: true });
       return {};

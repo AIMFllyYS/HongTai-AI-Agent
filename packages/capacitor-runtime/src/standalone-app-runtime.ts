@@ -341,6 +341,7 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
     http: ingestPorts.http,
     downloader: ingestPorts.downloader,
     mediaTools: ingestPorts.mediaTools,
+    media: options.plugins.mediaRuntime,
     transcriber,
     rewriter,
     toDisplayUri: display,
@@ -389,7 +390,19 @@ export async function createStandaloneAppRuntime(options: CreateStandaloneAppRun
     now,
   });
   const recovery = new StandaloneRuntimeRecovery({ operations, sources: [tasks, analysis, diagnosis, production] });
-  const templates = new StandaloneTemplateService({ files: options.plugins.localFiles, analysis, now });
+  const templates = new StandaloneTemplateService({
+    files: options.plugins.localFiles,
+    analysis,
+    now,
+    deleteTaskCascade: (taskId, deleteOptions) => tasks.delete(taskId, deleteOptions),
+  });
+  // 拆解与模板双向联动删除：任务侧级联删除全部派生模板（只走记录级删除，不递归）。
+  tasks.attachLinkedDeletion({
+    listForTask: async (taskId) => (await templates.list())
+      .filter((template) => template.sourceTaskId === taskId)
+      .map((template) => template.templateId),
+    deleteRecord: (templateId) => templates.deleteRecord(templateId),
+  });
   const emptyStorageAreas = (["tasks", "observations", "productions", "templates", "cache", "app-data"] as const)
     .map((area) => ({ area, byteLength: 0, itemCount: 0, deletableByteLength: 0, protectedByteLength: 0 }));
   const unavailableStorage = {

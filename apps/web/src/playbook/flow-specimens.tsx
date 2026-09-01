@@ -266,13 +266,17 @@ export function PlaybookRecentRecordActionsSpecimen() {
         <p className="playbook-record-actions__label">拆解记录 · 本地视频</p>
         <div className="sheet-action-list">
           <div className="playbook-record-actions__delete">
+            <span className="sheet-action__icon"><Icon name="pen_line" size={20} /></span>
+            <span><strong>重命名</strong><small>修改这条拆解对应模板的名称</small></span>
+          </div>
+          <div className="playbook-record-actions__delete">
             <span className="sheet-action__icon"><Icon name="trash_2" size={20} /></span>
-            <span><strong>删除记录</strong><small>只移除这条记录的本机媒体与产物</small></span>
+            <span><strong>删除记录</strong><small>对应模板会一并删除，本机视频可选择保留</small></span>
           </div>
         </div>
         <div className="playbook-record-actions__cancel">取消</div>
       </div>
-      <p className="playbook-hint">进行中的拆解或观察保持锁定；确认删除前会再次说明本机媒体和数据文件边界。</p>
+      <p className="playbook-hint">进行中的拆解或观察保持锁定；删除需二次确认，级联删除模板有红色警示，本机视频由勾选框决定去留（默认保留）。</p>
     </div>
   );
 }

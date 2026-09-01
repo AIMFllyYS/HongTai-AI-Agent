@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type UIEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import { issueFromAppError } from "@hongtai/core";
 import type { AppRuntime, AppTaskRecord, ContentTemplateInput, ContentTemplateRecord, MediaReference, TaskIssue } from "@hongtai/core";
 
@@ -9,10 +9,13 @@ import { GlassCard } from "../components/GlassCard";
 import { HomeMastheadActions } from "../components/HomeMastheadActions";
 import { Icon } from "../components/Icon";
 import { IssueNotice } from "../components/IssueNotice";
+import { RenameSheet } from "../components/RenameSheet";
+import { Sheet, SheetActionRow } from "../components/Sheet";
 import { EmptyState } from "../components/StatePanels";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { useSkeletonHold } from "../motion/skeleton-hold";
 import { formatTaskTime, platformLabel } from "../features/tasks/task-presenters";
+import { useLongPress } from "../hooks/useLongPress";
 import { aiSettingsPath, type Navigate } from "../router";
 
 export interface TemplatesPageProps {
@@ -86,6 +89,38 @@ function coverMediaFor(record: ContentTemplateRecord, covers: ReadonlyMap<string
   return record.sourceTaskId ? covers.get(record.sourceTaskId) : undefined;
 }
 
+/**
+ * 仅在持久化首帧缺失时短暂使用的兜底：卸载时立即释放底层解码资源，
+ * 避免 WebView 原生 MediaPlayer 靠 GC 回收而耗尽（封面渐进失效的根因之一）。
+ */
+function TemplateCoverVideo({ name, uri, onError }: { readonly name: string; readonly uri: string; readonly onError: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const element = videoRef.current;
+    return () => {
+      if (!element) return;
+      element.pause();
+      element.removeAttribute("src");
+      element.load();
+    };
+  }, [uri]);
+
+  return (
+    <video
+      aria-label={`${name}来源视频首帧`}
+      className="templates-cover-media"
+      muted
+      onError={onError}
+      onLoadedData={(event) => { event.currentTarget.currentTime = 0; }}
+      playsInline
+      preload="metadata"
+      ref={videoRef}
+      src={uri}
+    />
+  );
+}
+
 function TemplateCoverContent({ record, media }: { readonly record: ContentTemplateRecord; readonly media: MediaReference | undefined }) {
   const [failed, setFailed] = useState(false);
 
@@ -100,18 +135,7 @@ function TemplateCoverContent({ record, media }: { readonly record: ContentTempl
     return <img alt={`${record.name}来源视频封面`} className="templates-cover-media" decoding="async" loading="lazy" onError={() => setFailed(true)} src={media.uri} />;
   }
   if (media?.kind === "video") {
-    return (
-      <video
-        aria-label={`${record.name}来源视频首帧`}
-        className="templates-cover-media"
-        muted
-        onError={() => setFailed(true)}
-        onLoadedData={(event) => { event.currentTarget.currentTime = 0; }}
-        playsInline
-        preload="metadata"
-        src={media.uri}
-      />
-    );
+    return <TemplateCoverVideo name={record.name} onError={() => setFailed(true)} uri={media.uri} />;
   }
   if (record.sourceTaskId) {
     return <span className="templates-cover-unavailable"><Icon name="video" size={22} /><span>原视频封面不可用</span></span>;
@@ -119,9 +143,40 @@ function TemplateCoverContent({ record, media }: { readonly record: ContentTempl
   return <p>{formulaPreview(record)}</p>;
 }
 
+function TemplateFeaturedCard({ record, media, onOpen, onLongPress }: { readonly record: ContentTemplateRecord; readonly media: MediaReference | undefined; readonly onOpen: () => void; readonly onLongPress: () => void }) {
+  const longPress = useLongPress({ onClick: onOpen, onLongPress });
+  return (
+    <button aria-label={`打开模板 ${record.name}，长按管理模板`} className="templates-featured-card" {...longPress} type="button">
+      <div className={`templates-cover templates-cover--${coverTone(record.templateId)} ${media ? "templates-cover--media" : ""}`.trim()}><TemplateCoverContent media={media} record={record} /></div>
+      <span className="templates-featured-card__badge">我的</span>
+      <div className="templates-featured-card__scrim">
+        <strong>{record.name}</strong>
+        <p>{formulaPreview(record)}</p>
+        <small>{templateMeta(record)}</small>
+      </div>
+    </button>
+  );
+}
+
+function TemplateCatalogRow({ record, media, active, onOpen, onLongPress }: { readonly record: ContentTemplateRecord; readonly media: MediaReference | undefined; readonly active: boolean; readonly onOpen: () => void; readonly onLongPress: () => void }) {
+  const longPress = useLongPress({ onClick: onOpen, onLongPress });
+  return (
+    <button aria-label={`使用模板 ${record.name}，长按管理模板`} className={active ? "templates-catalog-row is-active" : "templates-catalog-row"} {...longPress} type="button">
+      <span className={`templates-catalog-thumb templates-cover templates-cover--${coverTone(record.templateId)} ${media ? "templates-cover--media" : ""}`.trim()}><TemplateCoverContent media={media} record={record} /></span>
+      <span className="templates-catalog-body">
+        <span className="templates-catalog-title"><strong>{record.name}</strong><span className="templates-mine-tag">我的</span></span>
+        <span className="templates-catalog-formula">{formulaPreview(record)}</span>
+        <span className="templates-catalog-meta">{templateMeta(record)}</span>
+      </span>
+      <span className="templates-use">使用</span>
+    </button>
+  );
+}
+
 export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
   const [templates, setTemplates] = useState<readonly ContentTemplateRecord[]>();
   const [sourceCovers, setSourceCovers] = useState<ReadonlyMap<string, MediaReference>>(new Map());
+  const [sourceTasksById, setSourceTasksById] = useState<ReadonlyMap<string, AppTaskRecord>>(new Map());
   const [sources, setSources] = useState<readonly AnalysisSource[]>([]);
   const [sourceTaskId, setSourceTaskId] = useState("");
   const [filterId, setFilterId] = useState<TemplateFilterId>("all");
@@ -131,6 +186,10 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
   const [editingId, setEditingId] = useState<string>();
   const [draft, setDraft] = useState<TemplateDraft>(EMPTY_DRAFT);
   const [deletingId, setDeletingId] = useState<string>();
+  const [deleteKeepLocalVideo, setDeleteKeepLocalVideo] = useState(true);
+  const [actionTargetId, setActionTargetId] = useState<string>();
+  const [renameId, setRenameId] = useState<string>();
+  const [renameIssue, setRenameIssue] = useState<TaskIssue>();
   const [busy, setBusy] = useState(false);
   const [readIssue, setReadIssue] = useState<TaskIssue>();
   const [issue, setIssue] = useState<TaskIssue>();
@@ -153,6 +212,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
       }));
       setTemplates(saved);
       setSourceCovers(new Map(coverEntries.filter((entry): entry is readonly [string, MediaReference] => Boolean(entry))));
+      setSourceTasksById(new Map(tasks.map((task) => [task.id, task])));
       setSources(available);
       setSourceTaskId((current) => current || available[0]?.task.id || "");
       setReadIssue(undefined);
@@ -226,12 +286,12 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
     }
   };
 
-  const remove = async (templateId: string) => {
+  const remove = async (templateId: string, keepLocalVideo: boolean) => {
     if (busy) return;
     setBusy(true);
     setIssue(undefined);
     try {
-      await runtime.templates.delete(templateId);
+      await runtime.templates.delete(templateId, { keepLocalVideo });
       if (editingId === templateId) { setEditingId(undefined); setDraft(EMPTY_DRAFT); }
       setDeletingId(undefined);
       await load();
@@ -242,8 +302,43 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
     }
   };
 
+  const openDelete = (templateId: string) => {
+    setActionTargetId(undefined);
+    setDeleteKeepLocalVideo(true);
+    setIssue(undefined);
+    setDeletingId(templateId);
+  };
+
+  const openRename = (templateId: string) => {
+    setActionTargetId(undefined);
+    setRenameIssue(undefined);
+    setRenameId(templateId);
+  };
+
+  const submitRename = async (name: string) => {
+    const record = templates?.find((item) => item.templateId === renameId);
+    if (!record || busy) return;
+    setBusy(true);
+    setRenameIssue(undefined);
+    try {
+      await runtime.templates.update(record.templateId, { name, summary: record.summary, formula: record.formula, steps: record.steps, variableSlots: record.variableSlots });
+      setRenameId(undefined);
+      await load();
+    } catch (error) {
+      setRenameIssue(issueFromAppError(error, { code: "STORAGE_WRITE_FAILED", message: "无法保存模板名称", action: "retry" }));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const updateDraft = (field: keyof TemplateDraft, value: string) => setDraft((current) => ({ ...current, [field]: value }));
   const editedTemplate = templates?.find((item) => item.templateId === editingId);
+  const actionTemplate = templates?.find((item) => item.templateId === actionTargetId);
+  const renameTemplate = templates?.find((item) => item.templateId === renameId);
+  const deletingTemplate = templates?.find((item) => item.templateId === deletingId);
+  const deletingSourceTask = deletingTemplate?.sourceTaskId ? sourceTasksById.get(deletingTemplate.sourceTaskId) : undefined;
+  /** 有来源拆解且本机留有视频时提供勾选框；任务列表查不到来源时按有视频处理，把选择权交给用户。 */
+  const deletingHasLocalVideo = Boolean(deletingTemplate?.sourceTaskId) && (!deletingSourceTask || deletingSourceTask.contentType === "video");
 
   const onFeaturedScroll = (event: UIEvent<HTMLDivElement>) => {
     const scroller = event.currentTarget;
@@ -294,15 +389,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
             <>
               <div className="templates-carousel" onScroll={onFeaturedScroll}>
                 {featured.map((record) => (
-                  <button aria-label={`打开模板 ${record.name}`} className="templates-featured-card" key={record.templateId} onClick={() => edit(record)} type="button">
-                    <div className={`templates-cover templates-cover--${coverTone(record.templateId)} ${coverMediaFor(record, sourceCovers) ? "templates-cover--media" : ""}`.trim()}><TemplateCoverContent media={coverMediaFor(record, sourceCovers)} record={record} /></div>
-                    <span className="templates-featured-card__badge">我的</span>
-                    <div className="templates-featured-card__scrim">
-                      <strong>{record.name}</strong>
-                      <p>{formulaPreview(record)}</p>
-                      <small>{templateMeta(record)}</small>
-                    </div>
-                  </button>
+                  <TemplateFeaturedCard key={record.templateId} media={coverMediaFor(record, sourceCovers)} onLongPress={() => { setIssue(undefined); setActionTargetId(record.templateId); }} onOpen={() => edit(record)} record={record} />
                 ))}
               </div>
               {featured.length > 1 ? (
@@ -342,15 +429,7 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
           ) : (
             <div className="templates-catalog-list">
                 {filtered.map((record) => (
-                  <button aria-label={`使用模板 ${record.name}`} className={record.templateId === editingId ? "templates-catalog-row is-active" : "templates-catalog-row"} key={record.templateId} onClick={() => edit(record)} type="button">
-                  <span className={`templates-catalog-thumb templates-cover templates-cover--${coverTone(record.templateId)} ${coverMediaFor(record, sourceCovers) ? "templates-cover--media" : ""}`.trim()}><TemplateCoverContent media={coverMediaFor(record, sourceCovers)} record={record} /></span>
-                  <span className="templates-catalog-body">
-                    <span className="templates-catalog-title"><strong>{record.name}</strong><span className="templates-mine-tag">我的</span></span>
-                    <span className="templates-catalog-formula">{formulaPreview(record)}</span>
-                    <span className="templates-catalog-meta">{templateMeta(record)}</span>
-                  </span>
-                  <span className="templates-use">使用</span>
-                </button>
+                  <TemplateCatalogRow active={record.templateId === editingId} key={record.templateId} media={coverMediaFor(record, sourceCovers)} onLongPress={() => { setIssue(undefined); setActionTargetId(record.templateId); }} onOpen={() => edit(record)} record={record} />
               ))}
             </div>
           )}
@@ -391,19 +470,56 @@ export function TemplatesPage({ runtime, navigate }: TemplatesPageProps) {
             </div>
             <div className="template-editor__actions"><Button disabled={busy || !draft.name.trim()} icon={<Icon name="check_circle" size={17} />} onClick={() => void save()}>{busy ? "正在保存" : "保存修改"}</Button><Button disabled={busy} onClick={() => setEditingId(undefined)} variant="quiet">关闭编辑</Button></div>
             {editingId !== "new" ? (
-              <Button aria-label={`删除模板 ${editedTemplate?.name ?? ""}`} disabled={busy} onClick={() => setDeletingId(editingId)} variant="quiet"><Icon name="close" size={16} />删除</Button>
+              <Button aria-label={`删除模板 ${editedTemplate?.name ?? ""}`} disabled={busy} onClick={() => { if (editingId) openDelete(editingId); }} variant="quiet"><Icon name="close" size={16} />删除</Button>
             ) : null}
           </GlassCard>
         ) : null}
 
+        {actionTemplate ? (
+          <Sheet className="template-actions-sheet" onClose={() => setActionTargetId(undefined)} open title="模板操作">
+            <p className="recent-record-actions-sheet__label">模板 · {actionTemplate.name}</p>
+            <div className="sheet-action-list">
+              <SheetActionRow
+                description="修改模板名称"
+                icon={<Icon name="pen_line" size={20} />}
+                onSelect={() => openRename(actionTemplate.templateId)}
+                title="重命名"
+              />
+              <SheetActionRow
+                description={actionTemplate.sourceTaskId ? "对应拆解记录会一并删除，本机视频可选择保留" : "只删除这份模板，不可恢复"}
+                icon={<Icon name="trash_2" size={20} />}
+                onSelect={() => openDelete(actionTemplate.templateId)}
+                title="删除模板"
+              />
+            </div>
+            <Button className="sheet-cancel" onClick={() => setActionTargetId(undefined)} variant="quiet">取消</Button>
+          </Sheet>
+        ) : null}
+
+        {renameTemplate ? (
+          <RenameSheet
+            busy={busy}
+            fieldLabel="模板名称"
+            initialValue={renameTemplate.name}
+            issue={renameIssue}
+            onClose={() => setRenameId(undefined)}
+            onSubmit={(name) => void submitRename(name)}
+            open
+            title="重命名模板"
+          />
+        ) : null}
+
         <ConfirmDeleteSheet
           busy={busy}
+          checkbox={deletingHasLocalVideo ? { label: "同时删除已下载到本机的视频", checked: !deleteKeepLocalVideo, onChange: (checked) => setDeleteKeepLocalVideo(!checked) } : undefined}
           confirmLabel="确认删除"
-          description="只删除这份模板，不可恢复；来源拆解和它的视频都会保留，不受影响。"
-          heading={`确认删除模板“${editedTemplate?.name ?? "当前模板"}”？`}
+          dangerNote={deletingTemplate?.sourceTaskId ? "将同时彻底删除对应拆解记录，无法恢复。" : undefined}
+          description={deletingTemplate?.sourceTaskId ? "这份模板与它的来源拆解是同一份内容；默认保留已下载到本机的视频。" : "只删除这份模板，不可恢复。"}
+          heading={`确认删除模板“${deletingTemplate?.name ?? editedTemplate?.name ?? "当前模板"}”？`}
+          issue={deletingId ? issue : undefined}
           onClose={() => setDeletingId(undefined)}
-          onConfirm={() => { if (editingId) void remove(editingId); }}
-          open={Boolean(editingId && editingId !== "new" && deletingId === editingId)}
+          onConfirm={() => { if (deletingId) void remove(deletingId, deleteKeepLocalVideo); }}
+          open={Boolean(deletingId)}
           title="删除模板"
         />
       </div>

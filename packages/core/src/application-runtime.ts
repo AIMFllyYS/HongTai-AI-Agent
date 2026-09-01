@@ -482,8 +482,16 @@ export interface TaskService {
   cancel(taskId: string): Promise<AppTaskRecord>;
   /** Creates a new immutable task with a distinct ID and `retryOfTaskId=taskId`. */
   retry(taskId: string): Promise<AppTaskRecord>;
-  /** Permanently removes one terminal task and all of its private artifacts. */
-  delete(taskId: string): Promise<void>;
+  /**
+   * Permanently removes one terminal task and every template derived from it.
+   * With `keepLocalVideo: true` the downloaded `media/video.mp4` stays in
+   * private storage while the task record and all other artifacts are removed.
+   */
+  delete(taskId: string, options?: LinkedRecordDeleteOptions): Promise<void>;
+}
+
+export interface LinkedRecordDeleteOptions {
+  readonly keepLocalVideo?: boolean;
 }
 
 export interface ContentAnalysisRecord {
@@ -713,7 +721,13 @@ export interface TemplateService {
   createFromAnalysis(taskId: string): Promise<ContentTemplateRecord>;
   create(input: ContentTemplateInput): Promise<ContentTemplateRecord>;
   update(templateId: string, input: ContentTemplateInput): Promise<ContentTemplateRecord>;
-  delete(templateId: string): Promise<void>;
+  /**
+   * Permanently removes one template. A template with a `sourceTaskId` is the
+   * same content as its source task: deletion cascades to that task and to
+   * every sibling template derived from it. `keepLocalVideo: true` preserves
+   * the task's downloaded `media/video.mp4` in private storage.
+   */
+  delete(templateId: string, options?: LinkedRecordDeleteOptions): Promise<void>;
 }
 
 export type ObservationMode = "tongue" | "face";

@@ -294,7 +294,7 @@ test("real task pages constrain technical text and expose persisted stage percen
   const progress = read("components/TaskProgressSteps.tsx");
   const css = read("styles/pages/tasks-runtime.css");
 
-  assert.match(home, /className=\{localVideo \? undefined : "technical-value"\}/);
+  assert.match(home, /className=\{labelIsUrl \? "technical-value" : undefined\}/);
   assert.match(processing, /className="technical-value"/);
   assert.match(detail, /className="technical-value"/);
   assert.match(analysis, /可以离开此页|分析过程不会保留/);
@@ -304,6 +304,75 @@ test("real task pages constrain technical text and expose persisted stage percen
   assert.match(progress, /task-progress-steps__percent/);
   assert.match(css, /\.progress-step__detail[^}]*overflow-wrap:\s*anywhere/s);
   assert.match(css, /@media\s*\(max-width:\s*26\.875rem\)[\s\S]*\.task-page-actions[^}]*grid-template-columns:\s*1fr/);
+});
+
+test("task/template deletion is a confirmed two-way cascade with an opt-in local video purge", () => {
+  const history = read("features/tasks/TaskHistory.tsx");
+  const actions = read("components/RecentRecordActionsSheet.tsx");
+  const confirm = read("components/ConfirmDeleteSheet.tsx");
+  const detail = read("pages/TaskDetailPage.tsx");
+  const templates = read("pages/TemplatesPage.tsx");
+  const components = read("styles/components.css");
+
+  // 统一的确认弹层提供：醒目红色级联警示、本机视频去留勾选框、失败原因上屏。
+  assert.match(confirm, /dangerNote\?:/);
+  assert.match(confirm, /checkbox\?:/);
+  assert.match(confirm, /confirm-delete-sheet__danger/);
+  assert.match(confirm, /confirm-delete-sheet__checkbox/);
+  assert.match(components, /\.confirm-delete-sheet__danger[^}]*var\(--color-error\)/s);
+  assert.match(components, /\.confirm-delete-sheet__checkbox/s);
+
+  // 拆解记录动作层：重命名行 + 删除进确认弹层；勾选框默认不勾（保留视频）。
+  assert.match(actions, /title="重命名"/);
+  assert.match(actions, /<ConfirmDeleteSheet/);
+  assert.match(actions, /同时删除已下载到本机的视频/);
+  assert.match(actions, /将同时彻底删除模板「/);
+  assert.match(actions, /keepLocalVideo: !\(hasLocalVideo && deleteLocalVideo\)/);
+
+  // 历史列表删除携带 keepLocalVideo 选项；详情页区分下载视频与本地上传副本。
+  assert.match(history, /runtime\.tasks\.delete\(selectedTask\.id, \{ keepLocalVideo: options\.keepLocalVideo \}\)/);
+  assert.match(detail, /runtime\.tasks\.delete\(detail\.task\.id, \{ keepLocalVideo: deleteKeepLocalVideo \}\)/);
+  assert.match(detail, /同时删除已下载到本机的视频/);
+  assert.match(detail, /同时删除本机保存的视频副本/);
+  assert.match(detail, /将同时彻底删除模板「/);
+
+  // 模板页：长按出操作弹层，删除同样走级联确认并保留勾选框。
+  assert.match(templates, /useLongPress/);
+  assert.match(templates, /title="删除模板"/);
+  assert.match(templates, /将同时彻底删除对应拆解记录，无法恢复。/);
+  assert.match(templates, /同时删除已下载到本机的视频/);
+  assert.match(templates, /runtime\.templates\.delete\(templateId, \{ keepLocalVideo \}\)/);
+  assert.doesNotMatch(templates, /来源拆解和它的视频都会保留/);
+  assert.doesNotMatch(detail, /已经复制保存的模板不受影响/);
+});
+
+test("task history shows the linked template name and both pages support renaming it", () => {
+  const home = read("pages/TaskHomePage.tsx");
+  const history = read("features/tasks/TaskHistory.tsx");
+  const actions = read("components/RecentRecordActionsSheet.tsx");
+  const rename = read("components/RenameSheet.tsx");
+  const templates = read("pages/TemplatesPage.tsx");
+
+  // 名称层级：模板名称 → 拆解主题 → 详情标题 → 回退链接/本地上传。
+  assert.match(home, /loadHistoryNameMaps/);
+  assert.match(home, /runtime\.templates\.list\(\)/);
+  assert.match(home, /readContentAnalysis\(analysis\)\.overview\?\.theme/);
+  assert.match(home, /detail\?\.content\.title/);
+  assert.match(history, /recordNames\?\.get\(task\.id\)/);
+  assert.match(history, /linkedTemplateName=\{selectedTemplate\?\.name\}/);
+
+  // 无模板的拆解禁用重命名并说明原因；有模板时整条名称经 templates.update 保存。
+  assert.match(actions, /renameDisabledReason/);
+  assert.match(history, /该拆解还没有模板，可先在详情页存为模板。/);
+  assert.match(history, /runtime\.templates\.update\(template\.templateId, \{/);
+  assert.match(templates, /runtime\.templates\.update\(record\.templateId, \{ name/);
+
+  // 统一重命名弹层：非空拦截、默认 80 字符上限，与服务端 normalizedInput 一致。
+  assert.match(rename, /maxLength = 80/);
+  assert.match(rename, /if \(!trimmed \|\| busy\) return/);
+  assert.match(rename, /重命名|保存名称/);
+  assert.match(history, /<RenameSheet/);
+  assert.match(templates, /<RenameSheet/);
 });
 
 test("LatestReadGuard current() does not retire a sibling read; begin/invalidate do", async () => {
