@@ -66,6 +66,14 @@
 >
 > 本段只收窄 #122 的排查面（CLI 已通、浏览器已通、APK 源码已含 MIME 修复）；**APK 真网复验条件不变**，见上文关单清单。Android 端 remux 逐项核对（显式 `MUXER_OUTPUT_MPEG_4`、编码白名单覆盖 `video/avc`+`audio/mp4a-latm`、时序约束满足）未发现新缺陷，不改原生代码。
 
+**2026-09-01 追加（解析层真实根因，已修复并实跑验证，随 v0.1.35 进包）：**
+
+> 用户报告手机端 B 站解析持续不好使（测试链 `https://b23.tv/dRtdz4d`）。系统性实测发现：**B 站已把未签名 `x/web-interface/view` 纳入风控**——同一已触发风控的 IP 下，未签名 `view` 必返 HTTP 412（HTML 验证页），WBI 签名的 `x/web-interface/wbi/view` 返回 200 完整 JSON（bvid/aid 均可）；`nav`/`pagelist`/WBI `playurl`/CDN 双流均正常（音频 Content-Type 仍为 `video/mp4`，音频槽 MIME 修复继续有效）。「CLI 好使、手机不好使」是风控按 IP/频次触发造成的假象：本次实测 CLI 在同一风控 IP 下同样 412。
+>
+> 修复（`packages/platforms/src/bilibili/adapter.ts`，Kotlin 零改动、无 Cookie/登录）：`parse` 先取匿名 `nav` 的 WBI 密钥，view 改走签名端点 `wbi/view`；`nav` 无密钥时退回原未签名端点。验证：`tests/platforms.test.ts` 40/40（新增两条签名行为回归）、`pnpm check` 全过；CLI 在同一风控 IP 下对用户短链实跑全链路 `succeeded`（任务 `20260901231523-z2mhz0`，35s，双流下载+合并，ffprobe 确认 h264+aac 双轨）。随 v0.1.35 (versionCode 43) Release 归档。
+>
+> **APK 物理真机复验仍由用户执行**（本机无真机），关单清单不变：重点观察「提取内容」阶段不再出现 `PLATFORM_API_RATE_LIMITED`，且 `download-media` 不再被音频 `video/mp4` 声明误杀。
+
 ---
 
 ### 2. 已关、但采集尾巴就是 #122：[#87](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/87) B 站 APK 一律解析失败

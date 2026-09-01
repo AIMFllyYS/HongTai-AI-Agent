@@ -121,7 +121,7 @@ function bilibiliClient(options: {
     if (request.url.includes("/x/web-interface/nav")) {
       return jsonResponse(request.url, options.nav ?? { code: -101, data: {} });
     }
-    if (request.url.includes("/x/web-interface/view")) {
+    if (request.url.includes("/x/web-interface/wbi/view") || request.url.includes("/x/web-interface/view")) {
       return jsonResponse(request.url, { code: 0, data: options.view ?? BILIBILI_VIEW });
     }
     if (request.url.includes("playurl")) {
@@ -575,6 +575,52 @@ test("B站适配器提取P1 DASH音视频", async () => {
   assert.match(playurl ?? "", /[?&]qn=64(?:&|$)/);
   assert.doesNotMatch(playurl ?? "", /fourk=1/);
   assertWhitelistedRaw(content.raw);
+});
+
+const BILIBILI_NAV_WBI = {
+  code: -101,
+  data: {
+    wbi_img: {
+      img_url: "https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b0fd2ca.png",
+      sub_url: "https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png",
+    },
+  },
+} as const;
+
+test("B站持有wbi密钥时view与playurl都走签名端点", async () => {
+  const requests: string[] = [];
+  const client = bilibiliClient({
+    nav: BILIBILI_NAV_WBI,
+    onRequest: (request) => requests.push(request.url),
+  });
+  const adapter = new BilibiliAdapter();
+  const resolved = await adapter.resolve("https://www.bilibili.com/video/BV1xx411c7mD", client);
+  const content = await adapter.parse(resolved, client);
+  assert.equal(content.title, "测试B站");
+  const viewUrl = requests.find((url) => url.includes("/view?"));
+  assert.ok(viewUrl, "应发起 view 请求");
+  assert.ok(viewUrl.includes("/x/web-interface/wbi/view"), `view 应走 wbi 签名端点: ${viewUrl}`);
+  assert.match(viewUrl, /[?&]bvid=BV1xx411c7mD(?:&|$)/);
+  assert.match(viewUrl, /[?&]wts=\d+(?:&|$)/);
+  assert.match(viewUrl, /[?&]w_rid=[0-9a-f]{32}(?:&|$)/);
+  const playurl = requests.find((url) => url.includes("playurl"));
+  assert.ok(playurl?.includes("/x/player/wbi/playurl"), `playurl 应走 wbi 签名端点: ${playurl}`);
+  assert.match(playurl ?? "", /[?&]w_rid=[0-9a-f]{32}(?:&|$)/);
+});
+
+test("B站nav无wbi密钥时退回未签名端点", async () => {
+  const requests: string[] = [];
+  const client = bilibiliClient({
+    onRequest: (request) => requests.push(request.url),
+  });
+  const adapter = new BilibiliAdapter();
+  const resolved = await adapter.resolve("https://www.bilibili.com/video/BV1xx411c7mD", client);
+  await adapter.parse(resolved, client);
+  const viewUrl = requests.find((url) => url.includes("/view?"));
+  assert.ok(viewUrl?.includes("/x/web-interface/view?"), `view 应退回未签名端点: ${viewUrl}`);
+  assert.doesNotMatch(viewUrl ?? "", /w_rid=/);
+  const playurl = requests.find((url) => url.includes("playurl"));
+  assert.ok(playurl?.includes("/x/player/playurl?"), `playurl 应退回未签名端点: ${playurl}`);
 });
 
 test("B站URL已含BV时resolve不发HTTP", async () => {

@@ -222,10 +222,18 @@ export class BilibiliAdapter implements PlatformAdapter {
     const aid = extractAid(link.finalUrl) ?? extractAid(link.sourceUrl);
     if (!bvid && !aid) throw new TaskError({ code: "INPUT_URL_INVALID", message: "无法从B站链接中提取BV号或av号", action: "edit_input" });
     const page = extractPage(link.finalUrl) ?? extractPage(link.sourceUrl) ?? 1;
-    const viewQuery = bvid ? `bvid=${encodeURIComponent(bvid)}` : `aid=${aid}`;
+    // B站对未签名的 x/web-interface/view 启用风控（HTTP 412），官方网页端走
+    // WBI 签名的 x/web-interface/wbi/view；签名密钥从匿名 nav 接口获取，无需登录。
+    // nav 不可用时退回未签名端点，保持旧行为。
+    const wbiKeys = await fetchWbiKeys(http, link.finalUrl);
+    const viewParams: Record<string, string | number> = bvid ? { bvid } : { aid: aid ?? 0 };
+    const viewQuery = wbiKeys
+      ? signWbiQuery(viewParams, wbiKeys.imgKey, wbiKeys.subKey, Math.floor(Date.now() / 1000))
+      : new URLSearchParams(Object.fromEntries(Object.entries(viewParams).map(([key, value]) => [key, String(value)]))).toString();
+    const viewPath = wbiKeys ? "/x/web-interface/wbi/view" : "/x/web-interface/view";
     const viewPayload = await getApi(
       http,
-      `https://api.bilibili.com/x/web-interface/view?${viewQuery}`,
+      `https://api.bilibili.com${viewPath}?${viewQuery}`,
       link.finalUrl,
     );
     const view = asRecord(viewPayload.data);
@@ -249,7 +257,6 @@ export class BilibiliAdapter implements PlatformAdapter {
       fnval: 16,
       fnver: 0,
     };
-    const wbiKeys = await fetchWbiKeys(http, link.finalUrl);
     const playQuery = wbiKeys
       ? signWbiQuery(playParams, wbiKeys.imgKey, wbiKeys.subKey, Math.floor(Date.now() / 1000))
       : new URLSearchParams(Object.fromEntries(Object.entries(playParams).map(([key, value]) => [key, String(value)]))).toString();
