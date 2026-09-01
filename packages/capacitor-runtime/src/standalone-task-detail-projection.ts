@@ -122,7 +122,7 @@ export function projectTaskDetail(
   const description = contentString(details.description);
   const author = contentString(details.author);
   const canonicalUrl = contentString(details.canonicalUrl);
-  const cover = coverReference(details) ?? media.find((item) => item.kind === "video");
+  const cover = media.find((item) => item.kind === "video") ?? coverReference(details);
   const durationSeconds = typeof details.durationSeconds === "number" && Number.isFinite(details.durationSeconds)
     ? details.durationSeconds
     : undefined;

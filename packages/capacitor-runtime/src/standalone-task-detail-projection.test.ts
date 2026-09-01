@@ -66,7 +66,14 @@ test("projectTaskDetail leaves local-upload metadata without engagement counts",
   assert.equal(detail.content.playCount, undefined);
 });
 
-test("projectTaskDetail exposes a safe remote cover and falls back to the stored video", () => {
+test("projectTaskDetail prefers the stored video over the remote cover for downloaded tasks", () => {
+  const video: MediaReference = { uri: "capacitor://localhost/private/tasks/task-1/media/video.mp4", kind: "video", origin: "downloaded", displayName: "解析视频" };
+  const detail = projectTaskDetail(task(), [video], { coverUrl: "https://cdn.example/cover.jpg?signature=secret#frame" }, undefined, undefined, undefined);
+  assert.equal(detail.content.cover?.uri, video.uri);
+  assert.equal(detail.content.cover?.kind, "video");
+});
+
+test("projectTaskDetail falls back to a safe remote cover only when the stored video is missing", () => {
   const remote = projectTaskDetail(task(), [], { coverUrl: "https://cdn.example/cover.jpg?signature=secret#frame" }, undefined, undefined, undefined);
   assert.deepEqual(remote.content.cover, {
     uri: "https://cdn.example/cover.jpg",
@@ -75,9 +82,4 @@ test("projectTaskDetail exposes a safe remote cover and falls back to the stored
     mimeType: "image/jpeg",
     displayName: "视频封面",
   });
-
-  const video: MediaReference = { uri: "capacitor://localhost/private/tasks/task-1/media/video.mp4", kind: "video", origin: "downloaded", displayName: "解析视频" };
-  const fallback = projectTaskDetail(task(), [video], {}, undefined, undefined, undefined);
-  assert.equal(fallback.content.cover?.uri, video.uri);
-  assert.equal(fallback.content.cover?.kind, "video");
 });
