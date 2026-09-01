@@ -31,7 +31,7 @@
 - 候选归档 23,412,591 字节、SHA-256 `307fe0941610bfe9c64cc335a8115f7640f84fb7cd3a5971a69d74c4aa575f63`；Release 单测、lint、四 ABI assemble、16 KiB 对齐、v2/v3 签名、证书锚定（`54df122c…b5b2fde`，与历史发布一致）由 `scripts/build-android-release.ps1` 全程校验通过。
 - `pnpm check`（typecheck + lint + 根套件 + capacitor-runtime 190 项测试）与 web build 通过；封面优先级、懒回灌单flight/失败记忆、级联删除与保留视频语义均由单测锁定，UI 侧新增级联确认/勾选框/重命名契约断言。
 - 浏览器 dev 运行时端到端核对（390px + 桌面）：封面 `<img>` 持久化首帧渲染、页面来回切换后封面稳定、长按出操作弹层、重命名双向生效、级联删除后另一方同步消失且 `media/video.mp4` 按勾选保留（证据 `output/browser-e2e/w234-*.png` 与 `w234-findings.json`）。构建时无可用 Android 设备连接，真机端测未执行，不声称端侧通过。
-- `download.html` 未切换：公网推荐仍为 `v0.1.32`（code 40），候选验收与公网上传另行安排，见 [v0.1.34 Release 验收](docs/验收/2026-09-02-v0134-release-candidate.md)。
+- `download.html` 已于 2026-09-02 切换：公网推荐指向 `HongTai-AI-Agent-release-v0.1.34.apk`（code 42，公网 HEAD 回验大小一致），此前缺席的 `v0.1.33` 一并补登为历史版本；候选验收证据见 [v0.1.34 Release 验收](docs/验收/2026-09-02-v0134-release-candidate.md)。
 
 ## [0.1.33] - 2026-09-01
 
@@ -45,7 +45,7 @@
 - 候选归档 23,410,228 字节、SHA-256 `c49f2ea178f756015c0439b78e93f89e84d03f363b68e663ae29b328c9e6d4b5`；Release 单测、lint、四 ABI assemble、16 KiB 对齐、v2/v3 签名、证书锚定（`54df122c…b5b2fde`，与历史发布一致）由 `scripts/build-android-release.ps1` 全程校验通过。
 - `pnpm check`（typecheck + lint + 根套件 650 项 + capacitor-runtime 174 项测试）与 web build 通过；封面优先级由投影层单测锁定（本地视频优先、远端封面仅兜底）。
 - 修复在读路径生效，存量爆款拆解任务无需数据迁移；构建时无可用 Android 设备连接，真机/模拟器端测未执行，不声称端侧通过；卡片渲染复用与本地上传完全相同的 `<video preload="metadata">` 首帧机制。
-- `download.html` 未切换：公网推荐仍为 `v0.1.32`（code 40），候选验收与公网上传另行安排，见 [v0.1.33 Release 验收](docs/验收/2026-09-01-v0133-release-candidate.md)。
+- `download.html` 于 2026-09-02 随 `v0.1.34` 发布一并补登：本版本作为历史版本提供下载（code 41，公网 HEAD 回验大小一致）；候选验收证据见 [v0.1.33 Release 验收](docs/验收/2026-09-01-v0133-release-candidate.md)。
 
 ## [0.1.32] - 2026-09-01
 

@@ -397,16 +397,46 @@
     }
 
     .spec-card__body {
-      padding: 22px 24px;
+      padding: 16px 24px 20px;
     }
 
-    .spec-card__section-label {
-      margin-bottom: 14px;
+    .spec-card__fold {
+      border-top: 1px solid var(--line);
+    }
+
+    .spec-card__fold summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 13px 0;
       color: var(--green-deep);
-      font-size: 11px;
+      cursor: pointer;
+      font-size: 12px;
       font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      list-style: none;
+    }
+
+    .spec-card__fold summary::-webkit-details-marker { display: none; }
+
+    .spec-card__fold summary::after {
+      width: 7px;
+      height: 7px;
+      border-right: 1.5px solid currentColor;
+      border-bottom: 1.5px solid currentColor;
+      content: "";
+      transform: rotate(45deg);
+      transition: transform 180ms ease;
+      flex-shrink: 0;
+    }
+
+    .spec-card__fold[open] summary::after {
+      transform: rotate(225deg);
+    }
+
+    .spec-card__fold-body {
+      padding: 2px 0 16px;
     }
 
     .spec-card__feature-list {
@@ -457,18 +487,12 @@
       line-height: 1.5;
     }
 
-    .spec-card__footer {
-      padding: 16px 24px 20px;
-      border-top: 1px solid var(--line);
-      background: var(--paper-deep);
-    }
-
     .spec-card__meta-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       color: var(--muted);
       font-size: 12px;
     }
@@ -482,15 +506,6 @@
       border: 1px solid var(--line);
       border-radius: 10px;
       background: var(--white);
-    }
-
-    .hash-label {
-      display: block;
-      margin-bottom: 3px;
-      color: var(--muted);
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
     }
 
     .hash-code {
@@ -743,36 +758,6 @@
     }
 
     .release-card__link:hover .release-card__link-arrow { transform: translateY(3px); }
-
-    .release-boundary {
-      display: flex;
-      gap: 14px;
-      align-items: flex-start;
-      min-width: 0;
-      max-width: 100%;
-      margin-top: 22px;
-      padding: 18px 20px;
-      border: 1px solid #f3e0c4;
-      border-radius: 16px;
-      color: #a8650a;
-      background: #ffedd5;
-      font-size: 13px;
-      overflow-wrap: anywhere;
-    }
-
-    .release-boundary strong { color: #1b1d1f; }
-
-    .boundary-icon {
-      display: grid;
-      flex: 0 0 24px;
-      width: 24px;
-      height: 24px;
-      place-items: center;
-      border: 1px solid currentColor;
-      border-radius: 50%;
-      font-weight: 900;
-      line-height: 1;
-    }
 
     .changelog-wrap {
       width: min(980px, 100%);
@@ -1073,15 +1058,15 @@
       <div class="hero__copy">
         <div class="hero__badge">
           <span class="hero__badge-dot" aria-hidden="true"></span>
-          <span>v0.1.32 最新版本发布 · Android 本地优先</span>
+          <span>v0.1.34 最新版本发布 · Android 本地优先</span>
         </div>
         <h1 id="hero-title">让 AI 帮你把内容<span class="hero__accent">做好。</span></h1>
         <p class="hero__lead">公开链接拆解、AI 智能诊断、爆款复刻与本地 9:16 成片，全流程在你的 Android 设备本地流畅运行。无需云端中转与注册登录，数据自主可控。</p>
         <div class="hero__actions">
-          <a class="button button--primary" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.32.apk" aria-label="下载宏泰 AI 智能体 v0.1.32 Android 安装包">
+          <a class="button button--primary" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.34.apk" aria-label="下载宏泰 AI 智能体 v0.1.34 Android 安装包">
             <div class="button__label-group">
               <span class="button__label">下载 Android 安装包</span>
-              <span class="button__meta">v0.1.32 · 23.4 MB · 正式构建</span>
+              <span class="button__meta">v0.1.34 · 23.4 MB · 正式构建</span>
             </div>
             <span class="button__arrow" aria-hidden="true">↓</span>
           </a>
@@ -1093,54 +1078,59 @@
         </ul>
       </div>
 
-      <aside class="spec-card" aria-label="当前推荐版本 v0.1.32">
+      <aside class="spec-card" aria-label="当前推荐版本 v0.1.34">
         <div class="spec-card__header">
           <div class="spec-card__brand">
             <div class="spec-card__logo" aria-hidden="true"></div>
             <div class="spec-card__title-group">
               <strong class="spec-card__title">宏泰 AI 智能体</strong>
-              <span class="spec-card__version-code">v0.1.32 (内部版本 40)</span>
+              <span class="spec-card__version-code">v0.1.34 (内部版本 42)</span>
             </div>
           </div>
           <span class="spec-card__tag">当前推荐</span>
         </div>
 
         <div class="spec-card__body">
-          <div class="spec-card__section-label">本版核心亮点</div>
-          <ul class="spec-card__feature-list">
-            <li>
-              <span class="feature-icon" aria-hidden="true">✦</span>
-              <div class="feature-content">
-                <strong>分镜生成逐句可见</strong>
-                <p>撰写分镜文稿时每句一生成就显示真实内容：正文、贴纸与预估秒数逐句呈现，顶部实时更新预估总时长</p>
-              </div>
-            </li>
-            <li>
-              <span class="feature-icon" aria-hidden="true">✦</span>
-              <div class="feature-content">
-                <strong>配音进度逐句可查</strong>
-                <p>每句分镜卡片右下角实时显示「配音中」与进度，配音阶段可逐句查看已配音、配音中与待配音状态</p>
-              </div>
-            </li>
-            <li>
-              <span class="feature-icon" aria-hidden="true">✦</span>
-              <div class="feature-content">
-                <strong>制作流程自动推进</strong>
-                <p>一键制作依次经过文稿、配音、合成、成片视图，页头素材库与更多按钮窄屏同排不再溢出</p>
-              </div>
-            </li>
-          </ul>
-        </div>
-
-        <div class="spec-card__footer">
           <div class="spec-card__meta-row">
             <span><strong>格式</strong> Android APK</span>
-            <span><strong>大小</strong> 23,410,224 字节</span>
+            <span><strong>大小</strong> 23,412,591 字节</span>
           </div>
-          <div class="spec-card__hash-box">
-            <span class="hash-label">官方校验码 SHA-256</span>
-            <code class="hash-code">9CED370391EF49420BFB940B66D21306C0BF6EEFDAD287E5A05789ABE7D6797A</code>
-          </div>
+
+          <details class="spec-card__fold">
+            <summary>本版核心亮点</summary>
+            <ul class="spec-card__feature-list spec-card__fold-body">
+              <li>
+                <span class="feature-icon" aria-hidden="true">✦</span>
+                <div class="feature-content">
+                  <strong>模板封面彻底修复</strong>
+                  <p>网络下载的爆款拆解视频统一以本地视频首帧作为模板封面，来回切换页面不再失效</p>
+                </div>
+              </li>
+              <li>
+                <span class="feature-icon" aria-hidden="true">✦</span>
+                <div class="feature-content">
+                  <strong>模板与拆解联动删除</strong>
+                  <p>删除前二次确认并红色警示不可恢复，本机已下载的视频默认保留，勾选后才一并删除</p>
+                </div>
+              </li>
+              <li>
+                <span class="feature-icon" aria-hidden="true">✦</span>
+                <div class="feature-content">
+                  <strong>长按重命名</strong>
+                  <p>模板页与拆解页长按即可自定义名称，拆解历史直接显示模板名称，不再裸显链接</p>
+                </div>
+              </li>
+            </ul>
+          </details>
+
+          <details class="spec-card__fold">
+            <summary>官方校验码 SHA-256</summary>
+            <div class="spec-card__fold-body">
+              <div class="spec-card__hash-box">
+                <code class="hash-code">307FE0941610BFE9C64CC335A8115F7640F84FB7CD3A5971A69D74C4AA575F63</code>
+              </div>
+            </div>
+          </details>
         </div>
       </aside>
     </section>
@@ -1160,13 +1150,23 @@
         <noscript>
           <div class="release-list">
             <article class="release-card release-card--recommended">
-              <div class="release-card__top"><strong class="release-card__version">v0.1.32</strong><span class="badge">当前推荐</span></div>
-              <p class="release-card__summary">制作板块体验修复：分镜文稿流式生成逐句渲染真实内容（正文、贴纸、预估秒数与总时长），每句配音状态实时上卡，一键制作依次自动经过文稿、配音、合成、成片视图；页头素材库与更多按钮窄屏同排不再溢出。</p>
-              <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.32.apk">下载安装包 <span aria-hidden="true">↓</span></a>
+              <div class="release-card__top"><strong class="release-card__version">v0.1.34</strong><span class="badge">当前推荐</span></div>
+              <p class="release-card__summary">模板封面根治：网络下载的拆解视频统一以本地视频首帧展示，来回切换页面不再失效；模板与拆解记录双向联动删除，二次确认红色警示，本机已下载视频默认保留、可勾选一并删除；拆解历史显示模板名称代替链接；模板页与拆解页长按支持重命名。</p>
+              <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.34.apk">下载安装包 <span aria-hidden="true">↓</span></a>
             </article>
             <details class="release-archive">
-              <summary class="release-archive__summary">历史版本 <span class="release-archive__count">31 个可下载版本</span></summary>
+              <summary class="release-archive__summary">历史版本 <span class="release-archive__count">33 个可下载版本</span></summary>
               <div class="release-archive__content">
+                <article class="release-card">
+                  <div class="release-card__top"><strong class="release-card__version">v0.1.33</strong><span class="badge">历史版本</span></div>
+                  <p class="release-card__summary">爆款拆解模板封面恢复本地视频首帧：封面来源改为本地已下载视频优先、平台远端封面仅兜底，联网下载来源的模板卡片不再显示「原视频封面不可用」。</p>
+                  <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.33.apk">下载安装包 <span aria-hidden="true">↓</span></a>
+                </article>
+                <article class="release-card">
+                  <div class="release-card__top"><strong class="release-card__version">v0.1.32</strong><span class="badge">历史版本</span></div>
+                  <p class="release-card__summary">制作板块体验修复：分镜文稿流式生成逐句渲染真实内容（正文、贴纸、预估秒数与总时长），每句配音状态实时上卡，一键制作依次自动经过文稿、配音、合成、成片视图；页头素材库与更多按钮窄屏同排不再溢出。</p>
+                  <a class="release-card__link" href="https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.32.apk">下载安装包 <span aria-hidden="true">↓</span></a>
+                </article>
                 <article class="release-card">
                   <div class="release-card__top"><strong class="release-card__version">v0.1.31</strong><span class="badge">历史版本</span></div>
                   <p class="release-card__summary">设置页「清理缓存」升级为「存储管理」：设备存储进度条总览，拆解任务、舌诊面诊、制作项目等六类占用真实分布；视频、照片、素材逐项二次确认删除，缓存一键清理，应用配置分组统计可导出报告；彻底修复各类占用显示 0B 的统计失真。</p>
@@ -1326,11 +1326,6 @@
             </details>
           </div>
         </noscript>
-
-        <div class="release-boundary reveal" role="note">
-          <span class="boundary-icon" aria-hidden="true">!</span>
-          <div><strong>使用说明：</strong>当前推荐 v0.1.32。安装包大小和校验码写在下载卡片上，方便你核对下到的是不是同一份文件。</div>
-        </div>
       </div>
     </section>
 
@@ -1353,7 +1348,7 @@
   <footer>
     <div class="shell footer-inner">
       <div><strong>宏泰 AI 智能体</strong> · Pulse Flow</div>
-      <div class="footer-meta">Android 安装包下载 · 内容更新于 2026-08-31</div>
+      <div class="footer-meta">Android 安装包下载 · 内容更新于 2026-09-02</div>
     </div>
   </footer>
 
@@ -1361,9 +1356,29 @@
     // 版本维护区：新增或删除一个对象即可更新下载卡片。
     const RELEASES = [
       {
-        "version": "v0.1.32",
+        "version": "v0.1.34",
         "recommended": true,
         "status": "当前推荐",
+        "summary": "模板封面根治与模板管理升级：网络下载的爆款拆解视频统一以本地视频首帧作为封面，来回切换页面不再失效；模板与拆解记录双向联动删除，二次确认红色警示，本机已下载视频默认保留、可勾选一并删除；拆解历史显示模板名称代替链接；模板页与拆解页长按支持重命名。",
+        "versionCode": "42",
+        "size": "23,412,591 bytes",
+        "sha256": "307FE0941610BFE9C64CC335A8115F7640F84FB7CD3A5971A69D74C4AA575F63",
+        "url": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.34.apk"
+      },
+      {
+        "version": "v0.1.33",
+        "recommended": false,
+        "status": "历史版本",
+        "summary": "爆款拆解模板封面恢复本地视频首帧：封面来源改为本地已下载视频优先、平台远端封面仅兜底，联网下载来源的模板卡片不再显示「原视频封面不可用」。",
+        "versionCode": "41",
+        "size": "23,410,228 bytes",
+        "sha256": "C49F2EA178F756015C0439B78E93F89E84D03F363B68E663AE29B328C9E6D4B5",
+        "url": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.33.apk"
+      },
+      {
+        "version": "v0.1.32",
+        "recommended": false,
+        "status": "历史版本",
         "summary": "制作板块体验修复：分镜文稿流式生成逐句渲染真实内容（正文、贴纸、预估秒数与总时长），每句配音状态实时上卡，一键制作依次自动经过文稿、配音、合成、成片视图；页头素材库与更多按钮窄屏同排不再溢出。",
         "versionCode": "40",
         "size": "23,410,224 bytes",
@@ -1679,13 +1694,35 @@
     // 更新维护区：所有时间统一使用北京时间（UTC+8）。
     const CHANGELOG = [
       {
+        "iso": "2026-09-02T00:00:00+08:00",
+        "date": "2026.09.02",
+        "time": "当前推荐",
+        "category": "v0.1.34",
+        "title": "模板封面彻底修复，模板与拆解联动管理",
+        "description": "模板页封面问题彻底根治：从网络下载的爆款拆解视频统一以本地视频首帧作为模板封面，首次进入与来回切换页面都稳定显示，不再出现「不可用」。模板与拆解记录现在双向联动删除——删除前底部弹层二次确认并以红色警示说明不可恢复，本机已下载的视频默认保留，勾选后才一并彻底删除。拆解历史不再裸显链接，改为显示对应的拆解模板名称；模板页长按卡片、拆解页长按记录都可以重命名，默认名称之外支持自定义。",
+        "referenceLabel": "当前推荐版本",
+        "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.34.apk",
+        "downloadLabel": "下载 v0.1.34"
+      },
+      {
         "iso": "2026-09-01T00:00:00+08:00",
         "date": "2026.09.01",
-        "time": "当前推荐",
+        "time": "历史版本",
+        "category": "v0.1.33",
+        "title": "爆款拆解模板封面恢复本地视频首帧",
+        "description": "修复所有从网络下载的爆款拆解视频在模板页显示「原视频封面不可用」的问题：封面来源改为本地已下载视频优先、平台远端封面仅作兜底，模板卡片与用户自己上传的视频一样展示视频首帧画面，无需重新下载。",
+        "referenceLabel": "历史版本",
+        "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.33.apk",
+        "downloadLabel": "下载 v0.1.33"
+      },
+      {
+        "iso": "2026-09-01T00:00:00+08:00",
+        "date": "2026.09.01",
+        "time": "历史版本",
         "category": "v0.1.32",
         "title": "制作流程逐句可见、自动推进",
         "description": "一键制作的等待过程不再空白：撰写分镜文稿时，每句一生成就渲染真实卡片——正文、所用贴纸与预估秒数逐句呈现，顶部实时更新预估总时长；进入配音后，每句分镜卡片右下角实时显示「配音中」与进度，配音阶段可逐句查看状态；整个流程依次自动经过文稿、配音、合成、成片视图，每一步进展都看得见。同时修复了制作页右上角「素材库」与「更多」按钮在窄屏下堆叠溢出的问题。",
-        "referenceLabel": "当前推荐版本",
+        "referenceLabel": "历史版本",
         "downloadUrl": "https://husteread.com/storage/public/HongTai-AI-Agent-release-v0.1.32.apk",
         "downloadLabel": "下载 v0.1.32"
       },
