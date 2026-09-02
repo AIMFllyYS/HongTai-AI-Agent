@@ -7,10 +7,14 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
-import android.media.MediaMuxer
 import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
+import androidx.media3.common.Format
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.muxer.BufferInfo
+import androidx.media3.muxer.Mp4Muxer
+import androidx.media3.muxer.SeekableMuxerOutput
 import java.io.File
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
@@ -278,9 +282,11 @@ class AndroidMediaRuntime(context: Context) : MediaRuntime {
   ): RemuxedVideoOutput = remuxVideoNow(taskId, videoUri, audioUri)
 
   /**
-   * Encoded-track-only MP4 remux: no transcoding and no timestamp rewriting.
-   * If a source combination cannot be verified with its original sample
-   * timestamps, the temporary output is discarded instead of being exposed.
+   * Encoded-track-only MP4 remux: no transcoding; each track keeps its
+   * original sample deltas and is only rebased by one constant so its
+   * earliest presentation lands at zero. If a source combination cannot be
+   * verified with its preserved sample timing, the temporary output is
+   * discarded instead of being exposed.
    */
   fun remuxVideoNow(taskId: String, videoUri: String, audioUri: String? = null): RemuxedVideoOutput {
     val normalizedTaskId = PrivateArtifactPolicy.taskDirectoryName(taskId)
@@ -361,6 +367,18 @@ class AndroidMediaRuntime(context: Context) : MediaRuntime {
     }
   }
 
+  /**
+   * Encoded-track-only MP4 remux on Media3's muxer: no transcoding and no
+   * per-sample timestamp rewriting. B-frame sources arrive in decode order
+   * with non-monotonic presentation timestamps; Media3 writes the ctts box
+   * for them, which the framework MediaMuxer could not preserve. Each track
+   * is rebased by one constant so its earliest presentation lands at zero:
+   * encoded sources legitimately start above zero (B-frame reorder delay) or
+   * below it (AAC encoder priming). If a source combination cannot be
+   * verified with its preserved sample timing, the temporary output is
+   * discarded instead of being exposed.
+   */
+  @androidx.annotation.OptIn(UnstableApi::class)
   private fun remuxTracks(
     taskId: String,
     video: MediaTrackSource,
@@ -368,26 +386,28 @@ class AndroidMediaRuntime(context: Context) : MediaRuntime {
   ): RemuxedVideoOutput {
     val destination = createTaskOutputFile(taskId, REMUX_DIRECTORY_NAME, "mp4")
     val temporary = File(destination.parentFile, ".${destination.name}.${UUID.randomUUID()}.part")
-    var muxer: MediaMuxer? = null
+    var muxer: Mp4Muxer? = null
     val sessions = mutableListOf<RemuxTrackSession>()
-    var muxerStarted = false
+    var muxerClosed = false
     var finalized = false
     try {
       val deadlineElapsedMs = SystemClock.elapsedRealtime() + MAX_REMUX_WALL_CLOCK_MS
-      muxer = MediaMuxer(temporary.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-      val videoSession = openRemuxTrack(video, muxer)
+      val videoTiming = scanTrackTiming(video, deadlineElapsedMs)
+      val audioTiming = audio?.let { scanTrackTiming(it, deadlineElapsedMs) }
+      if (audioTiming != null) requireTrackTimingCompatibility(videoTiming, audioTiming)
+
+      muxer = Mp4Muxer.Builder(SeekableMuxerOutput.of(temporary.absolutePath)).build()
+      val videoSession = openRemuxTrack(video, muxer, videoTiming.minPresentationTimeUs)
       sessions += videoSession
-      val audioSession = audio?.let { source -> openRemuxTrack(source, muxer).also(sessions::add) }
-      muxer.start()
-      muxerStarted = true
+      val audioSession = audio?.let { source ->
+        openRemuxTrack(source, muxer, requireNotNull(audioTiming).minPresentationTimeUs).also(sessions::add)
+      }
 
       val videoSummary = copyEncodedTrack(videoSession, muxer, deadlineElapsedMs)
       val audioSummary = audioSession?.let { copyEncodedTrack(it, muxer, deadlineElapsedMs) }
-      if (audioSummary != null) requireTrackTimingCompatibility(videoSummary, audioSummary)
 
-      muxer.stop()
-      muxerStarted = false
-      muxer.release()
+      muxer.close()
+      muxerClosed = true
       muxer = null
       sessions.forEach(RemuxTrackSession::release)
       sessions.clear()
@@ -409,14 +429,70 @@ class AndroidMediaRuntime(context: Context) : MediaRuntime {
         hasAudio = audioSummary != null,
       )
     } finally {
-      if (muxerStarted) runCatching { muxer?.stop() }
-      runCatching { muxer?.release() }
+      if (!muxerClosed) runCatching { muxer?.close() }
       sessions.forEach(RemuxTrackSession::release)
       if (!finalized) deleteQuietly(temporary)
     }
   }
 
-  private fun openRemuxTrack(source: MediaTrackSource, muxer: MediaMuxer): RemuxTrackSession {
+  /**
+   * Metadata-only pass measuring a track's raw presentation window before any
+   * bytes move. The minimum becomes the track's rebase constant in
+   * [copyEncodedTrack]; measuring upfront also rejects wrong or corrupted
+   * pairings before the muxer writes a single byte.
+   */
+  private fun scanTrackTiming(source: MediaTrackSource, deadlineElapsedMs: Long): TrackTiming {
+    val extractor = MediaExtractor()
+    try {
+      extractor.setDataSource(source.file.absolutePath)
+      val actualMimeType = extractor.getTrackFormat(source.trackIndex).getString(MediaFormat.KEY_MIME)
+      require(actualMimeType == source.mimeType) { "The downloaded media track changed while it was being remuxed." }
+      extractor.selectTrack(source.trackIndex)
+      try {
+        var sampleCount = 0L
+        var lastPresentationTimeUs: Long? = null
+        var minPresentationTimeUs = Long.MAX_VALUE
+        var maxPresentationTimeUs = Long.MIN_VALUE
+        while (extractor.sampleTrackIndex == source.trackIndex) {
+          ensureOperationWithinDeadline(deadlineElapsedMs, "The private media remux exceeded its time limit.")
+          val presentationTimeUs = extractor.sampleTime
+          // B-frame sources legitimately reorder presentation timestamps in
+          // decode order and AAC sources may start slightly below zero
+          // (encoder priming); only an unbounded jump signals corruption.
+          require(
+            presentationTimeUs >= -MAX_SAMPLE_TIMESTAMP_REORDER_US &&
+              presentationTimeUs <= MAX_TRACK_TIMESTAMP_US &&
+              (lastPresentationTimeUs == null ||
+                presentationTimeUs >= lastPresentationTimeUs - MAX_SAMPLE_TIMESTAMP_REORDER_US),
+          ) {
+            "The downloaded media timestamps cannot be preserved safely."
+          }
+          lastPresentationTimeUs = presentationTimeUs
+          if (presentationTimeUs < minPresentationTimeUs) minPresentationTimeUs = presentationTimeUs
+          if (presentationTimeUs > maxPresentationTimeUs) maxPresentationTimeUs = presentationTimeUs
+          sampleCount += 1L
+          require(sampleCount <= MAX_SAMPLES_PER_TRACK) { "The downloaded media has too many remux samples." }
+          extractor.advance()
+        }
+        if (sampleCount == 0L) throw MediaRemuxException("A downloaded media track has no samples.")
+        return TrackTiming(
+          minPresentationTimeUs = minPresentationTimeUs,
+          maxPresentationTimeUs = maxPresentationTimeUs,
+        )
+      } finally {
+        extractor.unselectTrack(source.trackIndex)
+      }
+    } finally {
+      extractor.release()
+    }
+  }
+
+  @androidx.annotation.OptIn(UnstableApi::class)
+  private fun openRemuxTrack(
+    source: MediaTrackSource,
+    muxer: Mp4Muxer,
+    timestampOffsetUs: Long,
+  ): RemuxTrackSession {
     val extractor = MediaExtractor()
     try {
       extractor.setDataSource(source.file.absolutePath)
@@ -435,7 +511,8 @@ class AndroidMediaRuntime(context: Context) : MediaRuntime {
       return RemuxTrackSession(
         source = source,
         extractor = extractor,
-        muxerTrackIndex = muxer.addTrack(format),
+        muxerTrackIndex = muxer.addTrack(media3TrackFormat(format, actualMimeType)),
+        timestampOffsetUs = timestampOffsetUs,
         buffer = ByteBuffer.allocate(maxOf(declaredInputSize, DEFAULT_ENCODED_SAMPLE_BYTES)),
       )
     } catch (error: Exception) {
@@ -444,15 +521,17 @@ class AndroidMediaRuntime(context: Context) : MediaRuntime {
     }
   }
 
+  @androidx.annotation.OptIn(UnstableApi::class)
   private fun copyEncodedTrack(
     session: RemuxTrackSession,
-    muxer: MediaMuxer,
+    muxer: Mp4Muxer,
     deadlineElapsedMs: Long,
   ): TrackSampleSummary {
     var sampleCount = 0L
     var firstPresentationTimeUs: Long? = null
     var lastPresentationTimeUs = -1L
-    val timestampDigest = TrackTimestampDigest()
+    var maxPresentationTimeUs = -1L
+    val sampleDigest = TrackSampleDigest()
     while (true) {
       ensureOperationWithinDeadline(deadlineElapsedMs, "The private media remux exceeded its time limit.")
       val buffer = session.buffer
@@ -461,22 +540,44 @@ class AndroidMediaRuntime(context: Context) : MediaRuntime {
       if (sampleSize < 0) break
       require(sampleSize in 1..buffer.capacity()) { "A downloaded media sample is outside the supported remux size." }
       val presentationTimeUs = session.extractor.sampleTime
-      require(presentationTimeUs >= 0L && presentationTimeUs >= lastPresentationTimeUs && presentationTimeUs <= MAX_TRACK_TIMESTAMP_US) {
+      // Decode-order delivery means B-frame sources legitimately reorder
+      // presentation timestamps, and AAC sources may start slightly below zero
+      // (encoder priming); only an unbounded jump signals corruption. Each
+      // track is rebased by its scanned minimum so the MP4 sample table stays
+      // non-negative while every per-sample delta is preserved exactly.
+      require(
+        presentationTimeUs >= -MAX_SAMPLE_TIMESTAMP_REORDER_US &&
+          presentationTimeUs <= MAX_TRACK_TIMESTAMP_US &&
+          presentationTimeUs >= lastPresentationTimeUs - MAX_SAMPLE_TIMESTAMP_REORDER_US,
+      ) {
         "The downloaded media timestamps cannot be preserved safely."
       }
       val sourceFlags = session.extractor.sampleFlags
       require(sourceFlags and MediaExtractor.SAMPLE_FLAG_ENCRYPTED == 0) {
         "Encrypted downloaded media cannot be remuxed locally."
       }
-      val flags = normalizedSampleFlags(sourceFlags)
+      // Every AAC frame is an independent sync point. Fragmented sources do
+      // not say so in their trun flags, while regular-MP4 readers treat a
+      // missing or partial stss box differently, so audio is written with the
+      // truthful keyframe flag to keep the written and re-read flag sequence
+      // identical; video keeps its source keyframe pattern for seek accuracy.
+      val flags = if (session.source.mimeType.startsWith("audio/")) {
+        MediaCodec.BUFFER_FLAG_KEY_FRAME
+      } else {
+        normalizedSampleFlags(sourceFlags)
+      }
+      val rebasedPresentationTimeUs = presentationTimeUs - session.timestampOffsetUs
+      buffer.limit(sampleSize)
+      buffer.position(0)
       muxer.writeSampleData(
         session.muxerTrackIndex,
         buffer,
-        MediaCodec.BufferInfo().apply { set(0, sampleSize, presentationTimeUs, flags) },
+        BufferInfo(rebasedPresentationTimeUs, sampleSize, flags),
       )
-      if (sampleCount == 0L) firstPresentationTimeUs = presentationTimeUs
+      if (sampleCount == 0L) firstPresentationTimeUs = rebasedPresentationTimeUs
       lastPresentationTimeUs = presentationTimeUs
-      timestampDigest.add(presentationTimeUs, sampleSize, flags)
+      if (rebasedPresentationTimeUs > maxPresentationTimeUs) maxPresentationTimeUs = rebasedPresentationTimeUs
+      sampleDigest.add(sampleSize, flags)
       sampleCount += 1L
       require(sampleCount <= MAX_SAMPLES_PER_TRACK) { "The downloaded media has too many remux samples." }
       session.extractor.advance()
@@ -485,16 +586,16 @@ class AndroidMediaRuntime(context: Context) : MediaRuntime {
       mimeType = session.source.mimeType,
       sampleCount = sampleCount,
       firstPresentationTimeUs = firstPresentationTimeUs ?: throw MediaRemuxException("A downloaded media track has no samples."),
-      lastPresentationTimeUs = lastPresentationTimeUs,
-      timestampDigest = timestampDigest.value(),
+      maxPresentationTimeUs = maxPresentationTimeUs,
+      sampleDigest = sampleDigest.value(),
     )
   }
 
-  private fun requireTrackTimingCompatibility(video: TrackSampleSummary, audio: TrackSampleSummary) {
-    require(kotlin.math.abs(video.firstPresentationTimeUs - audio.firstPresentationTimeUs) <= MAX_AV_START_OFFSET_US) {
+  private fun requireTrackTimingCompatibility(video: TrackTiming, audio: TrackTiming) {
+    require(kotlin.math.abs(video.minPresentationTimeUs - audio.minPresentationTimeUs) <= MAX_AV_START_OFFSET_US) {
       "The downloaded video and audio timestamps cannot be aligned safely."
     }
-    require(kotlin.math.abs(video.lastPresentationTimeUs - audio.lastPresentationTimeUs) <= MAX_AV_END_OFFSET_US) {
+    require(kotlin.math.abs(video.maxPresentationTimeUs - audio.maxPresentationTimeUs) <= MAX_AV_END_OFFSET_US) {
       "The downloaded video and audio durations cannot be aligned safely."
     }
   }
@@ -514,9 +615,7 @@ class AndroidMediaRuntime(context: Context) : MediaRuntime {
       }
       val videoTrackIndex = outputTracks.singleOrNull { (_, mimeType) -> mimeType == expectedVideo.mimeType }?.first
         ?: throw MediaRemuxException("The remuxed video track could not be verified.")
-      require(summarizeEncodedTrack(extractor, videoTrackIndex, deadlineElapsedMs) == expectedVideo) {
-        "The remuxed video timestamps could not be verified."
-      }
+      requireSummariesMatch(summarizeEncodedTrack(extractor, videoTrackIndex, deadlineElapsedMs), expectedVideo, "video")
       if (expectedAudio == null) {
         require(outputTracks.none { (_, mimeType) -> mimeType.startsWith("audio/") }) {
           "The remuxed output contains an unexpected audio track."
@@ -524,12 +623,36 @@ class AndroidMediaRuntime(context: Context) : MediaRuntime {
       } else {
         val audioTrackIndex = outputTracks.singleOrNull { (_, mimeType) -> mimeType == expectedAudio.mimeType }?.first
           ?: throw MediaRemuxException("The remuxed audio track could not be verified.")
-        require(summarizeEncodedTrack(extractor, audioTrackIndex, deadlineElapsedMs) == expectedAudio) {
-          "The remuxed audio timestamps could not be verified."
-        }
+        requireSummariesMatch(summarizeEncodedTrack(extractor, audioTrackIndex, deadlineElapsedMs), expectedAudio, "audio")
       }
     } finally {
       extractor.release()
+    }
+  }
+
+  /**
+   * The muxer re-quantizes timestamps into its own timescale, so boundary and
+   * peak timestamps are compared with a small tolerance; the per-sample
+   * payload digest must still match exactly.
+   */
+  private fun requireSummariesMatch(actual: TrackSampleSummary, expected: TrackSampleSummary, label: String) {
+    require(
+      actual.mimeType == expected.mimeType &&
+        actual.sampleCount == expected.sampleCount &&
+        actual.sampleDigest == expected.sampleDigest,
+    ) {
+      "The remuxed $label track could not be verified " +
+        "(mime ${actual.mimeType}/${expected.mimeType}, " +
+        "samples ${actual.sampleCount}/${expected.sampleCount}, " +
+        "digestMatch=${actual.sampleDigest == expected.sampleDigest})."
+    }
+    require(
+      kotlin.math.abs(actual.firstPresentationTimeUs - expected.firstPresentationTimeUs) <= MAX_VERIFY_TIMESTAMP_TOLERANCE_US &&
+        kotlin.math.abs(actual.maxPresentationTimeUs - expected.maxPresentationTimeUs) <= MAX_VERIFY_TIMESTAMP_TOLERANCE_US,
+    ) {
+      "The remuxed $label timestamps could not be verified " +
+        "(firstUs ${actual.firstPresentationTimeUs}/${expected.firstPresentationTimeUs}, " +
+        "maxUs ${actual.maxPresentationTimeUs}/${expected.maxPresentationTimeUs})."
     }
   }
 
@@ -555,7 +678,8 @@ class AndroidMediaRuntime(context: Context) : MediaRuntime {
       var sampleCount = 0L
       var firstPresentationTimeUs: Long? = null
       var lastPresentationTimeUs = -1L
-      val timestampDigest = TrackTimestampDigest()
+      var maxPresentationTimeUs = -1L
+      val sampleDigest = TrackSampleDigest()
       while (true) {
         ensureOperationWithinDeadline(deadlineElapsedMs, "The remuxed media verification exceeded its time limit.")
         buffer.clear()
@@ -563,12 +687,19 @@ class AndroidMediaRuntime(context: Context) : MediaRuntime {
         if (sampleSize < 0) break
         require(sampleSize in 1..buffer.capacity()) { "The remuxed media output has an unsupported sample size." }
         val presentationTimeUs = extractor.sampleTime
-        require(presentationTimeUs >= 0L && presentationTimeUs >= lastPresentationTimeUs && presentationTimeUs <= MAX_TRACK_TIMESTAMP_US) {
+        // ctts-bearing B-frame outputs reorder presentation timestamps in
+        // decode order; only an unbounded jump signals corruption.
+        require(
+          presentationTimeUs >= 0L &&
+            presentationTimeUs <= MAX_TRACK_TIMESTAMP_US &&
+            presentationTimeUs >= lastPresentationTimeUs - MAX_SAMPLE_TIMESTAMP_REORDER_US,
+        ) {
           "The remuxed media output has invalid timestamps."
         }
         if (sampleCount == 0L) firstPresentationTimeUs = presentationTimeUs
         lastPresentationTimeUs = presentationTimeUs
-        timestampDigest.add(presentationTimeUs, sampleSize, normalizedSampleFlags(extractor.sampleFlags))
+        if (presentationTimeUs > maxPresentationTimeUs) maxPresentationTimeUs = presentationTimeUs
+        sampleDigest.add(sampleSize, normalizedSampleFlags(extractor.sampleFlags))
         sampleCount += 1L
         require(sampleCount <= MAX_SAMPLES_PER_TRACK) { "The remuxed media output has too many samples." }
         extractor.advance()
@@ -577,8 +708,8 @@ class AndroidMediaRuntime(context: Context) : MediaRuntime {
         mimeType = mimeType,
         sampleCount = sampleCount,
         firstPresentationTimeUs = firstPresentationTimeUs ?: throw MediaRemuxException("The remuxed media output has no samples."),
-        lastPresentationTimeUs = lastPresentationTimeUs,
-        timestampDigest = timestampDigest.value(),
+        maxPresentationTimeUs = maxPresentationTimeUs,
+        sampleDigest = sampleDigest.value(),
       )
     } finally {
       extractor.unselectTrack(trackIndex)
@@ -738,6 +869,27 @@ class AndroidMediaRuntime(context: Context) : MediaRuntime {
   private fun normalizedSampleFlags(value: Int): Int =
     if (value and MediaExtractor.SAMPLE_FLAG_SYNC != 0) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0
 
+  /**
+   * Media3's muxer consumes its own Format, so the extractor's MediaFormat is
+   * copied field-by-field; codec configuration data becomes initializationData.
+   */
+  @androidx.annotation.OptIn(UnstableApi::class)
+  private fun media3TrackFormat(format: MediaFormat, mimeType: String): Format {
+    val builder = Format.Builder().setSampleMimeType(mimeType)
+    if (format.containsKey(MediaFormat.KEY_WIDTH)) builder.setWidth(format.getInteger(MediaFormat.KEY_WIDTH))
+    if (format.containsKey(MediaFormat.KEY_HEIGHT)) builder.setHeight(format.getInteger(MediaFormat.KEY_HEIGHT))
+    if (format.containsKey(MediaFormat.KEY_SAMPLE_RATE)) builder.setSampleRate(format.getInteger(MediaFormat.KEY_SAMPLE_RATE))
+    if (format.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) builder.setChannelCount(format.getInteger(MediaFormat.KEY_CHANNEL_COUNT))
+    val initializationData = listOf("csd-0", "csd-1", "csd-2").mapNotNull { key ->
+      if (!format.containsKey(key)) return@mapNotNull null
+      val source = format.getByteBuffer(key) ?: return@mapNotNull null
+      val duplicate = source.duplicate()
+      ByteArray(duplicate.remaining()).also(duplicate::get)
+    }
+    if (initializationData.isNotEmpty()) builder.setInitializationData(initializationData)
+    return builder.build()
+  }
+
   private fun syncFile(file: File) {
     RandomAccessFile(file, "r").use { openFile -> openFile.fd.sync() }
   }
@@ -776,6 +928,10 @@ class AndroidMediaRuntime(context: Context) : MediaRuntime {
     const val MAX_TRACK_TIMESTAMP_US = 6L * 60L * 60L * 1_000_000L
     const val MAX_AV_START_OFFSET_US = 2L * 1_000_000L
     const val MAX_AV_END_OFFSET_US = 10L * 1_000_000L
+    /** B-frame reorder depth tolerated on decode-order sample timestamps. */
+    const val MAX_SAMPLE_TIMESTAMP_REORDER_US = 2L * 1_000_000L
+    /** The muxer re-quantizes µs timestamps into track timescales (90 kHz video / sample-rate audio). */
+    const val MAX_VERIFY_TIMESTAMP_TOLERANCE_US = 1_000L
   }
 }
 
@@ -790,34 +946,44 @@ private data class VideoSourceTracks(
   val audio: MediaTrackSource?,
 )
 
+private data class TrackTiming(
+  val minPresentationTimeUs: Long,
+  val maxPresentationTimeUs: Long,
+)
+
 private data class TrackSampleSummary(
   val mimeType: String,
   val sampleCount: Long,
   val firstPresentationTimeUs: Long,
-  val lastPresentationTimeUs: Long,
-  val timestampDigest: String,
+  val maxPresentationTimeUs: Long,
+  val sampleDigest: String,
 )
 
 private class RemuxTrackSession(
   val source: MediaTrackSource,
   val extractor: MediaExtractor,
   val muxerTrackIndex: Int,
+  val timestampOffsetUs: Long,
   val buffer: ByteBuffer,
 ) {
   fun release() = extractor.release()
 }
 
-/** Small deterministic sequence digest avoids holding long-media timestamps in memory during output verification. */
-private class TrackTimestampDigest {
+/**
+ * Small deterministic per-sample payload digest (sizes and keyframe flags)
+ * avoids holding long-media sample data in memory during output verification.
+ * Presentation timestamps are excluded on purpose: the muxer re-quantizes
+ * them into its own timescale, so they are compared with tolerance instead.
+ */
+private class TrackSampleDigest {
   private val digest = MessageDigest.getInstance("SHA-256")
-  private val buffer = ByteBuffer.allocate(16).order(ByteOrder.BIG_ENDIAN)
+  private val buffer = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN)
 
-  fun add(presentationTimeUs: Long, sampleSize: Int, normalizedFlags: Int) {
+  fun add(sampleSize: Int, normalizedFlags: Int) {
     buffer.clear()
-    buffer.putLong(presentationTimeUs)
     buffer.putInt(sampleSize)
     buffer.putInt(normalizedFlags)
-    digest.update(buffer.array())
+    digest.update(buffer.array(), 0, 8)
   }
 
   fun value(): String = digest.digest().joinToString(separator = "") { value -> "%02x".format(value.toInt() and 0xff) }

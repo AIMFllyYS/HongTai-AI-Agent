@@ -89,8 +89,8 @@ android {
     applicationId = "com.hongtai.aiagent"
     minSdk = 24
     targetSdk = 36
-    versionCode = 43
-    versionName = "0.1.35"
+    versionCode = 44
+    versionName = "0.1.36"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     ndk {
@@ -226,6 +226,7 @@ dependencies {
   // modules must remain on one version.
   implementation("androidx.media3:media3-common:1.10.1")
   implementation("androidx.media3:media3-effect:1.10.1")
+  implementation("androidx.media3:media3-muxer:1.10.1")
   implementation("androidx.media3:media3-transformer:1.10.1")
 
   testImplementation("junit:junit:4.13.2")

@@ -74,6 +74,16 @@
 >
 > **APK 物理真机复验仍由用户执行**（本机无真机），关单清单不变：重点观察「提取内容」阶段不再出现 `PLATFORM_API_RATE_LIMITED`，且 `download-media` 不再被音频 `video/mp4` 声明误杀。
 
+**2026-09-02 追加（合并层真实根因，已修复并模拟器 APK 端测通过，随 v0.1.36 进包）：**
+
+> v0.1.35 模拟器端测证实：解析/提取/双流下载全部恢复（字节数与 CDN 逐字节一致），任务改倒在**合并**——logcat 实测异常链 `MediaRemuxException ← IllegalArgumentException: The downloaded media timestamps cannot be preserved safely.`，UI 只显示「媒体下载失败」（上文诊断缺口坐实）。根因：**B 站视频是 H.264 High 带 B 帧**（`has_b_frames=3`，1022 样本 480 处 PTS 回退），`MediaExtractor` 按解码序吐非单调 PTS，被 remux 的单调性 `require` 拒绝；且框架 `MediaMuxer` 不写 ctts，本来就承载不了 B 帧。抖音/小红书源无 B 帧，所以只有 B 站炸。
+>
+> 修复（`AndroidMediaRuntime.kt` + `media3-muxer:1.10.1`）：remux 换 Media3 `Mp4Muxer`（写 ctts）；每轨先做仅元数据预扫取最小 PTS、写入时整体重基到 0（覆盖 B 帧延迟起始与 AAC priming 负 PTS，真实 B 站源 min=0 为无操作）；AAC 轨写入统一 sync flag（fMP4 trun 不标记 sync，普通 MP4 缺省全 sync，统一后写出/回读一致）；回读校验契约改为 mime/样本数/payload digest 精确 + 首/峰值 PTS ±1000µs 容差，失败消息带比对值。
+>
+> 验证：合成 B 帧夹具回归 2/2；同一测试类换真实 `v.m4s`/`a.m4s`（端测期 CDN 拉取）2/2 后恢复合成夹具；`PrivateMediaStoreInstrumentationTest`、`:app:testReleaseUnitTest`、`lintRelease` 全过。**模拟器（hongtai-api35，API 35）v0.1.36 真网全链路端测**：用户短链七阶段全绿，`task.json` 仅剩三条 AI Key 未配置的 warning（诚实降级为平台字幕文稿），无媒体错误；合并产物 ffprobe 确认 1022 帧 h264（B 帧保留）+ 1466 帧 aac、双轨 start=0、全程解码零错误。升级路径 v0.1.35(43)→v0.1.36(44) 实测正常升级、`firstInstallTime` 保留。
+>
+> 关单清单第一条「无 Cookie 公开短稿过 download-media 并留下可探测本地音视频」现已有模拟器 APK 证据；**物理真机复验仍由用户执行**。本 issue 可收窄为「UI 诊断缺口 + 物理真机确认」两项尾巴。
+
 ---
 
 ### 2. 已关、但采集尾巴就是 #122：[#87](https://github.com/AIMFllyYS/HongTai-AI-Agent/issues/87) B 站 APK 一律解析失败
